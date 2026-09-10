@@ -49,12 +49,44 @@ Sleeper is read-only. Titan can't set lineups, claim waivers or trade.
   Sleeper sets their lineups itself.
 - **Byes come from Sleeper's schedule**, so they stay right every season.
 
-## Where data lives (today)
+## Where data lives
 
-Everything is kept in the browser on the user's own device (`localStorage`):
-the linked username, league switches, rankings and the last refresh. The
-device talks to `api.sleeper.app` directly. There's no Titan server. See
-`privacy.html`.
+- **On the device** (`localStorage`): the linked Sleeper username, league
+  switches, rankings, the last refresh and a trimmed player list. Titan works
+  fully on one device without signing in.
+- **In the person's own account, if they sign in with Google** (Firebase
+  Authentication + Cloud Firestore, `nam5`): `users/{uid}` holds the Sleeper
+  link and league switches, and `users/{uid}/ranks/{week}` holds each week's
+  rankings. `firestore.rules` lets only that signed-in person read or write
+  their own data.
+- **Sleeper** is read directly from the device (`api.sleeper.app`). Titan has
+  no server of its own.
+
+See `privacy.html`.
+
+## Sync
+
+`sync.js` (an ES module) signs in with Google and keeps the device and the
+account level. The rules for which copy wins live in `syncplan.js`, which is
+pure and tested: the newer copy wins, compared by the timestamp stamped on
+every save, week by week for rankings. Changes from another device apply
+live. Signing out stops syncing on that device. **Delete my Titan account**
+in Settings removes the synced data and the sign-in.
+
+Sync is optional by design. If Firebase can't load (offline, blocked, or the
+page opened from a file), the app runs on the device alone. Sign-in works on
+the Firebase Hosting domains; the GitHub Pages address forwards to
+`titan-fantasy-football.web.app`.
+
+## Deploying
+
+```
+firebase deploy --only hosting          # the app
+firebase deploy --only firestore:rules  # the database rules
+```
+
+Firebase project: `titan-fantasy-football`, live at
+https://titan-fantasy-football.web.app.
 
 ## Files
 
@@ -75,11 +107,10 @@ No build step and no dependencies. It runs on any static host.
 ## Roadmap
 
 1. **Done: public web app.** Any Sleeper user, rankings private on the device.
-2. **Next: sync across your own devices.** Google sign-in with Firebase
-   (Authentication + Firestore). Each user's rankings and league switches are
-   stored under their own account, readable only by them. Hosting moves to
-   Firebase Hosting, which also provides the root domain Google Play needs.
-3. **Then: Google Play.** Package the same web app as a Trusted Web Activity
+2. **Done: sync across your own devices.** Google sign-in with Firebase
+   (Authentication + Firestore), hosted on Firebase Hosting, which also
+   provides the root domain Google Play needs.
+3. **Next: Google Play.** Package the same web app as a Trusted Web Activity
    (Bubblewrap), with a Digital Asset Links file at
    `/.well-known/assetlinks.json` on the hosting domain. Needs a Google Play
    developer account, a privacy policy, the data-safety form, and the closed
