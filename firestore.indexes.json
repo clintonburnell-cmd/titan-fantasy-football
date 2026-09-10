@@ -1,0 +1,10 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "history",
+      "fieldPath": "leagues",
+      "indexes": []
+    }
+  ]
+}

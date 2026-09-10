@@ -8,6 +8,7 @@
       ".firebase/**",
       "firebase-debug.log",
       "firestore.rules",
+      "firestore.indexes.json",
       "README.md",
       "**/.git/**",
       "**/node_modules/**",
@@ -29,7 +30,8 @@
     ]
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "functions": {
     "source": "functions",

@@ -9,6 +9,7 @@
  */
 const {onSchedule} = require('firebase-functions/v2/scheduler');
 const logger = require('firebase-functions/logger');
+const zlib = require('zlib');
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore} = require('firebase-admin/firestore');
 const SCC = require('./shared/engine.js');
@@ -30,17 +31,27 @@ async function getJson(url) {
 }
 
 /* Sleeper's full player list is ~14 MB, so the trimmed copy (~140 KB) is kept
-   in Firestore and in memory, and rebuilt every few days. */
+   in memory and in Firestore, and rebuilt every few days. Firestore gets it
+   gzipped in one bytes field: as a map, every player would be an indexed field
+   and the document would be rejected. */
+const pack = map => zlib.gzipSync(JSON.stringify(map));
+const unpack = buf => JSON.parse(zlib.gunzipSync(buf).toString('utf8'));
+
 async function playerMap() {
   if (warm && Date.now() - warm.ts < PLAYERS_TTL) return warm.map;
   const ref = db.doc('meta/players');
-  const saved = await ref.get();
-  if (saved.exists && Date.now() - saved.get('ts') < PLAYERS_TTL) {
-    warm = {ts: saved.get('ts'), map: saved.get('map')};
-    return warm.map;
+  try {
+    const saved = await ref.get();
+    if (saved.exists && saved.get('gz') && Date.now() - saved.get('ts') < PLAYERS_TTL) {
+      warm = {ts: saved.get('ts'), map: unpack(saved.get('gz'))};
+      return warm.map;
+    }
+  } catch (e) {
+    logger.warn('saved player list unreadable: ' + e.message);
   }
   warm = {ts: Date.now(), map: SCC.trimPlayers(await getJson(SLEEPER + '/v1/players/nfl'))};
-  await ref.set(warm);
+  // Best effort: failing to cache the list must not stop anyone's calls being saved.
+  await ref.set({ts: warm.ts, gz: pack(warm.map)}).catch(e => logger.warn('could not cache the player list: ' + e.message));
   return warm.map;
 }
 
@@ -108,4 +119,4 @@ exports.freezeCalls = onSchedule({
 }, run);
 
 // For local testing without Cloud Scheduler.
-exports._test = {run, freezeForUser, ranksFor, playerMap};
+exports._test = {run, freezeForUser, ranksFor, playerMap, pack, unpack};
