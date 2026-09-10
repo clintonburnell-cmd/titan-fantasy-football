@@ -1,3 +1,7 @@
 # Firebase CLI's local deploy bookkeeping
 .firebase/
 firebase-debug.log
+
+# Server job: installed packages, and the engine copies made before each deploy
+functions/node_modules/
+functions/shared/

@@ -733,7 +733,7 @@
     });
 
     var hurt = d.roster.filter(function (p) { return p.start && p.inj; });
-    return {cfg: d.cfg, roster: d.roster, rows: rows, moves: moves, wire: wire, hurt: hurt, stops: stops};
+    return {cfg: d.cfg, roster: d.roster, rows: rows, moves: moves, wire: wire, hurt: hurt, stops: stops, opt: opt};
   }
 
   function analyzeAll(snap, weekly) {
@@ -824,6 +824,71 @@
     return {weeks: weeks, rows: rows, totals: totals, clean: clean};
   }
 
+  /* ----------------------------------------- projections + weekly history */
+
+  /* Sleeper's weekly projections (RotoWire's numbers) trimmed to what Titan
+     uses. Each player keeps his standard-scoring points and the points his
+     catches add at full PPR, so any league's reception value works:
+     standard + ppr * catches. */
+  function trimProjections(list) {
+    var map = {};
+    (list || []).forEach(function (e) {
+      if (!e || e.player_id === undefined || !e.stats) return;
+      var std = Number(e.stats.pts_std), full = Number(e.stats.pts_ppr);
+      if (!isFinite(std) && !isFinite(full)) return;
+      if (!isFinite(std)) std = full;
+      if (!isFinite(full)) full = std;
+      map[String(e.player_id)] = [round2(std), round2(full - std)];
+    });
+    return map;
+  }
+
+  function projFor(projMap, id, ppr) {
+    var e = projMap && projMap[String(id)];
+    return e ? round2(e[0] + (Number(ppr) || 0) * e[1]) : null;
+  }
+
+  function sumProj(list) {
+    var t = 0;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].proj !== null && list[i].proj !== undefined) t += Number(list[i].proj);
+    }
+    return round2(t);
+  }
+
+  /* A week's record of Titan's calls, one entry per rostered player. Every
+     refresh rewrites a player's entry until his game kicks off; from then on
+     the entry stays exactly as it was at the last refresh before kickoff. */
+  function freezeWeek(prev, analysis, projMap, season, week, now) {
+    now = now || Date.now();
+    var old = (prev && prev.leagues) || {};
+    var out = {season: String(season), week: Number(week), updatedAt: now, leagues: {}};
+    ((analysis && analysis.leagues) || []).forEach(function (L) {
+      var id = String(L.cfg.id);
+      var before = (old[id] && old[id].players) || {};
+      var players = {}, k;
+      for (k in before) players[k] = before[k];
+      var titanSlot = {}, call = {};
+      (L.opt || []).forEach(function (o) { if (o.p) titanSlot[o.p.id] = o.slot; });
+      L.rows.forEach(function (r) { if (r.p) call[r.p.id] = r.verdict; });
+      L.roster.forEach(function (p) {
+        if (p.locked && before[p.id]) return; // frozen at kickoff
+        players[p.id] = {
+          n: p.name, pos: p.pos, team: p.team, start: !!p.start, slot: p.slot || '',
+          rank: p.rank === undefined ? null : p.rank,
+          tier: p.tier === '' || p.tier === undefined ? null : p.tier,
+          proj: projFor(projMap, p.id, L.cfg.ppr),
+          call: call[p.id] || (titanSlot[p.id] ? 'START' : 'BENCH'),
+          titan: titanSlot[p.id] || '', inj: p.inj || '', locked: !!p.locked, at: now
+        };
+      });
+      out.leagues[id] = {key: L.cfg.key, name: L.cfg.name, ppr: L.cfg.ppr || 0, lineup: L.cfg.lineup, players: players};
+    });
+    // A league switched off mid-week keeps what was already saved for it.
+    for (var lid in old) if (!out.leagues[lid]) out.leagues[lid] = old[lid];
+    return out;
+  }
+
   /* ------------------------------------------------ results + scorecard
 
      Not "are the rankings good in the abstract" but "given the players I
@@ -836,7 +901,7 @@
      Points come from Sleeper's matchups, so they are already under each
      league's own scoring rules. */
 
-  function scoreLeague(lg, rosters, matchups, userId, players, weekly) {
+  function scoreLeague(lg, rosters, matchups, userId, players, weekly, hist, projMap) {
     if (!rosters) return {error: 'could not load rosters'};
     var mineId = null;
     for (var r = 0; r < rosters.length; r++) {
@@ -859,20 +924,36 @@
       if (starterArr[sx] && starterArr[sx] !== '0') slotOf[starterArr[sx]] = lg.lineup[sx];
     }
 
+    // A frozen record (saved at each kickoff) supplies the rank, call and
+    // projection Titan had at lock. Without one, today's rankings and
+    // projections stand in.
+    var frozen = (hist && hist.players) || {};
     var roster = ids.map(function (id) {
       var info = playerInfo(players, id);
       var w = weekly[norm(info.name)] || null;
+      var h = frozen[String(id)] || null;
       return {
         id: String(id), name: info.name, pos: info.pos, team: info.team,
-        rank: w && w.rank !== null ? w.rank : null,
+        rank: h ? (h.rank === undefined ? null : h.rank) : (w && w.rank !== null ? w.rank : null),
         pts: Number(pp[String(id)] || 0),
+        proj: h && h.proj !== null && h.proj !== undefined ? h.proj : projFor(projMap, id, lg.ppr),
+        call: h ? h.call : '', frozen: !!h,
         start: !!startedIds[String(id)],
         locked: false, outish: false, slot: slotOf[String(id)] || ''
       };
     });
 
     var actual = sumPts(roster.filter(function (p) { return p.start; }));
-    var byRank = sumPts(optimal(roster, lg.lineup).map(function (o) { return o.p; }));
+    var rankLine = optimal(roster, lg.lineup).map(function (o) { return o.p; });
+    var byRank = sumPts(rankLine);
+    // Players with no frozen call get the call today's rankings make.
+    var inLine = {};
+    rankLine.forEach(function (p) { if (p) inLine[p.id] = true; });
+    roster.forEach(function (p) {
+      if (!p.frozen) p.call = p.start ? (inLine[p.id] ? 'OK' : 'SWAP OUT') : (inLine[p.id] ? 'START' : 'BENCH');
+    });
+    var projActual = sumProj(roster.filter(function (p) { return p.start; }));
+    var projByRank = sumProj(rankLine);
     var perfect = sumPts(bestByPoints(roster, lg.lineup));
     var cc = closeCalls(roster, lg.lineup, startedIds);
 
@@ -891,20 +972,27 @@
 
     return {key: lg.key, name: lg.name, actual: actual, byRank: byRank, perfect: perfect,
       leftOnBench: round2(byRank - actual), ceiling: round2(perfect - byRank),
+      projActual: projActual, projByRank: projByRank, vsProj: round2(actual - projActual),
+      frozen: roster.filter(function (p) { return p.frozen; }).length,
       close: cc, detail: detail, roster: roster};
   }
 
-  function scoreWeek(res, weekly) {
+  /* `history` is the week's frozen record (freezeWeek output) or null, and
+     `projMap` is Sleeper's projections for the week, used where nothing froze. */
+  function scoreWeek(res, weekly, history, projMap) {
     var rows = [], skipped = [];
-    var T = {actual: 0, byRank: 0, perfect: 0, cw: 0, ct: 0};
+    var T = {actual: 0, byRank: 0, perfect: 0, projActual: 0, projByRank: 0, cw: 0, ct: 0};
+    var hist = (history && history.leagues) || {};
     res.leagues.forEach(function (x) {
-      var r = scoreLeague(x.cfg, x.rosters, x.matchups, res.userId, res.players, weekly);
+      var r = scoreLeague(x.cfg, x.rosters, x.matchups, res.userId, res.players, weekly, hist[String(x.cfg.id)], projMap);
       if (r.error) { skipped.push(x.cfg.key + ': ' + r.error); return; }
       rows.push(r);
       T.actual += r.actual; T.byRank += r.byRank; T.perfect += r.perfect;
+      T.projActual += r.projActual; T.projByRank += r.projByRank;
       T.cw += r.close.wins; T.ct += r.close.total;
     });
-    T.actual = round2(T.actual); T.byRank = round2(T.byRank); T.perfect = round2(T.perfect);
+    ['actual', 'byRank', 'perfect', 'projActual', 'projByRank'].forEach(function (k) { T[k] = round2(T[k]); });
+    T.vsProj = round2(T.actual - T.projActual);
     return {week: res.week, rows: rows, totals: T, skipped: skipped};
   }
 
@@ -921,7 +1009,8 @@
     closeCalls: closeCalls, freeAgents: freeAgents,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
-    exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek
+    exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
+    trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -66,7 +66,9 @@
     score: {week: 0, busy: false, data: null, error: ''},
     draft: {week: 0, text: '', parsed: null, file: '', pos: ''},
     link: {busy: false, error: ''},
-    sync: {ready: false, api: null, user: null, state: 'off', error: '', at: 0}
+    sync: {ready: false, api: null, user: null, state: 'off', error: '', at: 0},
+    proj: {}, // Sleeper's projections for the snapshot's week
+    view: {week: 0, pos: 'QB'} // the saved rankings open on the Rankings tab
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
   if (S.snap && S.account && S.snap.userId !== S.account.userId) S.snap = null;
@@ -152,6 +154,7 @@
       snap.userId = S.account.userId;
       S.snap = snap;
       store.set(KEY.snap, snap);
+      S.proj = await API.fetchProjections(snap.season, snap.week);
       if (S.score.week === snap.week) S.score.data = null; // live points have moved
     } catch (e) {
       S.error = 'Refresh failed: ' + (e && e.message ? e.message : e);
@@ -163,22 +166,41 @@
     }
   }
 
+  // Sleeper's projections for the snapshot's week; kept on the device for an hour.
+  async function loadProj() {
+    if (!S.snap) return;
+    const week = S.snap.week;
+    const map = await API.fetchProjections(S.snap.season, week);
+    if (!S.snap || S.snap.week !== week) return;
+    S.proj = map;
+    if (S.ui.tab === 'lineups') render();
+  }
+
+  /* A week's results, scored against the record the server job froze at each
+     kickoff (signed-in users), or against today's rankings and projections. */
   async function loadScore(week) {
     S.score = {week, busy: true, data: null, error: ''};
     if (S.ui.tab === 'score') render();
     try {
       const leagues = S.snap.leagues.map(d => d.cfg);
-      const res = await API.collectScores(S.account, leagues, week, S.snap.season);
+      const [res, hist, proj] = await Promise.all([
+        API.collectScores(S.account, leagues, week, S.snap.season),
+        S.sync.api && S.sync.user ? S.sync.api.getHistory(week).catch(() => null) : null,
+        API.fetchProjections(S.snap.season, week)
+      ]);
+      if (S.score.week !== week) return; // another week was picked meanwhile
       if (!res.started) {
         S.score.error = `Week ${week} has not kicked off yet, so there's nothing to score.`;
       } else {
         const r = ranksFor(week);
-        const D = SCC.scoreWeek(res, SCC.weeklyMap(r.rows));
+        const D = SCC.scoreWeek(res, SCC.weeklyMap(r.rows), hist, proj);
         D.ranks = r;
+        D.history = hist ? hist.updatedAt || 1 : 0;
         D.provisional = res.done < res.total;
         S.score.data = D;
       }
     } catch (e) {
+      if (S.score.week !== week) return;
       S.score.error = `Could not load week ${week}: ${e && e.message ? e.message : e}`;
     }
     S.score.busy = false;
@@ -305,7 +327,18 @@
         ? 'Switch some on in <button class="link" data-go="settings">Settings</button>.'
         : `Sleeper shows no ${esc(S.snap.season)} leagues on this account.`}</div>`;
     } else if (!list.length) h += `<div class="empty-note">Nothing to do. Every lineup matches your rankings.</div>`;
-    return h + list.map(leagueCard).join('');
+    const credit = Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper.</p>' : '';
+    return h + list.map(leagueCard).join('') + credit;
+  }
+
+  const projOf = (p, cfg) => SCC.projFor(S.proj, p.id, cfg.ppr);
+
+  // Sleeper's projection for the lineup as set, and for Titan's lineup when that differs.
+  function projLine(L) {
+    const mine = SCC.sumProj(L.roster.filter(p => p.start).map(p => ({proj: projOf(p, L.cfg)})));
+    if (!mine) return '';
+    const titan = SCC.sumProj((L.opt || []).filter(o => o.p).map(o => ({proj: projOf(o.p, L.cfg)})));
+    return ` · projected ${fmt(mine)}${Math.abs(titan - mine) >= 0.1 ? `, Titan's lineup ${fmt(titan)}` : ''}`;
   }
 
   function leagueCard(L) {
@@ -313,7 +346,7 @@
       : L.moves.length ? ['swap', plural(L.moves.length, 'change')]
       : ['ok', 'Set'];
     let h = `<article class="card league">
-      <header class="card-h"><div><h3>${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg))}</p></div><span class="pill p-${st[0]}">${st[1]}</span></header>`;
+      <header class="card-h"><div><h3>${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg) + projLine(L))}</p></div><span class="pill p-${st[0]}">${st[1]}</span></header>`;
     if (L.moves.length) {
       h += `<div class="moves"><h4>Make these changes in Sleeper</h4>${L.moves.map(m => `
         <div class="move"><span class="slot">${esc(slotName(m.slot))}</span>
@@ -321,7 +354,7 @@
           <span class="mv in">${esc(m.inn.name)} <em>${esc(rl(m.inn))}${m.inn.opp ? ' vs ' + esc(m.inn.opp) : ''}</em></span>
         </div>`).join('')}</div>`;
     }
-    h += `<ol class="lineup">${L.rows.map(lineupRow).join('')}</ol>`;
+    h += `<ol class="lineup">${L.rows.map(r => lineupRow(r, L.cfg)).join('')}</ol>`;
     L.wire.forEach(w => {
       const tail = w.cur ? `, better than ${esc(w.cur.name)} (${esc(rl(w.cur))})`
         : w.anyUnranked ? ', and you are starting someone unranked here' : '';
@@ -343,13 +376,14 @@
     return s ? ` · <span class="${p.outish ? 'bad' : 'warn'}">${esc(s)}</span>` : '';
   }
 
-  function lineupRow(r) {
+  function lineupRow(r, cfg) {
     if (!r.p) {
       return `<li class="row r-stop"><span class="slot">${esc(slotName(r.slot))}</span><span class="pos"></span>
         <span class="who"><b>Slot empty</b></span><span class="right"><span class="verdict v-stop">FILL SLOT</span></span></li>`;
     }
     const p = r.p, v = VERDICT[r.verdict] || 'ok';
-    const sub = [p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye].filter(Boolean).join(' · ');
+    const proj = projOf(p, cfg);
+    const sub = [p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
     return `<li class="row r-${v}"><span class="slot">${esc(slotName(r.slot))}</span>${pos(p.pos)}
       <span class="who"><b>${esc(p.name)}</b><small>${esc(sub)}${statusText(p)}</small></span>
       <span class="right">${rankCell(p)}<span class="verdict v-${v}">${esc(r.verdict)}</span></span></li>`;
@@ -427,7 +461,11 @@
     return h;
   }
 
-  /* ---- Scorecard */
+  /* ---- Weeks */
+
+  // How Titan's call on a player reads in a week's record.
+  const CALL = {'OK': 'start', 'START': 'start', 'BENCH': 'bench', 'SWAP OUT': 'swap out', 'DO NOT START': "don't start",
+    'UNRANKED': 'unranked', 'LOCKED': 'locked', 'FILL SLOT': 'fill slot'};
 
   function screenScore() {
     if (!S.snap) return emptyState();
@@ -435,42 +473,73 @@
     const wk = S.score.week || cur;
     let h = `<div class="bar">
       <label class="field"><span>Week</span><select data-ui="scoreWeek">
-        ${Array.from({length: Math.max(cur, 1)}, (_, i) => i + 1).map(w =>
-          `<option value="${w}" ${w === wk ? 'selected' : ''}>Week ${w}</option>`).join('')}
+        ${Array.from({length: 18}, (_, i) => i + 1).map(w => `<option value="${w}" ${w === wk ? 'selected' : ''} ${w > cur ? 'disabled' : ''}>Week ${w}${
+          w === cur ? ' (this week)' : w > cur ? ' (not played yet)' : ''}</option>`).join('')}
       </select></label>
       <button class="btn" data-action="score" ${S.score.busy ? 'disabled' : ''}>${S.score.busy ? 'Loading…' : S.score.data ? 'Reload' : 'Load'}</button>
     </div>
-    <p class="lede"><b>Actual</b> is what you started. <b>By rank</b> is what your rankings would have started from the same bench.
-      <b>Perfect</b> is the best that roster could have done in hindsight. <b>Left on bench</b> is what following your rankings would have gained you.</p>`;
+    <p class="lede"><b>Projected</b> is Sleeper's projection for the players you started. <b>By rank</b> is what your rankings would have
+      started from the same bench, and <b>perfect</b> is the best that roster could have done in hindsight. Open a league for every player's
+      rank, Titan's call, projection and points.</p>`;
     if (S.score.error) h += `<div class="banner swap">${esc(S.score.error)}</div>`;
     const D = S.score.data;
     if (!D) return h;
 
     const T = D.totals, gained = Math.round((T.byRank - T.actual) * 10) / 10;
-    if (D.provisional) h += `<div class="banner swap"><b>Live:</b> games are still in progress, so these numbers will move.</div>`;
-    if (!D.ranks.exact) {
+    if (D.provisional) {
+      h += `<div class="banner swap"><b>Live:</b> games are still in progress, so these numbers will move. Projections cover the whole week.</div>`;
+    }
+    h += historyBanner(D);
+    if (!D.ranks.exact && !D.history) {
       h += `<div class="banner swap">No rankings saved for week ${D.week}${D.ranks.week
         ? `, so "By rank" is using week ${D.ranks.week}.` : ', so "By rank" has nothing to order by.'}</div>`;
     }
-    h += `<section class="tiles">${tile(fmt(T.actual), 'you scored', 'muted')}${tile(fmt(T.byRank), 'by rank', gained > 0 ? 'swap' : 'ok')}${
-      tile(fmt(T.perfect), 'perfect', 'muted')}${tile(T.ct ? `${T.cw}/${T.ct}` : 'None', 'close calls right', 'muted')}</section>`;
-    h += `<p class="verdict-line">${gained > 0 ? `Following your rankings would have scored <b class="amber">${fmt(gained)}</b> more.`
-      : gained < 0 ? `Your lineups beat your rankings by <b class="good">${fmt(-gained)}</b>.` : 'Your lineups matched your rankings.'}</p>`;
+    h += `<section class="tiles">${tile(fmt(T.actual), 'you scored', 'muted')}${tile(T.projActual ? fmt(T.projActual) : 'None', 'projected', 'muted')}${
+      tile(fmt(T.byRank), 'by rank', gained > 0 ? 'swap' : 'ok')}${tile(fmt(T.perfect), 'perfect', 'muted')}</section>`;
+    const vsProj = !T.projActual ? ''
+      : D.provisional ? `So far: <b>${fmt(T.actual)}</b> of <b>${fmt(T.projActual)}</b> projected. `
+      : T.vsProj >= 0 ? `You beat the projection by <b class="good">${fmt(T.vsProj)}</b>. `
+      : `You finished <b class="amber">${fmt(-T.vsProj)}</b> under the projection. `;
+    h += `<p class="verdict-line">${vsProj}${gained > 0 ? `Following your rankings would have scored <b class="amber">${fmt(gained)}</b> more.`
+      : gained < 0 ? `Your lineups beat your rankings by <b class="good">${fmt(-gained)}</b>.` : 'Your lineups matched your rankings.'}${
+      T.ct ? ` Close calls right: ${T.cw} of ${T.ct}.` : ''}</p>`;
     if (D.skipped.length) h += `<p class="fine">Skipped: ${esc(D.skipped.join('; '))}</p>`;
     h += D.rows.map(r => `<details class="card score"><summary>
         <span class="sname">${esc(r.key)}</span>
         <span class="n"><small>Actual</small>${fmt(r.actual)}</span>
-        <span class="n"><small>By rank</small>${fmt(r.byRank)}</span>
-        <span class="n"><small>Perfect</small>${fmt(r.perfect)}</span>
+        <span class="n"><small>Projected</small>${r.projActual ? fmt(r.projActual) : 'None'}</span>
+        <span class="n${r.projActual && !D.provisional ? (r.vsProj >= 0 ? ' good' : ' amber') : ''}"><small>vs proj</small>${
+          !r.projActual ? '' : D.provisional ? 'Live' : signed(r.vsProj)}</span>
         <span class="n${r.leftOnBench > 0 ? ' amber' : ''}"><small>Left on bench</small>${signed(r.leftOnBench)}</span>
       </summary>
-      <p class="sub">Ceiling gap ${fmt(r.ceiling)} · close calls ${r.close.total ? `${r.close.wins} / ${r.close.total}` : 'none'}</p>
-      <ul class="detail">${r.detail.map(d => `<li class="row${d.benchWin ? ' r-swap' : ''}">
-        <span class="slot">${esc(d.slot === 'bench' ? 'BENCH' : slotName(d.slot))}</span>${d.p ? pos(d.p.pos) : '<span class="pos"></span>'}
-        <span class="who"><b>${d.p ? esc(d.p.name) : 'Empty slot'}</b><small>${d.p ? esc(rl(d.p)) : ''}${d.benchWin ? ' · outscored your weakest starter' : ''}</small></span>
-        <span class="right"><span class="rank">${d.p ? fmt(d.p.pts) : ''}</span></span></li>`).join('')}</ul>
+      <p class="sub">By rank ${fmt(r.byRank)} · perfect ${fmt(r.perfect)} · close calls ${r.close.total ? `${r.close.wins} of ${r.close.total}` : 'none'}</p>
+      <ul class="detail">${r.detail.map(d => detailRow(d, D.provisional)).join('')}</ul>
     </details>`).join('');
+    h += `<p class="fine">Projections via Sleeper.${D.ranks.week
+      ? ` <button class="link" data-action="ranks-view" data-week="${D.ranks.week}">See your week ${D.ranks.week} rankings</button>` : ''}</p>`;
     return h;
+  }
+
+  function historyBanner(D) {
+    if (D.history) {
+      return `<div class="banner ok">Ranks, Titan's calls and projections are as they stood at each player's kickoff, saved automatically.</div>`;
+    }
+    const why = `Nothing was saved at kickoff for week ${D.week}, so ranks and calls use your rankings as they are now, with Sleeper's latest projections.`;
+    return S.sync.user ? `<div class="banner swap">${why}</div>`
+      : `<div class="banner swap">${why} <button class="link" data-go="settings">Sign in with Google</button> and Titan saves them at every kickoff.</div>`;
+  }
+
+  // While the week is live, a player who hasn't scored yet shows no gap to his projection.
+  function detailRow(d, live) {
+    const slot = `<span class="slot">${esc(d.slot === 'bench' ? 'BENCH' : slotName(d.slot))}</span>`;
+    if (!d.p) return `<li class="row r-stop">${slot}<span class="pos"></span><span class="who"><b>Empty slot</b></span><span class="right"></span></li>`;
+    const p = d.p, proj = has(p.proj) ? Number(p.proj) : null;
+    const bits = [p.rank === null ? 'unranked' : rl(p), p.call && 'Titan: ' + (CALL[p.call] || String(p.call).toLowerCase()),
+      proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
+    const diff = proj !== null && !(live && !p.pts) ? `<small class="${p.pts >= proj ? 'good' : 'amber'}">${signed(p.pts - proj)}</small>` : '';
+    return `<li class="row${d.benchWin ? ' r-swap' : ''}">${slot}${pos(p.pos)}
+      <span class="who"><b>${esc(p.name)}</b><small>${esc(bits)}${d.benchWin ? ' · outscored your weakest starter' : ''}</small></span>
+      <span class="right"><span class="rank pts">${fmt(p.pts)}${diff}</span></span></li>`;
   }
 
   /* ---- Rankings */
@@ -486,8 +555,10 @@
         const e = S.ranks.weeks[w];
         return `<li><span><b>Week ${w}</b> · ${e.rows.length} players<small>${esc(countsText(e.rows))} · saved ${esc(when(e.savedAt))}${
           e.source ? ' from ' + esc(e.source) : ''}</small></span>
-          <button class="btn ghost small" data-action="ranks-del" data-week="${w}">Delete</button></li>`;
+          <span class="saved-btns"><button class="btn ghost small" data-action="ranks-view" data-week="${w}">${S.view.week === w ? 'Hide' : 'View'}</button>
+          <button class="btn ghost small" data-action="ranks-del" data-week="${w}">Delete</button></span></li>`;
       }).join('')}</ul>` : '<p class="muted">None yet.</p>'}</section>
+      ${ranksViewer()}
       <section class="card pad"><h3>Import rankings</h3>
         <div class="bar">
           <label class="field narrow"><span>Week</span><input type="number" min="1" max="18" data-draft="week" value="${S.draft.week}"></label>
@@ -509,6 +580,35 @@
           <p>Name defenses by team (<code>LAC D/ST</code>, <code>Los Angeles Chargers</code> or <code>LAC</code> all work).</p>
         </details>
       </section>`;
+  }
+
+  // One saved week's rankings, a position at a time.
+  function ranksViewer() {
+    const w = S.view.week, e = S.ranks.weeks[w];
+    if (!e) return '';
+    const counts = SCC.rankCounts(e.rows);
+    const shown = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].filter(p => counts[p]);
+    const pick = shown.includes(S.view.pos) ? S.view.pos : shown[0];
+    const rows = e.rows.filter(r => r.pos === pick).sort((a, b) => SCC.rankKey(a) - SCC.rankKey(b));
+    const flex = pick === 'RB' || pick === 'WR' || pick === 'TE';
+    return `<section class="card pad" id="ranks-view">
+      <div class="view-h"><h3>Week ${w} rankings</h3><button class="btn ghost small" data-action="ranks-view" data-week="0">Close</button></div>
+      <p class="fine">Saved ${esc(when(e.savedAt))}${e.source ? ' from ' + esc(e.source) : ''}.${
+        flex ? ' RB, WR and TE are in FLEX order, with each player\'s FLEX rank on the right.' : ''}</p>
+      <div class="chips" role="group" aria-label="Position">${shown.map(p =>
+        `<button class="chip" data-view-pos="${p}" aria-pressed="${p === pick}">${p} ${counts[p]}</button>`).join('')}</div>
+      <ol class="roster">${rows.map((r, i) => `<li class="row"><span class="slot">${esc(pick)}${i + 1}</span>${pos(r.pos)}
+        <span class="who"><b>${esc(r.name)}</b><small>${esc([r.team, has(r.opp) && 'vs ' + r.opp, has(r.tier) && 'tier ' + r.tier].filter(Boolean).join(' · '))}</small></span>
+        <span class="right"><span class="rank">${flex && r.rank !== null && r.rank < 1000 ? 'FLEX ' + esc(r.rank) : ''}</span></span></li>`).join('')}</ol>
+    </section>`;
+  }
+
+  // Opens a saved week's rankings on the Rankings tab, or closes them.
+  function viewRanks(w) {
+    S.view.week = S.ui.tab === 'ranks' && S.view.week === w ? 0 : w;
+    if (S.ui.tab !== 'ranks') go('ranks'); else render();
+    const el = $('ranks-view');
+    if (el) el.scrollIntoView({block: 'start', behavior: 'smooth'});
   }
 
   const parseDraft = () => (S.draft.text.trim() ? SCC.parseRanks(S.draft.text, {pos: S.draft.pos}) : null);
@@ -701,7 +801,12 @@
       render();
       toast('Rankings updated from your account.');
     },
-    setSync(patch) { Object.assign(S.sync, patch); paintSync(); },
+    setSync(patch) {
+      Object.assign(S.sync, patch);
+      paintSync();
+      // Signing in makes the week's saved record readable: score again with it.
+      if (patch.state === 'on' && S.ui.tab === 'score' && S.score.data && !S.score.data.history && !S.score.busy) loadScore(S.score.week);
+    },
     syncReady(api) { S.sync.api = api; S.sync.ready = true; paintSync(); }
   };
 
@@ -734,12 +839,14 @@
   });
 
   view.addEventListener('click', e => {
-    const t = e.target.closest('[data-go],[data-filter],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
     if (t.dataset.filter) { S.ui.filter = t.dataset.filter; saveUi(); return render(); }
+    if (t.dataset.viewPos) { S.view.pos = t.dataset.viewPos; return render(); }
     const a = t.dataset.action;
     if (a === 'score') loadScore(S.score.week || S.snap.week);
+    else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
     else if (a === 'ranks-save') saveRanks();
     else if (a === 'ranks-del') deleteRanks(Number(t.dataset.week));
     else if (a === 'leagues-save') saveLeagues();
@@ -805,4 +912,5 @@
   analyze();
   render();
   if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS)) refresh();
+  else loadProj();
 })();

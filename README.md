@@ -50,7 +50,7 @@ website (such as alerts) to pass review.
 | Rosters | Every rostered player per league, with rank, tier, opponent and bye |
 | Exposure | Players on two or more of your teams |
 | Byes | How many of your players are off each week, per league |
-| Scorecard | For any week: what you scored, what your rankings would have scored, and the perfect-hindsight score |
+| Weeks | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points |
 | Rankings | Import and manage weekly rankings |
 | Settings | Linked account, which leagues Titan manages, refresh log |
 
@@ -94,11 +94,25 @@ page opened from a file), the app runs on the device alone. Sign-in works on
 the Firebase Hosting domains; the GitHub Pages address forwards to
 `titan-fantasy-football.web.app`.
 
+## Server job
+
+`functions/index.js` is a scheduled Cloud Function (`freezeCalls`). Every 15 minutes on NFL
+game days it runs, for each person who signed in to sync, the same engine the app uses
+(`engine.js` and `sleeper.js`, copied in before each deploy): their live Sleeper rosters
+under their synced rankings, plus Sleeper's projections for the week. It saves the result
+to `users/{uid}/history/{week}` with `freezeWeek`, which keeps rewriting a player's entry
+until his game kicks off and never after. The Weeks tab scores each week against that
+frozen record. Scheduled functions need Firebase's pay-as-you-go (Blaze) plan.
+
+Projections come from Sleeper's projections feed, which Sleeper licenses from RotoWire
+and doesn't officially document; the app says "Projections via Sleeper".
+
 ## Deploying
 
 ```
 firebase deploy --only hosting          # the app
 firebase deploy --only firestore:rules  # the database rules
+firebase deploy --only functions        # the kickoff freezer (Blaze plan)
 ```
 
 Firebase project: `titan-fantasy-football`, live at
@@ -116,6 +130,7 @@ sw.js                  Service worker: offline shell, installable app
 manifest.webmanifest   App name and icons for installing
 icon*.svg / icon*.png  App icons (the PNGs are rendered from the SVGs)
 privacy.html           Privacy policy
+functions/             Server job: freezes each week's calls at kickoff
 ```
 
 No build step and no dependencies. It runs on any static host.

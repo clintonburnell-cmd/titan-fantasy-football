@@ -130,14 +130,25 @@ const api = {
     return (entry ? setDoc(weekDoc(u.uid, week), entry) : deleteDoc(weekDoc(u.uid, week))).catch(saveFailed);
   },
 
+  /* A week's frozen record of Titan's calls, saved by the server job at each
+     kickoff, or null if there isn't one. */
+  async getHistory(week) {
+    const u = auth.currentUser;
+    if (!u) return null;
+    const s = await getDoc(doc(db, 'users', u.uid, 'history', String(week)));
+    return s.exists() ? s.data() : null;
+  },
+
   /* Removes everything Titan stores for this person, then the sign-in itself.
      Google asks for a fresh sign-in first if the last one was a while ago. */
   async deleteAccount() {
     const u = auth.currentUser;
     if (!u) return;
     stopListening();
-    const weeks = await getDocs(collection(db, 'users', u.uid, 'ranks'));
-    await Promise.all(weeks.docs.map(d => deleteDoc(d.ref)));
+    for (const sub of ['ranks', 'history']) {
+      const docs = await getDocs(collection(db, 'users', u.uid, sub));
+      await Promise.all(docs.docs.map(d => deleteDoc(d.ref)));
+    }
     await deleteDoc(userDoc(u.uid));
     try {
       await deleteUser(u);

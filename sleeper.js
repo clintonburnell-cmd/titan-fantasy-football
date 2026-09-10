@@ -265,11 +265,27 @@
     return out;
   }
 
+  /* Sleeper's weekly projections (RotoWire's numbers), trimmed and kept for an hour. */
+  var PROJ_POS = '&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=K&position[]=DEF';
+  async function fetchProjections(season, week) {
+    var key = 'titan.proj.v1.' + season + '.' + week;
+    var cached = store.get(key);
+    if (cached && Date.now() - cached.ts < 3600 * 1000) return cached.map;
+    try {
+      var list = await getJson('https://api.sleeper.app/projections/nfl/' + season + '/' + week + '?season_type=regular' + PROJ_POS);
+      var map = SCC.trimProjections(list || []);
+      store.set(key, {ts: Date.now(), map: map});
+      return map;
+    } catch (e) {
+      return cached ? cached.map : {};
+    }
+  }
+
   var api = {
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
     collect: collect, collectScores: collectScores,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
-    PLAYERS_KEY: PLAYERS_KEY
+    fetchProjections: fetchProjections, PLAYERS_KEY: PLAYERS_KEY
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

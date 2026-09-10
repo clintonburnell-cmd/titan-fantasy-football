@@ -4,7 +4,7 @@
  * time the app opens, with the cached copy as the offline fallback. Sleeper's
  * API is never touched here: live data always comes straight from Sleeper.
  */
-const CACHE = 'titan-v4';
+const CACHE = 'titan-v5';
 const SHELL = ['./', 'index.html', 'styles.css', 'engine.js', 'sleeper.js', 'syncplan.js', 'app.js', 'sync.js',
   'icon.svg', 'icon-192.png', 'apple-touch-icon.png', 'manifest.webmanifest', 'privacy.html'];
 
