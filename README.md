@@ -1,4 +1,4 @@
-# Titan Fantasy Football
+# Titan Fantasy Football Manager
 
 Start/sit calls, waiver upgrades, exposure and bye weeks across every Sleeper
 league you play in, ordered by your own rankings.
@@ -16,10 +16,14 @@ start/sit rules, made to work for any Sleeper account.
    and every refresh re-reads the user's leagues, including each league's lineup
    slots, team count and scoring. A commissioner's format change is picked up
    automatically.
-2. **Import rankings**: a CSV file or a paste. Two layouts are read:
-   one row per player (`Player, Pos, Team, Rank[, Opp, Implied, Tier]`), or
+2. **Import rankings**: a CSV file or a paste. Three layouts are read:
+   one row per player (`Player, Pos, Team, Rank[, Opp, Implied, Tier]`);
    side-by-side position tables like Late-Round's export
-   (`QB Rank, QB Player, …, FLEX Rank, FLEX Player, …`).
+   (`QB Rank, QB Player, …, FLEX Rank, FLEX Player, …`); and FantasyPros
+   exports (`RK, PLAYER NAME, TEAM, OPP`), one file per position, where the position
+   comes from the file name or the user's pick. A file ranking only some positions is
+   added to that week and replaces just those positions. For RB/WR/TE, FantasyPros'
+   FLEX file gives the overall ranks FLEX slots need.
 3. **Follow the calls**: every lineup slot gets a verdict (OK, SWAP OUT,
    DO NOT START, UNRANKED, LOCKED), with the exact swaps to make, ranked free
    agents nobody in the league has, and injured starters.
@@ -127,5 +131,10 @@ No build step and no dependencies. It runs on any static host.
 
    The engine already works on a neutral roster format (`buildLeague` output), so each
    platform needs its own adapter like `sleeper.js`, not a rewrite.
-**Save point:** the git tag `v1.0.0` marks everything above: the web app, sync, the tip
-jar, the News tab and the signed Android app.
+
+## Save points
+
+| Tag | What it holds |
+|---|---|
+| `v1.0.0` | Web app for any Sleeper account, Google sign-in sync, the website-only tip jar, the News tab, and the signed Android app |
+| `v1.1.0` | Renamed Titan Fantasy Football Manager; FantasyPros rankings; the full title on phones |

@@ -1,4 +1,4 @@
-/* Titan Fantasy Football — sync decisions.
+/* Titan Fantasy Football Manager — sync decisions.
  *
  * Which copy wins when this device and the person's account disagree. Pure
  * functions, so the rules can be tested without Firebase: the newer copy

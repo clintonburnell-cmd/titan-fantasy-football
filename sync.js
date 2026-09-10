@@ -1,4 +1,4 @@
-/* Titan Fantasy Football — sync across a person's own devices.
+/* Titan Fantasy Football Manager — sync across a person's own devices.
  *
  * Google sign-in (Firebase Authentication) plus one private Firestore area per
  * person: users/{uid} holds the linked Sleeper account and league switches,

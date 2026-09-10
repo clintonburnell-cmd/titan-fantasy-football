@@ -1,4 +1,4 @@
-/* Titan Fantasy Football — service worker.
+/* Titan Fantasy Football Manager — service worker.
  *
  * Network first for the app's own files, so an update is picked up the next
  * time the app opens, with the cached copy as the offline fallback. Sleeper's

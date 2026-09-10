@@ -1,4 +1,4 @@
-/* Titan Fantasy Football — engine
+/* Titan Fantasy Football Manager — engine
  *
  * Start/sit, waiver, exposure, bye and scorecard rules. Pure functions only —
  * no page, no network, no storage — so the same file runs in the browser and

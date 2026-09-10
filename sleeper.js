@@ -1,4 +1,4 @@
-/* Titan Fantasy Football — Sleeper API + browser storage.
+/* Titan Fantasy Football Manager — Sleeper API + browser storage.
  *
  * Read-only: Sleeper has no API for setting lineups, claiming waivers or making
  * trades, and none is needed to read a public account. Every endpoint used here

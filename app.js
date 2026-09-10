@@ -1,4 +1,4 @@
-/* Titan Fantasy Football — the app.
+/* Titan Fantasy Football Manager — the app.
  *
  * Everything lives in this browser: the linked Sleeper account, the last pull
  * from Sleeper (the snapshot) and the rankings the user imported. Every screen
@@ -213,7 +213,7 @@
   function screenWelcome() {
     return `<section class="welcome">
       <img src="icon.svg" alt="" width="76" height="76">
-      <h2>Titan Fantasy Football</h2>
+      <h2>Titan Fantasy Football Manager</h2>
       <p class="lede">Start/sit calls, waiver upgrades, exposure and bye weeks across every league you play on Sleeper, ordered by your own rankings.</p>
       <form class="card pad" data-form="link" novalidate>
         <label class="field block"><span>Your Sleeper username</span>
