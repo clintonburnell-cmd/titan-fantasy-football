@@ -26,11 +26,16 @@ start/sit rules, made to work for any Sleeper account.
 
 Sleeper is read-only. Titan can't set lineups, claim waivers or trade.
 
+The header has a Ko-fi tip jar ("Like my work? Consider a tip!"). It shows only on
+the website. The Google Play app opens `/?source=play`, and Titan hides the tip jar
+for that session, because tips inside a Play app must use Google Play billing.
+
 ## Screens
 
 | Screen | What it shows |
 |---|---|
 | Lineups | Each league's lineup as set in Sleeper, with a verdict on every slot, the changes to make, wire upgrades and injuries |
+| News | News-only X accounts (@UnderdogNFL, @RotowireNFL), each opening on X. X doesn't let apps read posts without a paid plan |
 | Rosters | Every rostered player per league, with rank, tier, opponent and bye |
 | Exposure | Players on two or more of your teams |
 | Byes | How many of your players are off each week, per league |
