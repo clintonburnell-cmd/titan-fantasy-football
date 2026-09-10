@@ -37,6 +37,24 @@
     }
   })();
 
+  // iPhone and iPad visitors in the browser get a one-time tip on putting Titan on
+  // their home screen. iPadOS reports itself as a Mac, so touch support gives it away.
+  const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const STANDALONE = navigator.standalone === true ||
+    !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  const IOS_HINT_KEY = 'titan.iosHint.v1';
+  const SHARE_ICON = '<svg class="share-ico" viewBox="0 0 24 24" aria-label="Share"><path d="M12 3v12M8 7l4-4 4 4" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 10H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12' +
+    'a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+  function iosHint() {
+    if (!IS_IOS || STANDALONE || store.get(IOS_HINT_KEY)) return '';
+    const device = /iPhone|iPod/.test(navigator.userAgent) ? 'iPhone' : 'iPad';
+    return `<div class="banner ios-hint" role="note"><span><b>Install Titan on your ${device}:</b> tap Share ${SHARE_ICON}, then
+      <b>Add to Home Screen</b>.</span><button class="link" data-action="ios-hint-close">Got it</button></div>`;
+  }
+
   const S = {
     account: store.get(KEY.account),
     ranks: store.get(KEY.ranks) || {weeks: {}},
@@ -185,9 +203,9 @@
 
   function render() {
     paintHeader();
-    if (!S.account) { view.innerHTML = screenWelcome(); return; }
+    if (!S.account) { view.innerHTML = iosHint() + screenWelcome(); return; }
     const err = S.error ? `<div class="banner stop">${esc(S.error)}</div>` : '';
-    view.innerHTML = err + SCREENS[S.ui.tab]();
+    view.innerHTML = iosHint() + err + SCREENS[S.ui.tab]();
   }
 
   function emptyState() {
@@ -727,6 +745,7 @@
     else if (a === 'leagues-save') saveLeagues();
     else if (a === 'unlink') unlink();
     else if (a === 'players-reload') { API.clearPlayers(); refresh(); }
+    else if (a === 'ios-hint-close') { store.set(IOS_HINT_KEY, 1); render(); }
     else if (a === 'sync-in' && S.sync.api) {
       S.sync.api.signIn().catch(e => window.TitanApp.setSync({state: 'error', error: 'Sign-in failed: ' + (e.code || e.message)}));
     } else if (a === 'sync-out' && S.sync.api) {

@@ -99,6 +99,9 @@ function saveFailed(e) { App.setSync({state: 'error', error: 'Could not save to 
 
 const api = {
   async signIn() {
+    // A home-screen web app on iPhone can't hand a sign-in popup back to the app,
+    // so it signs in with a full-page redirect instead.
+    if (navigator.standalone === true) return signInWithRedirect(auth, provider);
     try {
       await signInWithPopup(auth, provider);
     } catch (e) {
@@ -140,6 +143,8 @@ const api = {
       await deleteUser(u);
     } catch (e) {
       if (e.code !== 'auth/requires-recent-login') throw e;
+      // No popup there either; a fresh sign-in does the same job.
+      if (navigator.standalone === true) throw new Error('For security, sign out and sign back in, then delete your account.');
       await reauthenticateWithPopup(u, provider);
       await deleteUser(u);
     }

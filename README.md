@@ -34,6 +34,13 @@ The header has a Ko-fi tip jar ("Like my work? Consider a tip!"). It shows only 
 the website. The Google Play app opens `/?source=play`, and Titan hides the tip jar
 for that session, because tips inside a Play app must use Google Play billing.
 
+On iPhone and iPad, Titan runs as a home-screen web app (Safari: Share, then Add to
+Home Screen). Visitors in the browser see a one-time tip explaining that. From the
+home screen, Google sign-in uses a full-page redirect, because iOS home-screen apps
+can't hand a popup back. An App Store version is a later step: Apple needs a native
+wrapper built on a Mac, Sign in with Apple alongside Google, and features beyond the
+website (such as alerts) to pass review.
+
 ## Screens
 
 | Screen | What it shows |
