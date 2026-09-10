@@ -399,15 +399,14 @@
       position: single ? fixedPos : '', warning: warning, error: rows.length ? '' : 'No player rows found.'};
   }
 
-  /* A file that ranks only some positions (FantasyPros exports one per position)
-     is added to the week, replacing just those positions. A file covering QB, RB,
-     WR and TE replaces the whole week. */
+  /* A file replaces only the positions it ranks and keeps the rest of the week,
+     so FantasyPros' per-position files add up, and a file without K or DEF (like
+     the OP list) leaves the saved K and DEF ranks alone. */
   function mergeRanks(prevRows, newRows) {
     var c = rankCounts(newRows);
     var positions = Object.keys(c);
-    var full = ['QB', 'RB', 'WR', 'TE'].every(function (p) { return c[p]; });
-    if (full || !prevRows || !prevRows.length) return {rows: newRows, merged: false, positions: positions};
-    return {rows: prevRows.filter(function (r) { return !c[r.pos]; }).concat(newRows), merged: true, positions: positions};
+    var kept = (prevRows || []).filter(function (r) { return !c[r.pos]; });
+    return {rows: kept.length ? kept.concat(newRows) : newRows, merged: kept.length > 0, positions: positions};
   }
 
   function weeklyMap(rows) {
