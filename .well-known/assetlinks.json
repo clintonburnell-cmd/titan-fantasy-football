@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.titanfantasyfootball.app",
+      "sha256_cert_fingerprints": [
+        "54:88:AC:25:1E:91:E9:FE:D9:2C:67:4A:CC:30:B0:4F:88:46:26:1A:A4:74:C4:01:67:B9:78:83:37:F0:F4:A8"
+      ]
+    }
+  }
+]
