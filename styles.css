@@ -272,6 +272,7 @@ details.score .sub { padding: 0 14px 10px; color: var(--muted); font-size: .8rem
 .btn.ghost { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); }
 .btn.small { padding: 5px 10px; font-size: .8rem; }
 label.btn { display: inline-flex; align-items: center; }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .draft { display: grid; gap: 10px; justify-items: start; }
 
 .help { font-size: .84rem; color: var(--muted); }

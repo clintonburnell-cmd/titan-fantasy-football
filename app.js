@@ -15,6 +15,23 @@
   const STALE_MS = 5 * 60 * 1000;
   const TABS = ['lineups', 'rosters', 'exposure', 'byes', 'score', 'ranks', 'settings'];
   const AVATAR = 'https://sleepercdn.com/avatars/thumbs/';
+  const TIP_URL = 'https://ko-fi.com/titandev';
+
+  // Inside the Google Play app, tips would have to go through Google Play billing,
+  // so the Ko-fi tip jar shows only on the website. The Play app opens
+  // /?source=play (and arrives with an android-app:// referrer); remembering it
+  // for the session covers reloads that drop the query string.
+  const IN_PLAY_APP = (() => {
+    try {
+      if (new URLSearchParams(location.search).get('source') === 'play' ||
+          document.referrer.startsWith('android-app://com.titanfantasyfootball.app')) {
+        sessionStorage.setItem('titan.play', '1');
+      }
+      return sessionStorage.getItem('titan.play') === '1';
+    } catch (e) {
+      return false;
+    }
+  })();
 
   const S = {
     account: store.get(KEY.account),
@@ -515,6 +532,10 @@
           <div class="bar"><button class="btn" data-action="leagues-save">Save and refresh</button></div>`
         : `<p class="muted">${S.busy ? 'Loading…' : 'No leagues yet — tap Refresh.'}</p>`}
       </section>
+      ${IN_PLAY_APP ? '' : `<section class="card pad"><h3>Support Titan</h3>
+        <p class="fine">Titan is free, with no ads. If it helps you win, you can buy the developer a coffee.</p>
+        <div class="bar"><a class="btn" href="${TIP_URL}" target="_blank" rel="noopener">Tip on Ko-fi</a></div>
+      </section>`}
       <section class="card pad"><h3>Player list</h3>
         <p class="fine">Names, positions and teams are saved on this device and refreshed every few days. Injuries and game locks are pulled fresh on every refresh.</p>
         <div class="bar"><button class="btn ghost" data-action="players-reload">Reload player list now</button></div>
@@ -717,6 +738,7 @@
 
   /* --------------------------------------------------------------- boot */
 
+  if (IN_PLAY_APP) document.querySelectorAll('[data-tip]').forEach(el => { el.hidden = true; });
   analyze();
   render();
   if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS)) refresh();
