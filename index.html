@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Titan Fantasy Football</title>
+  <meta name="description" content="Start/sit calls, waiver upgrades, exposure and bye weeks across every Sleeper league you play in, ordered by your own rankings.">
+  <meta name="theme-color" content="#0a0f1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Titan">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-in">
+      <div class="brand">
+        <img src="icon.svg" alt="" width="34" height="34">
+        <div><h1>Titan Fantasy Football</h1><p id="meta">Start/sit for every Sleeper league</p></div>
+      </div>
+      <button id="refresh" class="refresh" type="button" aria-label="Refresh from Sleeper" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Refresh</span>
+      </button>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Sections" hidden>
+      <div class="tabs-in">
+        <button type="button" data-tab="lineups">Lineups</button>
+        <button type="button" data-tab="rosters">Rosters</button>
+        <button type="button" data-tab="exposure">Exposure</button>
+        <button type="button" data-tab="byes">Byes</button>
+        <button type="button" data-tab="score">Scorecard</button>
+        <button type="button" data-tab="ranks">Rankings</button>
+        <button type="button" data-tab="settings">Settings</button>
+      </div>
+    </nav>
+  </header>
+
+  <div id="progress" class="progress" role="status" hidden></div>
+  <main id="view" class="wrap"></main>
+  <footer class="foot wrap">
+    Titan Fantasy Football isn't affiliated with or endorsed by Sleeper. <a href="privacy.html">Privacy</a>
+  </footer>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="engine.js"></script>
+  <script src="sleeper.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

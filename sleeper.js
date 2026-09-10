@@ -1,0 +1,277 @@
+/* Titan Fantasy Football — Sleeper API + browser storage.
+ *
+ * Read-only: Sleeper has no API for setting lineups, claiming waivers or making
+ * trades, and none is needed to read a public account. Every endpoint used here
+ * answers browsers directly (CORS *), so each person's phone talks to Sleeper
+ * itself and Titan needs no server for this part.
+ */
+(function (root) {
+  'use strict';
+
+  var SCC = root.SCC || (typeof require === 'function' ? require('./engine.js') : null);
+
+  var API = 'https://api.sleeper.app/v1';
+  var SCHEDULE = 'https://api.sleeper.app/schedule/nfl/regular/';
+  var PLAYERS_KEY = 'titan.players.v1';
+  // Names, positions and teams barely move week to week, and the full list is
+  // ~14 MB, so it is kept for a few days. Injuries are pulled fresh every refresh.
+  var PLAYERS_TTL = 3 * 24 * 3600 * 1000;
+  var BATCH = 25;
+  var FETCH_OPTS = typeof window !== 'undefined' ? {cache: 'no-store'} : {};
+
+  /* localStorage in the browser, plain memory under Node. Every access is
+     guarded: private windows and full storage throw. */
+  var mem = {};
+  function ls() { try { return root.localStorage || null; } catch (e) { return null; } }
+  var store = {
+    get: function (k) {
+      try {
+        var s = ls(), v = s ? s.getItem(k) : mem[k];
+        return v == null ? null : JSON.parse(v);
+      } catch (e) { return null; }
+    },
+    set: function (k, v) {
+      var j = JSON.stringify(v);
+      try { var s = ls(); if (s) s.setItem(k, j); else mem[k] = j; return true; } catch (e) { return false; }
+    },
+    del: function (k) {
+      try { var s = ls(); if (s) s.removeItem(k); else delete mem[k]; } catch (e) {}
+    }
+  };
+
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  async function getJson(url) {
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      try {
+        var res = await fetch(url, FETCH_OPTS);
+        if (res.ok) return await res.json();
+        if (res.status === 404) return null;
+      } catch (e) {
+        if (attempt === 3) throw e;
+      }
+      await sleep(attempt * 800);
+    }
+    return null;
+  }
+
+  function stamp(d) {
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  /* ------------------------------------------------------------ account */
+
+  /* Sleeper answers an unknown username with 200 and a body of `null`. */
+  async function lookupUser(name) {
+    name = String(name || '').trim().replace(/^@/, '');
+    if (!name) return null;
+    var u = await getJson(API + '/user/' + encodeURIComponent(name));
+    if (!u || !u.user_id) return null;
+    return {userId: String(u.user_id), username: u.username || name,
+      displayName: u.display_name || u.username || name, avatar: u.avatar || ''};
+  }
+
+  async function discoverLeagues(userId, season, prefs) {
+    var list = await getJson(API + '/user/' + userId + '/leagues/nfl/' + season);
+    return list ? SCC.leaguesFromSleeper(list, prefs) : null;
+  }
+
+  /* ------------------------------------------------------------ players */
+
+  async function loadPlayers(say) {
+    var cached = store.get(PLAYERS_KEY);
+    if (cached && cached.map && Date.now() - cached.ts < PLAYERS_TTL) return cached.map;
+    try {
+      var full = await getJson(API + '/players/nfl');
+      if (!full) throw new Error('empty response');
+      var map = SCC.trimPlayers(full);
+      store.set(PLAYERS_KEY, {ts: Date.now(), map: map});
+      if (say) say('Refreshed the Sleeper player list (' + Object.keys(map).length + ' players).');
+      return map;
+    } catch (e) {
+      if (cached && cached.map) {
+        if (say) say('Could not refresh the player list, using the saved copy (' + (e.message || e) + ').');
+        return cached.map;
+      }
+      throw new Error('could not load the Sleeper player list (' + (e.message || e) + ')');
+    }
+  }
+
+  function savePlayers(map) {
+    var cached = store.get(PLAYERS_KEY);
+    store.set(PLAYERS_KEY, {ts: cached ? cached.ts : Date.now(), map: map});
+  }
+
+  function clearPlayers() { store.del(PLAYERS_KEY); }
+
+  /* Per-player lookups, in parallel batches: fresh injury tag and current team
+     for each rostered player. ~150 players cost a second or two. */
+  async function fetchDetails(ids) {
+    var need = [], seen = {}, out = {};
+    ids.forEach(function (id) {
+      id = String(id);
+      if (/^\d+$/.test(id) && !seen[id]) { seen[id] = 1; need.push(id); }
+    });
+    for (var b = 0; b < need.length; b += BATCH) {
+      var chunk = need.slice(b, b + BATCH);
+      var res = await Promise.all(chunk.map(function (id) {
+        return getJson(API + '/players/nfl/' + id).catch(function () { return null; });
+      }));
+      res.forEach(function (p, j) {
+        if (!p) return;
+        out[chunk[j]] = {
+          name: SCC.fullName(p), pos: p.position || '', team: p.team || '',
+          inj: p.injury_status ? p.injury_status + (p.injury_body_part ? ' (' + p.injury_body_part + ')' : '') : ''
+        };
+      });
+    }
+    return out;
+  }
+
+  async function resolveMissing(ids, players) {
+    var got = await fetchDetails(ids);
+    var n = 0;
+    for (var id in got) {
+      players[id] = [got[id].name || ('id ' + id), got[id].pos || '?', got[id].team];
+      n++;
+    }
+    if (n) savePlayers(players);
+    return n;
+  }
+
+  function missingIds(lists, players) {
+    var out = [];
+    lists.forEach(function (ids) {
+      (ids || []).forEach(function (id) {
+        id = String(id);
+        if (/^\d+$/.test(id) && !players[id]) out.push(id);
+      });
+    });
+    return out;
+  }
+
+  /* ------------------------------------------------------------- refresh */
+
+  /* Everything the lineup screens need, pulled live for one account. Nothing
+     here depends on the rankings, so new rankings can be applied later without
+     refetching. `known` is the last league list, used if Sleeper's fails. */
+  async function collect(account, progress, known) {
+    progress = progress || function () {};
+    var prefs = account.prefs || {};
+    var log = [];
+    var say = function (m) { log.push(m); };
+    say('Refresh started ' + stamp(new Date()));
+
+    progress('Checking the NFL week…');
+    var state = await getJson(API + '/state/nfl');
+    var week = state && state.week ? Number(state.week) : 1;
+    if (week < 1) week = 1;
+    var season = state && state.season ? String(state.season) : String(new Date().getFullYear());
+    var leagueSeason = state && state.league_season ? String(state.league_season) : season;
+    say('NFL ' + season + ', week ' + week + '.');
+
+    progress('Finding your leagues…');
+    var found = await Promise.all([
+      discoverLeagues(account.userId, leagueSeason, prefs).catch(function () { return null; }),
+      getJson(SCHEDULE + season).catch(function () { return null; }),
+      loadPlayers(say)
+    ]);
+    var all = found[0], sched = found[1], players = found[2];
+    if (!all) {
+      all = (known || []).map(function (l) {
+        var p = prefs[l.id];
+        return Object.assign({}, l, p && p.active !== undefined ? {active: !!p.active} : {});
+      });
+      say('Could not load your league list from Sleeper — using the last one we had.');
+    }
+    var byes = SCC.setByes(sched && sched.length ? SCC.byesFromSchedule(sched) : null);
+
+    var leagues = all.filter(function (l) { return l.active; });
+    say(all.length + ' league(s) on ' + account.displayName + '\'s Sleeper account, ' + leagues.length + ' switched on.');
+
+    progress('Pulling ' + leagues.length + ' leagues from Sleeper…');
+    var sets = await Promise.all(leagues.map(function (l) {
+      return getJson(API + '/league/' + l.id + '/rosters').catch(function () { return null; });
+    }));
+
+    var missing = missingIds([].concat.apply([], sets.map(function (rs) {
+      return (rs || []).map(function (r) { return r.players; });
+    })), players);
+    if (missing.length) {
+      progress('Looking up ' + missing.length + ' new players…');
+      say('Looked up ' + (await resolveMissing(missing, players)) + ' new player name(s).');
+    }
+
+    var live = [];
+    leagues.forEach(function (lg, i) {
+      var d = SCC.buildLeague(lg, sets[i], account.userId, players);
+      if (d.error) { say(lg.key + ': ' + d.error + ' — skipped.'); return; }
+      live.push(d);
+      say(lg.key + ': ' + d.roster.length + ' players, ' + d.startCount + ' starting.');
+    });
+
+    var snap = {at: Date.now(), week: week, season: season, available: all, byes: byes, leagues: live, log: log};
+    if (!live.length) { say('No rosters loaded. Nothing to show.'); return snap; }
+
+    progress('Checking injuries…');
+    var ids = [];
+    live.forEach(function (d) { d.roster.forEach(function (p) { ids.push(p.id); }); });
+    var details = await fetchDetails(ids);
+    var moved = 0;
+    for (var id in details) {
+      var e = players[id];
+      if (e && details[id].team && e[2] !== details[id].team) { e[2] = details[id].team; moved++; }
+    }
+    if (moved) savePlayers(players);
+    say(SCC.applyDetails(live, details) + ' rostered player(s) carry an injury tag right now.');
+
+    var games = sched && sched.length ? SCC.gameStates(sched, week) : {};
+    var lk = SCC.applyLocks(live, games);
+    if (!Object.keys(games).length) {
+      say('Could not read the NFL game clock — every player is being treated as still movable.');
+    } else if (lk.total) {
+      say(lk.total + ' of your rostered players are LOCKED (their game has kicked off): ' +
+          lk.teams.join(', ') + '. Locks clear when the new fantasy week opens Tuesday.');
+    } else {
+      say('No games have kicked off yet — every slot is still editable.');
+    }
+    return snap;
+  }
+
+  /* Rosters, matchups and the schedule for one week, for the Scorecard. */
+  async function collectScores(account, leagues, week, season) {
+    var sched = await getJson(SCHEDULE + season);
+    if (!sched || !sched.length) throw new Error('could not read the NFL schedule');
+    var prog = SCC.weekProgress(sched, week);
+    var out = {week: week, userId: account.userId, started: prog.started, done: prog.done,
+      total: prog.total, leagues: [], players: {}};
+    if (!prog.started) return out;
+
+    var players = await loadPlayers();
+    var sets = await Promise.all(leagues.map(function (l) {
+      return Promise.all([
+        getJson(API + '/league/' + l.id + '/rosters').catch(function () { return null; }),
+        getJson(API + '/league/' + l.id + '/matchups/' + week).catch(function () { return null; })
+      ]);
+    }));
+    var missing = missingIds([].concat.apply([], sets.map(function (s) {
+      return (s[1] || []).map(function (m) { return m.players; });
+    })), players);
+    if (missing.length) await resolveMissing(missing, players);
+
+    out.players = players;
+    out.leagues = leagues.map(function (l, i) { return {cfg: l, rosters: sets[i][0], matchups: sets[i][1]}; });
+    return out;
+  }
+
+  var api = {
+    store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
+    collect: collect, collectScores: collectScores,
+    loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
+    PLAYERS_KEY: PLAYERS_KEY
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.SleeperAPI = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
