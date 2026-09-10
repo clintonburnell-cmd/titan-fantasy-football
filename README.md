@@ -35,7 +35,7 @@ for that session, because tips inside a Play app must use Google Play billing.
 | Screen | What it shows |
 |---|---|
 | Lineups | Each league's lineup as set in Sleeper, with a verdict on every slot, the changes to make, wire upgrades and injuries |
-| News | News-only X accounts (@UnderdogNFL, @RotowireNFL), each opening on X. X doesn't let apps read posts without a paid plan |
+| News | News-only X accounts (@UnderdogNFL), each opening on X. X doesn't let apps read posts without a paid plan |
 | Rosters | Every rostered player per league, with rank, tier, opponent and bye |
 | Exposure | Players on two or more of your teams |
 | Byes | How many of your players are off each week, per league |
@@ -115,8 +115,17 @@ No build step and no dependencies. It runs on any static host.
 2. **Done: sync across your own devices.** Google sign-in with Firebase
    (Authentication + Firestore), hosted on Firebase Hosting, which also
    provides the root domain Google Play needs.
-3. **Next: Google Play.** Package the same web app as a Trusted Web Activity
-   (Bubblewrap), with a Digital Asset Links file at
-   `/.well-known/assetlinks.json` on the hosting domain. Needs a Google Play
-   developer account, a privacy policy, the data-safety form, and the closed
-   test Google requires of new personal developer accounts.
+3. **In progress: Google Play.** The same web app packaged as a Trusted Web Activity
+   with Bubblewrap (`com.titanfantasyfootball.app`), built and signed, and linked to the
+   site by `/.well-known/assetlinks.json`. The Play Console account is in verification;
+   then come the closed test Google requires of new personal accounts, and production.
+4. **Later: more fantasy platforms**, so one Titan account covers every league:
+   - **Yahoo Fantasy**: official Fantasy Sports API, signed in with Yahoo (OAuth).
+   - **ESPN Fantasy**: no official public API; unofficial endpoints work for public
+     leagues, and private leagues need the user's ESPN browser cookies.
+   - **NFL Fantasy** and **CBS Sports Fantasy**: need research on what each allows.
+
+   The engine already works on a neutral roster format (`buildLeague` output), so each
+   platform needs its own adapter like `sleeper.js`, not a rewrite.
+**Save point:** the git tag `v1.0.0` marks everything above: the web app, sync, the tip
+jar, the News tab and the signed Android app.

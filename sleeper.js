@@ -183,7 +183,7 @@
         var p = prefs[l.id];
         return Object.assign({}, l, p && p.active !== undefined ? {active: !!p.active} : {});
       });
-      say('Could not load your league list from Sleeper — using the last one we had.');
+      say('Could not load your league list from Sleeper, so using the last one we had.');
     }
     var byes = SCC.setByes(sched && sched.length ? SCC.byesFromSchedule(sched) : null);
 
@@ -206,7 +206,7 @@
     var live = [];
     leagues.forEach(function (lg, i) {
       var d = SCC.buildLeague(lg, sets[i], account.userId, players);
-      if (d.error) { say(lg.key + ': ' + d.error + ' — skipped.'); return; }
+      if (d.error) { say(lg.key + ': ' + d.error + ', skipped.'); return; }
       live.push(d);
       say(lg.key + ': ' + d.roster.length + ' players, ' + d.startCount + ' starting.');
     });
@@ -229,12 +229,12 @@
     var games = sched && sched.length ? SCC.gameStates(sched, week) : {};
     var lk = SCC.applyLocks(live, games);
     if (!Object.keys(games).length) {
-      say('Could not read the NFL game clock — every player is being treated as still movable.');
+      say('Could not read the NFL game clock, so every player is being treated as still movable.');
     } else if (lk.total) {
       say(lk.total + ' of your rostered players are LOCKED (their game has kicked off): ' +
           lk.teams.join(', ') + '. Locks clear when the new fantasy week opens Tuesday.');
     } else {
-      say('No games have kicked off yet — every slot is still editable.');
+      say('No games have kicked off yet. Every slot is still editable.');
     }
     return snap;
   }

@@ -717,12 +717,12 @@
     if (!rankedCount) log.push('No rankings yet, so nothing can be ordered. Import your rankings first.');
     if (hurtStarters.length) {
       log.push('', 'INJURY FLAGS on players you are CURRENTLY STARTING:');
-      hurtStarters.forEach(function (h) { log.push('   ' + h.league.name + ': ' + h.p.name + ' — ' + h.p.inj); });
+      hurtStarters.forEach(function (h) { log.push('   ' + h.league.name + ': ' + h.p.name + ' (' + h.p.inj + ')'); });
     }
     if (wireLines.length) {
       log.push('', 'Waiver-wire upgrades available:');
       wireLines.forEach(function (x) {
-        log.push('   ' + x.league.name + ': ' + x.w.pos + ' — ' +
+        log.push('   ' + x.league.name + ': ' + x.w.pos + ': ' +
           x.w.list.map(function (w) { return w.name + ' (' + rankLabel(w.pos, w.rank) + ')'; }).join(', '));
       });
     }
@@ -730,9 +730,9 @@
     if (changes.length) {
       log.push(changes.length + ' lineup change(s) your rankings want:');
       changes.forEach(function (c) {
-        log.push('   ' + c.league.name + ' — start ' + c.move.inn.name + ' (' + rankLabel(c.move.inn.pos, c.move.inn.rank) + ')');
+        log.push('   ' + c.league.name + ': start ' + c.move.inn.name + ' (' + rankLabel(c.move.inn.pos, c.move.inn.rank) + ')');
       });
-      log.push('', 'Make the changes in the Sleeper app — Titan cannot set lineups.');
+      log.push('', 'Make the changes in the Sleeper app. Titan cannot set lineups.');
     } else {
       log.push('Every lineup already matches your rankings.');
     }

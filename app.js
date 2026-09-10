@@ -18,8 +18,7 @@
   // News-only accounts on the News tab. X doesn't let apps read posts without a
   // paid plan, so each one opens on X.
   const NEWS_ACCOUNTS = [
-    {handle: 'UnderdogNFL', name: 'Underdog NFL', about: 'NFL news from Underdog'},
-    {handle: 'RotowireNFL', name: 'RotoWire NFL', about: 'NFL player news from RotoWire'}
+    {handle: 'UnderdogNFL', name: 'Underdog NFL', about: 'NFL news from Underdog'}
   ];
 
   // Inside the Google Play app, tips would have to go through Google Play billing,
@@ -153,7 +152,7 @@
       const leagues = S.snap.leagues.map(d => d.cfg);
       const res = await API.collectScores(S.account, leagues, week, S.snap.season);
       if (!res.started) {
-        S.score.error = `Week ${week} has not kicked off yet — nothing to score.`;
+        S.score.error = `Week ${week} has not kicked off yet, so there's nothing to score.`;
       } else {
         const r = ranksFor(week);
         const D = SCC.scoreWeek(res, SCC.weeklyMap(r.rows));
@@ -193,17 +192,17 @@
 
   function emptyState() {
     return S.busy
-      ? `<div class="empty"><h2>Pulling your leagues…</h2><p>The first load also grabs Sleeper's player list — about 10 seconds.</p></div>`
+      ? `<div class="empty"><h2>Pulling your leagues…</h2><p>The first load also grabs Sleeper's player list, which takes about 10 seconds.</p></div>`
       : `<div class="empty"><h2>Nothing pulled yet</h2><p>Tap Refresh to load your leagues from Sleeper.</p></div>`;
   }
 
   function ranksBanner(r, week) {
     if (!r.week) {
-      return `<div class="banner stop"><b>No rankings yet.</b> Titan orders your lineups by your own rankings — import them to get start/sit calls.
+      return `<div class="banner stop"><b>No rankings yet.</b> Titan orders your lineups by your own rankings. Import them to get start/sit calls.
         <button class="link" data-go="ranks">Import rankings →</button></div>`;
     }
     if (!r.exact) {
-      return `<div class="banner swap">Using your <b>week ${r.week}</b> rankings — nothing imported for week ${week} yet.
+      return `<div class="banner swap">Using your <b>week ${r.week}</b> rankings, since nothing is imported for week ${week} yet.
         <button class="link" data-go="ranks">Import week ${week} →</button></div>`;
     }
     return '';
@@ -215,7 +214,7 @@
     return `<section class="welcome">
       <img src="icon.svg" alt="" width="76" height="76">
       <h2>Titan Fantasy Football</h2>
-      <p class="lede">Start/sit calls, waiver upgrades, exposure and bye weeks across every league you play on Sleeper — ordered by your own rankings.</p>
+      <p class="lede">Start/sit calls, waiver upgrades, exposure and bye weeks across every league you play on Sleeper, ordered by your own rankings.</p>
       <form class="card pad" data-form="link" novalidate>
         <label class="field block"><span>Your Sleeper username</span>
           <input name="username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"
@@ -226,7 +225,7 @@
       </form>
       <div class="sync-welcome" data-sync-slot="welcome">${syncWelcome()}</div>
       <ol class="how">
-        <li><b>Link</b> your Sleeper username — your leagues and lineup formats load automatically.</li>
+        <li><b>Link</b> your Sleeper username, and your leagues and lineup formats load automatically.</li>
         <li><b>Import</b> your weekly rankings as a CSV.</li>
         <li><b>Follow</b> the calls: who to start, who to swap, who's on the wire.</li>
       </ol>
@@ -242,7 +241,7 @@
     try {
       const u = await API.lookupUser(name);
       if (!u) {
-        S.link = {busy: false, name, error: `No Sleeper account called "${name.trim()}". Check the spelling — it's the name on your Sleeper profile.`};
+        S.link = {busy: false, name, error: `No Sleeper account called "${name.trim()}". Check the spelling: it's the name on your Sleeper profile.`};
         render();
         return;
       }
@@ -287,7 +286,7 @@
       h += `<div class="empty-note">No leagues to show. ${S.snap.available && S.snap.available.length
         ? 'Switch some on in <button class="link" data-go="settings">Settings</button>.'
         : `Sleeper shows no ${esc(S.snap.season)} leagues on this account.`}</div>`;
-    } else if (!list.length) h += `<div class="empty-note">Nothing to do — every lineup matches your rankings.</div>`;
+    } else if (!list.length) h += `<div class="empty-note">Nothing to do. Every lineup matches your rankings.</div>`;
     return h + list.map(leagueCard).join('');
   }
 
@@ -306,8 +305,8 @@
     }
     h += `<ol class="lineup">${L.rows.map(lineupRow).join('')}</ol>`;
     L.wire.forEach(w => {
-      const tail = w.cur ? ` — better than ${esc(w.cur.name)} (${esc(rl(w.cur))})`
-        : w.anyUnranked ? ' — you are starting someone unranked here' : '';
+      const tail = w.cur ? `, better than ${esc(w.cur.name)} (${esc(rl(w.cur))})`
+        : w.anyUnranked ? ', and you are starting someone unranked here' : '';
       h += `<p class="note wire"><b>Wire ${esc(w.pos)}:</b> ${w.list.map(x =>
         `${esc(x.name)} (${esc(SCC.rankLabel(x.pos, x.rank))}${x.opp ? ' ' + esc(x.opp) : ''})`).join(', ')}${tail}</p>`;
     });
@@ -318,7 +317,7 @@
   }
 
   function rankCell(p) {
-    return `<span class="rank">${p.rank === null ? '—' : esc(rl(p))}${has(p.tier) ? `<small>T${esc(p.tier)}</small>` : ''}</span>`;
+    return `<span class="rank">${p.rank === null ? 'NR' : esc(rl(p))}${has(p.tier) ? `<small>T${esc(p.tier)}</small>` : ''}</span>`;
   }
 
   function statusText(p) {
@@ -381,7 +380,7 @@
   function screenExposure() {
     if (!S.snap) return emptyState();
     const E = SCC.exposure(S.A.leagues);
-    let h = `<p class="lede">How many of your ${E.active} teams own each player — anyone on two or more.</p>`;
+    let h = `<p class="lede">How many of your ${E.active} teams own each player (anyone on two or more).</p>`;
     if (!E.rows.length) return h + '<div class="empty-note">No player is on more than one of your teams.</div>';
     h += `<ul class="card list">${E.rows.map(r => `
       <li class="row xrow${r.count >= 5 ? ' x-hi' : r.count === 4 ? ' x-mid' : ''}">${pos(r.pos)}
@@ -406,7 +405,7 @@
       ${B.rows.map(r => `<tr><th title="${esc(r.name)}">${esc(r.key)}</th>${B.weeks.map(w => cell(r.counts[w] || 0)).join('')}<td class="tot">${r.total}</td></tr>`).join('')}
       <tr class="all"><th>All teams</th>${B.weeks.map(w => cell(B.totals[w] || 0)).join('')}<td class="tot"></td></tr>
       </tbody></table></div>`;
-    if (B.clean.length) h += `<div class="banner ok">Week ${B.clean.join(', ')} completely clean — nobody you roster anywhere is off.</div>`;
+    if (B.clean.length) h += `<div class="banner ok">Week ${B.clean.join(', ')} completely clean: nobody you roster anywhere is off.</div>`;
     return h;
   }
 
@@ -430,13 +429,13 @@
     if (!D) return h;
 
     const T = D.totals, gained = Math.round((T.byRank - T.actual) * 10) / 10;
-    if (D.provisional) h += `<div class="banner swap"><b>Live</b> — games still in progress, these numbers will move.</div>`;
+    if (D.provisional) h += `<div class="banner swap"><b>Live:</b> games are still in progress, so these numbers will move.</div>`;
     if (!D.ranks.exact) {
       h += `<div class="banner swap">No rankings saved for week ${D.week}${D.ranks.week
-        ? ` — "By rank" is using week ${D.ranks.week}.` : ' — "By rank" has nothing to order by.'}</div>`;
+        ? `, so "By rank" is using week ${D.ranks.week}.` : ', so "By rank" has nothing to order by.'}</div>`;
     }
     h += `<section class="tiles">${tile(fmt(T.actual), 'you scored', 'muted')}${tile(fmt(T.byRank), 'by rank', gained > 0 ? 'swap' : 'ok')}${
-      tile(fmt(T.perfect), 'perfect', 'muted')}${tile(T.ct ? `${T.cw}/${T.ct}` : '—', 'close calls right', 'muted')}</section>`;
+      tile(fmt(T.perfect), 'perfect', 'muted')}${tile(T.ct ? `${T.cw}/${T.ct}` : 'None', 'close calls right', 'muted')}</section>`;
     h += `<p class="verdict-line">${gained > 0 ? `Following your rankings would have scored <b class="amber">${fmt(gained)}</b> more.`
       : gained < 0 ? `Your lineups beat your rankings by <b class="good">${fmt(-gained)}</b>.` : 'Your lineups matched your rankings.'}</p>`;
     if (D.skipped.length) h += `<p class="fine">Skipped: ${esc(D.skipped.join('; '))}</p>`;
@@ -447,10 +446,10 @@
         <span class="n"><small>Perfect</small>${fmt(r.perfect)}</span>
         <span class="n${r.leftOnBench > 0 ? ' amber' : ''}"><small>Left on bench</small>${signed(r.leftOnBench)}</span>
       </summary>
-      <p class="sub">Ceiling gap ${fmt(r.ceiling)} · close calls ${r.close.total ? `${r.close.wins} / ${r.close.total}` : '—'}</p>
+      <p class="sub">Ceiling gap ${fmt(r.ceiling)} · close calls ${r.close.total ? `${r.close.wins} / ${r.close.total}` : 'none'}</p>
       <ul class="detail">${r.detail.map(d => `<li class="row${d.benchWin ? ' r-swap' : ''}">
         <span class="slot">${esc(d.slot === 'bench' ? 'BENCH' : slotName(d.slot))}</span>${d.p ? pos(d.p.pos) : '<span class="pos"></span>'}
-        <span class="who"><b>${d.p ? esc(d.p.name) : '— empty —'}</b><small>${d.p ? esc(rl(d.p)) : ''}${d.benchWin ? ' · outscored your weakest starter' : ''}</small></span>
+        <span class="who"><b>${d.p ? esc(d.p.name) : 'Empty slot'}</b><small>${d.p ? esc(rl(d.p)) : ''}${d.benchWin ? ' · outscored your weakest starter' : ''}</small></span>
         <span class="right"><span class="rank">${d.p ? fmt(d.p.pts) : ''}</span></span></li>`).join('')}</ul>
     </details>`).join('');
     return h;
@@ -476,7 +475,7 @@
           <label class="field narrow"><span>Week</span><input type="number" min="1" max="18" data-draft="week" value="${S.draft.week}"></label>
           <label class="btn ghost file">Choose CSV file<input type="file" accept=".csv,.tsv,.txt,text/csv" data-draft="file" hidden></label>
         </div>
-        <label class="field block"><span>…or paste them — CSV, or copied straight out of a spreadsheet</span>
+        <label class="field block"><span>…or paste them as CSV, or copied straight out of a spreadsheet</span>
           <textarea data-draft="text" rows="7" spellcheck="false" placeholder="Player,Pos,Team,Rank,Opp,Implied,Tier&#10;Joe Burrow,QB,CIN,1,TB,27.5,1">${esc(S.draft.text)}</textarea></label>
         <div id="draft-preview" class="draft">${draftPreview()}</div>
         <details class="help"><summary>What format works?</summary>
@@ -514,13 +513,13 @@
     if (!P || !P.rows.length) return;
     const w = S.draft.week;
     S.ranks.weeks[w] = {rows: P.rows, savedAt: Date.now(), source: S.draft.file || 'paste'};
-    if (!store.set(KEY.ranks, S.ranks)) { toast('Could not save — browser storage is full or blocked.'); return; }
+    if (!store.set(KEY.ranks, S.ranks)) { toast('Could not save. Browser storage is full or blocked.'); return; }
     pushWeek(w);
     S.draft = {week: w, text: '', parsed: null, file: ''};
     if (S.score.week === w) S.score.data = null;
     analyze();
     render();
-    toast(`Week ${w} rankings saved — lineups re-scored.`);
+    toast(`Week ${w} rankings saved. Lineups re-scored.`);
   }
 
   function deleteRanks(w) {
@@ -547,7 +546,7 @@
           <input type="checkbox" data-league="${esc(l.id)}" ${l.active ? 'checked' : ''}>
           <span><b>${esc(l.key)}</b><small>${esc(SCC.describeLeague(l))} · ${esc(l.lineup.map(slotName).join(' '))}</small></span></label></li>`).join('')}</ul>
           <div class="bar"><button class="btn" data-action="leagues-save">Save and refresh</button></div>`
-        : `<p class="muted">${S.busy ? 'Loading…' : 'No leagues yet — tap Refresh.'}</p>`}
+        : `<p class="muted">${S.busy ? 'Loading…' : 'No leagues yet. Tap Refresh.'}</p>`}
       </section>
       <section class="card pad"><h3>Player list</h3>
         <p class="fine">Names, positions and teams are saved on this device and refreshed every few days. Injuries and game locks are pulled fresh on every refresh.</p>
