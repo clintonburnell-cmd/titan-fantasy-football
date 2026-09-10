@@ -1,0 +1,3 @@
+# Firebase CLI's local deploy bookkeeping
+.firebase/
+firebase-debug.log
