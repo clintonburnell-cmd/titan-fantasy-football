@@ -38,7 +38,8 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     fresh
       .then(res => {
-        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
+        // Refreshing the offline copy is best effort; a failed write must not surface as an error.
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); }
         return res;
       })
       .catch(() => caches.match(req, {ignoreSearch: true})
