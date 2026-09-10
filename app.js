@@ -447,14 +447,33 @@
 
   /* ---- Byes */
 
+  // "RB, FLEX" or "2 RB": the spots a bye week leaves open.
+  function needText(list) {
+    const c = {};
+    list.forEach(s => { c[s] = (c[s] || 0) + 1; });
+    return 'Need ' + Object.keys(c).map(s => (c[s] > 1 ? c[s] + ' ' : '') + s).join(', ');
+  }
+
+  function needRow(n, cols) {
+    if (!n.needs.length) return '';
+    return `<tr class="needs"><td colspan="${cols}"><div class="needs-in">${n.needs.map(x =>
+      `<span class="need"><b>Wk ${x.week}</b> ${esc(needText(x.need))}${x.off.length ? `<small>${esc(x.off.join(', '))} off</small>` : ''}</span>`).join('')}</div></td></tr>`;
+  }
+
   function screenByes() {
     if (!S.snap) return emptyState();
     const B = SCC.byeMap(S.A.leagues, S.snap.byes);
+    const N = SCC.byeNeeds(S.A.leagues, S.snap.week);
+    const short = N.filter(n => n.needs.length).length;
     const cell = n => (n ? `<td style="--heat:${(Math.min(n, 6) / 6).toFixed(2)}">${n}</td>` : '<td class="zero">·</td>');
-    let h = `<p class="lede">Players on your current rosters who are off each week.</p>
+    let h = `<p class="lede">Players on your current rosters who are off each week. Under a league, each upcoming week where byes
+      leave a starting spot you can't fill, and who's off.</p>
+      ${short ? `<div class="banner swap">${plural(short, 'league')} will need a pickup for a bye week.</div>`
+        : '<div class="banner ok">Every lineup is covered through the byes.</div>'}
       <div class="card table-wrap"><table class="byes">
       <thead><tr><th>Week</th>${B.weeks.map(w => `<th>${w}</th>`).join('')}<th>Total</th></tr></thead><tbody>
-      ${B.rows.map(r => `<tr><th title="${esc(r.name)}">${esc(r.key)}</th>${B.weeks.map(w => cell(r.counts[w] || 0)).join('')}<td class="tot">${r.total}</td></tr>`).join('')}
+      ${B.rows.map((r, i) => `<tr${N[i].needs.length ? ' class="has-needs"' : ''}><th title="${esc(r.name)}">${esc(r.key)}</th>${
+        B.weeks.map(w => cell(r.counts[w] || 0)).join('')}<td class="tot">${r.total}</td></tr>${needRow(N[i], B.weeks.length + 2)}`).join('')}
       <tr class="all"><th>All teams</th>${B.weeks.map(w => cell(B.totals[w] || 0)).join('')}<td class="tot"></td></tr>
       </tbody></table></div>`;
     if (B.clean.length) h += `<div class="banner ok">Week ${B.clean.join(', ')} completely clean: nobody you roster anywhere is off.</div>`;

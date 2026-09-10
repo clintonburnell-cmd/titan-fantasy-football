@@ -612,6 +612,9 @@
     for (var sx = 0; sx < starterArr.length && sx < lg.lineup.length; sx++) {
       if (starterArr[sx] && starterArr[sx] !== '0') slotOf[starterArr[sx]] = lg.lineup[sx];
     }
+    // Stashed on IR or the taxi squad: rostered, but can't be started.
+    var held = {};
+    (mine.reserve || []).concat(mine.taxi || []).forEach(function (x) { held[String(x)] = 1; });
 
     var roster = ids.map(function (id) {
       var info = playerInfo(players, id);
@@ -620,7 +623,7 @@
         start: starters.indexOf(String(id)) >= 0,
         slot: slotOf[String(id)] || '',
         bye: byeOf(info.team),
-        inj: '', outish: false, locked: false
+        inj: '', outish: false, locked: false, held: !!held[String(id)]
       };
     });
 
@@ -823,6 +826,56 @@
     return {weeks: weeks, rows: rows, totals: totals, clean: clean};
   }
 
+  /* The starting spots a roster can't fill: players are matched to spots by
+     augmenting paths, dedicated spots first, then the flex spots from narrowest
+     to widest, so nobody is counted for two spots. Returns the open spots. */
+  var FLEX_ORDER = {WRRB_FLEX: 1, REC_FLEX: 1, FLEX: 2, IDP_FLEX: 2, SUPER_FLEX: 3};
+  function openSlots(slots, players) {
+    var owner = {}, open = [];
+    function assign(s, seen) {
+      for (var j = 0; j < players.length; j++) {
+        if (seen[j] || !slotFits(slots[s], players[j].pos)) continue;
+        seen[j] = 1;
+        if (owner[j] === undefined || assign(owner[j], seen)) { owner[j] = s; return true; }
+      }
+      return false;
+    }
+    slots.map(function (s, i) { return i; })
+      .sort(function (a, b) { return (FLEX_ORDER[slots[a]] || 0) - (FLEX_ORDER[slots[b]] || 0) || a - b; })
+      .forEach(function (i) { if (!assign(i, {})) open.push(slots[i]); });
+    return open;
+  }
+
+  /* For each league, every upcoming bye week that leaves a starting spot you
+     can't fill, and who's off. Players on IR or the taxi squad, or out long-term,
+     don't count as available. A spot that's already empty without any byes
+     (the Lineups tab flags those) isn't blamed on the bye. */
+  var LONG_OUT = {IR: 1, PUP: 1, Sus: 1, NA: 1, DNR: 1};
+  function byeNeeds(leagues, fromWeek) {
+    var from = Number(fromWeek) || 1;
+    return leagues.map(function (d) {
+      var slots = (d.cfg.lineup || []).filter(function (s) { return !NOT_STARTERS[s]; });
+      var usable = d.roster.filter(function (p) { return !p.held && !(p.inj && LONG_OUT[p.inj.split(' ')[0]]); });
+      var already = {};
+      openSlots(slots, usable).forEach(function (s) { already[s] = (already[s] || 0) + 1; });
+      var weeks = {};
+      d.roster.forEach(function (p) { if (p.bye && p.bye >= from) weeks[p.bye] = 1; });
+      var needs = Object.keys(weeks).map(Number).sort(function (a, b) { return a - b; }).map(function (w) {
+        var left = {}, need = [];
+        for (var k in already) left[k] = already[k];
+        openSlots(slots, usable.filter(function (p) { return p.bye !== w; })).forEach(function (s) {
+          if (left[s]) left[s]--; else need.push(s);
+        });
+        if (!need.length) return null;
+        var off = usable.filter(function (p) {
+          return p.bye === w && need.some(function (s) { return slotFits(s, p.pos); });
+        }).map(function (p) { return p.name; });
+        return {week: w, need: need.map(slotLabel), off: off};
+      }).filter(Boolean);
+      return {key: d.cfg.key, name: d.cfg.name, needs: needs};
+    });
+  }
+
   /* ----------------------------------------- projections + weekly history */
 
   /* Sleeper's weekly projections (RotoWire's numbers) trimmed to what Titan
@@ -1009,7 +1062,8 @@
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
-    trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek
+    trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
+    openSlots: openSlots, byeNeeds: byeNeeds
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

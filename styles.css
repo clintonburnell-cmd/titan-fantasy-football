@@ -254,6 +254,19 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 .byes td.zero { color: var(--faint); font-weight: 400; }
 .byes td.tot { background: none; color: var(--muted); padding-right: 14px; }
 .byes tr.all th, .byes tr.all td { border-top: 2px solid var(--line); border-bottom: 0; }
+/* A league's bye-week gaps sit in a row under it, and stay in view while the weeks scroll. */
+.byes tr.has-needs th, .byes tr.has-needs td { border-bottom: 0; }
+.byes tr.needs td { background: none; text-align: left; font-weight: 400; padding: 0 0 10px; }
+.needs-in {
+  position: sticky; left: 0; display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0 14px; max-width: calc(100vw - 2 * var(--gutter)); box-sizing: border-box;
+}
+.need {
+  display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; padding: 4px 9px; border-radius: 8px;
+  border: 1px solid rgb(245 185 66 / .45); background: rgb(245 185 66 / .1); color: var(--swap); font-size: .78rem; font-weight: 600;
+}
+.need b { color: var(--text); }
+.need small { color: var(--muted); font-weight: 400; }
 
 /* ------------------------------------------------------------- scorecard */
 
