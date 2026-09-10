@@ -46,7 +46,7 @@
     error: '',
     A: null, // the snapshot analysed under the current rankings
     score: {week: 0, busy: false, data: null, error: ''},
-    draft: {week: 0, text: '', parsed: null, file: ''},
+    draft: {week: 0, text: '', parsed: null, file: '', pos: ''},
     link: {busy: false, error: ''},
     sync: {ready: false, api: null, user: null, state: 'off', error: '', at: 0}
   };
@@ -485,18 +485,44 @@
               Rank is your overall (FLEX) rank for RB/WR/TE and your positional rank for QB, K and DEF.</li>
             <li><b>Side-by-side position tables</b>, like the export from Late-Round: <code>QB Rank, QB Player, …, FLEX Rank, FLEX Player, …</code>.
               RB/WR/TE are ranked by the FLEX table.</li>
+            <li><b>FantasyPros rankings</b>, one file per position. Import the QB, K and DST files, plus the FLEX
+              file for RB/WR/TE. Each file is added to that week and replaces only its own position.</li>
           </ul>
           <p>Name defenses by team (<code>LAC D/ST</code>, <code>Los Angeles Chargers</code> or <code>LAC</code> all work).</p>
         </details>
       </section>`;
   }
 
+  const parseDraft = () => (S.draft.text.trim() ? SCC.parseRanks(S.draft.text, {pos: S.draft.pos}) : null);
+
+  // What saving the draft would do to that week: replace it, or add to it.
+  function mergePlan(P, w) {
+    const prev = S.ranks.weeks[w];
+    return Object.assign({prev}, SCC.mergeRanks(prev && prev.rows, P.rows));
+  }
+
+  function posPicker() {
+    return `<label class="field narrow-select"><span>Which position does this file rank?</span><select data-draft="pos">
+      <option value="">Choose…</option>${['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].map(p =>
+        `<option ${S.draft.pos === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>`;
+  }
+
   function draftPreview() {
-    const P = S.draft.parsed;
-    const save = `<button class="btn" data-action="ranks-save" ${P && P.rows.length ? '' : 'disabled'}>Save as week ${S.draft.week} rankings${
-      S.ranks.weeks[S.draft.week] ? ' (replaces saved)' : ''}</button>`;
+    const P = S.draft.parsed, w = S.draft.week;
+    const plan = P && P.rows.length ? mergePlan(P, w) : null;
+    const label = plan && plan.merged ? `Add to week ${w} rankings`
+      : `Save as week ${w} rankings${S.ranks.weeks[w] ? ' (replaces saved)' : ''}`;
+    const save = `<button class="btn" data-action="ranks-save" ${plan ? '' : 'disabled'}>${label}</button>`;
     if (!P) return save;
+    if (P.needsPosition) return `<div class="banner swap">${esc(P.error)}</div>${posPicker()}${save}`;
     if (P.error) return `<div class="banner stop">${esc(P.error)}</div>${save}`;
+    if (P.format === 'fantasypros' || P.format === 'single') {
+      const skippedFp = P.skipped.length ? ` · skipped ${P.skipped.length}` : '';
+      const what = plan.merged ? `<p class="fine">Saving replaces week ${w}'s ${esc(plan.positions.join(', '))} rankings and keeps the rest.</p>` : '';
+      return `<div class="banner ok"><b>${P.rows.length} players read${P.format === 'fantasypros' ? ' from FantasyPros' : ''}</b> · ${
+        esc(countsText(P.rows))}${skippedFp}</div>${P.warning ? `<div class="banner swap">${esc(P.warning)}</div>` : ''}${
+        P.position ? posPicker() : ''}${what}${save}`;
+    }
     const skipped = P.skipped.length
       ? ` · skipped ${P.skipped.length} (${esc(P.skipped.slice(0, 3).map(s => `${s.text}: ${s.why}`).join('; '))}${P.skipped.length > 3 ? '…' : ''})` : '';
     const from = P.format === 'wide' ? ' from the position tables' : '';
@@ -512,14 +538,18 @@
     const P = S.draft.parsed;
     if (!P || !P.rows.length) return;
     const w = S.draft.week;
-    S.ranks.weeks[w] = {rows: P.rows, savedAt: Date.now(), source: S.draft.file || 'paste'};
+    const plan = mergePlan(P, w);
+    const name = S.draft.file || 'paste';
+    S.ranks.weeks[w] = {rows: plan.rows, savedAt: Date.now(),
+      source: plan.merged ? `${(plan.prev && plan.prev.source) || 'earlier import'} + ${name}` : name};
     if (!store.set(KEY.ranks, S.ranks)) { toast('Could not save. Browser storage is full or blocked.'); return; }
     pushWeek(w);
-    S.draft = {week: w, text: '', parsed: null, file: ''};
+    S.draft = {week: w, text: '', parsed: null, file: '', pos: ''};
     if (S.score.week === w) S.score.data = null;
     analyze();
     render();
-    toast(`Week ${w} rankings saved. Lineups re-scored.`);
+    toast(plan.merged ? `Week ${w} ${plan.positions.join(', ')} rankings added. Lineups re-scored.`
+      : `Week ${w} rankings saved. Lineups re-scored.`);
   }
 
   function deleteRanks(w) {
@@ -711,13 +741,15 @@
   view.addEventListener('change', e => {
     const t = e.target;
     if (t.dataset.ui === 'league') { S.ui.league = t.value; saveUi(); render(); }
+    else if (t.dataset.draft === 'pos') { S.draft.pos = t.value; S.draft.parsed = parseDraft(); paintDraft(); }
     else if (t.dataset.ui === 'scoreWeek') loadScore(Number(t.value));
     else if (t.dataset.draft === 'file' && t.files && t.files[0]) {
       const f = t.files[0];
       f.text().then(txt => {
         S.draft.text = txt;
         S.draft.file = f.name;
-        S.draft.parsed = SCC.parseRanks(txt);
+        S.draft.pos = SCC.positionHint(f.name);
+        S.draft.parsed = parseDraft();
         const ta = view.querySelector('textarea[data-draft="text"]');
         if (ta) ta.value = txt;
         paintDraft();
@@ -730,7 +762,7 @@
     if (t.dataset.draft === 'text') {
       S.draft.text = t.value;
       S.draft.file = '';
-      S.draft.parsed = t.value.trim() ? SCC.parseRanks(t.value) : null;
+      S.draft.parsed = parseDraft();
       paintDraft();
     } else if (t.dataset.draft === 'week') {
       const n = parseInt(t.value, 10);

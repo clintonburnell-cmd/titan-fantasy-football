@@ -68,12 +68,13 @@ code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-siz
 .tip:hover { background: rgb(245 185 66 / .18); }
 .tip b { color: var(--swap); font-weight: 700; }
 .tip-cup { font-size: 1rem; }
-/* On a phone the tip splits over two short lines and the title shortens to "Titan". */
+/* On a phone the tip splits over two short lines, and the full name wraps
+   under the logo rather than being cut short. */
 @media (max-width: 560px) {
   .tip { padding: 5px 10px; font-size: .72rem; }
   .tip-text b, .tip-text span { display: block; }
+  .brand h1 { white-space: normal; font-size: .9rem; line-height: 1.15; }
 }
-@media (max-width: 480px) { .brand .long { display: none; } }
 
 .refresh {
   display: inline-flex; align-items: center; gap: 7px; flex: none;
@@ -330,5 +331,5 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
   .row { gap: 8px; padding-inline: 12px; }
   .row:not(.xrow) { grid-template-columns: 2.4rem 2.3rem minmax(0, 1fr) auto; }
   .refresh span { display: none; }
-  .brand h1 { font-size: .95rem; }
+  .brand h1 { font-size: .86rem; }
 }

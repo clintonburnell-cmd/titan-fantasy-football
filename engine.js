@@ -228,9 +228,9 @@
     return rows;
   }
 
-  var HEADERS = {player: 'player', name: 'player', pos: 'pos', position: 'pos', team: 'team',
-    rank: 'rank', wkrank: 'rank', overall: 'rank', opp: 'opp', opponent: 'opp', implied: 'implied',
-    tier: 'tier', posrank: 'posRank'};
+  var HEADERS = {player: 'player', name: 'player', playername: 'player', pos: 'pos', position: 'pos',
+    team: 'team', rank: 'rank', rk: 'rank', wkrank: 'rank', overall: 'rank', opp: 'opp', opponent: 'opp',
+    implied: 'implied', tier: 'tier', tiers: 'tier', posrank: 'posRank'};
 
   function num(v) {
     var s = String(v == null ? '' : v).trim();
@@ -317,35 +317,58 @@
       error: rows.length ? '' : 'Found the position columns but no player rows.'};
   }
 
+  /* The position a single-position file ranks, from its name, for example
+     FantasyPros_2026_Week_1_QB_Rankings.csv. FLEX files carry their own
+     positions, so they need no hint. */
+  function positionHint(filename) {
+    var m = String(filename || '').toUpperCase().match(/(^|[^A-Z])(QB|RB|WR|TE|K|DST|DEF|FLEX)(?=[^A-Z]|$)/);
+    if (!m || m[2] === 'FLEX') return '';
+    return m[2] === 'DST' ? 'DEF' : m[2];
+  }
+
   /* One row per player: Player, Pos, Team, Rank, then optional Opp, Implied,
      Tier, Pos Rank. Rank is the overall (FLEX) rank for RB/WR/TE and the
-     positional rank for QB/K/DEF. Header row optional; columns found by name. */
-  function parseRanks(text) {
+     positional rank for QB/K/DEF. Header row optional; columns found by name.
+     Also reads FantasyPros exports: RK, PLAYER NAME, TEAM, OPP ("at IND"), with
+     either a POS column like "RB12" (the FLEX file, where RK is the overall rank)
+     or no position column at all (one file per position; `opts.pos` says which). */
+  function parseRanks(text, opts) {
+    opts = opts || {};
     var lines = splitRows(text);
     var cols = {player: 0, pos: 1, team: 2, rank: 3, opp: 4, implied: 5, tier: 6, posRank: 7};
-    var start = 0, i;
+    var start = 0, header = [], i;
     for (i = 0; i < Math.min(lines.length, 15); i++) {
       var low = lines[i].map(function (c) { return String(c).trim().toLowerCase(); });
       if (low.some(function (c) { return /^(qb|rb|wr|te|k|def|dst|flex) rank$/.test(c); })) return parseWide(lines, i);
-      if (low.indexOf('player') < 0 && low.indexOf('name') < 0) continue;
+      if (!low.some(function (c) { return c === 'player' || c === 'name' || c === 'player name'; })) continue;
       cols = {};
       low.forEach(function (h, j) {
         var k = HEADERS[h.replace(/[^a-z]/g, '')];
         if (k && cols[k] === undefined) cols[k] = j;
       });
+      header = low;
       start = i + 1;
       break;
     }
-    if (cols.player === undefined || cols.pos === undefined || cols.rank === undefined) {
-      return {rows: [], skipped: [], error: 'Could not find the Player, Pos and Rank columns.'};
+    var fixedPos = String(opts.pos || '').toUpperCase();
+    if (fixedPos === 'DST' || fixedPos === 'D/ST') fixedPos = 'DEF';
+    if (cols.player === undefined || cols.rank === undefined) {
+      return {rows: [], skipped: [], error: 'Could not find the Player and Rank columns.'};
     }
+    var single = cols.pos === undefined;
+    if (single && !POSITIONS[fixedPos]) {
+      return {rows: [], skipped: [], needsPosition: true,
+        error: 'This file has no position column. Choose the position it ranks.'};
+    }
+    var fantasyPros = header.indexOf('player name') >= 0 && header.indexOf('rk') >= 0;
     var rows = [], skipped = [];
     for (i = start; i < lines.length; i++) {
       var r = lines[i];
       var name = String(r[cols.player] || '').trim();
       if (!name) continue;
-      var pos = String(r[cols.pos] || '').trim().toUpperCase();
-      if (pos === 'DST' || pos === 'D/ST') pos = 'DEF';
+      var rawPos = single ? fixedPos : String(r[cols.pos] || '').trim().toUpperCase();
+      var pm = rawPos.match(/^(QB|RB|WR|TE|K|DEF|DST|D\/ST)(\d+)?$/);
+      var pos = pm ? (pm[1] === 'DST' || pm[1] === 'D/ST' ? 'DEF' : pm[1]) : rawPos;
       if (!POSITIONS[pos]) {
         skipped.push({line: i + 1, text: name, why: pos ? 'position ' + pos : 'no position'});
         continue;
@@ -354,19 +377,37 @@
         var abbr = defTeam(name) || teamAbbr(r[cols.team]);
         if (abbr) name = abbr + ' D/ST';
       }
-      var implied = num(r[cols.implied]), tier = num(r[cols.tier]);
+      var implied = num(r[cols.implied]), tier = num(r[cols.tier]), rank = num(r[cols.rank]);
       rows.push({
         name: name,
         pos: pos,
         team: teamAbbr(r[cols.team]),
-        rank: num(r[cols.rank]),
-        opp: String(r[cols.opp] == null ? '' : r[cols.opp]).trim(),
+        rank: rank,
+        opp: String(r[cols.opp] == null ? '' : r[cols.opp]).trim().replace(/^(at|vs\.?|@)\s+/i, ''),
         implied: implied === null ? '' : implied,
         tier: tier === null ? '' : tier,
-        posRank: num(r[cols.posRank])
+        posRank: cols.posRank !== undefined ? num(r[cols.posRank]) : pm && pm[2] ? Number(pm[2]) : single ? rank : null
       });
     }
-    return {rows: rows, skipped: skipped, format: 'rows', error: rows.length ? '' : 'No player rows found.'};
+    // RB, WR and TE share FLEX slots, so a positional list (RB1, RB2, ...) can't
+    // be compared fairly with the other two.
+    var warning = single && SLOT_POS.FLEX[fixedPos]
+      ? 'These ' + fixedPos + ' ranks are positional, so FLEX slots can\'t compare them fairly with other positions. ' +
+        'For RB, WR and TE, FantasyPros\' FLEX rankings work best.'
+      : '';
+    return {rows: rows, skipped: skipped, format: fantasyPros ? 'fantasypros' : single ? 'single' : 'rows',
+      position: single ? fixedPos : '', warning: warning, error: rows.length ? '' : 'No player rows found.'};
+  }
+
+  /* A file that ranks only some positions (FantasyPros exports one per position)
+     is added to the week, replacing just those positions. A file covering QB, RB,
+     WR and TE replaces the whole week. */
+  function mergeRanks(prevRows, newRows) {
+    var c = rankCounts(newRows);
+    var positions = Object.keys(c);
+    var full = ['QB', 'RB', 'WR', 'TE'].every(function (p) { return c[p]; });
+    if (full || !prevRows || !prevRows.length) return {rows: newRows, merged: false, positions: positions};
+    return {rows: prevRows.filter(function (r) { return !c[r.pos]; }).concat(newRows), merged: true, positions: positions};
   }
 
   function weeklyMap(rows) {
@@ -872,7 +913,8 @@
     norm: norm, teamAbbr: teamAbbr, byeOf: byeOf, byesFromSchedule: byesFromSchedule, setByes: setByes,
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
-    splitRows: splitRows, parseRanks: parseRanks, weeklyMap: weeklyMap, rankCounts: rankCounts,
+    splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
+    weeklyMap: weeklyMap, rankCounts: rankCounts,
     gameStates: gameStates, weekProgress: weekProgress,
     rankKey: rankKey, rankLabel: rankLabel, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
