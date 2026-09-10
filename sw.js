@@ -4,8 +4,8 @@
  * time the app opens, with the cached copy as the offline fallback. Sleeper's
  * API is never touched here: live data always comes straight from Sleeper.
  */
-const CACHE = 'titan-v2';
-const SHELL = ['./', 'index.html', 'styles.css', 'engine.js', 'sleeper.js', 'app.js',
+const CACHE = 'titan-v3';
+const SHELL = ['./', 'index.html', 'styles.css', 'engine.js', 'sleeper.js', 'syncplan.js', 'app.js', 'sync.js',
   'icon.svg', 'icon-192.png', 'manifest.webmanifest', 'privacy.html'];
 
 /* Each file is cached on its own with put(). cache.addAll() failed intermittently

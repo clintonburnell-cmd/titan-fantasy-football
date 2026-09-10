@@ -26,7 +26,8 @@
     A: null, // the snapshot analysed under the current rankings
     score: {week: 0, busy: false, data: null, error: ''},
     draft: {week: 0, text: '', parsed: null, file: ''},
-    link: {busy: false, error: ''}
+    link: {busy: false, error: ''},
+    sync: {ready: false, api: null, user: null, state: 'off', error: '', at: 0}
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
   if (S.snap && S.account && S.snap.userId !== S.account.userId) S.snap = null;
@@ -201,6 +202,7 @@
         <button class="btn big" type="submit" ${S.link.busy ? 'disabled' : ''}>${S.link.busy ? 'Finding you…' : 'Link Sleeper account'}</button>
         <p class="fine">No password. Titan only reads what Sleeper already shows publicly, and it can't change your lineups.</p>
       </form>
+      <div class="sync-welcome" data-sync-slot="welcome">${syncWelcome()}</div>
       <ol class="how">
         <li><b>Link</b> your Sleeper username — your leagues and lineup formats load automatically.</li>
         <li><b>Import</b> your weekly rankings as a CSV.</li>
@@ -222,8 +224,9 @@
         render();
         return;
       }
-      S.account = Object.assign(u, {prefs: {}});
+      S.account = Object.assign(u, {prefs: {}, updatedAt: Date.now()});
       store.set(KEY.account, S.account);
+      pushAccount();
       S.snap = null;
       store.del(KEY.snap);
       S.link = {busy: false, error: ''};
@@ -425,7 +428,9 @@
     const cur = S.snap ? S.snap.week : 1;
     if (!S.draft.week) S.draft.week = cur;
     const weeks = Object.keys(S.ranks.weeks).map(Number).sort((a, b) => b - a);
-    return `<p class="lede">Titan orders your lineups only by your own rankings. They're kept on this device and never shared.</p>
+    return `<p class="lede">Titan orders your lineups only by your own rankings. ${S.sync.user
+        ? 'They sync to your devices through your Google sign-in, and only you can see them.'
+        : 'They\'re kept on this device and never shared. Sign in on Settings to sync them to your other devices.'}</p>
       <section class="card pad"><h3>Saved rankings</h3>${weeks.length ? `<ul class="saved">${weeks.map(w => {
         const e = S.ranks.weeks[w];
         return `<li><span><b>Week ${w}</b> · ${e.rows.length} players<small>${esc(countsText(e.rows))} · saved ${esc(when(e.savedAt))}${
@@ -476,6 +481,7 @@
     const w = S.draft.week;
     S.ranks.weeks[w] = {rows: P.rows, savedAt: Date.now(), source: S.draft.file || 'paste'};
     if (!store.set(KEY.ranks, S.ranks)) { toast('Could not save — browser storage is full or blocked.'); return; }
+    pushWeek(w);
     S.draft = {week: w, text: '', parsed: null, file: ''};
     if (S.score.week === w) S.score.data = null;
     analyze();
@@ -487,6 +493,7 @@
     if (!confirm(`Delete your week ${w} rankings from this device?`)) return;
     delete S.ranks.weeks[w];
     store.set(KEY.ranks, S.ranks);
+    pushWeek(w);
     analyze();
     render();
   }
@@ -496,7 +503,8 @@
   function screenSettings() {
     const a = S.account;
     const all = (S.snap && S.snap.available) || [];
-    let h = `<section class="card pad"><h3>Sleeper account</h3>
+    let h = `<section class="card pad" data-sync-slot="settings">${syncSettings()}</section>
+      <section class="card pad"><h3>Sleeper account</h3>
       <div class="account">${avatar(a.avatar, 44)}<div><b>${esc(a.displayName)}</b><small>@${esc(a.username)}</small></div>
         <button class="btn ghost small" data-action="unlink">Switch account</button></div></section>
       <section class="card pad"><h3>Leagues</h3>
@@ -522,7 +530,9 @@
     const prefs = Object.assign({}, S.account.prefs);
     view.querySelectorAll('[data-league]').forEach(el => { prefs[el.dataset.league] = {active: el.checked}; });
     S.account.prefs = prefs;
+    S.account.updatedAt = Date.now();
     store.set(KEY.account, S.account);
+    pushAccount();
     toast('Leagues saved.');
     refresh();
   }
@@ -536,6 +546,83 @@
     store.del(KEY.snap);
     render();
   }
+
+  /* ---- Sync across the person's own devices (sync.js; optional) */
+
+  function pushAccount() {
+    if (S.sync.api && S.sync.user && S.account) S.sync.api.pushAccount(S.account);
+  }
+
+  function pushWeek(w) {
+    if (S.sync.api && S.sync.user) S.sync.api.pushWeek(w, S.ranks.weeks[w] || null);
+  }
+
+  function syncSettings() {
+    const s = S.sync;
+    const head = '<h3>Sync across your devices</h3>';
+    if (!s.ready) {
+      return head + `<p class="fine">${location.protocol === 'file:'
+        ? 'Sync works in the online app.' : 'Sync is loading. It needs an internet connection.'}</p>`;
+    }
+    if (!s.user) {
+      return head + `<p class="fine">Sign in with Google to keep your Sleeper link, league switches and rankings the same on your phone and computer. Only you can see them.</p>
+        ${s.error ? `<div class="banner stop">${esc(s.error)}</div>` : ''}
+        <div class="bar"><button class="btn" data-action="sync-in">Sign in with Google</button></div>`;
+    }
+    const status = s.state === 'syncing' ? 'Syncing…' : s.state === 'error' ? s.error : s.at ? `Synced · ${when(s.at)}` : 'Synced';
+    const photo = s.user.photo
+      ? `<img class="avatar" src="${esc(s.user.photo)}" alt="" width="44" height="44" referrerpolicy="no-referrer">` : avatar('', 44);
+    return head + `<div class="account">${photo}<div><b>${esc(s.user.name || s.user.email)}</b><small>${esc(s.user.email)}</small></div>
+        <button class="btn ghost small" data-action="sync-out">Sign out</button></div>
+      <p class="fine${s.state === 'error' ? ' bad-text' : ''}">${esc(status)}</p>
+      <details class="help"><summary>Delete my Titan account</summary>
+        <p>Removes your synced Sleeper link and rankings from Titan's database and deletes your Titan sign-in. This device keeps its own copy until you unlink it.</p>
+        <p><button class="btn ghost small" data-action="sync-delete">Delete my Titan account</button></p></details>`;
+  }
+
+  function syncWelcome() {
+    const s = S.sync;
+    if (!s.ready) return '';
+    if (!s.user) {
+      return `<p class="fine">Used Titan on another device? <button class="link" data-action="sync-in">Sign in with Google</button> to bring your account and rankings here.</p>`;
+    }
+    return `<p class="fine">Signed in as ${esc(s.user.email)}. ${s.state === 'syncing'
+      ? 'Loading your Titan account…' : 'Link your Sleeper username above and it will sync to your other devices.'}</p>`;
+  }
+
+  // Sync state changes repaint only the sync panels, so nothing being typed is lost.
+  function paintSync() {
+    view.querySelectorAll('[data-sync-slot]').forEach(el => {
+      el.innerHTML = el.dataset.syncSlot === 'welcome' ? syncWelcome() : syncSettings();
+    });
+  }
+
+  // The bridge sync.js talks to. The app never depends on it being there.
+  window.TitanApp = {
+    local: () => ({account: S.account, ranks: S.ranks}),
+    applyAccount(account) {
+      const newUser = !S.account || S.account.userId !== account.userId;
+      const newPrefs = !newUser && JSON.stringify(S.account.prefs || {}) !== JSON.stringify(account.prefs || {});
+      S.account = Object.assign({}, account);
+      store.set(KEY.account, S.account);
+      if (newUser) { S.snap = null; S.A = null; store.del(KEY.snap); }
+      render();
+      if (newUser || newPrefs) refresh();
+    },
+    applyRanks(changes) {
+      Object.keys(changes).forEach(w => {
+        if (changes[w]) S.ranks.weeks[w] = changes[w];
+        else delete S.ranks.weeks[w];
+        if (S.score.week === Number(w)) S.score.data = null;
+      });
+      store.set(KEY.ranks, S.ranks);
+      analyze();
+      render();
+      toast('Rankings updated from your account.');
+    },
+    setSync(patch) { Object.assign(S.sync, patch); paintSync(); },
+    syncReady(api) { S.sync.api = api; S.sync.ready = true; paintSync(); }
+  };
 
   const SCREENS = {
     lineups: screenLineups, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
@@ -577,6 +664,15 @@
     else if (a === 'leagues-save') saveLeagues();
     else if (a === 'unlink') unlink();
     else if (a === 'players-reload') { API.clearPlayers(); refresh(); }
+    else if (a === 'sync-in' && S.sync.api) {
+      S.sync.api.signIn().catch(e => window.TitanApp.setSync({state: 'error', error: 'Sign-in failed: ' + (e.code || e.message)}));
+    } else if (a === 'sync-out' && S.sync.api) {
+      if (confirm('Sign out of sync on this device? Your data stays here and in your account.')) S.sync.api.signOut();
+    } else if (a === 'sync-delete' && S.sync.api) {
+      if (!confirm('Delete your Titan account and everything synced to it? This cannot be undone.')) return;
+      S.sync.api.deleteAccount().then(() => toast('Your Titan account was deleted.'),
+        e => window.TitanApp.setSync({state: 'error', error: 'Could not delete: ' + (e.code || e.message)}));
+    }
   });
 
   view.addEventListener('change', e => {

@@ -4,6 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Titan Fantasy Football</title>
+  <script>
+    // Titan's home is Firebase Hosting (Google sign-in works there); the old
+    // GitHub Pages address forwards to it.
+    if (location.hostname === 'clintonburnell-cmd.github.io') {
+      location.replace('https://titan-fantasy-football.web.app/' + location.search + location.hash);
+    }
+  </script>
   <meta name="description" content="Start/sit calls, waiver upgrades, exposure and bye weeks across every Sleeper league you play in, ordered by your own rankings.">
   <meta name="theme-color" content="#0a0f1a">
   <meta name="mobile-web-app-capable" content="yes">
@@ -48,6 +55,8 @@
 
   <script src="engine.js"></script>
   <script src="sleeper.js"></script>
+  <script src="syncplan.js"></script>
   <script src="app.js"></script>
+  <script type="module" src="sync.js"></script>
 </body>
 </html>
