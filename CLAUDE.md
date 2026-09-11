@@ -14,7 +14,8 @@ live site, so site changes reach it without a new upload. What's done and what's
 | File | What it does |
 |---|---|
 | `index.html`, `site.css` | The website at the root: what Titan is, features, FAQ. In a browser it always shows the website (the owner's call: never forward browser visitors, even with a saved account). Only the Android app's `/?source=play` and home-screen copies go to the app, keeping the query; `/?home` shows the website even there |
-| `titan.svg` | The Titan banner art (hand-drawn vector). The Play feature graphic (`titan-android/store/feature-graphic.html`) uses it too: re-render that after changing it |
+| `titan.svg` | The Titan banner art (hand-drawn vector). The Play feature graphic (`titan-android/store/feature-graphic.html`) and the share image `og-image.jpg` (`titan-android/store/og-image.html`) use it too: re-render both after changing it |
+| `robots.txt`, `sitemap.xml` | For search engines. `/app/` stays out of results through its noindex tag, not robots.txt (a block would hide the tag). Add new website pages to the sitemap, and keep the home page's structured data (JSON-LD) FAQ identical to the visible FAQ |
 | `app/index.html` | The app's page, at `/app/`. It loads every file by absolute path (`/app.js`, `/styles.css`) |
 | `engine.js` | All the rules, pure (runs in the browser, in Node tests and in the server job): rankings parsing, start/sit, waiver ideas, exposure, byes, projections, kickoff freezing, weekly scoring |
 | `sleeper.js` | Sleeper API, the refresh (`collect`) for Sleeper and ESPN leagues, browser storage |
@@ -62,7 +63,10 @@ live site, so site changes reach it without a new upload. What's done and what's
   and the server job (`freezeForUser`) follow the same rule: change them together.
 - Rosters follow Sleeper's order: `L.rows` for starters, then the bench by `POS_ORDER`,
   then Reserve (IR and taxi, `heldAs`). Keep new roster views in that order.
-- Show new ESPN or Yahoo features only once they work; don't promise them in the app or the listing.
+- Show new ESPN or Yahoo features in the app and the Play listing only once they work (Google treats
+  promised features in a listing as misleading). The website says Yahoo is coming soon, at the
+  owner's request (2026-09-11): its title, a Yahoo card and the FAQ. Keep that wording honest until
+  Yahoo leagues work.
 
 ## Writing (app text, README, store listing)
 

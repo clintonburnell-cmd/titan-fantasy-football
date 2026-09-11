@@ -1,0 +1,7 @@
+# Titan Fantasy Football Manager
+# The app at /app/ stays crawlable so search engines can see its noindex tag.
+User-agent: *
+Allow: /
+Disallow: /__/
+
+Sitemap: https://titanfantasyfootball.com/sitemap.xml

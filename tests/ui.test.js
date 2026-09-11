@@ -85,10 +85,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const web = await ev(`({h1: document.querySelector('.hero h1').innerText.replace(/\\n/g, ' '), open: document.querySelectorAll('a[href="/app/"]').length,
     wide: document.documentElement.scrollWidth <= innerWidth})`);
   check(/one place/i.test(web.h1) && web.open >= 3 && web.wide, `"${web.h1}", ${web.open} Open Titan links, fits a 390px phone`);
+  const seo = await ev(`(() => { let ld = null; try { ld = JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent); } catch (e) {}
+    const faq = ld ? ld['@graph'].find(x => x['@type'] === 'FAQPage').mainEntity : [];
+    // textContent: a closed <details> isn't rendered, so its innerText can come back empty.
+    const shown = [...document.querySelectorAll('.faq details')].map(d => [d.querySelector('summary').textContent.trim(), d.querySelector('p').textContent.trim()]);
+    const bad = faq.length !== shown.length ? 'count ' + faq.length + ' vs ' + shown.length
+      : (faq.map((q, i) => q.name !== shown[i][0] || q.acceptedAnswer.text !== shown[i][1] ? q.name : '').filter(Boolean)[0] || '');
+    return {title: document.title, types: ld ? ld['@graph'].map(x => x['@type']).join(',') : 'invalid JSON-LD', bad}; })()`);
+  check(/Sleeper, ESPN and Yahoo/.test(seo.title) && seo.types === 'WebSite,WebApplication,FAQPage' && !seo.bad,
+    `search: "${seo.title}", structured data ${seo.types}, ` + (seo.bad ? 'FAQ differs at: ' + seo.bad : 'its FAQ identical to the page\'s'));
 
   T.section('the app, at /app/');
   await send('Page.navigate', {url: ORIGIN + '/app/'});
   check(await waitFor('!!document.querySelector("[data-form=link]")', 20000), 'the welcome screen loads');
+  check(await ev(`(document.querySelector('meta[name="robots"]') || {}).content`) === 'noindex', 'the app page is kept out of search results (noindex)');
   check(/Sleeper and ESPN/.test(await text('.welcome .lede')), 'the welcome mentions Sleeper and ESPN');
 
   T.section('starting with ESPN only');

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Titan Fantasy Football Manager</title>
+  <title>Titan Fantasy Football Manager: Start/Sit Tool for Sleeper, ESPN and Yahoo</title>
   <script>
     // In a browser, titanfantasyfootball.com always shows the website; Open Titan
     // leads to the app at /app/. Only the Android app (it opens /?source=play)
@@ -22,13 +22,63 @@
       if (play || installed) location.replace('/app/' + q + location.hash);
     })();
   </script>
-  <meta name="description" content="One place to manage every Sleeper and ESPN league you play. Import your own rankings and get start/sit calls, swaps and waiver upgrades based on them.">
+  <meta name="description" content="Manage your Sleeper and ESPN fantasy football leagues in one place, with Yahoo coming soon. Import your rankings for start/sit calls, swaps and waiver pickups.">
   <link rel="canonical" href="https://titanfantasyfootball.com/">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Titan Fantasy Football Manager">
+  <meta property="og:site_name" content="Titan Fantasy Football Manager">
+  <meta property="og:title" content="Titan Fantasy Football Manager: Start/Sit Tool for Sleeper, ESPN and Yahoo">
   <meta property="og:description" content="Every league in one place. Every call from your rankings.">
   <meta property="og:url" content="https://titanfantasyfootball.com/">
-  <meta property="og:image" content="https://titanfantasyfootball.com/icon-512.png">
+  <meta property="og:image" content="https://titanfantasyfootball.com/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="A Titan lifting a football, beside the words: Every league in one place. Every call from your rankings.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Titan Fantasy Football Manager">
+  <meta name="twitter:description" content="Every league in one place. Every call from your rankings.">
+  <meta name="twitter:image" content="https://titanfantasyfootball.com/og-image.jpg">
+  <!-- For search engines: what Titan is, and the FAQ below (keep the answers identical to the page). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "name": "Titan Fantasy Football Manager",
+        "alternateName": "Titan",
+        "url": "https://titanfantasyfootball.com/"
+      },
+      {
+        "@type": "WebApplication",
+        "name": "Titan Fantasy Football Manager",
+        "url": "https://titanfantasyfootball.com/",
+        "applicationCategory": "SportsApplication",
+        "operatingSystem": "Any (web browser)",
+        "browserRequirements": "Requires JavaScript",
+        "description": "Manage your Sleeper and ESPN fantasy football leagues in one place, with Yahoo coming soon. Import your rankings for start/sit calls, swaps and waiver pickups.",
+        "image": "https://titanfantasyfootball.com/og-image.jpg",
+        "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {"@type": "Question", "name": "Is Titan free?",
+            "acceptedAnswer": {"@type": "Answer", "text": "Yes. There's an optional tip jar if you'd like to support it."}},
+          {"@type": "Question", "name": "Which platforms does Titan work with?",
+            "acceptedAnswer": {"@type": "Answer", "text": "Sleeper and ESPN today, and Yahoo is coming soon. Link Sleeper with your username, and add ESPN leagues by their ID or link."}},
+          {"@type": "Question", "name": "Do I need my own rankings?",
+            "acceptedAnswer": {"@type": "Answer", "text": "No. Until you import some, Titan uses Sleeper's weekly projections in each league's scoring. Import yours whenever you like and they take over."}},
+          {"@type": "Question", "name": "What ranking files can I import?",
+            "acceptedAnswer": {"@type": "Answer", "text": "A CSV file or a spreadsheet paste with player, position, team and rank columns, plus the export formats of Late-Round, FantasyPros and The Hall."}},
+          {"@type": "Question", "name": "Can Titan set my lineup for me?",
+            "acceptedAnswer": {"@type": "Answer", "text": "No. Sleeper and ESPN don't let outside apps change lineups, so Titan shows the exact changes to make and a button that opens the team in Sleeper or ESPN."}},
+          {"@type": "Question", "name": "Does it work on my phone?",
+            "acceptedAnswer": {"@type": "Answer", "text": "Yes. Titan runs in any phone or computer browser, and you can add it to your home screen like an app."}}
+        ]
+      }
+    ]
+  }
+  </script>
   <meta name="theme-color" content="#0a0f1a">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -133,6 +183,8 @@
             <p>No password. Titan reads what your Sleeper profile already shows, and every league you're in loads on its own.</p></div>
           <div class="panel"><span class="tag">ESPN</span><h3>Add a league by ID or link</h3>
             <p>Public leagues need nothing else. For private ones, you can save your ESPN login to your own Titan account.</p></div>
+          <div class="panel"><span class="tag">Yahoo</span><h3>Coming soon</h3>
+            <p>Yahoo leagues are next. When they land, they'll sit right alongside your Sleeper and ESPN teams.</p></div>
           <div class="panel"><span class="tag">Together</span><h3>One screen for game day</h3>
             <p>Lineups, matchups, rosters, injuries, bye weeks and live scores for every league, with quick jumps between them.</p></div>
         </div>
@@ -212,7 +264,7 @@ Tyrell Banks,RB,TEN,31</pre></div>
         <h2>Questions</h2>
         <div class="faq">
           <details><summary>Is Titan free?</summary><p>Yes. There's an optional tip jar if you'd like to support it.</p></details>
-          <details><summary>Which platforms does Titan work with?</summary><p>Sleeper and ESPN. Link Sleeper with your username, and add ESPN leagues by their ID or link.</p></details>
+          <details><summary>Which platforms does Titan work with?</summary><p>Sleeper and ESPN today, and Yahoo is coming soon. Link Sleeper with your username, and add ESPN leagues by their ID or link.</p></details>
           <details><summary>Do I need my own rankings?</summary><p>No. Until you import some, Titan uses Sleeper's weekly projections in each league's scoring. Import yours whenever you like and they take over.</p></details>
           <details><summary>What ranking files can I import?</summary><p>A CSV file or a spreadsheet paste with player, position, team and rank columns, plus the export formats of Late-Round, FantasyPros and The Hall.</p></details>
           <details><summary>Can Titan set my lineup for me?</summary><p>No. Sleeper and ESPN don't let outside apps change lineups, so Titan shows the exact changes to make and a button that opens the team in Sleeper or ESPN.</p></details>
