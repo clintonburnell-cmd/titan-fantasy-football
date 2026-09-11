@@ -3,7 +3,7 @@
  * Every 15 minutes on NFL game days, for each person who signed in to sync,
  * saves Titan's calls for the week: each player's rank, Titan's call and his
  * projected points (Sleeper's projections). A player's entry keeps updating
- * until his game kicks off, then stays frozen, so the Weeks tab can compare
+ * until his game kicks off, then stays frozen, so the Results tab can compare
  * what was expected at lock with what actually happened.
  * Stored at users/{uid}/history/{week}, readable only by that person.
  */

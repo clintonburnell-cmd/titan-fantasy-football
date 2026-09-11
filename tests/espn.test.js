@@ -81,7 +81,7 @@ const {check, section} = T;
   const priv = s1.available.find(l => l.id === 'espn:99999903');
   check(priv && priv.error === 'private' && priv.active === false && priv.key === 'Secret League', 'a private league is listed with its reason, switched off');
   const sc1 = await API.collectScores(espnOnly, s1.leagues.map(x => x.cfg), 1, s1.season);
-  check(sc1.skipped.length === 2 && sc1.leagues.length === 0, 'Weeks tab lists ESPN leagues as not scored yet');
+  check(sc1.skipped.length === 2 && sc1.leagues.length === 0, 'the Results tab lists ESPN leagues as not scored yet');
 
   if (T.sleeperUser) {
     const me = await API.lookupUser(T.sleeperUser);

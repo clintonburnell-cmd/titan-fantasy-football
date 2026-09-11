@@ -591,18 +591,31 @@
     if (m.error) return `<article class="card league">${head}<p class="note">Couldn't load this matchup: ${esc(m.error)}</p></article>`;
     if (m.none) return `<article class="card league">${head}<p class="note">No matchup this week.</p></article>`;
     const a = sideTotals(m.me, m.cfg), b = sideTotals(m.opp, m.cfg);
-    const status = a.live || b.live ? '<span class="vs live">LIVE</span>' : a.done && b.done ? '<span class="vs">FINAL</span>' : '<span class="vs">VS</span>';
+    const status = a.live || b.live ? '<span class="vs live">LIVE</span>' : a.done && b.done ? '<span class="vs">FINAL</span>' : '';
     const lead = (x, y) => (x.started || y.started) && x.pts > y.pts ? ' lead' : '';
     const pic = s => (s.avatar ? avatar(s.avatar, 36)
       : `<span class="avatar blank initials" style="width:36px;height:36px">${esc(initials(s.name))}</span>`);
     const team = (s, cls) => `<div class="bside ${cls}">${pic(s)}<div class="sinfo"><b class="bname">${esc(s.name)}</b><small>${esc(s.record || '')}</small></div></div>`;
-    const score = (t, o, cls) => `<div class="bscore ${cls}${lead(t, o)}"><span class="btotal">${fmt(t.pts)}</span><small>${fmt(t.proj)}</small></div>`;
+    const projected = (t, cls) => `<div class="bscore ${cls}"><small>projected</small><span class="bproj">${fmt(t.proj)}</span></div>`;
     const rows = m.cfg.lineup.map((slot, i) => `<li class="mrow">${matchInfo(m.me.players[i], 'me')}${matchPts(m.me.players[i], m.cfg, 'me')}
       <span class="mslot">${esc(slotName(slot))}</span>${matchPts(m.opp.players[i], m.cfg, 'opp')}${matchInfo(m.opp.players[i], 'opp')}</li>`).join('');
-    return `<article class="card league match">${head}
-      <div class="board">${team(m.me, 'me')}${score(a, b, 'me')}${status}${score(b, a, 'opp')}${team(m.opp, 'opp')}</div>
-      <ol class="mlist">${rows}</ol></article>`;
+    // The header, shown collapsed or open: league, score, and each side's chance to win.
+    const wp = SCC.winProbability(winList(m.me, m.cfg), winList(m.opp, m.cfg));
+    const pa = Math.round(wp.a * 100), pb = 100 - pa;
+    const bar = a.proj || b.proj || a.started || b.started ? `<div class="winbar" title="Chance to win">
+        <span class="wp me${pa >= pb ? ' up' : ''}">${pa}%</span><span class="wbar"><i class="wme" style="width:${pa}%"></i><i class="wopp" style="width:${pb}%"></i></span>
+        <span class="wp opp${pb > pa ? ' up' : ''}">${pb}%</span></div>` : '';
+    const open = !!(S.ui.openMatch || {})[m.cfg.id];
+    return `<details class="card match" id="${anchor(m.cfg)}" data-match="${esc(m.cfg.id)}"${open ? ' open' : ''}>
+      <summary class="mhead"><div class="mh-top"><span class="sname">${esc(m.cfg.key)}</span>${status}</div>
+        <div class="mh-score"><span class="mh-name">${esc(m.me.name)}</span><b class="mh-pts${lead(a, b)}">${fmt(a.pts)}</b>
+          <b class="mh-pts${lead(b, a)}">${fmt(b.pts)}</b><span class="mh-name opp">${esc(m.opp.name)}</span></div>${bar}</summary>
+      <div class="board">${team(m.me, 'me')}${projected(a, 'me')}<span class="vs">VS</span>${projected(b, 'opp')}${team(m.opp, 'opp')}</div>
+      <ol class="mlist">${rows}</ol></details>`;
   }
+
+  // One side's starters as the win-chance model reads them.
+  const winList = (side, cfg) => side.players.map(p => (!p || p.empty ? null : {pts: p.pts, proj: SCC.projFor(S.proj, p.id, cfg.ppr), state: (gameOf(p.team) || {}).state || ''}));
 
   function screenMatchup() {
     if (!S.snap) return emptyState();
@@ -615,7 +628,10 @@
     if (M.error) h += `<div class="banner stop">${esc(M.error)}</div>`;
     if (!M.data) return h + (M.busy ? '<div class="empty-note">Loading this week\'s matchups…</div>' : '');
     if (!M.data.length) return h + '<div class="empty-note">No leagues to show.</div>';
-    return h + M.data.map(matchCard).join('') + (Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper.</p>' : '');
+    const tools = `<div class="match-tools"><button class="link" data-action="match-all">Expand all</button>
+      <button class="link" data-action="match-none">Collapse all</button></div>`;
+    return h + tools + M.data.map(matchCard).join('') +
+      (Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper. Chance to win is Titan\'s estimate from them and the points so far.</p>' : '');
   }
 
   /* ---- Rosters */
@@ -729,7 +745,7 @@
     return h;
   }
 
-  /* ---- Weeks */
+  /* ---- Results (each week's scores; the tab id is still 'score') */
 
   // How Titan's call on a player reads in a week's record.
   const CALL = {'OK': 'start', 'START': 'start', 'BENCH': 'bench', 'SWAP OUT': 'swap out', 'DO NOT START': "don't start",
@@ -1328,6 +1344,13 @@
     if (a === 'score') loadScore(S.score.week || S.snap.week);
     else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
     else if (a === 'matchups') loadMatchups();
+    else if (a === 'match-all' || a === 'match-none') {
+      const open = {};
+      if (a === 'match-all') (S.match.data || []).forEach(x => { open[x.cfg.id] = 1; });
+      S.ui.openMatch = open;
+      saveUi();
+      render();
+    }
     else if (a === 'espn-start') startEspnOnly();
     else if (a === 'espn-team') pickEspnTeam(t.dataset.team);
     else if (a === 'espn-cancel') { S.espn.pick = null; render(); }
@@ -1368,6 +1391,17 @@
       });
     }
   });
+
+  // Which Matchup leagues are open is remembered ('toggle' doesn't bubble, so this listens on the way down).
+  view.addEventListener('toggle', e => {
+    const d = e.target;
+    if (!d.matches || !d.matches('details[data-match]')) return;
+    const open = Object.assign({}, S.ui.openMatch);
+    if (d.open) open[d.dataset.match] = 1;
+    else delete open[d.dataset.match];
+    S.ui.openMatch = open;
+    saveUi();
+  }, true);
 
   view.addEventListener('input', e => {
     const t = e.target;

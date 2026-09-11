@@ -483,6 +483,38 @@
     return today >= tuesday ? week + 1 : week;
   }
 
+  /* Each side's chance to win a matchup, from points so far and what's still to
+     come. A player whose game is over counts his points; one still playing, his
+     points plus half of whatever his projection still expects; one yet to play,
+     his projection. Points still to come are uncertain (a spread of 0.6 times
+     each player's expected remaining points), so the chance heads to 100% as
+     games end. Each side is a list of {pts, proj, state}. */
+  function winProbability(a, b) {
+    function side(list) {
+      var exp = 0, v = 0;
+      (list || []).forEach(function (p) {
+        if (!p) return;
+        var pts = Number(p.pts) || 0, proj = Number(p.proj) || 0, rem;
+        if (p.state === 'complete') rem = 0;
+        else if (p.state === 'in_game') rem = Math.max(0, proj - pts) * 0.5;
+        else rem = proj;
+        exp += (p.state === 'complete' || p.state === 'in_game' ? pts : 0) + rem;
+        v += Math.pow(0.6 * rem, 2);
+      });
+      return {exp: exp, v: v};
+    }
+    var A = side(a), B = side(b), sd = Math.sqrt(A.v + B.v), d = A.exp - B.exp;
+    var pa = sd < 0.01 ? (d > 0 ? 1 : d < 0 ? 0 : 0.5) : normCdf(d / sd);
+    return {a: pa, b: 1 - pa, expA: round2(A.exp), expB: round2(B.exp)};
+  }
+
+  // The standard normal distribution's CDF (Abramowitz and Stegun 26.2.17).
+  function normCdf(z) {
+    var t = 1 / (1 + 0.2316419 * Math.abs(z));
+    var p = 0.3989423 * Math.exp(-z * z / 2) * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    return z > 0 ? 1 - p : p;
+  }
+
   /* A new rankings file usually leaves out players whose games are already
      over. Rostered players whose game has started keep the rank they had in the
      rankings being replaced, so they don't turn "unranked" halfway through a
@@ -1132,7 +1164,7 @@
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
     trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
     openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, applyPoints: applyPoints,
-    keepStartedRanks: keepStartedRanks
+    keepStartedRanks: keepStartedRanks, winProbability: winProbability
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

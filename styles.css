@@ -355,6 +355,25 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
    player on the left and your opponent's on the right, points toward the middle. */
 .match-bar { flex-wrap: nowrap; align-items: center; justify-content: space-between; }
 .match-bar .lede { flex: 1 1 auto; }
+.match-tools { display: flex; gap: 14px; justify-content: flex-end; }
+/* Each league collapses to its header: league, score, and a win-chance bar. */
+details.match > summary { list-style: none; cursor: pointer; display: grid; gap: 7px; padding: 12px 14px; }
+details.match > summary::-webkit-details-marker { display: none; }
+.mh-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.mh-score { display: grid; grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr); align-items: baseline; column-gap: 12px; }
+.mh-name { color: var(--muted); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mh-name.opp { text-align: right; }
+.mh-pts { font-size: 1.3rem; font-weight: 850; font-variant-numeric: tabular-nums; }
+.mh-pts.lead { color: var(--ok); }
+.winbar { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr) 2.6rem; align-items: center; gap: 8px; }
+.wp { font-size: .74rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wp.opp { text-align: right; }
+.wp.up { color: var(--text); }
+.wbar { display: flex; height: 7px; border-radius: 999px; overflow: hidden; background: var(--line); gap: 2px; }
+.wbar i { display: block; height: 100%; }
+.wbar .wme { background: var(--ok); }
+.wbar .wopp { background: #5d6d8a; }
+.bproj { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .board, .mrow { display: grid; grid-template-columns: minmax(0, 1fr) 3rem 2.4rem 3rem minmax(0, 1fr); align-items: center; column-gap: 6px; }
 .board { padding: 14px 12px; border-top: 1px solid var(--line); }
 .bside { display: flex; align-items: center; gap: 8px; min-width: 0; }

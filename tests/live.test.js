@@ -1,5 +1,5 @@
 // A real Sleeper account end to end: lookup, league discovery, byes from the
-// schedule, refresh, analysis, projections, the kickoff record and the Weeks
+// schedule, refresh, analysis, projections, the kickoff record and the Results
 // scoring. Runs only when TITAN_SLEEPER_USER is set (never write a username
 // into this repo). Rankings are the public sample file.
 const T = require('./lib');
@@ -51,7 +51,7 @@ if (!T.sleeperUser) {
   check(mus.length === snap.leagues.length && full.length + mus.filter(x => x.none).length === mus.length && !mus.some(x => x.error),
     `this week's matchups: ${full.length} with both lineups, ${mus.filter(x => x.none).length} with none`);
 
-  section('projections, kickoff record, Weeks');
+  section('projections, kickoff record, Results');
   const proj = await API.fetchProjections(snap.season, snap.week);
   check(Object.keys(proj).length > 300, `${Object.keys(proj).length} projections for week ${snap.week}`);
   const hist = SCC.freezeWeek(null, A, proj, snap.season, snap.week);

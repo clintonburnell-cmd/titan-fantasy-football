@@ -180,4 +180,17 @@ const keptX = SCC.keepStartedRanks([{name: 'Slow Back', pos: 'RB', rank: 55}],
   {[SCC.norm('Played Qb')]: 1, [SCC.norm('Slow Back')]: 1});
 check(keptX.length === 1 && keptX[0].name === 'Played Qb' && keptX[0].rank === 4,
   'new rankings keep the old rank of a started player they left out, and nobody else\'s');
+
+section('chance to win a matchup');
+const team = (projs, state, pts) => projs.map((proj, i) => ({proj, state: state || 'pre', pts: pts ? pts[i] : 0}));
+const even = SCC.winProbability(team([15, 15, 15]), team([15, 15, 15]));
+check(Math.abs(even.a - 0.5) < 0.001 && Math.abs(even.a + even.b - 1) < 1e-9, 'same projections before kickoff: 50/50');
+const fav = SCC.winProbability(team([15, 15, 15, 15, 15, 15, 15, 15, 20]), team([12, 12, 12, 12, 12, 12, 12, 12, 14]));
+check(fav.a > 0.6 && fav.a < 0.9, `projected 140 against 110 before kickoff: ${Math.round(fav.a * 100)}% (a clear favorite, not a lock)`);
+const over = SCC.winProbability(team([15, 15], 'complete', [20, 21]), team([30, 30], 'complete', [18, 22]));
+check(over.a === 1 && over.b === 0, 'every game over: the side ahead has 100%');
+const late = SCC.winProbability(team([15, 15], 'complete', [30, 30]).concat(team([10], 'in_game', [8])), team([15, 15, 15], 'complete', [10, 12, 11]));
+check(late.a > 0.99, 'far ahead with one player left: almost certain');
+const comeback = SCC.winProbability(team([15, 15, 15], 'complete', [10, 10, 10]), team([15, 15], 'complete', [12, 12]).concat(team([25])));
+check(comeback.b > 0.5 && comeback.b < 1, `behind by 6 with a 25-point projection still to play: ${Math.round(comeback.b * 100)}%`);
 T.done();

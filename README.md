@@ -53,7 +53,7 @@ website (such as alerts) to pass review.
 | Rosters | Every rostered player per league, with rank, tier, opponent and bye; a player search (name, team or position) and chips that jump to any league |
 | Exposure | Players on two or more of your teams |
 | Byes | How many of your players are off each week, per league |
-| Weeks | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points (Sleeper leagues; ESPN scoring is next) |
+| Results | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points (Sleeper leagues; ESPN scoring is next) |
 | News | News-only X accounts (@UnderdogNFL), each opening on X. X doesn't let apps read posts without a paid plan |
 | Rankings | Import and manage weekly rankings |
 | Settings | Linked Sleeper account, ESPN leagues and login, which leagues Titan manages, refresh log |
@@ -110,7 +110,7 @@ game days it runs, for each person who signed in to sync, the same engine the ap
 and ESPN rosters (private ESPN leagues with their saved login) under their synced rankings,
 plus Sleeper's projections for the week. It saves the result
 to `users/{uid}/history/{week}` with `freezeWeek`, which keeps rewriting a player's entry
-until his game kicks off and never after. The Weeks tab scores each week against that
+until his game kicks off and never after. The Results tab scores each week against that
 frozen record. Scheduled functions need Firebase's pay-as-you-go (Blaze) plan.
 
 Projections come from Sleeper's projections feed, which Sleeper licenses from RotoWire
@@ -173,7 +173,7 @@ No build step and no dependencies. It runs on any static host.
 4. **More fantasy platforms**, so one Titan account covers every league:
    - **Done: ESPN Fantasy** (`espn.js`) for lineups, rosters, exposure, byes and the
      kickoff record; public leagues by ID, private ones with the member's saved ESPN
-     login. Next: ESPN leagues on the Weeks tab.
+     login. Next: ESPN leagues on the Results tab.
    - **Next: Yahoo Fantasy**: official Fantasy Sports API, signed in with Yahoo (OAuth),
      with a registered Yahoo developer app and a server-side token exchange.
    - **Later: NFL Fantasy** and **CBS Sports Fantasy**: need research on what each allows.

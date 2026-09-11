@@ -1,7 +1,7 @@
 // The app in headless Chrome at phone width, served from this folder. ESPN
 // league requests are answered with the test leagues through Chrome's request
 // interception, so no real league is read. With TITAN_SLEEPER_USER set it also
-// links that Sleeper account from Settings and checks the Weeks tab and the
+// links that Sleeper account from Settings and checks the Results tab and the
 // rankings viewer. Needs Chrome (set CHROME if it isn't in the default place).
 const {spawn} = require('child_process');
 const http = require('http');
@@ -137,6 +137,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   await tab('matchup');
   check(await waitFor(`!!document.querySelector('.match .board')`, 30000), 'the Matchup tab loads');
+  const head = await ev(`(() => { const d = document.querySelector('details.match'); const w = [...d.querySelectorAll('.winbar .wp')].map(x => parseInt(x.innerText, 10));
+    return {open: d.open, score: d.querySelector('.mh-score').innerText.replace(/\\n/g, ' '), wp: w}; })()`);
+  check(!head.open && /Team 1/.test(head.score) && /Team 2/.test(head.score), 'each league starts collapsed, its header showing both teams and scores: ' + head.score);
+  check(head.wp.length === 2 && head.wp[0] + head.wp[1] === 100, `a chance-to-win bar in the header (${head.wp.join('% / ')}%)`);
+  await ev(`document.querySelector('details.match > summary').click(); true`);
+  await sleep(300);
+  await tab('lineups');
+  await tab('matchup');
+  await waitFor(`!!document.querySelector('details.match')`, 30000);
+  check(await ev(`document.querySelector('details.match').open`), 'opening a league is remembered after leaving the tab');
   const mu = await ev(`({board: ((document.querySelector('.match .board') || {}).innerText || (document.querySelector('.card.league') || {}).innerText || '').replace(/\\n/g, ' '),
     rows: document.querySelectorAll('.match .mrow').length,
     opp: [...document.querySelectorAll('.match .minfo.opp b')].map(b => b.innerText).filter(Boolean).length,
@@ -146,7 +156,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await tab('byes');
   check(await ev(`!!document.querySelector('table.byes')`), 'the Byes table renders');
   await tab('score');
-  check(await waitFor(`/ESPN weekly scores are coming soon/.test(document.body.innerText)`, 30000), 'the Weeks tab says ESPN scoring is coming');
+  check(await waitFor(`/ESPN weekly scores are coming soon/.test(document.body.innerText)`, 30000), 'the Results tab says ESPN scoring is coming');
+  check(await ev(`document.querySelector('#tabs [data-tab="score"]').innerText === 'Results'`), 'the tab is called Results');
 
   if (T.sleeperUser) {
     T.section('linking Sleeper as well');
@@ -169,7 +180,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     await ev(`document.querySelector('[data-action="ranks-save"]').click(); true`);
     await sleep(600);
     await tab('score');
-    check(await waitFor(`!!document.querySelector('details.score') || /has not kicked off/.test(document.body.innerText)`, 120000), 'the Weeks tab loads');
+    check(await waitFor(`!!document.querySelector('details.score') || /has not kicked off/.test(document.body.innerText)`, 120000), 'the Results tab loads');
     check(await ev(`document.querySelectorAll('[data-ui=scoreWeek] option').length === 18`), 'weeks 1 to 18 are listed');
     if (await ev(`!!document.querySelector('[data-action="ranks-view"]')`)) {
       await ev(`document.querySelector('[data-action="ranks-view"]').click(); true`);
