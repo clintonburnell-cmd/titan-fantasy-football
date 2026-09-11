@@ -48,9 +48,9 @@ website (such as alerts) to pass review.
 
 | Screen | What it shows |
 |---|---|
-| Lineups | Each league's lineup as set, with a verdict on every slot, the changes to make, wire upgrades and injuries. Every player shows his Sleeper headshot and team logo, his kickoff time (in the viewer's time zone) and projection, and once his game starts, his points marked LIVE or FINAL. Tiles count lineup changes, injured starters, wire upgrades, and starters and bench players locked or yet to play. Filters: all, needs action, or one problem at a time (lineup changes, empty spots, out or doubtful, questionable, on bye, unranked starters, wire upgrades); chips at the top jump to any league |
+| Lineups | Each league's lineup as set, with a verdict on every slot, the changes to make, wire upgrades and injuries. Every player shows his Sleeper headshot and team logo, his kickoff time (in the viewer's time zone) and projection, and once his game starts, his points marked LIVE or FINAL. Tiles count lineup changes, injured starters, wire upgrades, and starters and bench players locked or yet to play. Filters: all, needs action, or one problem at a time (lineup changes, empty spots, out or doubtful, questionable, on bye, unranked starters, wire upgrades); chips at the top jump to any league; each league folds to its header (remembered), with Expand all and Collapse all |
 | Matchup | Each league's head-to-head this week, collapsed to a header with both scores and a chance-to-win bar, like Sleeper's; open it for avatars, records, projected totals, and both lineups spot by spot with headshots, points, kickoff times and projections |
-| Rosters | Every rostered player per league with headshot, rank, tier, opponent, bye, kickoff time and live points; a player search (name, team or position) and chips that jump to any league |
+| Rosters | Every league's roster in Sleeper's order: the starters spot by spot, then the bench by position (QB, RB, WR, TE, K, DEF), then IR and taxi under Reserve, each with headshot, rank, tier, opponent, bye, kickoff time and live points; a player search (name, team or position), chips that jump to any league, and leagues that fold like Lineups |
 | Exposure | Players on two or more of your teams |
 | Byes | How many of your players are off each week, per league |
 | Results | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points (Sleeper leagues; ESPN scoring is next) |
@@ -81,6 +81,8 @@ website (such as alerts) to pass review.
 - **Chance to win** on Matchup is Titan's estimate: points so far plus what each player's
   projection still expects, with the uncertainty of points still to come
   (`winProbability` in `engine.js`).
+- **Folded leagues are remembered per tab.** Lineups and Rosters start open, Matchup
+  starts folded; only a person's own taps are saved, not the search opening a league.
 - **Saved data carries a version.** An older snapshot on a device is refreshed on open,
   so a new field (like kickoff times) never waits for a manual refresh.
 
@@ -207,3 +209,4 @@ No build step and no dependencies. It runs on any static host.
 | `v1.1.0` | Renamed Titan Fantasy Football Manager; FantasyPros rankings; the full title on phones |
 | `v1.2.0` | Weeks tab (weeks 1 to 18, calls and projections frozen at kickoff by the server job), saved-rankings viewer, projections on Lineups, bye-week needs per league, ESPN leagues (public and private), and Link more leagues in Settings |
 | `v1.3.0` | Matchup tab like Sleeper's (collapsible leagues, scores and a chance-to-win bar, both lineups); live and final scores; the Tuesday week switch; kickoff times; headshots and team logos; game-status tiles; league jump chips and a Rosters player search; players whose game has started left alone; Weeks renamed Results; tests in the repo and CLAUDE.md |
+| `v1.4.0` | Lineups filters by problem (lineup changes, empty spots, out or doubtful, questionable, on bye, unranked starters, wire upgrades) and an ON BYE call for starters on bye; Rosters in Sleeper's order (starters by spot, bench by position, IR and taxi under Reserve); fold and unfold leagues on Lineups and Rosters, with Expand all and Collapse all everywhere |

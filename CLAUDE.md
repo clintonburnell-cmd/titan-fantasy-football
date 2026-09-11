@@ -40,6 +40,11 @@ live site, so site changes reach it without a new upload. What's done and what's
 - Live scores refresh without a full refresh (`livePoints`, `loadMatchups`, `scheduleLive`):
   keep them light. ESPN's box score is ~230 KB, so it's fetched every other tick.
 - The Results tab's internal id is still `score`; only its label changed.
+- Folding (Lineups, Rosters, Matchup) goes through `isOpen`, `setFold` and `foldAll` in
+  `app.js`, keyed by `FOLD_KEY`. Only a person's tap on a header is saved (`tapped`); code
+  that opens or closes a league (the Rosters search, jump chips) must not save it.
+- Rosters follow Sleeper's order: `L.rows` for starters, then the bench by `POS_ORDER`,
+  then Reserve (IR and taxi, `heldAs`). Keep new roster views in that order.
 - Show new ESPN or Yahoo features only once they work; don't promise them in the app or the listing.
 
 ## Writing (app text, README, store listing)
