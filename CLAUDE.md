@@ -48,6 +48,10 @@ live site, so site changes reach it without a new upload. What's done and what's
 - A new rankings format: study the person's file locally, then test with a few made-up rows in
   the same format (see The Hall's test in `tests/engine.test.js`). Never commit a ranking
   site's actual file; many are paid. Name known sources in `parseRanks`'s `source`.
+- Default rankings (`defaultRanks`, `rankingsBy` in `engine.js`) are Sleeper's weekly projections
+  in each league's scoring. A week's import wins; the defaults fill positions it leaves out, or
+  everything when nothing is imported. The app (`ranksFor`, `analyze`, Results, `keepStarted`)
+  and the server job (`freezeForUser`) follow the same rule: change them together.
 - Rosters follow Sleeper's order: `L.rows` for starters, then the bench by `POS_ORDER`,
   then Reserve (IR and taxi, `heldAs`). Keep new roster views in that order.
 - Show new ESPN or Yahoo features only once they work; don't promise them in the app or the listing.

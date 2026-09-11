@@ -102,6 +102,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await ev(`document.querySelector('.link-pane button.btn').disabled`), 'the Yahoo tab waits, its button disabled');
 
   await tab('lineups');
+  check(await waitFor(`/default rankings/.test((document.querySelector('.banner.ok') || {}).innerText || '')`, 30000),
+    'with nothing imported, Lineups runs on the default rankings');
   const lineup = await ev(`({h: (document.querySelector('.league .card-h') || {}).innerText || '', n: document.querySelectorAll('.lineup .row').length})`);
   check(/Titan Test League/.test(lineup.h) && /ESPN/.test(lineup.h) && lineup.n === 9, 'Lineups shows the ESPN league, 9 spots');
   const chips = await ev(`[...document.querySelectorAll('[data-filter]')].map(b => ({id: b.dataset.filter, n: Number(b.innerText.match(/(\\d+)$/)[1])}))`);
@@ -216,6 +218,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     await sleep(300);
     await ev(`document.querySelector('[data-action="ranks-save"]').click(); true`);
     await sleep(600);
+    await tab('lineups');
+    check(await waitFor(`/DEF uses? the default rankings/.test(document.body.innerText) && !/Using Titan's default rankings/.test(document.body.innerText)`, 5000),
+      'after importing rankings without defenses, those rankings win and DEF uses the defaults');
     await tab('score');
     check(await waitFor(`!!document.querySelector('details.score') || /has not kicked off/.test(document.body.innerText)`, 120000), 'the Results tab loads');
     check(await ev(`document.querySelectorAll('[data-ui=scoreWeek] option').length === 18`), 'weeks 1 to 18 are listed');

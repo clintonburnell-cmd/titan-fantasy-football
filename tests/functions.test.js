@@ -59,7 +59,7 @@ function fakeUser(db) {
     }
   });
   const proj = await API.fetchProjections(season, 1);
-  const ctx = {season, week: 1, proj};
+  const ctx = {season, week: 1, proj, players};
   const account = {userId: '', displayName: 'Test', prefs: {}, espn: {leagues: [{id: '99999901', teamId: 1}, {id: '99999904', teamId: 1}]}};
 
   const noLogin = {ranks: {1: {rows}}, history: {}, private: {}};
@@ -76,6 +76,14 @@ function fakeUser(db) {
   check(lg && Object.keys(lg.players).length === 16 && Object.values(lg.players).some(p => p.proj !== null),
     `16 players saved with ranks, calls and projections (${Object.values(lg.players).filter(p => p.proj !== null).length} projected)`);
   check(JSON.stringify(rec).indexOf('undefined') < 0, 'no undefined values (Firestore rejects them)');
+
+  const bare = {ranks: {}, history: {}, private: {}};
+  await job.freezeForUser(fakeUser(bare), account, ctx);
+  const bareLg = bare.history['1'] && bare.history['1'].leagues['espn:99999901'];
+  const bareRanked = bareLg ? Object.values(bareLg.players).filter(p => p.rank !== null) : [];
+  const projected = bareLg ? Object.values(bareLg.players).filter(p => p.proj > 0).length : 0;
+  check(bareRanked.length > 0 && bareRanked.length >= projected - 2,
+    `with no rankings imported, the default rankings rank ${bareRanked.length} of 16 players (${projected} projected above 0)`);
 
   const pid = Object.keys(lg.players)[0], wasLocked = lg.players[pid].locked;
   db.history['1'].leagues['espn:99999901'].players[pid].rank = -7;

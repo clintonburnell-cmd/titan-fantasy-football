@@ -71,6 +71,7 @@
     match: {busy: false, data: null, error: '', at: 0, week: 0}, // this week's matchups, loaded on the Matchup tab
     rosterQuery: '', // the Rosters page's player search
     proj: {}, // Sleeper's projections for the snapshot's week
+    projAt: 0, // when they were last fetched (0: not yet this visit)
     view: {week: 0, pos: 'QB'} // the saved rankings open on the Rankings tab
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
@@ -119,21 +120,42 @@
 
   /* ----------------------------------------------------------- rankings */
 
-  /* The rankings for a week. If that week has none yet, fall back to the
-     latest earlier week and say so — better than ordering nothing. */
-  function ranksFor(week) {
+  /* The rankings for a week (`proj`: Sleeper's projections for it). The week's
+     import comes first, and Titan's default rankings (those projections, in
+     each league's scoring) fill any position it leaves out, or everything when
+     nothing is imported. Without projections (offline), the latest earlier
+     import stands in, and the screens say so. */
+  function ranksFor(week, proj) {
+    const hasProj = !!proj && Object.keys(proj).length > 0;
+    const saved = S.ranks.weeks[week];
+    if (saved) {
+      const have = SCC.rankCounts(saved.rows);
+      return {week, rows: saved.rows, exact: true, filled: hasProj ? SCC.DEFAULT_POS.filter(p => !have[p]) : []};
+    }
+    if (hasProj) return {week, rows: [], exact: true, defaults: true, filled: SCC.DEFAULT_POS.slice()};
     const weeks = Object.keys(S.ranks.weeks).map(Number).sort((a, b) => a - b);
-    if (!weeks.length) return {week: 0, rows: [], exact: false};
-    if (S.ranks.weeks[week]) return {week, rows: S.ranks.weeks[week].rows, exact: true};
+    if (!weeks.length) return {week: 0, rows: [], exact: false, filled: []};
     const earlier = weeks.filter(w => w < week);
     const w = earlier.length ? earlier[earlier.length - 1] : weeks[weeks.length - 1];
-    return {week: w, rows: S.ranks.weeks[w].rows, exact: false};
+    return {week: w, rows: S.ranks.weeks[w].rows, exact: false, filled: []};
+  }
+
+  // A week's rankings as each league reads them.
+  const rankingsOf = (r, proj, players) => SCC.rankingsBy(r.rows, r.filled.length ? proj : null, players);
+
+  // Sleeper's trimmed player list (names for the default rankings), read from
+  // storage once per refresh.
+  let playersMemo = {at: -1, map: {}};
+  function playerList() {
+    const at = S.snap ? S.snap.at : 0;
+    if (playersMemo.at !== at) playersMemo = {at, map: (store.get(API.PLAYERS_KEY) || {}).map || {}};
+    return playersMemo.map;
   }
 
   function analyze() {
     if (!S.snap) { S.A = null; return; }
-    const r = ranksFor(S.snap.week);
-    S.A = SCC.analyzeAll(S.snap, SCC.weeklyMap(r.rows));
+    const r = ranksFor(S.snap.week, S.proj);
+    S.A = SCC.analyzeAll(S.snap, rankingsOf(r, S.proj, playerList()));
     S.A.ranks = r;
   }
 
@@ -158,6 +180,7 @@
       S.snap = snap;
       store.set(KEY.snap, snap);
       S.proj = await API.fetchProjections(snap.season, snap.week);
+      S.projAt = Date.now();
       if (S.score.week === snap.week) S.score.data = null; // live points have moved
     } catch (e) {
       S.error = 'Refresh failed: ' + (e && e.message ? e.message : e);
@@ -178,7 +201,10 @@
     const map = await API.fetchProjections(S.snap.season, week);
     if (!S.snap || S.snap.week !== week) return;
     S.proj = map;
-    if (S.ui.tab === 'lineups') render();
+    S.projAt = Date.now();
+    // Titan's default rankings come from these projections.
+    analyze();
+    if (['lineups', 'matchup', 'rosters'].includes(S.ui.tab)) render();
   }
 
   /* Scores while games are on: about every minute, while the app is open on
@@ -231,8 +257,8 @@
       if (!res.started) {
         S.score.error = `Week ${week} has not kicked off yet, so there's nothing to score.`;
       } else {
-        const r = ranksFor(week);
-        const D = SCC.scoreWeek(res, SCC.weeklyMap(r.rows), hist, proj);
+        const r = ranksFor(week, proj);
+        const D = SCC.scoreWeek(res, rankingsOf(r, proj, res.players), hist, proj);
         D.ranks = r;
         D.history = hist ? hist.updatedAt || 1 : 0;
         D.provisional = res.done < res.total;
@@ -276,9 +302,20 @@
       : `<div class="empty"><h2>Nothing pulled yet</h2><p>Tap Refresh to load your leagues from Sleeper.</p></div>`;
   }
 
+  const andList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+
   function ranksBanner(r, week) {
+    if (r.defaults) {
+      return `<div class="banner ok">Using Titan's <b>default rankings</b> for week ${week}: Sleeper's projections, in each league's own scoring. Import your own and they take over.
+        <button class="link" data-go="ranks">Import week ${week} →</button></div>`;
+    }
+    if (r.exact && r.filled.length) {
+      const many = r.filled.length > 1;
+      return `<p class="fine">${esc(andList(r.filled))} use${many ? '' : 's'} the default rankings, since your week ${week} rankings don't include ${many ? 'them' : 'it'}.</p>`;
+    }
     if (!r.week) {
-      return `<div class="banner stop"><b>No rankings yet.</b> Titan orders your lineups by your own rankings. Import them to get start/sit calls.
+      if (!S.projAt) return '<p class="fine">Loading the default rankings…</p>';
+      return `<div class="banner stop"><b>No rankings yet.</b> Titan's default rankings come from Sleeper's projections, which couldn't be loaded. Import your rankings to get start/sit calls.
         <button class="link" data-go="ranks">Import rankings →</button></div>`;
     }
     if (!r.exact) {
@@ -307,7 +344,7 @@
       <div class="sync-welcome" data-sync-slot="welcome">${syncWelcome()}</div>
       <ol class="how">
         <li><b>Link</b> your Sleeper username, and your leagues and lineup formats load automatically.</li>
-        <li><b>Import</b> your weekly rankings as a CSV.</li>
+        <li><b>Import</b> your weekly rankings as a CSV, or start with Titan's defaults from Sleeper's projections.</li>
         <li><b>Follow</b> the calls: who to start, who to swap, who's on the wire.</li>
       </ol>
     </section>`;
@@ -836,6 +873,9 @@
       h += `<div class="banner swap"><b>Live:</b> games are still in progress, so these numbers will move. Projections cover the whole week.</div>`;
     }
     h += historyBanner(D);
+    if (D.ranks.defaults && !D.history) {
+      h += `<div class="banner ok">No rankings saved for week ${D.week}, so "By rank" uses Titan's default rankings from Sleeper's projections.</div>`;
+    }
     if (!D.ranks.exact && !D.history) {
       h += `<div class="banner swap">No rankings saved for week ${D.week}${D.ranks.week
         ? `, so "By rank" is using week ${D.ranks.week}.` : ', so "By rank" has nothing to order by.'}</div>`;
@@ -894,9 +934,10 @@
     const cur = S.snap ? S.snap.week : 1;
     if (!S.draft.week) S.draft.week = cur;
     const weeks = Object.keys(S.ranks.weeks).map(Number).sort((a, b) => b - a);
-    return `<p class="lede">Titan orders your lineups only by your own rankings. ${S.sync.user
-        ? 'They sync to your devices through your Google sign-in, and only you can see them.'
-        : 'They\'re kept on this device and never shared. Sign in on Settings to sync them to your other devices.'}</p>
+    return `<p class="lede">Until you import rankings for a week, Titan uses its default rankings: Sleeper's weekly projections, in each league's own scoring.
+      Once you import, yours take over, and the defaults only fill positions your file leaves out. ${S.sync.user
+        ? 'Imported rankings sync to your devices through your Google sign-in, and only you can see them.'
+        : 'Imported rankings are kept on this device and never shared. Sign in on Settings to sync them to your other devices.'}</p>
       <section class="card pad"><h3>Saved rankings</h3>${weeks.length ? `<ul class="saved">${weeks.map(w => {
         const e = S.ranks.weeks[w];
         return `<li><span><b>Week ${w}</b> · ${e.rows.length} players<small>${esc(countsText(e.rows))} · saved ${esc(when(e.savedAt))}${
@@ -1027,7 +1068,12 @@
     if (!S.snap || S.snap.week !== w) return [];
     const started = {};
     S.snap.leagues.forEach(d => d.roster.forEach(p => { if (p.locked) started[SCC.norm(p.name)] = 1; }));
-    return SCC.keepStartedRanks(rows, ranksFor(w).rows, started);
+    // Replacing the default rankings, a started player keeps his default rank (at
+    // half PPR, a middle ground: he's locked, so it's only shown). Only positions
+    // the new rankings cover are kept, so the defaults still fill the rest.
+    const r = ranksFor(w, S.proj), have = SCC.rankCounts(rows);
+    const old = r.defaults ? SCC.defaultRanks(S.proj, playerList(), 0.5) : r.rows;
+    return SCC.keepStartedRanks(rows, old.filter(x => have[x.pos]), started);
   }
 
   function deleteRanks(w) {

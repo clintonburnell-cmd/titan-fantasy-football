@@ -57,7 +57,8 @@ async function playerMap() {
   return warm.map;
 }
 
-/* The rankings for a week, or the latest earlier week: the same rule the app uses. */
+/* The rankings for a week, or the latest earlier week: the app's fallback when
+   there are no projections for the default rankings. */
 function ranksFor(weeks, week) {
   const have = Object.keys(weeks).map(Number).sort((a, b) => a - b);
   if (!have.length) return [];
@@ -66,8 +67,10 @@ function ranksFor(weeks, week) {
   return weeks[earlier.length ? earlier[earlier.length - 1] : have[have.length - 1]];
 }
 
-/* One person's week: their live Sleeper rosters under their own rankings,
-   merged into what was already frozen. */
+/* One person's week: their live Sleeper and ESPN rosters under their rankings
+   (Titan's defaults from the projections for any position they leave out, or
+   all of them when none are imported, as in the app), merged into what was
+   already frozen. */
 async function freezeForUser(userRef, account, ctx) {
   const rankDocs = await userRef.collection('ranks').get();
   const weeks = {};
@@ -75,7 +78,9 @@ async function freezeForUser(userRef, account, ctx) {
   // A saved ESPN login opens the person's private ESPN leagues.
   const login = (await userRef.collection('private').doc('espn').get()).data() || null;
   const snap = await API.collect(account, null, null, {espnCreds: login});
-  const analysis = SCC.analyzeAll(snap, SCC.weeklyMap(ranksFor(weeks, ctx.week)));
+  const hasProj = Object.keys(ctx.proj || {}).length > 0;
+  const rows = hasProj ? weeks[ctx.week] || [] : ranksFor(weeks, ctx.week);
+  const analysis = SCC.analyzeAll(snap, SCC.rankingsBy(rows, hasProj ? ctx.proj : null, ctx.players));
   const ref = userRef.collection('history').doc(String(ctx.week));
   const prev = (await ref.get()).data() || null;
   const next = SCC.freezeWeek(prev, analysis, ctx.proj, ctx.season, ctx.week);
@@ -99,7 +104,7 @@ async function run() {
   const players = await playerMap();
   API.store.set(API.PLAYERS_KEY, {ts: Date.now(), map: players});
   const proj = SCC.trimProjections(await getJson(SLEEPER + '/projections/nfl/' + season + '/' + week + '?season_type=regular' + PROJ_POS));
-  const ctx = {season, week, proj};
+  const ctx = {season, week, proj, players};
 
   const users = await db.collection('users').get();
   let saved = 0, failed = 0;

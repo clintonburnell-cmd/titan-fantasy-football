@@ -429,6 +429,58 @@
     return c;
   }
 
+  /* --------------------------------------------------- default rankings */
+
+  /* Rankings for a week with none imported, and for positions an import leaves
+     out: Sleeper's weekly projections (RotoWire's numbers) in one league's
+     scoring. QB, RB, WR and TE share one overall scale, so FLEX and superflex
+     spots compare projected points, as an overall rankings file does; K and DEF
+     each rank on their own. A player projected for nothing stays unranked.
+     `players` is the trimmed player list (trimPlayers). */
+  var DEFAULT_POS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+  var OVERALL = {QB: 1, RB: 1, WR: 1, TE: 1};
+  function defaultRanks(projMap, players, ppr) {
+    var list = [], seen = {}, count = {}, out = [];
+    for (var id in projMap || {}) {
+      var info = playerInfo(players, id);
+      if (DEFAULT_POS.indexOf(info.pos) < 0) continue;
+      var pts = projFor(projMap, id, ppr);
+      if (pts > 0) list.push({name: info.name, pos: info.pos, team: info.team, pts: pts});
+    }
+    list.sort(function (a, b) { return b.pts - a.pts || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0); });
+    list.forEach(function (x) {
+      // Rankings are keyed by name: of two players sharing one, the one projected higher keeps it.
+      var k = norm(x.name);
+      if (seen[k]) return;
+      seen[k] = 1;
+      var scale = OVERALL[x.pos] ? 'overall' : x.pos;
+      count[scale] = (count[scale] || 0) + 1;
+      out.push({name: x.name, pos: x.pos, team: x.team, rank: count[scale], opp: '', implied: '', tier: '', proj: x.pts});
+    });
+    return out;
+  }
+
+  /* The rankings each league plays by: the week's imported rows, with default
+     rows for every position they leave out (all of them when nothing is
+     imported). Returns a function of a league's settings, for analyzeAll and
+     scoreWeek, that builds each scoring value's map once. Without projections
+     there are no defaults, only the imported rows. */
+  function rankingsBy(rows, projMap, players) {
+    var have = rankCounts(rows);
+    var fill = !!projMap && Object.keys(projMap).length > 0 && DEFAULT_POS.some(function (p) { return !have[p]; });
+    var plain = null, byPpr = {};
+    return function (cfg) {
+      if (!fill) return plain || (plain = weeklyMap(rows));
+      var ppr = Number(cfg && cfg.ppr) || 0;
+      if (!byPpr[ppr]) {
+        var gaps = defaultRanks(projMap, players, ppr).filter(function (r) { return !have[r.pos]; });
+        // The imported rows go last, so on a shared name the import wins.
+        byPpr[ppr] = weeklyMap(gaps.concat(rows || []));
+      }
+      return byPpr[ppr];
+    };
+  }
+
   /* ------------------------------------------------------------- games */
 
   /* Per-team game state for the week, from Sleeper's own schedule. Sleeper locks
@@ -844,15 +896,21 @@
     return {cfg: d.cfg, roster: d.roster, rows: rows, moves: moves, wire: wire, hurt: hurt, stops: stops, opt: opt};
   }
 
+  /* `weekly` is one rankings map for every league, or a function of a league's
+     settings that returns its map (rankingsBy). */
   function analyzeAll(snap, weekly) {
+    var rankingsFor = typeof weekly === 'function' ? weekly : function () { return weekly; };
     // Teams whose game has kicked off this week: their free agents are no use now.
     var started = {}, games = (snap && snap.games) || {};
     for (var t in games) if (games[t] && games[t].state !== 'pre') started[t] = 1;
+    var rankedCount = typeof weekly === 'function' ? 0 : Object.keys(weekly).length;
     var leagues = ((snap && snap.leagues) || []).map(function (d) {
+      var wk = rankingsFor(d.cfg);
+      rankedCount = Math.max(rankedCount, Object.keys(wk).length);
       return analyzeLeague({
-        cfg: d.cfg, roster: attachRanks(d.roster, weekly),
+        cfg: d.cfg, roster: attachRanks(d.roster, wk),
         takenNorm: d.takenNorm || {}, takenAbbr: d.takenAbbr || {}, started: started
-      }, weekly, snap && snap.week);
+      }, wk, snap && snap.week);
     });
 
     var changes = [], hurtStarters = [], wireLines = [], stops = 0, locked = 0;
@@ -864,7 +922,6 @@
       L.roster.forEach(function (p) { if (p.locked) locked++; });
     });
 
-    var rankedCount = Object.keys(weekly).length;
     var log = [rankedCount + ' players in your rankings.'];
     if (!rankedCount) log.push('No rankings yet, so nothing can be ordered. Import your rankings first.');
     if (hurtStarters.length) {
@@ -1139,13 +1196,15 @@
   }
 
   /* `history` is the week's frozen record (freezeWeek output) or null, and
-     `projMap` is Sleeper's projections for the week, used where nothing froze. */
+     `projMap` is Sleeper's projections for the week, used where nothing froze.
+     `weekly` is a rankings map or a function of a league's settings, as in analyzeAll. */
   function scoreWeek(res, weekly, history, projMap) {
+    var rankingsFor = typeof weekly === 'function' ? weekly : function () { return weekly; };
     var rows = [], skipped = (res.skipped || []).slice();
     var T = {actual: 0, byRank: 0, perfect: 0, projActual: 0, projByRank: 0, cw: 0, ct: 0};
     var hist = (history && history.leagues) || {};
     res.leagues.forEach(function (x) {
-      var r = scoreLeague(x.cfg, x.rosters, x.matchups, res.userId, res.players, weekly, hist[String(x.cfg.id)], projMap);
+      var r = scoreLeague(x.cfg, x.rosters, x.matchups, res.userId, res.players, rankingsFor(x.cfg), hist[String(x.cfg.id)], projMap);
       if (r.error) { skipped.push(x.cfg.key + ': ' + r.error); return; }
       rows.push(r);
       T.actual += r.actual; T.byRank += r.byRank; T.perfect += r.perfect;
@@ -1163,7 +1222,7 @@
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
-    weeklyMap: weeklyMap, rankCounts: rankCounts,
+    weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     gameStates: gameStates, weekProgress: weekProgress,
     rankKey: rankKey, rankLabel: rankLabel, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,

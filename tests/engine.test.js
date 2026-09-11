@@ -226,4 +226,40 @@ const late = SCC.winProbability(team([15, 15], 'complete', [30, 30]).concat(team
 check(late.a > 0.99, 'far ahead with one player left: almost certain');
 const comeback = SCC.winProbability(team([15, 15, 15], 'complete', [10, 10, 10]), team([15, 15], 'complete', [12, 12]).concat(team([25])));
 check(comeback.b > 0.5 && comeback.b < 1, `behind by 6 with a 25-point projection still to play: ${Math.round(comeback.b * 100)}%`);
+
+section('default rankings (from projections)');
+// Made-up projections: [standard points, points catches add at full PPR].
+const dProj = {1: [20, 0], 2: [10, 6], 3: [13, 1], 4: [8, 0], 5: [9, 0], DEN: [7, 0], 6: [0, 0], 7: [11, 0], 8: [5, 5], 9: [3, 0]};
+const dPlayers = {1: ['Qb Guy', 'QB', 'KC'], 2: ['Rb Catch', 'RB', 'ATL'], 3: ['Wr Deep', 'WR', 'CIN'], 4: ['Kick Er', 'K', 'DAL'],
+  5: ['Kick Two', 'K', 'LAC'], 6: ['Zero Back', 'RB', 'NYJ'], 7: ['Ld Lb', 'LB', 'SF'], 8: ['Te Catch', 'TE', 'DET'], 9: ['Qb Guy', 'WR', 'NYG']};
+const dStd = SCC.defaultRanks(dProj, dPlayers, 0), dFull = SCC.defaultRanks(dProj, dPlayers, 1);
+const dr = (rows, n) => (rows.find(r => r.name === n) || {}).rank;
+check(dr(dStd, 'Qb Guy') === 1 && dr(dStd, 'Wr Deep') === 2 && dr(dStd, 'Rb Catch') === 3 && dr(dStd, 'Te Catch') === 4,
+  'standard scoring: QB, RB, WR and TE on one overall scale, by projected points');
+check(dr(dFull, 'Rb Catch') === 2 && dr(dFull, 'Wr Deep') === 3 && dr(dFull, 'Te Catch') === 4, 'full PPR: catches move the pass-catching back ahead');
+check(dr(dStd, 'Kick Two') === 1 && dr(dStd, 'Kick Er') === 2 && dr(dStd, 'DEN D/ST') === 1,
+  'K and DEF each rank on their own; a defense is named like the rosters (DEN D/ST)');
+check(!dStd.some(r => r.name === 'Zero Back' || r.name === 'Ld Lb'), 'no projection, no rank; IDP players are left out');
+check(dStd.filter(r => r.name === 'Qb Guy').length === 1 && dStd.find(r => r.name === 'Qb Guy').pos === 'QB', 'two players with one name: the one projected higher keeps it');
+const imported = [{name: 'Wr Deep', pos: 'WR', team: 'CIN', rank: 1}, {name: 'Rb Catch', pos: 'RB', team: 'ATL', rank: 40}, {name: 'Qb Guy', pos: 'QB', team: 'KC', rank: 5}];
+const byCfg = SCC.rankingsBy(imported, dProj, dPlayers);
+const mStd = byCfg({ppr: 0}), mFull = byCfg({ppr: 1});
+check(mStd[SCC.norm('Wr Deep')].rank === 1 && mStd[SCC.norm('Rb Catch')].rank === 40 && mStd[SCC.norm('Qb Guy')].rank === 5, 'an import wins for the positions it covers');
+check(mStd[SCC.norm('Te Catch')].rank === 4 && mStd[SCC.norm('Kick Two')].rank === 1 && !!mStd[SCC.norm('DEN D/ST')] && Object.keys(mStd).length === 7,
+  'the defaults fill the positions it leaves out (TE, K, DEF)');
+check(byCfg({ppr: 0}) === mStd && mFull !== mStd, 'each scoring value\'s rankings are built once');
+const dNone = SCC.rankingsBy([], dProj, dPlayers)({ppr: 1});
+check(dNone[SCC.norm('Rb Catch')].rank === 2 && Object.keys(dNone).length === 7, 'nothing imported: the defaults alone');
+check(Object.keys(SCC.rankingsBy(imported, null, dPlayers)({ppr: 1})).length === 3, 'no projections: the import alone');
+const every = imported.concat([{name: 'Tight End', pos: 'TE', team: 'KC', rank: 3}, {name: 'Kicker Guy', pos: 'K', team: 'KC', rank: 1},
+  {name: 'NYJ D/ST', pos: 'DEF', team: 'NYJ', rank: 1}]);
+check(Object.keys(SCC.rankingsBy(every, dProj, dPlayers)({ppr: 1})).length === 6, 'an import covering every position gets no defaults');
+const flexRoster = () => [
+  {id: '2', name: 'Rb Catch', pos: 'RB', team: 'ATL', start: true, slot: 'FLEX', inj: '', outish: false, locked: false},
+  {id: '3', name: 'Wr Deep', pos: 'WR', team: 'CIN', start: false, slot: '', inj: '', outish: false, locked: false}];
+const lgStd = {id: 'a', key: 'Std', name: 'Std', lineup: ['FLEX'], ppr: 0}, lgFull = {id: 'b', key: 'Full', name: 'Full', lineup: ['FLEX'], ppr: 1};
+const dA = SCC.analyzeAll({week: 1, leagues: [{cfg: lgStd, roster: flexRoster(), takenNorm: {}, takenAbbr: {}},
+  {cfg: lgFull, roster: flexRoster(), takenNorm: {}, takenAbbr: {}}]}, SCC.rankingsBy([], dProj, dPlayers));
+check(dA.leagues[0].moves.length === 1 && dA.leagues[0].moves[0].inn.name === 'Wr Deep' && dA.leagues[1].moves.length === 0,
+  'each league by its own scoring: standard starts the receiver at FLEX, full PPR keeps the back');
 T.done();

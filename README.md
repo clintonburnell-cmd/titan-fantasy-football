@@ -1,7 +1,8 @@
 # Titan Fantasy Football Manager
 
 Start/sit calls, waiver upgrades, exposure and bye weeks across every Sleeper
-and ESPN league you play in, ordered by your own rankings.
+and ESPN league you play in, ordered by your own rankings, or by Sleeper's weekly
+projections until you import some.
 
 Link a Sleeper username (no password needed) and add ESPN leagues by ID. Titan
 finds your leagues and their lineup formats, then compares the lineups you have
@@ -29,6 +30,11 @@ start/sit rules, made to work for any Sleeper account.
    FLEX file gives the overall ranks FLEX slots need. The Hall's weekly rankings (`Rank,
    Team, Player, Fantsy Position, Matchup, ...`) are one overall list of every position,
    so they're read as they are; its IDP rows are skipped.
+   **Default rankings:** until a week has rankings imported, Titan ranks players by
+   Sleeper's weekly projections (RotoWire's numbers) in each league's own scoring, with
+   QB, RB, WR and TE on one overall scale and K and DEF each on their own. An import takes
+   over, and the defaults fill only the positions it leaves out (`defaultRanks` and
+   `rankingsBy` in `engine.js`). The server job's weekly record follows the same rule.
 3. **Follow the calls**: every lineup slot gets a verdict (OK, SWAP OUT,
    DO NOT START, UNRANKED, LOCKED), with the exact swaps to make, ranked free
    agents nobody in the league has, and injured starters.
@@ -57,12 +63,13 @@ website (such as alerts) to pass review.
 | Byes | How many of your players are off each week, per league |
 | Results | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points (Sleeper leagues; ESPN scoring is next) |
 | News | News-only X accounts (@UnderdogNFL), each opening on X. X doesn't let apps read posts without a paid plan |
-| Rankings | Import weekly rankings (your own CSV or a sheet paste, Late-Round, FantasyPros, The Hall) and view any saved week by position |
+| Rankings | Import weekly rankings (your own CSV or a sheet paste, Late-Round, FantasyPros, The Hall) and view any saved week by position; until you import, lineups run on the default rankings from Sleeper's projections |
 | Settings | Linked Sleeper account, ESPN leagues and login, which leagues Titan manages, refresh log |
 
 ## Rules worth knowing
 
-- **Rankings are the only order.** Unranked players sit last. Out, Doubtful and
+- **Rankings are the only order**: your imported ones, or the default rankings for a
+  week or position you haven't imported. Unranked players sit last. Out, Doubtful and
   IR players sit below even unranked ones, and so does a player on bye that week:
   a starter on bye gets ON BYE and his backup goes in.
 - **Locks follow Sleeper.** Each player locks at his own game's kickoff. A
