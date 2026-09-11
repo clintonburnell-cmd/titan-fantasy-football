@@ -121,8 +121,9 @@ in Settings removes the synced data and the sign-in.
 
 Sync is optional by design. If Firebase can't load (offline, blocked, or the
 page opened from a file), the app runs on the device alone. Sign-in works on
-the Firebase Hosting domains; the GitHub Pages address forwards to
-`titan-fantasy-football.web.app`.
+`titanfantasyfootball.com` and the Firebase Hosting domains (each is an authorized domain
+in Firebase Auth and on the Google OAuth client); the GitHub Pages address forwards to
+`titanfantasyfootball.com`.
 
 ## Server job
 
@@ -159,8 +160,11 @@ firebase deploy --only firestore:rules  # the database rules
 firebase deploy --only functions        # the kickoff freezer (Blaze plan)
 ```
 
-Firebase project: `titan-fantasy-football`, live at
-https://titan-fantasy-football.web.app.
+Firebase project: `titan-fantasy-football`, live at https://titanfantasyfootball.com (the
+domain is registered at Porkbun and verified in Google Search Console; `www` forwards to it).
+https://titan-fantasy-football.web.app serves the same site and stays: the Android app is
+tied to it, and anything saved on a device without signing in stays with the address it was
+saved on.
 
 ## Files
 

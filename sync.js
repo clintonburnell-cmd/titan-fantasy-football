@@ -26,8 +26,9 @@ const HOST = location.hostname;
 // access is controlled by the security rules, not by keeping these secret.
 const CONFIG = {
   apiKey: 'AIzaSyDjOaXVvwa9JxSjrLe3Ihnmlbd0Te4jS4Q',
-  // Signing in through the app's own domain keeps the redirect flow same-site.
-  authDomain: /\.(web\.app|firebaseapp\.com)$/.test(HOST) ? HOST : 'titan-fantasy-football.firebaseapp.com',
+  // Signing in through the app's own domain keeps the redirect flow same-site
+  // (titanfantasyfootball.com is Titan's own domain; Firebase serves /__/auth there too).
+  authDomain: /\.(web\.app|firebaseapp\.com)$/.test(HOST) || HOST === 'titanfantasyfootball.com' ? HOST : 'titan-fantasy-football.firebaseapp.com',
   projectId: 'titan-fantasy-football',
   storageBucket: 'titan-fantasy-football.firebasestorage.app',
   messagingSenderId: '544453683345',
