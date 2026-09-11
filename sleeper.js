@@ -248,6 +248,11 @@
       say('Could not load your league list from Sleeper, so using the last one we had.');
     }
     var byes = SCC.setByes(sched && sched.length ? SCC.byesFromSchedule(sched) : null);
+    // "Try a demo": sample leagues from this week's projections instead of anyone's leagues.
+    if (account.demo) {
+      return demoSnapshot(account, {week: week, season: season, sched: sched, players: players, byes: byes,
+        kickMap: kickMap, log: log, say: say, progress: progress});
+    }
 
     var espnJson = {};
     espnLinks.forEach(function (link, i) {
@@ -304,6 +309,27 @@
     // v3: this week's kickoff times.
     var snap = {v: 3, at: Date.now(), week: week, season: season, available: all, byes: byes, leagues: live, log: log,
       kickoffs: weekKickoffs(kickMap, week)};
+    return finish(snap, {players: players, sched: sched, say: say, progress: progress});
+  }
+
+  /* "Try a demo": the demo leagues (demo.js) in place of anyone's leagues, then
+     the same injury tags, game clock and kickoff times as a real refresh. */
+  async function demoSnapshot(account, c) {
+    c.progress('Building the demo leagues…');
+    var built = root.TitanDemo ? root.TitanDemo.build(await fetchProjections(c.season, c.week), c.players, account.prefs) : [];
+    var live = built.filter(function (d) { return d.cfg.active; });
+    c.say(built.length ? 'Demo: ' + built.length + ' sample leagues built from week ' + c.week + '\'s projections.'
+      : 'Demo: this week\'s projections aren\'t out yet, so there are no demo leagues to build.');
+    var snap = {v: 3, at: Date.now(), week: c.week, season: c.season, available: built.map(function (d) { return d.cfg; }),
+      byes: c.byes, leagues: live, log: c.log, kickoffs: weekKickoffs(c.kickMap, c.week)};
+    return finish(snap, c);
+  }
+
+  /* The end of every refresh, once the rosters are in: fresh injury tags, the
+     game clock (locks) and points for games under way. */
+  async function finish(snap, c) {
+    var live = snap.leagues, players = c.players, say = c.say, progress = c.progress, sched = c.sched;
+    var week = snap.week, season = snap.season;
     if (!live.length) { say('No rosters loaded. Nothing to show.'); return snap; }
 
     progress('Checking injuries…');
@@ -342,7 +368,8 @@
      points can't be read keeps the ones it had. Returns how many players have points. */
   async function attachPoints(live, week, season, fresh, creds) {
     var sets = await Promise.all(live.map(function (d) {
-      if (!d.roster.some(function (p) { return p.locked; })) return null;
+      // Demo leagues have no matchups to read points from.
+      if (d.cfg.demo || !d.roster.some(function (p) { return p.locked; })) return null;
       if (d.cfg.platform === 'espn') {
         if (!fresh) return d.espnPoints || null;
         return ESPN.fetchPoints(d.cfg.espnId, season, week, d.cfg.teamId, {creds: creds}).catch(function () { return null; });

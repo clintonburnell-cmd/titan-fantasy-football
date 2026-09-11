@@ -16,6 +16,7 @@ live site, so site changes reach it without a new upload. What's done and what's
 | `index.html`, `site.css` | The website at the root: what Titan is, features, FAQ. In a browser it always shows the website (the owner's call: never forward browser visitors, even with a saved account). Only the Android app's `/?source=play` and home-screen copies go to the app, keeping the query; `/?home` shows the website even there |
 | `titan.svg` | The Titan banner art (hand-drawn vector). The Play feature graphic (`titan-android/store/feature-graphic.html`) and the share image `og-image.jpg` (`titan-android/store/og-image.html`) use it too: re-render both after changing it |
 | `robots.txt`, `sitemap.xml` | For search engines. `/app/` stays out of results through its noindex tag, not robots.txt (a block would hide the tag). Add new website pages to the sitemap, and keep the home page's structured data (JSON-LD) FAQ identical to the visible FAQ |
+| `demo.js` | "Try a demo" (`/app/?demo`): two sample leagues built from Sleeper's player list and this week's projections |
 | `app/index.html` | The app's page, at `/app/`. It loads every file by absolute path (`/app.js`, `/styles.css`) |
 | `engine.js` | All the rules, pure (runs in the browser, in Node tests and in the server job): rankings parsing, start/sit, waiver ideas, exposure, byes, projections, kickoff freezing, weekly scoring |
 | `sleeper.js` | Sleeper API, the refresh (`collect`) for Sleeper and ESPN leagues, browser storage |
@@ -42,6 +43,8 @@ live site, so site changes reach it without a new upload. What's done and what's
 - Adding a file the app loads: add it to `SHELL` in `sw.js` and bump `CACHE`.
 - The Android app opens `/?source=play`. The website's forward to `/app/` (with the query) must
   keep working, or the Play app shows the website instead of the app.
+- The demo (`DEMO` in `app.js`) uses its own storage names and never loads `sync.js`, so it can't
+  overwrite a real account or reach Firestore. Keep new storage, sync and server calls behind it.
 - When a refresh's saved data gains a field the screens rely on, bump the snapshot version
   (`v` in `collect`, `sleeper.js`) and the matching check at the end of `app.js`, so devices
   holding an older snapshot refresh on open instead of showing gaps.

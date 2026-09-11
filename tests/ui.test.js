@@ -256,6 +256,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     T.skip('linking a Sleeper account (set TITAN_SLEEPER_USER to run it)');
   }
 
+  T.section('the demo');
+  await send('Page.navigate', {url: ORIGIN + '/app/?demo'});
+  check(await waitFor(`document.querySelectorAll('.card.league').length === 2`, 90000), 'Try a demo builds two sample leagues');
+  const demo = await ev(`({note: !!document.querySelector('.demo-note'), names: [...document.querySelectorAll('.card.league h3')].map(h => h.innerText).join(', '),
+    sync: [...document.scripts].some(s => /sync\\.js/.test(s.src)), open: document.querySelectorAll('.card.league a.open-site').length})`);
+  check(demo.note && /Demo League/.test(demo.names) && !demo.sync && demo.open === 0,
+    `${demo.names}, with the demo note, no sign-in and no Open in Sleeper button`);
+  await tab('matchup');
+  check(/need your real leagues/.test(await text('#view')), 'Matchup explains it needs real leagues');
+  await send('Page.navigate', {url: ORIGIN + '/app/'});
+  // The real app reopens on the tab it was last on there, so go to Lineups first.
+  await waitFor(`!!document.querySelector('#tabs:not([hidden])')`, 30000);
+  await tab('lineups');
+  check(await waitFor(`[...document.querySelectorAll('.card.league h3')].some(h => /Titan Test League/.test(h.innerText))`, 60000) &&
+    await ev(`[...document.scripts].some(s => /sync\\.js/.test(s.src))`), 'back in the app, the real leagues are untouched and sign-in loads');
+
   T.section('who the website sends to the app');
   const go = async url => { await send('Page.navigate', {url: ORIGIN + url}); await sleep(1500); return ev('location.pathname + location.search'); };
   check(await go('/') === '/' && await ev('!!document.querySelector(".hero h1")'), 'someone already using Titan who opens / still sees the website');

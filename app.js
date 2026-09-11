@@ -11,7 +11,13 @@
 
   const {SCC, SleeperAPI: API, EspnAPI: ESPN} = window;
   const store = API.store;
-  const KEY = {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
+  // "Try a demo" (/app/?demo): sample leagues from real NFL players, kept apart
+  // from any real account (its own storage names, and sync.js never loads), so
+  // the demo can't overwrite someone's leagues or rankings.
+  const DEMO = new URLSearchParams(location.search).has('demo');
+  const KEY = DEMO
+    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1'}
+    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
   const STALE_MS = 5 * 60 * 1000;
   const TABS = ['lineups', 'matchup', 'rosters', 'exposure', 'byes', 'score', 'news', 'ranks', 'settings'];
   const AVATAR = 'https://sleepercdn.com/avatars/thumbs/';
@@ -76,6 +82,10 @@
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
   if (S.snap && S.account && S.snap.userId !== S.account.userId) S.snap = null;
+  if (DEMO && !S.account) {
+    S.account = {demo: true, userId: '', username: '', displayName: 'Demo leagues', avatar: '', prefs: {}, espn: {leagues: []}, updatedAt: Date.now()};
+    store.set(KEY.account, S.account);
+  }
 
   const $ = id => document.getElementById(id);
   const view = $('view');
@@ -244,6 +254,7 @@
   /* A week's results, scored against the record the server job froze at each
      kickoff (signed-in users), or against today's rankings and projections. */
   async function loadScore(week) {
+    if (DEMO) return;
     S.score = {week, busy: true, data: null, error: ''};
     if (S.ui.tab === 'score') render();
     try {
@@ -292,7 +303,7 @@
     paintHeader();
     if (!S.account) { view.innerHTML = iosHint() + screenWelcome(); return; }
     const err = S.error ? `<div class="banner stop">${esc(S.error)}</div>` : '';
-    view.innerHTML = iosHint() + err + SCREENS[S.ui.tab]();
+    view.innerHTML = iosHint() + demoBanner() + err + SCREENS[S.ui.tab]();
     if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
   }
 
@@ -325,6 +336,23 @@
     return '';
   }
 
+  /* ---- The demo (/app/?demo) */
+
+  const demoBanner = () => !DEMO ? '' : `<div class="banner ok demo-note"><b>This is a demo:</b> two sample leagues built from real NFL
+    players and this week's projections. <a href="/app/">Link your own leagues →</a></div>`;
+
+  function demoOnly(what, why) {
+    return `<div class="empty"><h2>${esc(what)} need your real leagues</h2><p>${esc(why)}</p>
+      <p><a class="btn" href="/app/">Link your own leagues</a></p></div>`;
+  }
+
+  function demoSettings() {
+    return `<section class="card pad"><h3>You're trying the demo</h3>
+      <p class="help">Its two leagues are samples built from Sleeper's real player list and this week's projections. Nothing
+        here is linked to an account, and nothing you do here changes one. Rankings you import stay in the demo.</p>
+      <div class="bar"><a class="btn" href="/app/">Link your own leagues</a><a class="btn ghost" href="/?home">About Titan</a></div></section>`;
+  }
+
   /* ---- Welcome / link account */
 
   function screenWelcome() {
@@ -341,6 +369,7 @@
         <p class="fine">No password. Titan only reads what Sleeper already shows publicly, and it can't change your lineups.</p>
       </form>
       <p class="fine">Play on ESPN? <button class="link" data-action="espn-start">Add an ESPN league instead</button>, and link Sleeper later if you like.</p>
+      <p class="fine">Just looking? <a href="/app/?demo">Try a demo</a> with two sample leagues built from real NFL players.</p>
       <div class="sync-welcome" data-sync-slot="welcome">${syncWelcome()}</div>
       <ol class="how">
         <li><b>Link</b> your Sleeper username and add your ESPN leagues. Every league loads with its own lineup format and scoring.</li>
@@ -518,7 +547,8 @@
     const team = cfg.teamId !== null && cfg.teamId !== undefined ? `&teamId=${encodeURIComponent(cfg.teamId)}` : '';
     return `https://fantasy.espn.com/football/team?leagueId=${encodeURIComponent(cfg.espnId)}${team}&seasonId=${encodeURIComponent(S.snap ? S.snap.season : '')}`;
   }
-  const openSite = cfg => `<a class="btn ghost small open-site" href="${esc(lineupUrl(cfg))}" target="_blank" rel="noopener">Open in ${siteName(cfg)} ↗</a>`;
+  // Demo leagues have no team page to open.
+  const openSite = cfg => cfg.demo ? '' : `<a class="btn ghost small open-site" href="${esc(lineupUrl(cfg))}" target="_blank" rel="noopener">Open in ${siteName(cfg)} ↗</a>`;
   const kickOf = p => kickText(p) ? ', ' + kickText(p) : '';
 
   function leagueCard(L) {
@@ -545,7 +575,7 @@
     if (L.hurt.length) {
       h += `<p class="note hurt"><b>Injured in your lineup:</b> ${L.hurt.map(p => `${esc(p.name)} (${esc(p.inj)})`).join(', ')}</p>`;
     }
-    if (!L.moves.length) h += `<div class="card-foot">${openSite(L.cfg)}</div>`;
+    if (!L.moves.length && !L.cfg.demo) h += `<div class="card-foot">${openSite(L.cfg)}</div>`;
     return h + '</details>';
   }
 
@@ -618,7 +648,7 @@
   /* ---- Matchup */
 
   async function loadMatchups(quiet) {
-    if (!S.snap || S.match.busy) return;
+    if (DEMO || !S.snap || S.match.busy) return;
     S.match.busy = true;
     if (!quiet && S.ui.tab === 'matchup') render();
     try {
@@ -714,6 +744,7 @@
   const winList = (side, cfg) => side.players.map(p => (!p || p.empty ? null : {pts: p.pts, proj: SCC.projFor(S.proj, p.id, cfg.ppr), state: (gameOf(p.team) || {}).state || ''}));
 
   function screenMatchup() {
+    if (DEMO) return demoOnly('Matchups', 'Matchups show your real opponent in every league, week by week.');
     if (!S.snap) return emptyState();
     const M = S.match;
     let h = `<div class="bar match-bar"><p class="lede">Your lineup against this week's opponent in every league, as both are set right now.</p>
@@ -864,6 +895,7 @@
     'UNRANKED': 'unranked', 'LOCKED': 'locked', 'FILL SLOT': 'fill slot'};
 
   function screenScore() {
+    if (DEMO) return demoOnly('Results', 'Results score your real teams week by week, against what your rankings would have started.');
     if (!S.snap) return emptyState();
     const cur = S.snap.week;
     const wk = S.score.week || cur;
@@ -1268,6 +1300,7 @@
   /* ---- Settings */
 
   function screenSettings() {
+    if (DEMO) return demoSettings();
     const a = S.account;
     const all = (S.snap && S.snap.available) || [];
     const sleeper = a.userId
@@ -1552,6 +1585,13 @@
 
   /* --------------------------------------------------------------- boot */
 
+  // Google sign-in and sync (sync.js), except in the demo: its leagues never reach an account.
+  if (!DEMO) {
+    const s = document.createElement('script');
+    s.type = 'module';
+    s.src = '/sync.js';
+    document.body.appendChild(s);
+  }
   if (IN_PLAY_APP) document.querySelectorAll('[data-tip]').forEach(el => { el.hidden = true; });
   analyze();
   render();

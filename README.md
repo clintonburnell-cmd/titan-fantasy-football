@@ -44,6 +44,12 @@ start/sit rules, made to work for any Sleeper account.
 Sleeper is read-only. Titan can't set lineups, claim waivers or trade. Each league has an
 Open in Sleeper (or Open in ESPN) button that goes to that team's page to make the changes.
 
+**Try a demo** (`/app/?demo`, linked from the website and the welcome screen) builds two sample
+leagues (`demo.js`) from Sleeper's real player list and this week's projections: real players,
+kickoff times and injury tags, with a bench back who should start, a weak FLEX, three players on
+both teams and a few good free agents. The demo keeps its own storage and never loads sign-in, so it
+can't touch a real account. Matchup and Results say they need real leagues.
+
 The header has a Ko-fi tip jar ("Like my work? Consider a tip!"). It shows only on
 the website. The Google Play app opens `/?source=play`, and Titan hides the tip jar
 for that session, because tips inside a Play app must use Google Play billing.
