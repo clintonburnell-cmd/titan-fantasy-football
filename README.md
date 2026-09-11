@@ -64,7 +64,8 @@ website (such as alerts) to pass review.
 ## Screens
 
 On computers and tablets, the app in a browser takes the website's look: its sections become a
-menu across the header, the page is a 960px column (one league per row, as on a phone), Settings sits
+menu across the header, the page is an 1100px column set left of centre (one league per row, as on a phone), the
+league chips wrap instead of scrolling, Settings sits
 in two columns, Rosters show as tables, the footer has three columns of links (the tip jar moves
 there), the Google account sits at the top right with Settings and Sign out, rows light up under the
 pointer, and on wide windows the Titan art sits faded to the right. Phones, the Android app and

@@ -301,6 +301,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await tab('rosters');
   check(await waitFor(`document.querySelectorAll('.rtable').length > 0 && document.querySelector('.rtable thead tr').children.length >= 7`, 5000),
     'Rosters show as tables on a computer');
+  check(await ev(`(() => { const j = document.querySelector('.jump'); if (!j) return true; const r = j.getBoundingClientRect().right;
+    return getComputedStyle(j).flexWrap === 'wrap' && [...j.querySelectorAll('.jump-chip')].every(c => c.getBoundingClientRect().right <= r + 1 && c.scrollWidth <= c.clientWidth + 1); })()`),
+    'the league chips wrap onto more lines instead of running off the edge');
   await tab('lineups');
   await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 2, mobile: true});
   await sleep(400);

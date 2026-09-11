@@ -173,7 +173,11 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
    side, and the website's footer. Phones, the Android app and home-screen
    copies (html.in-app, set in app.js) keep the app look. */
 @media (min-width: 900px) {
-  html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .progress { max-width: 960px; padding-inline: 24px; }
+  /* A 1100px page set left of centre: a quarter of the spare width goes on the
+     left and the rest on the right, where the Titan art sits. */
+  html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .progress {
+    max-width: 1100px; padding-inline: 24px; margin-left: max(0px, calc((100% - 1100px) / 4)); margin-right: auto;
+  }
   html:not(.in-app) .top-in { padding-block: 16px 4px; }
   html:not(.in-app) .brand h1 { font-size: 1.14rem; }
   html:not(.in-app) .tabs-in { gap: 28px; padding-block: 0; }
@@ -182,6 +186,11 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   html:not(.in-app) .tabs button[aria-current="page"] { background: none; color: var(--text); border-bottom-color: var(--accent-2); }
   html:not(.in-app) main.wrap { gap: 16px; padding-block: 24px 48px; }
   html:not(.in-app) .lede { max-width: 72ch; }
+  /* Room to spare: league chips wrap onto more lines instead of scrolling off the edge, and
+     league names in card headers wrap instead of trailing off. */
+  html:not(.in-app) .jump { flex-wrap: wrap; overflow: visible; }
+  html:not(.in-app) .jump-chip { max-width: none; }
+  html:not(.in-app) .card-h h3 { white-space: normal; }
   /* One league per row, as on a phone; Settings sits in two columns. */
   html:not(.in-app) main#view[data-tab="settings"] { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   html:not(.in-app) main#view[data-tab="settings"] > :not(.card) { grid-column: 1 / -1; }
