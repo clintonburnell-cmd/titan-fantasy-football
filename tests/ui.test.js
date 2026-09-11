@@ -118,6 +118,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(kicks.length >= 8 && kicks.every(k => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b|^Bye$/.test(k)),
     `kickoff day and time beside each name (${kicks.length} of 9), e.g. "${kicks[0]}"`);
   check(await ev(`getComputedStyle(document.querySelector('.lineup .kick')).fontStyle === 'italic'`), 'in italics');
+  check(await ev(`document.querySelector('details.league').open`), 'Lineups leagues start open');
+  await ev(`document.querySelector('details.league > summary').click(); true`);
+  await sleep(200);
+  await tab('rosters');
+  await tab('lineups');
+  check(await ev(`!document.querySelector('details.league').open`), 'folding a league on Lineups is remembered');
+  await ev(`document.querySelector('[data-action="fold-all"][data-kind="lineup"]').click(); true`);
+  await sleep(200);
+  check(await ev(`document.querySelector('details.league').open`), 'Expand all opens them again');
   const pics = await ev(`({faces: [...document.querySelectorAll('.lineup .pphoto img.hs')].map(i => i.getAttribute('src')),
     logos: document.querySelectorAll('.lineup .pphoto img.tl').length})`);
   check(pics.faces.length === 9 && pics.faces.filter(s => /sleepercdn\.com\/content\/nfl\/players\/thumb\/\d+\.jpg$/.test(s)).length === 8 &&
@@ -152,6 +161,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(nobody.rows === 0 && nobody.none, 'a search with no match says so');
   const cleared = await search('');
   check(cleared.rows === 16 && !cleared.none, 'clearing the search shows every player again');
+  await ev(`document.querySelector('details.roster-card > summary').click(); true`);
+  await sleep(200);
+  const folded = await ev(`!document.querySelector('details.roster-card').open`);
+  const during = await search(someone);
+  const openWhile = await ev(`document.querySelector('details.roster-card').open`);
+  await search('');
+  const after = await ev(`document.querySelector('details.roster-card').open`);
+  check(folded && during.rows >= 1 && openWhile && !after, 'a folded league opens while a search matches in it, then folds back');
+  await ev(`document.querySelector('[data-action="fold-all"][data-kind="roster"]').click(); true`);
+  await sleep(200);
 
   await tab('matchup');
   check(await waitFor(`!!document.querySelector('.match .board')`, 30000), 'the Matchup tab loads');

@@ -365,6 +365,33 @@
     {id: 'wire', label: 'Wire upgrades', test: L => L.wire.length > 0}
   ];
 
+  /* Folding leagues on Lineups, Rosters and Matchup. Lineups and Rosters start
+     open (the folded ones are remembered); Matchup starts folded to its headers
+     (the open ones are remembered). */
+  const FOLD_KEY = {lineup: 'closedLineup', roster: 'closedRoster', match: 'openMatch'};
+  function isOpen(kind, id) {
+    const set = S.ui[FOLD_KEY[kind]] || {};
+    return kind === 'match' ? !!set[id] : !set[id];
+  }
+  function setFold(kind, id, open) {
+    const set = Object.assign({}, S.ui[FOLD_KEY[kind]]);
+    if ((kind === 'match') === open) set[id] = 1;
+    else delete set[id];
+    S.ui[FOLD_KEY[kind]] = set;
+    saveUi();
+  }
+  function foldAll(kind, open) {
+    const ids = kind === 'match' ? (S.match.data || []).map(x => x.cfg.id) : S.A ? S.A.leagues.map(L => L.cfg.id) : [];
+    const set = {};
+    if ((kind === 'match') === open) ids.forEach(id => { set[id] = 1; });
+    S.ui[FOLD_KEY[kind]] = set;
+    saveUi();
+    render();
+  }
+  const foldTools = kind => `<div class="match-tools"><button class="link" data-action="fold-all" data-kind="${kind}">Expand all</button>
+    <button class="link" data-action="fold-none" data-kind="${kind}">Collapse all</button></div>`;
+  const foldAttrs = (kind, cfg) => `id="${anchor(cfg)}" data-fold="${kind}" data-id="${esc(cfg.id)}"${isOpen(kind, cfg.id) ? ' open' : ''}`;
+
   // Quick navigation: chips that jump to a league's card further down the page.
   const anchor = cfg => 'lg-' + String(cfg.id).replace(/[^\w-]/g, '_');
   function jumpBar(items) {
@@ -399,6 +426,7 @@
       .filter(f => f.id === 'all' || f.id === 'action' || f.n > 0 || f.id === pickF.id)
       .map(f => `<button class="chip" data-filter="${f.id}" aria-pressed="${f.id === pickF.id}">${esc(f.label)} ${f.n}</button>`).join('')}</div>`;
     if (list.length > 1) h += jumpBar(list.map(L => ({cfg: L.cfg, flag: !!needsAction(L)})));
+    if (list.length) h += foldTools('lineup');
     if (!A.leagues.length) {
       h += `<div class="empty-note">No leagues to show. ${S.snap.available && S.snap.available.length
         ? 'Switch some on in <button class="link" data-go="settings">Settings</button>.'
@@ -449,8 +477,8 @@
     const st = L.stops ? ['stop', plural(L.stops, 'problem')]
       : L.moves.length ? ['swap', plural(L.moves.length, 'change')]
       : ['ok', 'Set'];
-    let h = `<article class="card league" id="${anchor(L.cfg)}">
-      <header class="card-h"><div><h3>${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg) + projLine(L))}</p></div><span class="pill p-${st[0]}">${st[1]}</span></header>`;
+    let h = `<details class="card league fold" ${foldAttrs('lineup', L.cfg)}>
+      <summary class="card-h"><div><h3>${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg) + projLine(L))}</p></div><span class="pill p-${st[0]}">${st[1]}</span></summary>`;
     if (L.moves.length) {
       h += `<div class="moves"><h4>Make these changes in Sleeper</h4>${L.moves.map(m => `
         <div class="move"><span class="slot">${esc(slotName(m.slot))}</span>
@@ -468,7 +496,7 @@
     if (L.hurt.length) {
       h += `<p class="note hurt"><b>Injured in your lineup:</b> ${L.hurt.map(p => `${esc(p.name)} (${esc(p.inj)})`).join(', ')}</p>`;
     }
-    return h + '</article>';
+    return h + '</details>';
   }
 
   function rankCell(p) {
@@ -624,8 +652,7 @@
     const bar = a.proj || b.proj || a.started || b.started ? `<div class="winbar" title="Chance to win">
         <span class="wp me${pa >= pb ? ' up' : ''}">${pa}%</span><span class="wbar"><i class="wme" style="width:${pa}%"></i><i class="wopp" style="width:${pb}%"></i></span>
         <span class="wp opp${pb > pa ? ' up' : ''}">${pb}%</span></div>` : '';
-    const open = !!(S.ui.openMatch || {})[m.cfg.id];
-    return `<details class="card match" id="${anchor(m.cfg)}" data-match="${esc(m.cfg.id)}"${open ? ' open' : ''}>
+    return `<details class="card match" ${foldAttrs('match', m.cfg)}>
       <summary class="mhead"><div class="mh-top"><span class="sname">${esc(m.cfg.key)}</span>${status}</div>
         <div class="mh-score"><span class="mh-name">${esc(m.me.name)}</span><b class="mh-pts${lead(a, b)}">${fmt(a.pts)}</b>
           <b class="mh-pts${lead(b, a)}">${fmt(b.pts)}</b><span class="mh-name opp">${esc(m.opp.name)}</span></div>${bar}</summary>
@@ -647,9 +674,7 @@
     if (M.error) h += `<div class="banner stop">${esc(M.error)}</div>`;
     if (!M.data) return h + (M.busy ? '<div class="empty-note">Loading this week\'s matchups…</div>' : '');
     if (!M.data.length) return h + '<div class="empty-note">No leagues to show.</div>';
-    const tools = `<div class="match-tools"><button class="link" data-action="match-all">Expand all</button>
-      <button class="link" data-action="match-none">Collapse all</button></div>`;
-    return h + tools + M.data.map(matchCard).join('') +
+    return h + foldTools('match') + M.data.map(matchCard).join('') +
       (Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper. Chance to win is Titan\'s estimate from them and the points so far.</p>' : '');
   }
 
@@ -668,6 +693,7 @@
     </select></label></div>
     <p class="fine" data-find-count hidden></p>`;
     if (shown.length > 1) h += jumpBar(shown.map(L => ({cfg: L.cfg})));
+    if (shown.length) h += foldTools('roster');
     h += '<p class="empty-note" data-find-none hidden>No player on your rosters matches that.</p>';
     h += shown.map(L => {
       // Sleeper's order: the starters spot by spot, then the bench by position
@@ -686,10 +712,10 @@
       const starters = L.rows.map(r => (r.p ? row(r.p, slotName(r.slot))
         : `<li class="row r-stop" data-find=" "><span class="slot">${esc(slotName(r.slot))}</span><span class="pphoto"><span class="hs"></span></span>
           <span class="who"><b>Empty</b></span><span class="right"></span></li>`)).join('');
-      return `<article class="card roster-card" id="${anchor(L.cfg)}"><header class="card-h"><div><h3>${esc(L.cfg.key)}</h3>
-        <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></header>
+      return `<details class="card roster-card fold" ${foldAttrs('roster', L.cfg)}><summary class="card-h"><div><h3>${esc(L.cfg.key)}</h3>
+        <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></summary>
         <ul class="roster">${starters}${bench.length ? '<li class="rdiv">Bench</li>' + bench.map(p => row(p, 'BN')).join('') : ''}${
-          held.length ? '<li class="rdiv">Reserve</li>' + held.map(p => row(p, p.heldAs || 'IR', 'held')).join('') : ''}</ul></article>`;
+          held.length ? '<li class="rdiv">Reserve</li>' + held.map(p => row(p, p.heldAs || 'IR', 'held')).join('') : ''}</ul></details>`;
     }).join('');
     return h;
   }
@@ -714,6 +740,9 @@
       });
       card.hidden = !!q && !n;
       card.querySelectorAll('.rdiv').forEach(d => { d.hidden = !!q; });
+      // A folded league opens while it has a match, and goes back to how it was after.
+      if (q) { if (n && !card.open) card.open = true; }
+      else card.open = isOpen('roster', card.dataset.id);
       if (q && n) { rows += n; hits.add(card.id); }
     });
     const none = view.querySelector('[data-find-none]'), count = view.querySelector('[data-find-count]');
@@ -1362,11 +1391,15 @@
   });
 
   view.addEventListener('click', e => {
+    // A tap on a league's header folds or unfolds it; the toggle listener remembers it.
+    const head = e.target.closest('details[data-fold] > summary');
+    if (head) { tapped = head.parentElement; return; }
     const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
     if (t.dataset.jump) {
       const card = document.getElementById(t.dataset.jump);
+      if (card && card.tagName === 'DETAILS' && !card.open) { tapped = card; card.open = true; }
       if (card) card.scrollIntoView({behavior: 'smooth', block: 'start'});
       return;
     }
@@ -1377,13 +1410,7 @@
     if (a === 'score') loadScore(S.score.week || S.snap.week);
     else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
     else if (a === 'matchups') loadMatchups();
-    else if (a === 'match-all' || a === 'match-none') {
-      const open = {};
-      if (a === 'match-all') (S.match.data || []).forEach(x => { open[x.cfg.id] = 1; });
-      S.ui.openMatch = open;
-      saveUi();
-      render();
-    }
+    else if (a === 'fold-all' || a === 'fold-none') foldAll(t.dataset.kind, a === 'fold-all');
     else if (a === 'espn-start') startEspnOnly();
     else if (a === 'espn-team') pickEspnTeam(t.dataset.team);
     else if (a === 'espn-cancel') { S.espn.pick = null; render(); }
@@ -1425,15 +1452,15 @@
     }
   });
 
-  // Which Matchup leagues are open is remembered ('toggle' doesn't bubble, so this listens on the way down).
+  /* Folding a league is remembered only when the person tapped it, not when the
+     Rosters search opens or closes one ('toggle' doesn't bubble, so this listens
+     on the way down). */
+  let tapped = null;
   view.addEventListener('toggle', e => {
     const d = e.target;
-    if (!d.matches || !d.matches('details[data-match]')) return;
-    const open = Object.assign({}, S.ui.openMatch);
-    if (d.open) open[d.dataset.match] = 1;
-    else delete open[d.dataset.match];
-    S.ui.openMatch = open;
-    saveUi();
+    if (!d.matches || !d.matches('details[data-fold]') || d !== tapped) return;
+    tapped = null;
+    setFold(d.dataset.fold, d.dataset.id, d.open);
   }, true);
 
   view.addEventListener('input', e => {

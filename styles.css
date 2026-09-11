@@ -360,6 +360,11 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .match-bar { flex-wrap: nowrap; align-items: center; justify-content: space-between; }
 .match-bar .lede { flex: 1 1 auto; }
 .match-tools { display: flex; gap: 14px; justify-content: flex-end; }
+/* Lineups and Rosters leagues fold to their header, like Matchup's. */
+details.fold > summary { list-style: none; cursor: pointer; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary h3::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--muted); transition: transform .15s; }
+details.fold[open] > summary h3::before { transform: rotate(90deg); }
 /* Each league collapses to its header: league, score, and a win-chance bar. */
 details.match > summary { list-style: none; cursor: pointer; display: grid; gap: 7px; padding: 12px 14px; }
 details.match > summary::-webkit-details-marker { display: none; }
