@@ -228,6 +228,8 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; }
 .mv.in::before { content: "IN"; color: var(--ok); }
 .mv.in { font-weight: 600; }
 .mv.to::before { content: "MOVE"; color: var(--swap); }
+/* The changes box's tinted background is lighter, so its small print uses the brighter grey. */
+.moves .fine { color: var(--muted); }
 .moves-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .moves-h h4 { margin-bottom: 0; }
 .card-foot { padding: 8px 14px 12px; display: flex; justify-content: flex-end; border-top: 1px solid var(--line); }
