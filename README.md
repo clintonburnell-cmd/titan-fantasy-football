@@ -64,9 +64,9 @@ website (such as alerts) to pass review.
 ## Screens
 
 On computers and tablets, the app in a browser takes the website's look: its sections become a
-menu across the header, pages go up to 1200px wide with leagues two across on Lineups, Matchup and
-Rosters, Settings sits in two columns, and the footer is a row of links. Phones, the Android app and
-home-screen copies keep the app look.
+menu across the header, the page is a 960px column (one league per row, as on a phone), Settings sits
+in two columns, the footer is a row of links, and on wide windows the Titan art sits faded to the
+right. Phones, the Android app and home-screen copies keep the app look.
 
 | Screen | What it shows |
 |---|---|

@@ -121,7 +121,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
    side, and the website's footer. Phones, the Android app and home-screen
    copies (html.in-app, set in app.js) keep the app look. */
 @media (min-width: 900px) {
-  html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .progress { max-width: 1200px; padding-inline: 24px; }
+  html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .progress { max-width: 960px; padding-inline: 24px; }
   html:not(.in-app) .top-in { padding-block: 16px 4px; }
   html:not(.in-app) .brand h1 { font-size: 1.14rem; }
   html:not(.in-app) .tabs-in { gap: 28px; padding-block: 0; }
@@ -130,9 +130,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   html:not(.in-app) .tabs button[aria-current="page"] { background: none; color: var(--text); border-bottom-color: var(--accent-2); }
   html:not(.in-app) main.wrap { gap: 16px; padding-block: 24px 48px; }
   html:not(.in-app) .lede { max-width: 72ch; }
-  /* Reading pages keep a comfortable width; Settings sits in two columns. */
-  html:not(.in-app) main#view[data-tab="ranks"], html:not(.in-app) main#view[data-tab="news"],
-  html:not(.in-app) main#view[data-tab="exposure"] { max-width: 920px; }
+  /* One league per row, as on a phone; Settings sits in two columns. */
   html:not(.in-app) main#view[data-tab="settings"] { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   html:not(.in-app) main#view[data-tab="settings"] > :not(.card) { grid-column: 1 / -1; }
   html:not(.in-app) .foot { border-top: 1px solid var(--line); padding-block: 26px 44px; text-align: left; font-size: .82rem; }
@@ -141,8 +139,15 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   html:not(.in-app) .foot-nav a { text-decoration: none; }
   html:not(.in-app) .foot-nav a:hover { color: var(--text); }
 }
-@media (min-width: 1000px) {
-  html:not(.in-app) .league-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Titan's banner art, faded and fixed off to the right, where a wide window
+   has room beside the page. The cards stay solid in front of it. */
+@media (min-width: 1200px) {
+  html:not(.in-app) body.app-page::before {
+    content: ""; position: fixed; right: 2vw; bottom: 0; z-index: 0; pointer-events: none;
+    width: min(40vw, 460px); height: min(86vh, 820px);
+    background: url(/titan.svg) no-repeat right bottom / contain; opacity: .16;
+  }
+  html:not(.in-app) body.app-page main#view, html:not(.in-app) body.app-page .foot { position: relative; z-index: 1; }
 }
 
 /* -------------------------------------------------------------- welcome */
