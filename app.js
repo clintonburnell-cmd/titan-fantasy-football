@@ -13,7 +13,7 @@
   const store = API.store;
   const KEY = {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'news', 'rosters', 'exposure', 'byes', 'score', 'ranks', 'settings'];
+  const TABS = ['lineups', 'rosters', 'exposure', 'byes', 'score', 'news', 'ranks', 'settings'];
   const AVATAR = 'https://sleepercdn.com/avatars/thumbs/';
   // News-only accounts on the News tab. X doesn't let apps read posts without a
   // paid plan, so each one opens on X.

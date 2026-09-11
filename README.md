@@ -49,11 +49,11 @@ website (such as alerts) to pass review.
 | Screen | What it shows |
 |---|---|
 | Lineups | Each league's lineup as set in Sleeper, with a verdict on every slot, the changes to make, wire upgrades and injuries |
-| News | News-only X accounts (@UnderdogNFL), each opening on X. X doesn't let apps read posts without a paid plan |
 | Rosters | Every rostered player per league, with rank, tier, opponent and bye |
 | Exposure | Players on two or more of your teams |
 | Byes | How many of your players are off each week, per league |
 | Weeks | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points (Sleeper leagues; ESPN scoring is next) |
+| News | News-only X accounts (@UnderdogNFL), each opening on X. X doesn't let apps read posts without a paid plan |
 | Rankings | Import and manage weekly rankings |
 | Settings | Linked Sleeper account, ESPN leagues and login, which leagues Titan manages, refresh log |
 
