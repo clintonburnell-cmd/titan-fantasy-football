@@ -224,7 +224,8 @@
     var found = await Promise.all([
       account.userId ? discoverLeagues(account.userId, leagueSeason, prefs).catch(function () { return null; }) : [],
       getJson(SCHEDULE + season).catch(function () { return null; }),
-      loadPlayers(say),
+      // The demo names its players from the week's projections instead (demoPlayers).
+      account.demo ? null : loadPlayers(say),
       // Kickoff times are only for the screens, so the server job skips them.
       typeof window !== 'undefined' ? loadKickoffs(season) : null
     ]);
@@ -316,13 +317,35 @@
      the same injury tags, game clock and kickoff times as a real refresh. */
   async function demoSnapshot(account, c) {
     c.progress('Building the demo leagues…');
-    var built = root.TitanDemo ? root.TitanDemo.build(await fetchProjections(c.season, c.week), c.players, account.prefs) : [];
+    // Names come from the week's projections (about 2 MB) rather than Sleeper's full
+    // player list (about 14 MB), so a first visit to the demo loads quickly.
+    var got = await demoPlayers(c.season, c.week);
+    c.players = got.players;
+    c.demo = true;
+    var built = root.TitanDemo ? root.TitanDemo.build(got.proj, got.players, account.prefs) : [];
     var live = built.filter(function (d) { return d.cfg.active; });
     c.say(built.length ? 'Demo: ' + built.length + ' sample leagues built from week ' + c.week + '\'s projections.'
       : 'Demo: this week\'s projections aren\'t out yet, so there are no demo leagues to build.');
     var snap = {v: 3, at: Date.now(), week: c.week, season: c.season, available: built.map(function (d) { return d.cfg; }),
-      byes: c.byes, leagues: live, log: c.log, kickoffs: weekKickoffs(c.kickMap, c.week)};
+      byes: c.byes, leagues: live, log: c.log, kickoffs: weekKickoffs(c.kickMap, c.week), players: got.players};
     return finish(snap, c);
+  }
+
+  /* The demo's players and projections from one download: Sleeper's weekly
+     projections carry each player's name, position and team. The trimmed
+     projections are cached for the app, as fetchProjections does. */
+  async function demoPlayers(season, week) {
+    var list = (await getJson(projectionsUrl(season, week)).catch(function () { return null; })) || [];
+    var proj = SCC.trimProjections(list);
+    if (Object.keys(proj).length) store.set('titan.proj.v1.' + season + '.' + week, {ts: Date.now(), map: proj});
+    var players = {};
+    list.forEach(function (e) {
+      var p = e && e.player, id = e ? String(e.player_id) : '';
+      // Defenses are named from their team (SCC.playerInfo), so only numeric ids are kept.
+      if (!p || !proj[id] || !/^\d+$/.test(id)) return;
+      players[id] = [((p.first_name || '') + ' ' + (p.last_name || '')).trim() || ('id ' + id), p.position || '', p.team || e.team || ''];
+    });
+    return {players: players, proj: proj};
   }
 
   /* The end of every refresh, once the rosters are in: fresh injury tags, the
@@ -341,7 +364,8 @@
       var e = players[id];
       if (e && details[id].team && e[2] !== details[id].team) { e[2] = details[id].team; moved++; }
     }
-    if (moved) savePlayers(players);
+    // The demo's small list must never replace the saved full one.
+    if (moved && !c.demo) savePlayers(players);
     say(SCC.applyDetails(live, details) + ' rostered player(s) carry an injury tag right now.');
 
     var games = sched && sched.length ? SCC.gameStates(sched, week) : {};
@@ -542,12 +566,15 @@
 
   /* Sleeper's weekly projections (RotoWire's numbers), trimmed and kept for an hour. */
   var PROJ_POS = '&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=K&position[]=DEF';
+  function projectionsUrl(season, week) {
+    return 'https://api.sleeper.app/projections/nfl/' + season + '/' + week + '?season_type=regular' + PROJ_POS;
+  }
   async function fetchProjections(season, week) {
     var key = 'titan.proj.v1.' + season + '.' + week;
     var cached = store.get(key);
     if (cached && Date.now() - cached.ts < 3600 * 1000) return cached.map;
     try {
-      var list = await getJson('https://api.sleeper.app/projections/nfl/' + season + '/' + week + '?season_type=regular' + PROJ_POS);
+      var list = await getJson(projectionsUrl(season, week));
       var map = SCC.trimProjections(list || []);
       store.set(key, {ts: Date.now(), map: map});
       return map;

@@ -102,6 +102,11 @@ firebase deploy --only functions
 firebase deploy --only "firestore:rules,firestore:indexes"
 ```
 
+Google Cloud also runs two things outside this repo: daily Firestore backups kept 7 days (restore
+into a new database from the console or `gcloud firestore databases restore`), and an alert policy,
+"Titan server problems", that emails the owner when a function logs an error or the game-day job
+can't check someone (at most hourly). Keep the service names in its filter when adding functions.
+
 Test, commit, push, then deploy. After a deploy, check the live files, and for the server job
 trigger a run and read its logs. A save point is an annotated tag `vX.Y.Z`, a row in README's
 Save points table, and `git archive` of the tag into `D:\Claude\backups`.

@@ -109,6 +109,15 @@ function fakeUser(db) {
   check(Object.keys(adb.private.alerts.tokens).join() === 'good' && adb.private.alerts.sent['check|1|L|123'] === 1 && adb.private.alerts.prefs.out === true,
     'what was sent is remembered, the dead device forgotten, and the rest kept');
   check(await job.hasAlerts(fakeUser(adb)) && !(await job.hasAlerts(fakeUser({private: {}}))), 'who has alerts on is known');
+  pushed.length = 0;
+  const tdb = {private: {alerts: {tokens: {good: {at: 1}, dead: {at: 1}}}}};
+  const tRef = fakeUser(tdb).collection('private').doc('alerts');
+  const ok = await job.sendTest(tRef, 'good');
+  const why = async t => { try { await job.sendTest(tRef, t); return 'sent'; } catch (e) { return e.code; } };
+  const notOn = await why('other'), gone = await why('dead');
+  check(ok.sent && pushed.length === 2 && pushed[0].tokens.join() === 'good' && pushed[0].data.title === 'Titan test alert' &&
+    notOn === 'failed-precondition' && gone === 'not-found' && Object.keys(tdb.private.alerts.tokens).join() === 'good',
+    `a test alert goes only to the asking device; one without alerts on is told (${notOn}); a dead one is forgotten (${gone})`);
 
   const pid = Object.keys(lg.players)[0], wasLocked = lg.players[pid].locked;
   db.history['1'].leagues['espn:99999901'].players[pid].rank = -7;

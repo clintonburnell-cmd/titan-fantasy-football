@@ -9,8 +9,8 @@
   --line: #22304a;
   --text: #eaf0fb;
   --muted: #94a1b8;
-  --faint: #616e86;
-  --accent: #4f7dff;
+  --faint: #7f8ba3; /* the lightest grey that still reads clearly on every surface (WCAG 4.5:1) */
+  --accent: #3a67ea; /* dark enough for white button text (WCAG 4.5:1) */
   --accent-2: #7aa0ff;
   --accent-ink: #ffffff;
   --swap: #f5b942;
@@ -42,6 +42,10 @@ h1, h2, h3, h4, p { margin: 0; }
 a { color: var(--accent-2); }
 code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .9em; }
 .wrap, .top-in, .tabs-in, .progress { max-width: 880px; margin-inline: auto; padding-inline: var(--gutter); }
+/* The screen holds its space while it loads, so the footer doesn't jump. */
+main#view { min-height: 100vh; }
+/* For screen readers only. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* ---------------------------------------------------------------- header */
 

@@ -105,7 +105,7 @@ html { scroll-behavior: smooth; }
 .formats span { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: .82rem; }
 
 .flow { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
-.flow h4 { color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+.flow h3 { color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
 .csv-wrap { overflow-x: auto; }
 .csv {
   margin: 0; white-space: pre; font: .82rem/1.65 ui-monospace, "Cascadia Code", Consolas, monospace;
@@ -143,7 +143,9 @@ html { scroll-behavior: smooth; }
 
 .guide { max-width: 800px; padding-block: 40px 64px; }
 .guide .crumbs { color: var(--faint); font-size: .84rem; margin-bottom: 14px; }
-.guide .crumbs a { color: var(--muted); text-decoration: none; }
+.guide .crumbs a { color: var(--muted); }
+/* Links inside text are underlined, not only coloured. */
+.guide p a, .guide li a, .guide .crumbs a { text-decoration: underline; text-underline-offset: 2px; }
 .guide h1 { font-size: clamp(1.8rem, 4.2vw, 2.6rem); line-height: 1.12; letter-spacing: -.02em; font-weight: 850; }
 .guide .lead { color: var(--muted); font-size: 1.1rem; margin-top: 14px; }
 .guide h2 { font-size: 1.3rem; margin-top: 38px; letter-spacing: -.01em; }

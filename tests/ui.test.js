@@ -98,6 +98,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   T.section('the app, at /app/');
   await send('Page.navigate', {url: ORIGIN + '/app/'});
   check(await waitFor('!!document.querySelector("[data-form=link]")', 20000), 'the welcome screen loads');
+  check(await ev(`!!document.querySelector('.foot #feedback[href^="mailto:"]') && !!document.querySelector('.foot a[href="/terms.html"]')`),
+    'the app footer links Feedback and the Terms of Use');
   check(await ev(`(document.querySelector('meta[name="robots"]') || {}).content`) === 'noindex', 'the app page is kept out of search results (noindex)');
   check(/Sleeper and ESPN/.test(await text('.welcome .lede')), 'the welcome mentions Sleeper and ESPN');
 

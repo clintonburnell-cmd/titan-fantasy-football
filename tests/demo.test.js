@@ -39,5 +39,10 @@ const {check, section} = T;
     'a refresh builds both: ' + (snap.log.find(l => /^Demo/.test(l)) || 'no log line'));
   check(Object.keys(snap.games || {}).length > 0 && snap.leagues[0].roster.every(p => typeof p.locked === 'boolean' && p.game !== undefined),
     'the real game clock applies (locks and game days)');
+  const small = Object.keys(snap.players || {}).length;
+  check(small > 200 && small < 5000 && snap.leagues.every(d => d.roster.every(p => p.name && !/^id /.test(p.name))),
+    `players named from the week's projections (${small} of them), without Sleeper's full list`);
+  const saved = API.store.get(API.PLAYERS_KEY);
+  check(saved && Object.keys(saved.map).length > 5000, 'the saved full player list is left as it was');
   T.done();
 })().catch(T.crash);

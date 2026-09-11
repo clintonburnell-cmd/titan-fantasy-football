@@ -263,6 +263,31 @@ exports.ownerStats = onCall({region: 'us-central1', memory: '256MiB', maxInstanc
   return countStats(Date.now(), authUsers, accounts, withRankings, alertsOn);
 });
 
+/* "Send a test alert" in Settings: one alert to the device asking, if it's a
+   device the person turned alerts on for. A device that no longer accepts
+   alerts is forgotten. */
+async function sendTest(ref, token) {
+  const doc = (await ref.get()).data() || {};
+  if (!token || !(doc.tokens || {})[token]) throw new HttpsError('failed-precondition', 'Turn alerts on for this device first.');
+  const res = await sendPush({tokens: [token], data: {title: 'Titan test alert', body: 'Alerts work on this device. Real ones come on game days.',
+    url: '/app/', tag: 'test'}, webpush: {headers: {Urgency: 'high', TTL: '600'}}});
+  const r = res.responses[0] || {};
+  if (r.success) return {sent: true};
+  const code = r.error && r.error.code;
+  if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token') {
+    const tokens = Object.assign({}, doc.tokens);
+    delete tokens[token];
+    await ref.set(Object.assign({}, doc, {tokens}));
+    throw new HttpsError('not-found', 'This device stopped accepting alerts. Turn them off and on again.');
+  }
+  throw new HttpsError('unavailable', 'The alert could not be sent. Try again in a minute.');
+}
+
+exports.testAlert = onCall({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 30}, async req => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
+  return sendTest(db.doc(`users/${req.auth.uid}/private/alerts`), String((req.data || {}).token || ''));
+});
+
 // For local testing without Cloud Scheduler.
-exports._test = {run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts,
+exports._test = {run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
   setSend: fn => { sendPush = fn; }};

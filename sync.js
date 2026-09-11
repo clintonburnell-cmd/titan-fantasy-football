@@ -51,6 +51,8 @@ const espnDoc = uid => doc(db, 'users', uid, 'private', 'espn');
 const readEspnLeague = httpsCallable(getFunctions(app, 'us-central1'), 'espnLeague');
 // Totals for Titan's owner only; the server refuses everyone else.
 const readOwnerStats = httpsCallable(getFunctions(app, 'us-central1'), 'ownerStats');
+// "Send a test alert": the server sends one alert to this device.
+const sendTestAlert = httpsCallable(getFunctions(app, 'us-central1'), 'testAlert');
 
 // Game-day alerts: each device's push address (Firebase Cloud Messaging) and
 // the alerts wanted, in users/{uid}/private/alerts. Titan's server job sends
@@ -172,6 +174,10 @@ const api = {
     try { await deleteToken(getMessaging(app)); } catch (e) { /* no push address on this device */ }
     keepToken('');
     if (u) App.setAlerts(await alertsState(u.uid));
+  },
+
+  testAlert() {
+    return sendTestAlert({token: localToken()}).then(r => r.data);
   },
 
   alertPrefs(prefs) {

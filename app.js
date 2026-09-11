@@ -20,6 +20,9 @@
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
   const STALE_MS = 5 * 60 * 1000;
   const TABS = ['lineups', 'matchup', 'rosters', 'exposure', 'byes', 'score', 'news', 'ranks', 'settings'];
+  // Each screen's name, as a heading for screen readers (the tabs show it visually).
+  const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', rosters: 'Rosters', exposure: 'Exposure', byes: 'Byes',
+    score: 'Results', news: 'News', ranks: 'Rankings', settings: 'Settings'};
   const AVATAR = 'https://sleepercdn.com/avatars/thumbs/';
   // News-only accounts on the News tab. X doesn't let apps read posts without a
   // paid plan, so each one opens on X.
@@ -161,6 +164,8 @@
   // storage once per refresh.
   let playersMemo = {at: -1, map: {}};
   function playerList() {
+    // The demo carries its own small list (names from the week's projections).
+    if (S.snap && S.snap.players) return S.snap.players;
     const at = S.snap ? S.snap.at : 0;
     if (playersMemo.at !== at) playersMemo = {at, map: (store.get(API.PLAYERS_KEY) || {}).map || {}};
     return playersMemo.map;
@@ -307,7 +312,7 @@
     paintHeader();
     if (!S.account) { view.innerHTML = iosHint() + screenWelcome(); return; }
     const err = S.error ? `<div class="banner stop">${esc(S.error)}</div>` : '';
-    view.innerHTML = iosHint() + demoBanner() + err + SCREENS[S.ui.tab]();
+    view.innerHTML = `<h2 class="sr-only">${TAB_NAMES[S.ui.tab]}</h2>` + iosHint() + demoBanner() + err + SCREENS[S.ui.tab]();
     if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
   }
 
@@ -1401,7 +1406,8 @@
       ${a.permission === 'denied' && !a.on ? '<p class="fine">Notifications are blocked for Titan in this browser. Allow them in the site settings, then try again.</p>' : ''}
       <div class="bar"><button class="btn${a.on ? ' ghost' : ''}" data-action="${a.on ? 'alerts-off' : 'alerts-on'}" ${S.alertsBusy ? 'disabled' : ''}>${
         S.alertsBusy ? 'One moment…' : a.on ? 'Turn off on this device' : 'Turn on for this device'}</button>${
-        a.on ? '<span class="fine">Alerts are on for this device.</span>' : ''}</div>`);
+        a.on ? `<button class="btn ghost" data-action="alerts-test" ${S.alertsBusy ? 'disabled' : ''}>Send a test alert</button>` : ''}</div>
+      ${a.on ? '<p class="fine">Alerts are on for this device. Send a test to check it shows them.</p>' : ''}`);
   }
 
   const alertPrefs = () => Object.assign({out: true, check: true}, S.alerts && S.alerts.prefs);
@@ -1415,6 +1421,22 @@
       if (on) await S.sync.api.alertsOn(alertPrefs());
       else await S.sync.api.alertsOff();
       toast(on ? 'Alerts are on for this device.' : 'Alerts are off for this device.');
+    } catch (e) {
+      S.alertsError = (e && e.message) || String(e);
+    } finally {
+      S.alertsBusy = false;
+      render();
+    }
+  }
+
+  async function alertsTest() {
+    if (!S.sync.api || S.alertsBusy) return;
+    S.alertsBusy = true;
+    S.alertsError = '';
+    render();
+    try {
+      await S.sync.api.testAlert();
+      toast('Test alert sent. It should show up in a few seconds.');
     } catch (e) {
       S.alertsError = (e && e.message) || String(e);
     } finally {
@@ -1603,6 +1625,7 @@
     else if (a === 'owner-stats') loadOwnerStats();
     else if (a === 'alerts-on') alertsToggle(true);
     else if (a === 'alerts-off') alertsToggle(false);
+    else if (a === 'alerts-test') alertsTest();
     else if (a === 'ios-hint-close') { store.set(IOS_HINT_KEY, 1); render(); }
     else if (a === 'sync-in' && S.sync.api) {
       S.sync.api.signIn().catch(e => window.TitanApp.setSync({state: 'error', error: 'Sign-in failed: ' + (e.code || e.message)}));
@@ -1676,6 +1699,17 @@
   }
 
   /* --------------------------------------------------------------- boot */
+
+  // The footer's Feedback link opens an email with the device and screen filled in,
+  // so a bug report says where it happened. Nothing is sent unless the person sends it.
+  const fb = document.getElementById('feedback');
+  if (fb) {
+    fb.addEventListener('click', () => {
+      fb.href = 'mailto:gainalphatrading@gmail.com?subject=' + encodeURIComponent('Titan feedback') + '&body=' +
+        encodeURIComponent('What happened, or what would you like to see?\n\n\n---\nScreen: ' + S.ui.tab + (DEMO ? ' (demo)' : '') +
+          '\nDevice: ' + navigator.userAgent);
+    });
+  }
 
   // Google sign-in and sync (sync.js), except in the demo: its leagues never reach an account.
   if (!DEMO) {

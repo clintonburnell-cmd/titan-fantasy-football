@@ -103,6 +103,11 @@ website (such as alerts) to pass review.
   inactives) for starters ruled out or on bye and empty spots. `SCC.alertsFor` decides; the server
   job sends them through Firebase Cloud Messaging every 15 minutes on game days, and at noon, 4 PM
   and 8 PM Eastern on other days for players ruled out; `sw.js` shows them. Each alert goes out once.
+  **Send a test alert** (Settings, once alerts are on) sends one to that device (the `testAlert` function).
+- **Feedback and terms:** the app's footer has a Feedback link (an email with the screen and device
+  filled in) and the Terms of Use (`terms.html`), which every page links.
+- **Behind the scenes:** daily Firestore backups (kept 7 days) and an email to the owner when a server
+  function logs an error, both set up in Google Cloud.
 - **The week moves on Tuesday.** Once a week's games are over, the Tuesday after the last
   one (Eastern time) Titan shows the next week, even if Sleeper hasn't moved yet: scores
   clear and the upcoming projections show. A game still to be played holds the week.
