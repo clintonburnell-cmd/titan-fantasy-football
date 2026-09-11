@@ -14,6 +14,7 @@ const zlib = require('zlib');
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore} = require('firebase-admin/firestore');
 const {getAuth} = require('firebase-admin/auth');
+const {getMessaging} = require('firebase-admin/messaging');
 const SCC = require('./shared/engine.js');
 const API = require('./shared/sleeper.js');
 const ESPN = require('./shared/espn.js');
@@ -26,6 +27,8 @@ const SLEEPER = 'https://api.sleeper.app';
 const PROJ_POS = '&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=K&position[]=DEF';
 const PLAYERS_TTL = 3 * 24 * 3600 * 1000;
 let warm = null; // the trimmed player list, kept between runs on a warm instance
+// Sends one alert to many devices (Firebase Cloud Messaging); tests swap it out.
+let sendPush = msg => getMessaging().sendEachForMulticast(msg);
 
 async function getJson(url) {
   const res = await fetch(url);
@@ -79,14 +82,69 @@ async function freezeForUser(userRef, account, ctx) {
   // A saved ESPN login opens the person's private ESPN leagues.
   const login = (await userRef.collection('private').doc('espn').get()).data() || null;
   const snap = await API.collect(account, null, null, {espnCreds: login});
+  // The server's refresh skips kickoff times; the FLEX order and the lineup check use them.
+  snap.kickoffs = ctx.kickoffs || {};
   const hasProj = Object.keys(ctx.proj || {}).length > 0;
   const rows = hasProj ? weeks[ctx.week] || [] : ranksFor(weeks, ctx.week);
   const analysis = SCC.analyzeAll(snap, SCC.rankingsBy(rows, hasProj ? ctx.proj : null, ctx.players));
-  const ref = userRef.collection('history').doc(String(ctx.week));
-  const prev = (await ref.get()).data() || null;
-  const next = SCC.freezeWeek(prev, analysis, ctx.proj, ctx.season, ctx.week);
-  await ref.set(next);
-  return next;
+  let record = null;
+  if (ctx.freeze !== false) {
+    const ref = userRef.collection('history').doc(String(ctx.week));
+    const prev = (await ref.get()).data() || null;
+    record = SCC.freezeWeek(prev, analysis, ctx.proj, ctx.season, ctx.week);
+    await ref.set(record);
+  }
+  const alerts = await alertUser(userRef, analysis, ctx).catch(e => { logger.warn('could not send one user\'s alerts: ' + e.message); return 0; });
+  return {record, alerts};
+}
+
+/* Whether someone has game-day alerts on for at least one device. */
+async function hasAlerts(userRef) {
+  const d = (await userRef.collection('private').doc('alerts').get()).data();
+  return !!(d && d.tokens && Object.keys(d.tokens).length);
+}
+
+/* A person's new game-day alerts (SCC.alertsFor), sent to every device they
+   turned alerts on for. Only this week's sent alerts are remembered. Returns
+   how many went out. */
+async function alertUser(userRef, analysis, ctx) {
+  const ref = userRef.collection('private').doc('alerts');
+  const doc = (await ref.get()).data();
+  if (!doc || !doc.tokens || !Object.keys(doc.tokens).length) return 0;
+  const sent = {};
+  for (const k in doc.sent || {}) if (k.split('|')[1] === String(ctx.week)) sent[k] = 1;
+  const kicks = ctx.kickoffs || {};
+  const list = SCC.alertsFor(analysis, {week: ctx.week, now: Date.now(), sent,
+    kickoffs: [...new Set(Object.values(kicks).map(k => Number(k[0])))],
+    kickAt: p => { const k = kicks[SCC.teamAbbr(p.team)]; return k ? Number(k[0]) : 0; },
+    want: Object.assign({out: true, check: true}, doc.prefs || {})});
+  return list.length ? deliver(ref, list, sent) : 0;
+}
+
+/* Sends each alert to every device on file, forgets devices that no longer
+   accept alerts, and saves what was sent. The document is read again just
+   before writing, so a device added meanwhile isn't lost. */
+async function deliver(ref, list, sent) {
+  const doc = (await ref.get()).data() || {};
+  let tokens = Object.keys(doc.tokens || {});
+  const dead = new Set();
+  let n = 0;
+  for (const a of list) {
+    if (!tokens.length) break;
+    const res = await sendPush({tokens, data: {title: a.title, body: a.body, url: '/app/', tag: a.key},
+      webpush: {headers: {Urgency: 'high', TTL: '7200'}}});
+    res.responses.forEach((r, i) => {
+      const code = r.error && r.error.code;
+      if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-registration-token') dead.add(tokens[i]);
+    });
+    if (res.successCount) n++;
+    tokens = tokens.filter(t => !dead.has(t));
+  }
+  const latest = (await ref.get()).data() || {};
+  const keep = {};
+  for (const t in latest.tokens || {}) if (!dead.has(t)) keep[t] = latest.tokens[t];
+  await ref.set(Object.assign({}, latest, {tokens: keep, sent}));
+  return n;
 }
 
 async function run() {
@@ -95,29 +153,41 @@ async function run() {
   const week = Number(state.week);
   if (state.season_type !== 'regular' || !week) { logger.debug('not the regular season'); return 'off-season'; }
 
-  // Only game days matter: a player's call freezes at his kickoff. Sleeper's
-  // schedule gives game dates (Eastern), not kickoff times.
+  // Game days: each player's call freezes at his kickoff, and alerts go out.
+  // Injury reports come out through the week, so on other days people with
+  // alerts on are checked at noon, 4 PM and 8 PM Eastern. Sleeper's schedule
+  // gives game dates (Eastern), not kickoff times.
   const sched = await getJson(SLEEPER + '/schedule/nfl/regular/' + season);
   const games = sched.filter(g => Number(g.week) === week);
   const today = new Date().toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
-  if (!games.some(g => g.date === today || g.status === 'in_game')) { logger.debug('no games today'); return 'no games today'; }
+  const et = new Date(new Date().toLocaleString('en-US', {timeZone: 'America/New_York'}));
+  const gameDay = games.some(g => g.date === today || g.status === 'in_game');
+  const reportTime = [12, 16, 20].includes(et.getHours()) && et.getMinutes() < 15;
+  if (!gameDay && !reportTime) { logger.debug('no games today'); return 'no games today'; }
 
   const players = await playerMap();
   API.store.set(API.PLAYERS_KEY, {ts: Date.now(), map: players});
   const proj = SCC.trimProjections(await getJson(SLEEPER + '/projections/nfl/' + season + '/' + week + '?season_type=regular' + PROJ_POS));
-  const ctx = {season, week, proj, players};
+  // Kickoff times from ESPN's public NFL schedule, for the lineup check and the FLEX order.
+  const kicks = await ESPN.fetchKickoffs(season).catch(() => null);
+  const kickoffs = {};
+  for (const t in kicks || {}) if (kicks[t][week]) kickoffs[t] = kicks[t][week];
+  const ctx = {season, week, proj, players, kickoffs, freeze: gameDay};
 
   const users = await db.collection('users').get();
-  let saved = 0, failed = 0;
+  let done = 0, failed = 0, sent = 0;
   for (const u of users.docs) {
     const account = u.get('account');
     const espnLeagues = account && account.espn && account.espn.leagues;
     if (!account || !(account.userId || (espnLeagues && espnLeagues.length))) continue;
-    try { await freezeForUser(u.ref, account, ctx); saved++; }
-    catch (e) { failed++; logger.warn('could not freeze calls for one user: ' + e.message); }
+    // Away from game days only the alerts run, so only for people who turned them on.
+    if (!gameDay && !(await hasAlerts(u.ref))) continue;
+    try { const r = await freezeForUser(u.ref, account, ctx); done++; sent += r.alerts; }
+    catch (e) { failed++; logger.warn('could not check one user: ' + e.message); }
   }
-  logger.info(`week ${week}: saved calls for ${saved} user(s), ${failed} failed`);
-  return `week ${week}: ${saved} saved, ${failed} failed`;
+  const what = gameDay ? 'saved calls for' : 'checked alerts for';
+  logger.info(`week ${week}: ${what} ${done} user(s), ${sent} alert(s) sent, ${failed} failed`);
+  return `week ${week}: ${what} ${done}, ${sent} alerts, ${failed} failed`;
 }
 
 exports.freezeCalls = onSchedule({
@@ -194,4 +264,5 @@ exports.ownerStats = onCall({region: 'us-central1', memory: '256MiB', maxInstanc
 });
 
 // For local testing without Cloud Scheduler.
-exports._test = {run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats};
+exports._test = {run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts,
+  setSend: fn => { sendPush = fn; }};

@@ -284,4 +284,28 @@ check(kickRun(kickRoster(), {}).moves.length === 0, 'without kickoff times, a li
 check(kickRun(kickRoster({locked: true}), kicks).moves.length === 0, 'once the Thursday game has started, he stays in FLEX');
 const byDay = kickRun(kickRoster().map(p => Object.assign(p, {kick: {KC: '2026-09-10', BUF: '2026-09-13', DAL: '2026-09-14', NYJ: '2026-09-13'}[p.team]})), {});
 check(byDay.moves.length === 1 && byDay.moves[0].inn.name === 'Mon Back', 'with only game days (the server job), the Monday back still goes in FLEX');
+
+section('game-day alerts');
+const aRanks = SCC.weeklyMap([{name: 'Hurt Back', pos: 'RB', team: 'KC', rank: 1}, {name: 'Bench Back', pos: 'RB', team: 'BUF', rank: 5},
+  {name: 'Extra Back', pos: 'RB', team: 'BUF', rank: 7}, {name: 'Bye Wideout', pos: 'WR', team: 'MIA', rank: 3},
+  {name: 'Spare Wideout', pos: 'WR', team: 'BUF', rank: 9}]);
+const aLg = {id: 'a1', key: 'Alert League', name: 'Alert League', lineup: ['RB', 'WR', 'FLEX'], ppr: 1};
+const aRoster = () => [kp('11', 'Hurt Back', 'RB', 'KC', 'RB', {inj: 'Out', outish: true}), kp('12', 'Bye Wideout', 'WR', 'MIA', 'WR', {bye: 5}),
+  kp('13', 'Bench Back', 'RB', 'BUF', ''), kp('14', 'Extra Back', 'RB', 'BUF', ''), kp('15', 'Spare Wideout', 'WR', 'BUF', '')];
+const KC1 = Date.UTC(2026, 9, 11, 17), BUF1 = KC1 + 3 * 3600e3;
+const aA = SCC.analyzeAll({week: 5, kickoffs: {KC: [KC1, false], BUF: [BUF1, false]},
+  leagues: [{cfg: aLg, roster: aRoster(), takenNorm: {}, takenAbbr: {}}]}, aRanks);
+const aKick = p => ({KC: KC1, BUF: BUF1})[p.team] || 0;
+const aSent = {};
+const early = SCC.alertsFor(aA, {week: 5, now: KC1 - 5 * 3600e3, kickoffs: [KC1, BUF1], kickAt: aKick, sent: aSent});
+check(early.length === 1 && early[0].kind === 'out' && early[0].title === 'Hurt Back is out' && /Titan would start Bench Back instead/.test(early[0].body),
+  'a ruled-out starter: one alert, with who Titan would start: ' + (early[0] && early[0].title + '. ' + early[0].body));
+const hour = SCC.alertsFor(aA, {week: 5, now: KC1 - 60 * 60000, kickoffs: [KC1, BUF1], kickAt: aKick, sent: aSent});
+check(hour.length === 1 && hour[0].kind === 'check' && /Hurt Back \(Out\)/.test(hour[0].body) && /Bye Wideout \(on bye\)/.test(hour[0].body) &&
+  /an empty FLEX/.test(hour[0].body), 'about an hour before kickoff, the lineup check lists what\'s still wrong: ' + (hour[0] && hour[0].body));
+check(SCC.alertsFor(aA, {week: 5, now: KC1 - 50 * 60000, kickoffs: [KC1, BUF1], kickAt: aKick, sent: aSent}).length === 0, 'nothing is sent twice');
+check(SCC.alertsFor(aA, {week: 5, now: KC1 - 60 * 60000, kickoffs: [KC1, BUF1], kickAt: aKick, sent: {}, want: {out: false, check: false}}).length === 0,
+  'alerts someone turned off stay off');
+check(SCC.alertsFor(aA, {week: 5, now: KC1 - 3 * 3600e3, kickoffs: [KC1, BUF1], kickAt: aKick, sent: {}, want: {out: false, check: true}}).length === 0,
+  'no lineup check while kickoff is still hours away');
 T.done();

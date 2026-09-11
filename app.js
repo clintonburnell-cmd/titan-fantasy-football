@@ -77,6 +77,9 @@
     match: {busy: false, data: null, error: '', at: 0, week: 0}, // this week's matchups, loaded on the Matchup tab
     rosterQuery: '', // the Rosters page's player search
     owner: {is: false, busy: false, data: null, error: ''}, // Titan's owner: the stats card in Settings
+    alerts: null, // game-day alerts on this device: {supported, permission, on, prefs}, once signed in
+    alertsBusy: false,
+    alertsError: '',
     proj: {}, // Sleeper's projections for the snapshot's week
     projAt: 0, // when they were last fetched (0: not yet this visit)
     view: {week: 0, pos: 'QB'} // the saved rankings open on the Rankings tab
@@ -1312,7 +1315,7 @@
             autocorrect="off" spellcheck="false" value="${esc(S.link.name || '')}" ${S.link.busy ? 'disabled' : ''}></label>
           <button class="btn" type="submit" ${S.link.busy ? 'disabled' : ''}>${S.link.busy ? 'Finding you…' : 'Link Sleeper'}</button></form>
         ${S.link.error ? `<div class="banner stop">${esc(S.link.error)}</div>` : ''}`;
-    let h = `<section class="card pad" data-sync-slot="settings">${syncSettings()}</section>${S.owner.is ? ownerCard() : ''}
+    let h = `<section class="card pad" data-sync-slot="settings">${syncSettings()}</section>${alertsCard()}${S.owner.is ? ownerCard() : ''}
       <section class="card pad" id="link-leagues">${linkLeagues(sleeper)}</section>
       <section class="card pad"><h3>Leagues</h3>
         <p class="fine">Your Sleeper leagues are found automatically and your ESPN leagues are the ones you added, each with its own lineup format. Switch off any you don't want Titan to manage.</p>
@@ -1374,6 +1377,50 @@
 
   function pushWeek(w) {
     if (S.sync.api && S.sync.user) S.sync.api.pushWeek(w, S.ranks.weeks[w] || null);
+  }
+
+  /* Game-day alerts, chosen per device by signed-in people. The server job
+     sends them (SCC.alertsFor); sw.js shows them. */
+  function alertsCard() {
+    const head = `<h3>Game-day alerts</h3><p class="fine">Titan can tell you when a starter is ruled out, and check your lineups
+      about 75 minutes before each kickoff, once inactives are out.</p>`;
+    const card = inner => `<section class="card pad">${head}${inner}</section>`;
+    if (!S.sync.user) return card('<p class="help">Sign in with Google above to turn them on.</p>');
+    if (IS_IOS && !STANDALONE) {
+      return card(`<p class="help">On iPhone and iPad, alerts work once Titan is on your Home Screen: tap Share ${SHARE_ICON}, then
+        <b>Add to Home Screen</b>, and turn them on from there.</p>`);
+    }
+    const a = S.alerts;
+    if (!a) return card('<p class="fine">Checking this device…</p>');
+    if (!a.supported) return card('<p class="help">This browser can\'t show alerts. Chrome, Edge and Firefox can, and so can the Titan app.</p>');
+    const box = (k, label, sub) => `<li><label class="check"><input type="checkbox" data-alert="${k}" ${a.prefs[k] ? 'checked' : ''}>
+      <span><b>${label}</b><small>${sub}</small></span></label></li>`;
+    return card(`<ul class="lg-list">${box('out', 'Starter ruled out', 'Someone in your lineup is ruled out, doubtful or on IR, with who Titan would start instead')}
+        ${box('check', 'Lineup check', 'About 75 minutes before each kickoff: a starter ruled out or on bye, or an empty spot')}</ul>
+      ${S.alertsError ? `<div class="banner stop">${esc(S.alertsError)}</div>` : ''}
+      ${a.permission === 'denied' && !a.on ? '<p class="fine">Notifications are blocked for Titan in this browser. Allow them in the site settings, then try again.</p>' : ''}
+      <div class="bar"><button class="btn${a.on ? ' ghost' : ''}" data-action="${a.on ? 'alerts-off' : 'alerts-on'}" ${S.alertsBusy ? 'disabled' : ''}>${
+        S.alertsBusy ? 'One moment…' : a.on ? 'Turn off on this device' : 'Turn on for this device'}</button>${
+        a.on ? '<span class="fine">Alerts are on for this device.</span>' : ''}</div>`);
+  }
+
+  const alertPrefs = () => Object.assign({out: true, check: true}, S.alerts && S.alerts.prefs);
+
+  async function alertsToggle(on) {
+    if (!S.sync.api || S.alertsBusy) return;
+    S.alertsBusy = true;
+    S.alertsError = '';
+    render();
+    try {
+      if (on) await S.sync.api.alertsOn(alertPrefs());
+      else await S.sync.api.alertsOff();
+      toast(on ? 'Alerts are on for this device.' : 'Alerts are off for this device.');
+    } catch (e) {
+      S.alertsError = (e && e.message) || String(e);
+    } finally {
+      S.alertsBusy = false;
+      render();
+    }
   }
 
   /* Titan's owner only: totals from the server (ownerStats), never anyone's details. */
@@ -1452,6 +1499,10 @@
     setOwner(is) {
       if (S.owner.is === !!is) return;
       S.owner = {is: !!is, busy: false, data: null, error: ''};
+      if (S.ui.tab === 'settings') render();
+    },
+    setAlerts(a) {
+      S.alerts = a;
       if (S.ui.tab === 'settings') render();
     },
     applyAccount(account) {
@@ -1550,6 +1601,8 @@
     else if (a === 'unlink') unlink();
     else if (a === 'players-reload') { API.clearPlayers(); refresh(); }
     else if (a === 'owner-stats') loadOwnerStats();
+    else if (a === 'alerts-on') alertsToggle(true);
+    else if (a === 'alerts-off') alertsToggle(false);
     else if (a === 'ios-hint-close') { store.set(IOS_HINT_KEY, 1); render(); }
     else if (a === 'sync-in' && S.sync.api) {
       S.sync.api.signIn().catch(e => window.TitanApp.setSync({state: 'error', error: 'Sign-in failed: ' + (e.code || e.message)}));
@@ -1565,6 +1618,10 @@
   view.addEventListener('change', e => {
     const t = e.target;
     if (t.dataset.ui === 'league') { S.ui.league = t.value; saveUi(); render(); }
+    else if (t.dataset.alert) {
+      if (S.alerts) S.alerts.prefs[t.dataset.alert] = t.checked;
+      if (S.sync.api && S.sync.user) S.sync.api.alertPrefs(alertPrefs()).catch(() => toast('Could not save that choice. Try again.'));
+    }
     else if (t.dataset.draft === 'pos') { S.draft.pos = t.value; S.draft.parsed = parseDraft(); paintDraft(); }
     else if (t.dataset.ui === 'scoreWeek') loadScore(Number(t.value));
     else if (t.dataset.draft === 'file' && t.files && t.files[0]) {

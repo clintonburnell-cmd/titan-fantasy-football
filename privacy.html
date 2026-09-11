@@ -43,6 +43,8 @@
       <li>The rankings you import, week by week.</li>
       <li>Your ESPN login, only if you save it for private ESPN leagues: the <code>espn_s2</code> and <code>SWID</code> cookies
         ESPN's website uses to keep you signed in.</li>
+      <li>If you turn on game-day alerts: a notification address for each device you turned them on for (a push token from
+        Google's Firebase Cloud Messaging), which alerts you want, and which were already sent this week, so none repeats.</li>
     </ul>
     <p>Titan's server uses a saved ESPN login only to read your ESPN leagues, which a browser can't do for a private league
       itself. The app never shows it again, and <b>Settings → Link more leagues? → ESPN → Remove my ESPN login</b> deletes it. Because those
@@ -53,6 +55,10 @@
     <p>While you're signed in, Titan's server also keeps a record of each week: on NFL game days, every 15 minutes, it reads
       your linked Sleeper and ESPN leagues and your synced rankings, and saves each player's rank, Titan's call and his projected points
       under your account, frozen at his game's kickoff. The Results tab compares how your teams did with that record.</p>
+    <p>If you turn on alerts, the same check looks for starters ruled out or on bye and empty lineup spots, and sends an
+      alert to your devices through Firebase Cloud Messaging. On days without games it also looks for players ruled out
+      at noon, 4 PM and 8 PM Eastern, when injury reports come out. Turning alerts off on a device, or signing out there,
+      removes its address.</p>
     <p>To delete everything, open <b>Settings → Sync across your devices → Delete my Titan account</b>. That removes your synced
       data and your Titan sign-in. Signing out stops syncing on that device without deleting anything.</p>
 
@@ -65,7 +71,8 @@
       <li><b>ESPN</b> (<code>fantasy.espn.com</code>): your device reads ESPN's public NFL schedule for kickoff times, which
         sends nothing about you. If you add ESPN leagues, public ones are read by your device directly and private ones by
         Titan's server with the ESPN login you saved. Titan can't change your ESPN lineups either.</li>
-      <li><b>Google</b>: Firebase, for sign-in and sync if you choose to sign in, and for hosting the app.</li>
+      <li><b>Google</b>: Firebase, for sign-in and sync if you choose to sign in, for delivering alerts if you turn them on,
+        and for hosting the app.</li>
       <li><b>Ko-fi</b>: only if you tap the tip jar on the website. Tips are handled entirely by Ko-fi, and Titan never sees
         your payment details.</li>
       <li><b>X</b>: only if you tap an account on the News tab, which opens it in the X app or on x.com.</li>

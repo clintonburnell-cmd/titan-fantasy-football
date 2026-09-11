@@ -14,9 +14,10 @@ import {
   getRedirectResult, signOut, deleteUser, reauthenticateWithPopup
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
-  initializeFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot
+  initializeFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, collection, getDocs, onSnapshot
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {getFunctions, httpsCallable} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
+import {getMessaging, getToken, deleteToken, isSupported} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging.js';
 
 const App = window.TitanApp;
 const Plan = window.TitanSyncPlan;
@@ -50,6 +51,24 @@ const espnDoc = uid => doc(db, 'users', uid, 'private', 'espn');
 const readEspnLeague = httpsCallable(getFunctions(app, 'us-central1'), 'espnLeague');
 // Totals for Titan's owner only; the server refuses everyone else.
 const readOwnerStats = httpsCallable(getFunctions(app, 'us-central1'), 'ownerStats');
+
+// Game-day alerts: each device's push address (Firebase Cloud Messaging) and
+// the alerts wanted, in users/{uid}/private/alerts. Titan's server job sends
+// them and forgets addresses that stop working. This device's address is also
+// kept locally, to know whether alerts are on here.
+const alertsDoc = uid => doc(db, 'users', uid, 'private', 'alerts');
+const TOKEN_KEY = 'titan.alerts.token';
+const localToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (e) { return ''; } };
+const keepToken = t => { try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch (e) {} };
+
+async function alertsState(uid) {
+  const supported = await isSupported().catch(() => false);
+  const snap = await getDoc(alertsDoc(uid)).catch(() => null);
+  const data = snap && snap.exists() ? snap.data() : {};
+  const t = localToken();
+  return {supported, permission: typeof Notification !== 'undefined' ? Notification.permission : 'default',
+    on: !!(t && data.tokens && data.tokens[t]), prefs: Object.assign({out: true, check: true}, data.prefs || {})};
+}
 const ESPN = window.EspnAPI;
 const why = e => (e && (e.code || e.message)) || String(e);
 let listeners = [];
@@ -124,9 +143,40 @@ const api = {
     }
   },
 
-  signOut() {
+  async signOut() {
     stopListening();
+    // Alerts stop for this device along with the sign-in.
+    await api.alertsOff().catch(() => {});
     return signOut(auth);
+  },
+
+  /* Turns alerts on for this device: asks for permission, gets its push
+     address and saves it with the alerts wanted ({out, check}). */
+  async alertsOn(prefs) {
+    const u = auth.currentUser;
+    if (!u) throw new Error('Sign in first.');
+    if (!(await isSupported().catch(() => false))) throw new Error('This browser can\'t show alerts.');
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      throw new Error(perm === 'denied' ? 'Notifications are blocked for Titan in this browser\'s settings.' : 'Notifications weren\'t allowed.');
+    }
+    const token = await getToken(getMessaging(app), {serviceWorkerRegistration: await navigator.serviceWorker.ready});
+    await setDoc(alertsDoc(u.uid), {tokens: {[token]: {at: Date.now()}}, prefs}, {merge: true});
+    keepToken(token);
+    App.setAlerts(await alertsState(u.uid));
+  },
+
+  async alertsOff() {
+    const u = auth.currentUser, t = localToken();
+    if (u && t) await setDoc(alertsDoc(u.uid), {tokens: {[t]: deleteField()}}, {merge: true});
+    try { await deleteToken(getMessaging(app)); } catch (e) { /* no push address on this device */ }
+    keepToken('');
+    if (u) App.setAlerts(await alertsState(u.uid));
+  },
+
+  alertPrefs(prefs) {
+    const u = auth.currentUser;
+    return u ? setDoc(alertsDoc(u.uid), {prefs}, {merge: true}) : Promise.resolve();
   },
 
   pushAccount(account) {
@@ -175,6 +225,8 @@ const api = {
       await Promise.all(docs.docs.map(d => deleteDoc(d.ref)));
     }
     await deleteDoc(userDoc(u.uid));
+    try { await deleteToken(getMessaging(app)); } catch (e) { /* no push address on this device */ }
+    keepToken('');
     try {
       await deleteUser(u);
     } catch (e) {
@@ -196,6 +248,7 @@ onAuthStateChanged(auth, user => {
     App.setEspnLogin(null);
     App.setSync({user: null, state: 'off', at: 0});
     App.setOwner(false);
+    App.setAlerts(null);
     return;
   }
   if (ESPN) ESPN.setTransport(args => readEspnLeague(args).then(r => r.data));
@@ -205,6 +258,7 @@ onAuthStateChanged(auth, user => {
   App.setSync({user: {name: user.displayName || '', email: user.email || '', photo: user.photoURL || ''}});
   // Titan's owner (a custom claim on that one account) gets the stats card in Settings.
   user.getIdTokenResult(true).then(t => App.setOwner(t.claims.titanOwner === true)).catch(() => App.setOwner(false));
+  alertsState(user.uid).then(a => App.setAlerts(a)).catch(() => App.setAlerts(null));
   reconcile(user.uid).catch(e => App.setSync({state: 'error', error: 'Sync failed: ' + why(e)}));
 });
 

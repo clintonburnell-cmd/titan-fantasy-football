@@ -93,6 +93,23 @@ function fakeUser(db) {
   check(bareRanked.length > 0 && bareRanked.length >= projected - 2,
     `with no rankings imported, the default rankings rank ${bareRanked.length} of 16 players (${projected} projected above 0)`);
 
+  section('alerts');
+  const pushed = [];
+  job.setSend(async msg => {
+    pushed.push(msg);
+    return {successCount: msg.tokens.filter(t => t !== 'dead').length, responses: msg.tokens.map(t => t === 'dead'
+      ? {success: false, error: {code: 'messaging/registration-token-not-registered'}} : {success: true})};
+  });
+  const adb = {ranks: {}, history: {}, private: {alerts: {tokens: {good: {at: 1}, dead: {at: 1}}, prefs: {out: true, check: true}}}};
+  const aRef = fakeUser(adb).collection('private').doc('alerts');
+  const alist = [{key: 'out|1|L|p1|Out', kind: 'out', title: 'A is out', body: 'b'}, {key: 'check|1|L|123', kind: 'check', title: 'Lineup check: L', body: 'c'}];
+  const sentN = await job.deliver(aRef, alist, {'out|1|L|p1|Out': 1, 'check|1|L|123': 1});
+  check(sentN === 2 && pushed.length === 2 && pushed[0].tokens.length === 2 && pushed[1].tokens.join() === 'good' &&
+    pushed[0].data.title === 'A is out' && pushed[0].data.url === '/app/', 'each alert goes to every device, and a device that stops accepting them is dropped');
+  check(Object.keys(adb.private.alerts.tokens).join() === 'good' && adb.private.alerts.sent['check|1|L|123'] === 1 && adb.private.alerts.prefs.out === true,
+    'what was sent is remembered, the dead device forgotten, and the rest kept');
+  check(await job.hasAlerts(fakeUser(adb)) && !(await job.hasAlerts(fakeUser({private: {}}))), 'who has alerts on is known');
+
   const pid = Object.keys(lg.players)[0], wasLocked = lg.players[pid].locked;
   db.history['1'].leagues['espn:99999901'].players[pid].rank = -7;
   await job.freezeForUser(fakeUser(db), account, ctx);

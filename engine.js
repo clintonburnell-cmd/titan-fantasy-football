@@ -1308,6 +1308,73 @@
     return {week: res.week, rows: rows, totals: T, skipped: skipped};
   }
 
+  /* ------------------------------------------------------------- alerts */
+
+  /* Game-day alerts from one person's analysed leagues (analyzeAll):
+     'out'    a starter whose game hasn't kicked off is ruled out (Out, Doubtful,
+              IR and the like), with the player Titan would start instead. Once
+              per player and tag each week.
+     'check'  45 to 80 minutes before a kickoff (inactives come out about 90
+              minutes before), a league still starting someone ruled out in that
+              game, someone on bye, or nobody in a spot. Once per league and
+              kickoff time.
+     opts: {week, now, kickoffs: [ms], kickAt(p) -> ms, sent: {key: 1},
+     want: {out, check}}. Returns [{key, kind, title, body}] not yet sent, and
+     marks them in `sent`. */
+  var CHECK_FROM = 45 * 60000, CHECK_TO = 80 * 60000;
+  function alertsFor(analysis, opts) {
+    opts = opts || {};
+    var sent = opts.sent || {}, want = opts.want || {out: true, check: true}, now = opts.now || Date.now();
+    var out = [];
+    var add = function (a) { if (!sent[a.key]) { sent[a.key] = 1; out.push(a); } };
+    // Who Titan would put in a starter's place: the player coming into his spot.
+    var instead = function (L, p) {
+      var m = L.moves.filter(function (x) { return x.out && x.out.id === p.id; })[0];
+      return m ? m.inn : null;
+    };
+    var windows = (opts.kickoffs || []).filter(function (k) { return k - now >= CHECK_FROM && k - now <= CHECK_TO; });
+    ((analysis && analysis.leagues) || []).forEach(function (L) {
+      var name = L.cfg.name || L.cfg.key, id = String(L.cfg.id);
+      if (want.out) {
+        L.rows.forEach(function (r) {
+          var p = r.p;
+          if (!p || p.locked || !p.outish) return;
+          var sub = instead(L, p);
+          add({key: ['out', opts.week, id, p.id, p.inj].join('|'), kind: 'out',
+            title: p.name + ' is ' + injWord(p.inj),
+            body: 'He\'s in your ' + name + ' lineup. ' + (sub ? 'Titan would start ' + sub.name + ' instead.' : 'Titan has nobody to start in his place.')});
+        });
+      }
+      if (!want.check) return;
+      windows.forEach(function (k) {
+        var problems = [], subs = [];
+        L.rows.forEach(function (r) {
+          var p = r.p;
+          if (!p) { problems.push('an empty ' + slotLabel(r.slot)); return; }
+          if (p.locked) return;
+          if (p.onBye) problems.push(p.name + ' (on bye)');
+          else if (p.outish && opts.kickAt && opts.kickAt(p) === k) problems.push(p.name + ' (' + p.inj + ')');
+          else return;
+          var sub = instead(L, p);
+          if (sub) subs.push(sub.name);
+        });
+        if (!problems.length) return;
+        add({key: ['check', opts.week, id, k].join('|'), kind: 'check',
+          title: 'Lineup check: ' + name,
+          body: 'Games start in about an hour. Still in your lineup: ' + andJoin(problems) + '.' +
+            (subs.length ? ' Titan would start ' + andJoin(subs) + '.' : '')});
+      });
+    });
+    return out;
+  }
+
+  function andJoin(a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
+
+  function injWord(tag) {
+    var t = String(tag || '').split(' ')[0];
+    return t === 'Out' ? 'out' : t === 'Doubtful' ? 'doubtful' : t === 'IR' ? 'on IR' : t === 'Sus' ? 'suspended' : 'ruled out (' + tag + ')';
+  }
+
   var api = {
     INJ_OUT: INJ_OUT, WIRE_GROUPS: WIRE_GROUPS, SLOT_POS: SLOT_POS,
     norm: norm, teamAbbr: teamAbbr, byeOf: byeOf, byesFromSchedule: byesFromSchedule, setByes: setByes,
@@ -1315,6 +1382,7 @@
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
+    alertsFor: alertsFor,
     gameStates: gameStates, weekProgress: weekProgress,
     rankKey: rankKey, rankLabel: rankLabel, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,

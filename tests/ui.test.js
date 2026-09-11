@@ -105,6 +105,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`document.querySelector('[data-action="espn-start"]').click(); true`);
   await sleep(500);
   check(/^Sleeper \| ESPN\* \| Yahoo Soon$/.test(await linkTabs()), 'Settings opens at Link more leagues?, ESPN tab: ' + await linkTabs());
+  check(await ev(`/Game-day alerts/.test(document.querySelector('#view').innerText) && /Sign in with Google above/.test(document.querySelector('#view').innerText)`),
+    'Settings offers game-day alerts, once signed in');
   await submit('espn-add', 'league', 'abc');
   await sleep(200);
   check(/league ID/.test(await text('.banner.stop')), 'junk input is explained');

@@ -98,6 +98,11 @@ website (such as alerts) to pass review.
 - **Live scores**, in each league's own scoring, come from Sleeper's matchups and ESPN's
   box scores. While games are on they update about every minute with Lineups open (every
   couple of minutes on Matchup, and ESPN's larger box scores every other minute).
+- **Game-day alerts** (signed-in people choose them per device in Settings): a starter ruled out,
+  with who Titan would start instead, and a lineup check 45 to 80 minutes before each kickoff (after
+  inactives) for starters ruled out or on bye and empty spots. `SCC.alertsFor` decides; the server
+  job sends them through Firebase Cloud Messaging every 15 minutes on game days, and at noon, 4 PM
+  and 8 PM Eastern on other days for players ruled out; `sw.js` shows them. Each alert goes out once.
 - **The week moves on Tuesday.** Once a week's games are over, the Tuesday after the last
   one (Eastern time) Titan shows the next week, even if Sleeper hasn't moved yet: scores
   clear and the upcoming projections show. A game still to be played holds the week.

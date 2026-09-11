@@ -4,7 +4,7 @@
  * time the app opens, with the cached copy as the offline fallback. Sleeper's
  * API is never touched here: live data always comes straight from Sleeper.
  */
-const CACHE = 'titan-v9';
+const CACHE = 'titan-v10';
 // The website (the root page) and the app (/app/), with everything the app loads.
 const SHELL = ['./', 'index.html', 'site.css', 'titan.svg', 'app/', 'app/index.html', 'styles.css', 'engine.js', 'demo.js', 'espn.js', 'sleeper.js',
   'syncplan.js', 'app.js', 'sync.js', 'icon.svg', 'icon-192.png', 'apple-touch-icon.png', 'manifest.webmanifest', 'privacy.html'];
@@ -26,6 +26,28 @@ self.addEventListener('activate', event => {
   event.waitUntil(caches.keys()
     .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
+});
+
+/* Game-day alerts, sent by Titan's server job through Firebase Cloud
+   Messaging: each message carries its title, text, the page to open and a
+   tag (a newer alert with the same tag replaces the old one). */
+self.addEventListener('push', event => {
+  let m = {};
+  try { m = event.data ? event.data.json() : {}; } catch (e) { /* not JSON: show a plain alert */ }
+  const d = m.data || m, n = m.notification || {};
+  event.waitUntil(self.registration.showNotification(n.title || d.title || 'Titan', {
+    body: n.body || d.body || '', icon: '/icon-192.png', badge: '/icon-192.png',
+    tag: d.tag || undefined, data: {url: d.url || '/app/'}
+  }));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || '/app/', self.location.origin).href;
+  event.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(list => {
+    const open = list.find(c => c.url.startsWith(self.location.origin + '/app'));
+    return open ? open.focus() : self.clients.openWindow(url);
+  }));
 });
 
 self.addEventListener('fetch', event => {
