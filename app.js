@@ -481,22 +481,27 @@
   /* Folding leagues on Lineups, Rosters and Matchup. Lineups and Rosters start
      open (the folded ones are remembered); Matchup starts folded to its headers
      (the open ones are remembered). */
-  const FOLD_KEY = {lineup: 'closedLineup', roster: 'closedRoster', match: 'openMatch'};
+  const FOLD_KEY = {lineup: 'closedLineup', roster: 'closedRoster', match: 'openMatch', score: 'openScore'};
+  const SHUT = {match: true, score: true}; // folded until opened (the others start open)
   function isOpen(kind, id) {
     const set = S.ui[FOLD_KEY[kind]] || {};
-    return kind === 'match' ? !!set[id] : !set[id];
+    return SHUT[kind] ? !!set[id] : !set[id];
   }
   function setFold(kind, id, open) {
     const set = Object.assign({}, S.ui[FOLD_KEY[kind]]);
-    if ((kind === 'match') === open) set[id] = 1;
+    if (!!SHUT[kind] === open) set[id] = 1;
     else delete set[id];
     S.ui[FOLD_KEY[kind]] = set;
     saveUi();
   }
+  // A Results row names its league by key; this finds the league (or stands in for a gone one).
+  const cfgByKey = key => (S.A && S.A.leagues.find(L => L.cfg.key === key) || {}).cfg || {id: key, key};
   function foldAll(kind, open) {
-    const ids = kind === 'match' ? (S.match.data || []).map(x => x.cfg.id) : S.A ? S.A.leagues.map(L => L.cfg.id) : [];
+    const ids = kind === 'match' ? (S.match.data || []).map(x => x.cfg.id)
+      : kind === 'score' ? (S.score.data ? S.score.data.rows : []).map(r => cfgByKey(r.key).id)
+      : S.A ? S.A.leagues.map(L => L.cfg.id) : [];
     const set = {};
-    if ((kind === 'match') === open) ids.forEach(id => { set[id] = 1; });
+    if (!!SHUT[kind] === open) ids.forEach(id => { set[id] = 1; });
     S.ui[FOLD_KEY[kind]] = set;
     saveUi();
     render();
@@ -1016,8 +1021,7 @@
     if (S.score.error) h += `<div class="banner swap">${esc(S.score.error)}</div>`;
     const D = S.score.data;
     // The leagues down the left side on a wide computer window, as on Lineups (Results has no chips).
-    const cfgOf = key => (S.A.leagues.find(L => L.cfg.key === key) || {}).cfg || {id: key, key};
-    jumpBar(D && D.rows.length ? D.rows.map(r => ({cfg: cfgOf(r.key)})) : S.A.leagues.map(L => ({cfg: L.cfg})), false);
+    jumpBar(D && D.rows.length ? D.rows.map(r => ({cfg: cfgByKey(r.key)})) : S.A.leagues.map(L => ({cfg: L.cfg})), false);
     if (!D) return h;
 
     const T = D.totals, gained = Math.round((T.byRank - T.actual) * 10) / 10;
@@ -1042,7 +1046,8 @@
       : gained < 0 ? `Your lineups beat your rankings by <b class="good">${fmt(-gained)}</b>.` : 'Your lineups matched your rankings.'}${
       T.ct ? ` Close calls right: ${T.cw} of ${T.ct}.` : ''}</p>`;
     if (D.skipped.length) h += `<p class="fine">Skipped: ${esc(D.skipped.join('; '))}</p>`;
-    h += D.rows.map(r => `<details class="card score" id="${anchor(cfgOf(r.key))}"><summary>
+    if (D.rows.length) h += foldTools('score');
+    h += D.rows.map(r => `<details class="card score" ${foldAttrs('score', cfgByKey(r.key))}><summary>
         <span class="sname">${esc(r.key)}</span>
         <span class="n"><small>Actual</small>${fmt(r.actual)}</span>
         <span class="n"><small>Projected</small>${r.projActual ? fmt(r.projActual) : 'None'}</span>

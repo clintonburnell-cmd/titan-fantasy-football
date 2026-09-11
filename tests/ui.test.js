@@ -233,6 +233,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`[...document.querySelectorAll('details.score .sname')].some(s => /Titan Test League/.test(s.innerText))`, 30000),
     'the Results tab scores the ESPN league');
   check(await ev(`document.querySelector('#tabs [data-tab="score"]').innerText === 'Results'`), 'the tab is called Results');
+  await ev(`document.querySelector('[data-action="fold-all"][data-kind="score"]').click(); true`);
+  const scoreOpen = await ev(`[...document.querySelectorAll('details.score')].every(d => d.open)`);
+  await ev(`document.querySelector('[data-action="fold-none"][data-kind="score"]').click(); true`);
+  check(scoreOpen && await ev(`[...document.querySelectorAll('details.score')].every(d => !d.open)`),
+    'Results has Expand all and Collapse all, like the other tabs');
 
   if (T.sleeperUser) {
     T.section('linking Sleeper as well');
