@@ -75,6 +75,12 @@ live site, so site changes reach it without a new upload. What's done and what's
   `/traded_picks`, rounds 1 to 4) at FantasyCalc's plain pick values; ESPN doesn't share pick trades. Sides add up plainly (FantasyCalc's
   values already count stars for more, so don't add a star bonus) plus FantasyCalc's roster-spot
   adjustment: a waiver pickup (`SCC.waiverValue`, about the 300th-best player) per spot freed.
+- Two themes: white and blue by default, and dark (`theme.js` sets `data-theme="dark"` on `<html>`,
+  remembered in localStorage `titan.theme`; a moon/sun button in the headers, and Appearance in
+  Settings). Every colour that differs between them is a token in both `:root` blocks of `styles.css`
+  (no raw colours for text or surfaces), and text meets WCAG 4.5:1 in both. Each page's `<head>` has
+  the early snippet that sets a saved dark theme before anything draws, plus `/theme.js`. Check new
+  screens in both themes.
 - Every league name shows `leagueIcon(cfg)`: the league's picture (`cfg.pic`: Sleeper's league avatar,
   or your team's logo in an ESPN league, kept through `slimLeague`) with a lettered site badge in the
   corner (not the sites' logos), or a plain football when there's no picture. Give Yahoo a `pic` too.

@@ -63,6 +63,9 @@ website (such as alerts) to pass review.
 
 ## Screens
 
+Titan is white and blue by default. A moon and sun button in the header (and Appearance in
+Settings) switches the app and the website to a dark theme, remembered on that device.
+
 The News tab shows ESPN's latest NFL stories, newest first, refreshing every couple of minutes while
 it's open. Stories about players on your rosters are marked "Your player", with a filter for just
 those, and each story opens on ESPN. With alerts on, Titan also sends "News about your starters":

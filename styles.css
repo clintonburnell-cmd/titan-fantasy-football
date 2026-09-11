@@ -1,29 +1,71 @@
 /* Titan Fantasy Football
-   One dark theme, built for a phone on game day. Position colours follow the
-   ones fantasy players already know from their league apps. */
+   White and blue by default, with a dark theme people can switch to (theme.js puts
+   data-theme="dark" on <html>). Every colour that differs between the two is a token
+   here, so check both themes when adding one. Text colours meet WCAG 4.5:1 on every
+   surface in both. Position colours follow the ones fantasy players already know
+   from their league apps. */
 
 :root {
+  --bg: #f3f6fc;
+  --surface: #ffffff;
+  --surface-2: #e9eff9;
+  --line: #d6dfed;
+  --text: #0e1a2f;
+  --muted: #4b5972;
+  --faint: #5d6a83; /* the lightest grey that still reads clearly on every surface (WCAG 4.5:1) */
+  --accent: #2456d6; /* dark enough for white button text (WCAG 4.5:1) */
+  --accent-2: #2456d6; /* links and highlights */
+  --accent-ink: #ffffff;
+  --swap: #a35c00; /* amber text and marks */
+  --swap-bg: #f5b942; /* amber pills, with --swap-ink text */
+  --swap-ink: #2b1c00;
+  --swap-soft: rgb(245 185 66 / .16);
+  --stop: #c8362c;
+  --stop-soft: rgb(226 87 76 / .10);
+  --ok: #11804d;
+  --ok-soft: rgb(76 199 144 / .14);
+  --bad: #c42f25; /* an injury tag in text */
+  --lock: #e2e8f2;
+  --lock-ink: #4b5972;
+  --top-bg: rgb(255 255 255 / .9); /* the sticky header, see-through */
+  --hover: rgb(20 50 110 / .04);
+  --shadow: 0 16px 40px rgb(20 40 80 / .16);
+  --drop: rgb(20 40 80 / .22);
+  --bar-opp: #b6c2d6;
+  --field-line: rgb(20 60 140 / .07);
+  --art-opacity: .12;
+  --pos-qb: #d0185a; --pos-rb: #087a6b; --pos-wr: #1f6fd1; --pos-te: #9c5a06; --pos-k: #8e35c9; --pos-def: #b24f2e;
+  --radius: 14px;
+  --gutter: 16px;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
   --bg: #0a0f1a;
   --surface: #121a29;
   --surface-2: #19233a;
   --line: #22304a;
   --text: #eaf0fb;
   --muted: #94a1b8;
-  --faint: #7f8ba3; /* the lightest grey that still reads clearly on every surface (WCAG 4.5:1) */
-  --accent: #3a67ea; /* dark enough for white button text (WCAG 4.5:1) */
+  --faint: #7f8ba3;
+  --accent: #3a67ea;
   --accent-2: #7aa0ff;
-  --accent-ink: #ffffff;
   --swap: #f5b942;
-  --swap-ink: #2b1c00;
   --swap-soft: rgb(245 185 66 / .11);
   --stop: #e2574c;
   --stop-soft: rgb(226 87 76 / .13);
   --ok: #4cc790;
   --ok-soft: rgb(76 199 144 / .11);
+  --bad: #ff8278;
   --lock: #34425a;
   --lock-ink: #cfd8e6;
-  --radius: 14px;
-  --gutter: 16px;
+  --top-bg: rgb(10 15 26 / .92);
+  --hover: rgb(255 255 255 / .03);
+  --shadow: 0 16px 40px rgb(0 0 0 / .45);
+  --drop: rgb(0 0 0 / .45);
+  --bar-opp: #5d6d8a;
+  --field-line: rgb(255 255 255 / .06);
+  --art-opacity: .16;
+  --pos-qb: #fc2b6d; --pos-rb: #20ceb8; --pos-wr: #59a7ff; --pos-te: #feae58; --pos-k: #c96cff; --pos-def: #e07a58;
   color-scheme: dark;
 }
 
@@ -51,7 +93,7 @@ main#view { min-height: 100vh; }
 
 .top {
   position: sticky; top: 0; z-index: 10;
-  background: rgb(10 15 26 / .92);
+  background: var(--top-bg);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
   padding-top: env(safe-area-inset-top);
@@ -90,6 +132,18 @@ main#view { min-height: 100vh; }
 .refresh.spin svg { animation: spin .9s linear infinite; }
 .refresh:disabled { opacity: .75; cursor: progress; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* The light/dark switch (theme.js): a moon in the light theme, a sun in the dark one.
+   On a phone the app's header has no room, so it's in Settings there. */
+.theme-btn {
+  display: inline-grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; cursor: pointer;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+}
+.theme-btn:hover { color: var(--text); border-color: var(--accent-2); }
+.theme-btn svg { width: 18px; height: 18px; }
+.theme-btn .i-sun, :root[data-theme="dark"] .theme-btn .i-moon { display: none; }
+:root[data-theme="dark"] .theme-btn .i-sun { display: block; }
+@media (max-width: 480px) { .top .theme-btn { display: none; } }
 
 .tabs-in { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-block: 0 8px; }
 .tabs-in::-webkit-scrollbar { display: none; }
@@ -135,7 +189,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 
 /* Rows light up under the pointer (mice and trackpads only). */
 @media (hover: hover) {
-  .lineup .row:hover, .roster .row:hover, .rtable tbody tr:not(.rdiv):hover td { box-shadow: inset 0 0 0 999px rgb(255 255 255 / .03); }
+  .lineup .row:hover, .roster .row:hover, .rtable tbody tr:not(.rdiv):hover td { box-shadow: inset 0 0 0 999px var(--hover); }
 }
 
 /* Rosters as tables (computers). */
@@ -161,7 +215,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .acct-btn img, .acct-btn .avatar { width: 28px; height: 28px; border-radius: 50%; flex: none; }
 .acct-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acct-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 220px; padding: 6px; display: grid;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 40px rgb(0 0 0 / .45); }
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
 .acct-menu p { color: var(--muted); font-size: .78rem; padding: 6px 10px 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px;
   overflow: hidden; text-overflow: ellipsis; }
 .acct-menu button { text-align: left; border: 0; background: none; color: var(--text); padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: .88rem; }
@@ -177,14 +231,20 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .progress {
     max-width: 1100px; padding-inline: 24px; margin-inline: auto;
   }
-  html:not(.in-app) .top-in { padding-block: 16px 4px; }
-  html:not(.in-app) .brand h1 { font-size: 1.14rem; }
+  /* A taller header: more room, a bigger logo and title, taller menu links. */
+  html:not(.in-app) .top-in { padding-block: 22px 8px; }
+  html:not(.in-app) .brand { gap: 12px; }
+  html:not(.in-app) .brand img { width: 42px; height: 42px; }
+  html:not(.in-app) .brand h1 { font-size: 1.28rem; }
+  html:not(.in-app) .brand p { font-size: .84rem; }
   html:not(.in-app) .tabs-in { gap: 28px; padding-block: 0; }
-  html:not(.in-app) .tabs button { padding: 12px 0 13px; border-radius: 0; font-size: .93rem; border-bottom: 2px solid transparent; }
+  html:not(.in-app) .tabs button { padding: 15px 0 16px; border-radius: 0; font-size: .97rem; border-bottom: 2px solid transparent; }
   html:not(.in-app) .tabs button:hover { background: none; }
   html:not(.in-app) .tabs button[aria-current="page"] { background: none; color: var(--text); border-bottom-color: var(--accent-2); }
   html:not(.in-app) main.wrap { gap: 16px; padding-block: 24px 48px; }
   html:not(.in-app) .lede { max-width: 72ch; }
+  /* A league jumped to stops below the taller header. */
+  html:not(.in-app) .card.league, html:not(.in-app) .roster-card, html:not(.in-app) .card.match, html:not(.in-app) .card.score { scroll-margin-top: 10.25rem; }
   /* Room to spare: league chips wrap onto more lines instead of scrolling off the edge, and
      league names in card headers wrap instead of trailing off. */
   html:not(.in-app) .jump { flex-wrap: wrap; overflow: visible; }
@@ -216,7 +276,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .progress { max-width: 1280px; }
   html:not(.in-app) .with-side { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; align-items: start; }
   html:not(.in-app) .side-main { display: grid; gap: 16px; align-content: start; min-width: 0; }
-  html:not(.in-app) .side { position: sticky; top: 130px; max-height: calc(100vh - 150px); overflow-y: auto; display: grid; gap: 2px; scrollbar-width: thin; }
+  html:not(.in-app) .side { position: sticky; top: 158px; max-height: calc(100vh - 178px); overflow-y: auto; display: grid; gap: 2px; scrollbar-width: thin; }
 }
 .side-h { font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 2px 12px 8px; }
 .side-link { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; cursor: pointer;
@@ -237,7 +297,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   html:not(.in-app) body.app-page::before {
     content: ""; position: fixed; right: 2vw; bottom: 0; z-index: 0; pointer-events: none;
     width: min(40vw, 460px); height: min(86vh, 820px);
-    background: url(/titan.svg) no-repeat right bottom / contain; opacity: .16;
+    background: url(/titan.svg) no-repeat right bottom / contain; opacity: var(--art-opacity);
   }
   html:not(.in-app) body.app-page main#view, html:not(.in-app) body.app-page .foot { position: relative; z-index: 1; }
 }
@@ -266,7 +326,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 
 .pill { flex: none; font-size: .72rem; font-weight: 800; letter-spacing: .03em; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
 .p-ok { background: var(--ok-soft); color: var(--ok); }
-.p-swap { background: var(--swap); color: var(--swap-ink); }
+.p-swap { background: var(--swap-bg); color: var(--swap-ink); }
 .p-stop { background: var(--stop); color: #fff; }
 
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
@@ -304,7 +364,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .muted { color: var(--muted); }
 .amber { color: var(--swap); }
 .good { color: var(--ok); }
-.bad-text { color: #ff8278; }
+.bad-text { color: var(--bad); }
 .sync-welcome { text-align: center; }
 .empty { text-align: center; padding: 56px 16px; color: var(--muted); }
 .empty h2 { color: var(--text); font-size: 1.1rem; margin-bottom: 6px; }
@@ -334,7 +394,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .who b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who small { display: block; color: var(--muted); font-size: .78rem; }
 .who .warn { color: var(--swap); }
-.who .bad { color: #ff8278; font-weight: 600; }
+.who .bad { color: var(--bad); font-weight: 600; }
 .right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .rank { font-weight: 700; font-size: .9rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rank small { color: var(--muted); font-weight: 600; font-size: .72rem; margin-left: 5px; }
@@ -342,7 +402,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .verdict { font-size: .64rem; font-weight: 800; letter-spacing: .05em; padding: 3px 7px; border-radius: 6px; white-space: nowrap; }
 .v-ok { color: var(--faint); padding-inline: 0; }
 .v-unranked { color: var(--muted); background: var(--surface-2); }
-.v-swap { background: var(--swap); color: var(--swap-ink); }
+.v-swap { background: var(--swap-bg); color: var(--swap-ink); }
 .v-stop { background: var(--stop); color: #fff; }
 .v-locked { background: var(--lock); color: var(--lock-ink); }
 .r-swap { background: var(--swap-soft); }
@@ -356,7 +416,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .move .slot { grid-row: span 2; align-self: center; }
 .mv em { font-style: normal; color: var(--muted); font-size: .8rem; }
 .mv::before { display: inline-block; width: 2.9rem; font-size: .68rem; font-weight: 800; letter-spacing: .05em; }
-.mv.out::before { content: "OUT"; color: #ff8278; }
+.mv.out::before { content: "OUT"; color: var(--bad); }
 .mv.in::before { content: "IN"; color: var(--ok); }
 .mv.in { font-weight: 600; }
 .mv.to::before { content: "MOVE"; color: var(--swap); }
@@ -372,7 +432,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 
 .note { padding: 8px 14px; border-top: 1px solid var(--line); font-size: .82rem; color: var(--muted); }
 .note.wire b { color: var(--accent-2); }
-.note.hurt, .note.hurt b { color: #ff8278; }
+.note.hurt, .note.hurt b { color: var(--bad); }
 
 /* --------------------------------------------------------------- exposure */
 
@@ -530,7 +590,7 @@ details.match > summary::-webkit-details-marker { display: none; }
 .wbar { display: flex; height: 7px; border-radius: 999px; overflow: hidden; background: var(--line); gap: 2px; }
 .wbar i { display: block; height: 100%; }
 .wbar .wme { background: var(--ok); }
-.wbar .wopp { background: #5d6d8a; }
+.wbar .wopp { background: var(--bar-opp); }
 
 /* The News tab: ESPN's latest stories, the ones about your players marked. */
 .news-list { list-style: none; margin: 0; padding: 0; }
@@ -629,12 +689,12 @@ details.match > summary::-webkit-details-marker { display: none; }
 .lsite.s-yahoo { background: #6001d2; }
 .licon.xs { width: 18px; height: 18px; margin-right: 6px; }
 .licon.xs .lini { font-size: .48rem; }
-.slot[data-pos="QB"] { color: #fc2b6d; }
-.slot[data-pos="RB"] { color: #20ceb8; }
-.slot[data-pos="WR"] { color: #59a7ff; }
-.slot[data-pos="TE"] { color: #feae58; }
-.slot[data-pos="K"] { color: #c96cff; }
-.slot[data-pos="DEF"] { color: #e07a58; }
+.slot[data-pos="QB"] { color: var(--pos-qb); }
+.slot[data-pos="RB"] { color: var(--pos-rb); }
+.slot[data-pos="WR"] { color: var(--pos-wr); }
+.slot[data-pos="TE"] { color: var(--pos-te); }
+.slot[data-pos="K"] { color: var(--pos-k); }
+.slot[data-pos="DEF"] { color: var(--pos-def); }
 .mpts-col { display: grid; justify-items: end; font-variant-numeric: tabular-nums; }
 .mpts-col.opp { justify-items: start; }
 .mpts-col b { font-size: .98rem; font-weight: 800; }
@@ -686,7 +746,7 @@ details.match > summary::-webkit-details-marker { display: none; }
   position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%);
   max-width: calc(100% - 32px); background: var(--text); color: var(--bg);
   padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: .88rem;
-  box-shadow: 0 8px 30px rgb(0 0 0 / .4); z-index: 20;
+  box-shadow: var(--shadow); z-index: 20;
 }
 
 @media (max-width: 400px) {

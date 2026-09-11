@@ -13,7 +13,12 @@
   <meta property="og:url" content="https://titanfantasyfootball.com/guides/import-fantasy-rankings.html">
   <meta property="og:image" content="https://titanfantasyfootball.com/og-image.jpg">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="theme-color" content="#0a0f1a">
+  <meta name="theme-color" content="#f3f6fc">
+  <script>
+    // White and blue by default; dark when chosen on this device (theme.js), set before anything draws.
+    try { if (localStorage.getItem('titan.theme') === 'dark') { document.documentElement.dataset.theme = 'dark'; document.querySelector('meta[name="theme-color"]').content = '#0a0f1a'; } } catch (e) {}
+  </script>
+  <script src="/theme.js" defer></script>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/styles.css">
@@ -28,6 +33,7 @@
         <a href="/guides/sleeper-start-sit.html">Sleeper</a>
         <a href="/guides/espn-private-league.html">ESPN</a>
       </nav>
+      <button type="button" class="theme-btn" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" fill="currentColor"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       <a class="btn site-cta" href="/app/">Open Titan</a>
     </div>
   </header>

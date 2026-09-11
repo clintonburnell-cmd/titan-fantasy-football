@@ -6,7 +6,12 @@
   <title>Terms of Use · Titan Fantasy Football Manager</title>
   <link rel="canonical" href="https://titanfantasyfootball.com/terms.html">
   <meta name="description" content="The terms for using Titan Fantasy Football Manager: a free tool whose lineup calls are suggestions, not guarantees.">
-  <meta name="theme-color" content="#0a0f1a">
+  <meta name="theme-color" content="#f3f6fc">
+  <script>
+    // White and blue by default; dark when chosen on this device (theme.js), set before anything draws.
+    try { if (localStorage.getItem('titan.theme') === 'dark') { document.documentElement.dataset.theme = 'dark'; document.querySelector('meta[name="theme-color"]').content = '#0a0f1a'; } } catch (e) {}
+  </script>
+  <script src="/theme.js" defer></script>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
   <style>

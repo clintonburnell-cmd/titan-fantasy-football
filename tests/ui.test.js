@@ -356,6 +356,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     `a computer gets the website look: a menu with the section underlined, one league per row (${desk.width}px), a three-column footer, the Titan beside the page, the tip jar in the footer`);
   check(await waitFor(`!document.getElementById('acct').hidden && getComputedStyle(document.getElementById('acct')).display === 'block' &&
     /Sign in/.test(document.getElementById('acct').innerText)`, 20000), 'the header offers Sign in at the top right');
+  // Themes: white and blue by default; the header switch turns on dark mode, remembered on the device.
+  const bodyBg = () => ev(`getComputedStyle(document.body).backgroundColor`);
+  check(await ev(`!document.documentElement.dataset.theme`) && /243, 246, 252/.test(await bodyBg()), 'white and blue by default: ' + await bodyBg());
+  await ev(`document.querySelector('.top [data-theme-toggle]').click(); true`);
+  check(await ev(`document.documentElement.dataset.theme === 'dark' && localStorage.getItem('titan.theme') === 'dark' &&
+    document.querySelector('meta[name="theme-color"]').content === '#0a0f1a'`) && /10, 15, 26/.test(await bodyBg()), 'the header switch turns on dark mode: ' + await bodyBg());
+  await send('Page.reload');
+  await sleep(500);
+  check(await waitFor(`document.readyState === 'complete' && document.querySelectorAll('.card.league').length > 0`, 30000) &&
+    await ev(`document.documentElement.dataset.theme === 'dark'`), 'dark mode stays after a reload');
+  await ev(`document.querySelector('.top [data-theme-toggle]').click(); true`);
+  check(await ev(`!document.documentElement.dataset.theme && !localStorage.getItem('titan.theme')`) && /243, 246, 252/.test(await bodyBg()), 'and switches back to white and blue');
   // The league sidebar: one link per card, left of the cards, sticky, and no chips.
   const sideOk = `(() => { const s = document.querySelector('.with-side > .side'), cards = document.querySelectorAll('.side-main [id^="lg-"]');
     if (!s || !cards.length) return false;

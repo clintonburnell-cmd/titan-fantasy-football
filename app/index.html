@@ -12,7 +12,12 @@
     }
   </script>
   <meta name="description" content="One place to manage every Sleeper and ESPN league you play. Import your own rankings and get start/sit calls, swaps and waiver upgrades based on them.">
-  <meta name="theme-color" content="#0a0f1a">
+  <meta name="theme-color" content="#f3f6fc">
+  <script>
+    // White and blue by default; dark when chosen on this device (theme.js), set before anything draws.
+    try { if (localStorage.getItem('titan.theme') === 'dark') { document.documentElement.dataset.theme = 'dark'; document.querySelector('meta[name="theme-color"]').content = '#0a0f1a'; } } catch (e) {}
+  </script>
+  <script src="/theme.js" defer></script>
   <!-- The website (/) is what search engines should list, not the app. -->
   <meta name="robots" content="noindex">
   <meta name="mobile-web-app-capable" content="yes">
@@ -35,6 +40,7 @@
       <a class="tip" data-tip href="https://ko-fi.com/titandev" target="_blank" rel="noopener">
         <span class="tip-cup" aria-hidden="true">☕</span><span class="tip-text"><b>Like my work?</b> <span>Consider a tip!</span></span>
       </a>
+      <button type="button" class="theme-btn" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" fill="currentColor"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       <button id="refresh" class="refresh" type="button" aria-label="Refresh from Sleeper" hidden>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Refresh</span>
@@ -51,8 +57,8 @@
         <button type="button" data-tab="byes">Byes</button>
         <button type="button" data-tab="score">Results</button>
         <button type="button" data-tab="news">News</button>
-        <button type="button" data-tab="ranks">Rankings</button>
         <button type="button" data-tab="trade">Trade</button>
+        <button type="button" data-tab="ranks">Rankings</button>
         <button type="button" data-tab="settings">Settings</button>
       </div>
     </nav>

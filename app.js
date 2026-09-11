@@ -19,7 +19,7 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'matchup', 'rosters', 'exposure', 'byes', 'score', 'news', 'ranks', 'trade', 'settings'];
+  const TABS = ['lineups', 'matchup', 'rosters', 'exposure', 'byes', 'score', 'news', 'trade', 'ranks', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', rosters: 'Rosters', exposure: 'Exposure', byes: 'Byes',
     score: 'Results', news: 'News', ranks: 'Rankings', trade: 'Trade', settings: 'Settings'};
@@ -401,7 +401,8 @@
     return `<section class="card pad"><h3>You're trying the demo</h3>
       <p class="help">Its two leagues are samples built from Sleeper's real player list and this week's projections. Nothing
         here is linked to an account, and nothing you do here changes one. Rankings you import stay in the demo.</p>
-      <div class="bar"><a class="btn" href="/app/">Link your own leagues</a><a class="btn ghost" href="/?home">About Titan</a></div></section>`;
+      <div class="bar"><a class="btn" href="/app/">Link your own leagues</a><a class="btn ghost" href="/?home">About Titan</a></div></section>
+      ${appearanceCard()}`;
   }
 
   /* ---- Welcome / link account */
@@ -541,7 +542,7 @@
     let cur = links[0];
     for (const b of links) {
       const card = document.getElementById(b.dataset.jump);
-      if (card && !card.hidden && card.getBoundingClientRect().top <= 160) cur = b;
+      if (card && !card.hidden && card.getBoundingClientRect().top <= 180) cur = b;
     }
     links.forEach(b => { b.classList.toggle('on', b === cur); b.setAttribute('aria-current', b === cur ? 'location' : 'false'); });
   }
@@ -1501,7 +1502,7 @@
             autocorrect="off" spellcheck="false" value="${esc(S.link.name || '')}" ${S.link.busy ? 'disabled' : ''}></label>
           <button class="btn" type="submit" ${S.link.busy ? 'disabled' : ''}>${S.link.busy ? 'Finding you…' : 'Link Sleeper'}</button></form>
         ${S.link.error ? `<div class="banner stop">${esc(S.link.error)}</div>` : ''}`;
-    let h = `<section class="card pad" data-sync-slot="settings">${syncSettings()}</section>${alertsCard()}${S.owner.is ? ownerCard() : ''}
+    let h = `<section class="card pad" data-sync-slot="settings">${syncSettings()}</section>${alertsCard()}${appearanceCard()}${S.owner.is ? ownerCard() : ''}
       <section class="card pad" id="link-leagues">${linkLeagues(sleeper)}</section>
       <section class="card pad"><h3>Leagues</h3>
         <p class="fine">Your Sleeper leagues are found automatically and your ESPN leagues are the ones you added, each with its own lineup format. Switch off any you don't want Titan to manage.</p>
@@ -1563,6 +1564,15 @@
 
   function pushWeek(w) {
     if (S.sync.api && S.sync.user) S.sync.api.pushWeek(w, S.ranks.weeks[w] || null);
+  }
+
+  // White and blue (the default) or dark, remembered on this device (theme.js handles the chips).
+  function appearanceCard() {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    return `<section class="card pad"><h3>Appearance</h3><p class="fine">White and blue, or dark. Remembered on this device. On a computer,
+      the moon and sun button at the top switches it too.</p>
+      <div class="chips" role="group" aria-label="Theme"><button type="button" class="chip" data-theme-set="light" aria-pressed="${!dark}">Light</button>
+        <button type="button" class="chip" data-theme-set="dark" aria-pressed="${dark}">Dark</button></div></section>`;
   }
 
   /* Game-day alerts, chosen per device by signed-in people. The server job
@@ -2131,6 +2141,8 @@
   const relayout = () => { if (['lineups', 'matchup', 'rosters', 'score'].includes(S.ui.tab)) render(); };
   if (WIDE && WIDE.addEventListener) WIDE.addEventListener('change', relayout);
   if (SIDE && SIDE.addEventListener) SIDE.addEventListener('change', relayout);
+  // The Appearance card shows which theme is on (theme.js tells us when it changes).
+  document.addEventListener('titan-theme', () => { if (S.ui.tab === 'settings') render(); });
   if (IN_PLAY_APP) document.querySelectorAll('[data-tip]').forEach(el => { el.hidden = true; });
   analyze();
   render();

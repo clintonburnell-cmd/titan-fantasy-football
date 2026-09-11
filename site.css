@@ -10,12 +10,12 @@ html { scroll-behavior: smooth; }
 
 .site-top {
   position: sticky; top: 0; z-index: 10;
-  background: rgb(10 15 26 / .88);
+  background: var(--top-bg);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
   padding-top: env(safe-area-inset-top);
 }
-.site-top .site-in { display: flex; align-items: center; gap: 22px; padding-block: 12px; }
+.site-top .site-in { display: flex; align-items: center; gap: 22px; padding-block: 16px; }
 .site-brand { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--text); text-decoration: none; }
 .site-brand b { font-weight: 800; letter-spacing: -.01em; white-space: nowrap; }
 .site-nav { display: flex; gap: 24px; margin-left: auto; }
@@ -45,7 +45,7 @@ html { scroll-behavior: smooth; }
 .hero::after {
   content: ""; position: absolute; left: -10%; right: -10%; bottom: -30px; height: 220px; pointer-events: none;
   background:
-    repeating-linear-gradient(90deg, rgb(255 255 255 / .06) 0 2px, transparent 2px 110px),
+    repeating-linear-gradient(90deg, var(--field-line) 0 2px, transparent 2px 110px),
     linear-gradient(to top, rgb(76 199 144 / .12), transparent);
   transform: perspective(300px) rotateX(58deg); transform-origin: bottom;
   -webkit-mask-image: linear-gradient(to top, #000 25%, transparent);
@@ -57,7 +57,7 @@ html { scroll-behavior: smooth; }
 }
 .hero-in > div:first-child { padding-bottom: 64px; }
 .hero-art { align-self: end; display: flex; justify-content: center; }
-.hero-art img { display: block; width: min(100%, 380px); height: auto; filter: drop-shadow(0 24px 40px rgb(0 0 0 / .45)); }
+.hero-art img { display: block; width: min(100%, 380px); height: auto; filter: drop-shadow(0 24px 40px var(--drop)); }
 .site-in.split { margin-top: 0; }
 .eyebrow { color: var(--ok); font-size: .78rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; margin-bottom: 14px; }
 .hero h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); line-height: 1.07; letter-spacing: -.028em; font-weight: 850; }
@@ -66,7 +66,7 @@ html { scroll-behavior: smooth; }
 .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 14px; }
 .ctas .btn.big { width: auto; padding-inline: 22px; }
 .hero .fine, .cta-band .fine { color: var(--faint); font-size: .84rem; }
-.demo { box-shadow: 0 30px 80px rgb(0 0 0 / .45); border-radius: var(--radius); }
+.demo { box-shadow: 0 30px 80px var(--drop); border-radius: var(--radius); }
 .demo .card { pointer-events: none; }
 .demo-label { color: var(--faint); font-size: .74rem; text-align: right; margin-top: 10px; }
 @media (max-width: 900px) {
