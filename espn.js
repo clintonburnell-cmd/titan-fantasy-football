@@ -212,13 +212,16 @@
       unmatched: unmatched, espnPoints: espnPoints};
   }
 
-  /* One team's points so far this week (ESPN player ids), from the week's box
-     scores: much lighter than reading the whole league again. If ESPN's
-     week filter finds no matchup (a two-week playoff matchup), it asks again
+  /* The week's box scores, read for one team: 'points' gives that team's points
+     so far (ESPN player ids), 'matchup' its head-to-head (both lineups, with
+     team names). Much lighter than reading the whole league again. If ESPN's
+     week filter finds nothing (a two-week playoff matchup), it asks again
      without it. Private leagues go through Titan's server, like fetchLeague. */
-  async function fetchPoints(id, season, week, teamId, opts) {
+  async function readBoxscore(id, season, week, teamId, kind, opts) {
     opts = opts || {};
-    var url = BASE + season + '/segments/0/leagues/' + id + '?view=mBoxscore&scoringPeriodId=' + week;
+    var pick = kind === 'matchup' ? matchupFrom : pointsFromBoxscore;
+    var url = BASE + season + '/segments/0/leagues/' + id + '?view=mBoxscore' + (kind === 'matchup' ? '&view=mTeam' : '') +
+      '&scoringPeriodId=' + week;
     var browser = typeof window !== 'undefined';
     var filtered = {'x-fantasy-filter': JSON.stringify({schedule: {filterMatchupPeriodIds: {value: [Number(week)]}}})};
     var status = 0;
@@ -229,17 +232,66 @@
         var res = await fetch(url, browser ? {cache: 'no-store', credentials: 'omit', headers: headers} : {headers: headers});
         status = res.status;
         if (!res.ok) break;
-        var pts = pointsFromBoxscore(await res.json(), teamId);
-        if (pts) return pts;
+        var got = pick(await res.json(), teamId);
+        if (got) return got;
       } catch (e) {
+        // The week filter is a custom header, which needs ESPN's OK first; if
+        // that fails, the plain request (no custom header) is tried next.
         status = 0;
+        if (i === 0) continue;
         break;
       }
     }
     if (browser && transport && (status === 401 || status === 0)) {
-      return transport({leagueId: String(id), season: String(season), week: Number(week), kind: 'points', teamId: Number(teamId)});
+      return transport({leagueId: String(id), season: String(season), week: Number(week), kind: kind, teamId: Number(teamId)});
     }
     return null;
+  }
+
+  function fetchPoints(id, season, week, teamId, opts) { return readBoxscore(id, season, week, teamId, 'points', opts); }
+
+  /* This week's head-to-head for one team: {me, opp}, each {teamId, name,
+     players: [{espnId, name, pos, team, slot, start, pts}]}, or null when the
+     team has no matchup this week. */
+  function fetchMatchup(id, season, week, teamId, opts) { return readBoxscore(id, season, week, teamId, 'matchup', opts); }
+
+  function matchupFrom(json, teamId) {
+    var names = {}, recs = {}, found = null;
+    teamsOf(json).forEach(function (t) { names[t.id] = t.name; });
+    (json.teams || []).forEach(function (t) {
+      var o = t.record && t.record.overall;
+      if (o) recs[t.id] = (o.wins || 0) + '-' + (o.losses || 0) + (o.ties ? '-' + o.ties : '');
+    });
+    (json.schedule || []).forEach(function (m) {
+      if (found || !m.home || !m.away) return; // a bye has no away side
+      var mine = Number(m.home.teamId) === Number(teamId) ? m.home : Number(m.away.teamId) === Number(teamId) ? m.away : null;
+      if (mine) found = {me: boxSide(mine, names, recs), opp: boxSide(mine === m.home ? m.away : m.home, names, recs)};
+    });
+    return found;
+  }
+
+  function boxSide(side, names, recs) {
+    var players = ((side.rosterForCurrentScoringPeriod || {}).entries || []).map(function (e) {
+      var pe = e.playerPoolEntry || {}, pl = pe.player || {};
+      var pos = POS[pl.defaultPositionId] || '?', team = SCC.teamAbbr(TEAM[pl.proTeamId] || '');
+      var slot = SLOT[e.lineupSlotId] || '';
+      return {espnId: e.playerId, name: pos === 'DEF' ? team + ' D/ST' : cleanName(pl.fullName) || ('ESPN player ' + e.playerId),
+        pos: pos, team: team, slot: slot, start: !!slot && slot !== 'BN' && slot !== 'IR', pts: Number(pe.appliedStatTotal) || 0};
+    });
+    return {teamId: side.teamId, name: names[side.teamId] || ('Team ' + side.teamId), record: (recs || {})[side.teamId] || '', players: players};
+  }
+
+  /* Sleeper ids (and Sleeper's spelling of names) for ESPN players, so
+     projections and rankings find them. */
+  function toSleeper(list, players) {
+    players = players || {};
+    var idx = indexPlayers(players);
+    (list || []).forEach(function (p) {
+      var sid = matchSleeper(idx, players, p.name, p.pos, p.team);
+      p.id = sid || ('espn:' + p.espnId);
+      if (sid && p.pos !== 'DEF') p.name = players[sid][0];
+    });
+    return list;
   }
 
   /* Kickoff times for every NFL game of the season, from ESPN's public NFL
@@ -311,6 +363,7 @@
     fetchLeague: fetchLeague, setTransport: setTransport, parseLeagueId: parseLeagueId, normSwid: normSwid,
     leagueCfg: leagueCfg, teamsOf: teamsOf, ownedTeam: ownedTeam, buildLeague: buildLeague, slimLeague: slimLeague,
     fetchPoints: fetchPoints, pointsFromBoxscore: pointsFromBoxscore, fetchKickoffs: fetchKickoffs, kickoffsFrom: kickoffsFrom,
+    fetchMatchup: fetchMatchup, matchupFrom: matchupFrom, toSleeper: toSleeper,
     SLOT: SLOT, POS: POS, TEAM: TEAM
   };
 

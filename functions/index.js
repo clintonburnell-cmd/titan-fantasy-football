@@ -129,13 +129,15 @@ exports.freezeCalls = onSchedule({
 exports.espnLeague = onCall({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 30}, async req => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
   const {leagueId, season, week, kind, teamId} = req.data || {};
-  const points = kind === 'points';
+  const points = kind === 'points', matchup = kind === 'matchup';
   if (!/^\d{1,12}$/.test(String(leagueId)) || !/^\d{4}$/.test(String(season)) || (week !== undefined && !/^\d{1,2}$/.test(String(week))) ||
-      (points && (!/^\d{1,2}$/.test(String(week)) || !/^\d{1,3}$/.test(String(teamId))))) {
+      ((points || matchup) && (!/^\d{1,2}$/.test(String(week)) || !/^\d{1,3}$/.test(String(teamId))))) {
     throw new HttpsError('invalid-argument', 'Not an ESPN league.');
   }
   const login = (await db.doc(`users/${req.auth.uid}/private/espn`).get()).data();
   if (!login || !login.s2) throw new HttpsError('failed-precondition', 'No ESPN login saved.');
+  // This week's head-to-head: both lineups (null when there's no matchup).
+  if (matchup) return ESPN.fetchMatchup(String(leagueId), String(season), Number(week), Number(teamId), {creds: login});
   // Live scores: one team's points so far this week.
   if (points) {
     const pts = await ESPN.fetchPoints(String(leagueId), String(season), Number(week), Number(teamId), {creds: login});

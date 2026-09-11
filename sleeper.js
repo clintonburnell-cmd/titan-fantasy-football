@@ -360,6 +360,73 @@
     return n;
   }
 
+  /* This week's head-to-head in every league: your lineup and your opponent's,
+     spot by spot, with points so far and both team names. Sleeper: the week's
+     matchups, the rosters (who owns which) and the league's members. ESPN: the
+     week's box score. Locks, kickoff times and projections are added by the app. */
+  async function collectMatchups(snap) {
+    var players = await loadPlayers();
+    return Promise.all(snap.leagues.map(function (d) {
+      var lg = d.cfg;
+      var job = lg.platform === 'espn'
+        ? ESPN.fetchMatchup(lg.espnId, snap.season, snap.week, lg.teamId).then(function (m) {
+            return m ? {cfg: lg, me: espnSide(lg, m.me, players), opp: espnSide(lg, m.opp, players)} : {cfg: lg, none: true};
+          })
+        : sleeperLeagueMatchup(lg, d.rosterId, snap.week, players);
+      return job.catch(function (e) { return {cfg: lg, error: (e && e.message) || String(e)}; });
+    }));
+  }
+
+  async function sleeperLeagueMatchup(lg, rosterId, week, players) {
+    var r = await Promise.all(['/matchups/' + week, '/rosters', '/users'].map(function (p) { return getJson(API + '/league/' + lg.id + p); }));
+    // Opponents' players Titan hasn't met yet are looked up by id.
+    var missing = missingIds((r[0] || []).map(function (m) { return m.starters; }), players);
+    if (missing.length) await resolveMissing(missing, players);
+    return sleeperMatchup(lg, rosterId, r[0], r[1], r[2], players);
+  }
+
+  /* One Sleeper league's matchup from its matchups, rosters and members. Each
+     side's starters come in lineup order (Sleeper's `starters` follows it). */
+  function sleeperMatchup(lg, rosterId, matchups, rosters, users, players) {
+    var ms = matchups || [];
+    var me = ms.filter(function (m) { return m.roster_id === rosterId; })[0];
+    var opp = me && me.matchup_id !== null && me.matchup_id !== undefined
+      ? ms.filter(function (m) { return m.matchup_id === me.matchup_id && m.roster_id !== rosterId; })[0] : null;
+    if (!me || !opp) return {cfg: lg, none: true};
+    var owner = {}, who = {}, pic = {}, rec = {};
+    (rosters || []).forEach(function (r) {
+      var s = r.settings || {};
+      owner[r.roster_id] = r.owner_id;
+      rec[r.roster_id] = (s.wins || 0) + '-' + (s.losses || 0) + (s.ties ? '-' + s.ties : '');
+    });
+    (users || []).forEach(function (u) {
+      who[u.user_id] = (u.metadata && u.metadata.team_name) || u.display_name || '';
+      pic[u.user_id] = u.avatar || '';
+    });
+    var side = function (m) {
+      return {name: who[owner[m.roster_id]] || ('Team ' + m.roster_id), avatar: pic[owner[m.roster_id]] || '', record: rec[m.roster_id] || '',
+        players: lg.lineup.map(function (slot, i) {
+        var id = (m.starters || [])[i];
+        if (!id || id === '0') return {slot: slot, empty: true};
+        var info = SCC.playerInfo(players, id);
+        return {id: String(id), name: info.name, pos: info.pos, team: info.team, slot: slot, pts: Number((m.players_points || {})[id]) || 0};
+      })};
+    };
+    return {cfg: lg, me: side(me), opp: side(opp)};
+  }
+
+  // An ESPN side in lineup order, with Sleeper ids for projections.
+  function espnSide(lg, s, players) {
+    ESPN.toSleeper(s.players, players);
+    var used = {};
+    return {name: s.name, avatar: '', record: s.record || '', players: lg.lineup.map(function (slot) {
+      for (var i = 0; i < s.players.length; i++) {
+        if (!used[i] && s.players[i].start && s.players[i].slot === slot) { used[i] = 1; return s.players[i]; }
+      }
+      return {slot: slot, empty: true};
+    })};
+  }
+
   /* Fresh scores for a week in progress, without a full refresh: the game
      clock, then each league's points. Updates `snap` in place. `withEspn`
      false skips ESPN's larger box scores this time. */
@@ -422,6 +489,7 @@
   var api = {
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
     collect: collect, collectScores: collectScores, livePoints: livePoints,
+    collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
     fetchProjections: fetchProjections, PLAYERS_KEY: PLAYERS_KEY
   };

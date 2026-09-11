@@ -13,7 +13,7 @@
   const store = API.store;
   const KEY = {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'rosters', 'exposure', 'byes', 'score', 'news', 'ranks', 'settings'];
+  const TABS = ['lineups', 'matchup', 'rosters', 'exposure', 'byes', 'score', 'news', 'ranks', 'settings'];
   const AVATAR = 'https://sleepercdn.com/avatars/thumbs/';
   // News-only accounts on the News tab. X doesn't let apps read posts without a
   // paid plan, so each one opens on X.
@@ -68,6 +68,7 @@
     link: {busy: false, error: ''},
     sync: {ready: false, api: null, user: null, state: 'off', error: '', at: 0},
     espn: {busy: false, error: '', pick: null, login: null, openLogin: false}, // adding ESPN leagues
+    match: {busy: false, data: null, error: '', at: 0, week: 0}, // this week's matchups, loaded on the Matchup tab
     proj: {}, // Sleeper's projections for the snapshot's week
     view: {week: 0, pos: 'QB'} // the saved rankings open on the Rankings tab
   };
@@ -165,6 +166,7 @@
       analyze();
       render();
       scheduleLive();
+      if (S.ui.tab === 'matchup' && S.snap) loadMatchups(true);
     }
   }
 
@@ -192,15 +194,21 @@
     clearTimeout(liveTimer);
     if (!gameDay()) return;
     liveTimer = setTimeout(async () => {
-      if (document.visibilityState === 'visible' && S.ui.tab === 'lineups' && !S.busy && S.snap) {
+      const tab = S.ui.tab;
+      if (document.visibilityState === 'visible' && (tab === 'lineups' || tab === 'matchup') && !S.busy && S.snap) {
         try {
-          await API.livePoints(S.snap, gamesLive() && liveTick++ % 2 === 0);
+          // Every minute: the game clock and your points (ESPN's box score every
+          // other minute). On Matchup, both lineups reload every other minute.
+          const second = gamesLive() && liveTick % 2 === 0;
+          await API.livePoints(S.snap, tab === 'lineups' && second);
           store.set(KEY.snap, S.snap);
           analyze();
-          if (S.ui.tab === 'lineups' && !S.busy) render();
+          if (tab === 'matchup' && second) await loadMatchups(true);
+          else if (S.ui.tab === tab && !S.busy) render();
         } catch (e) {
           // The next tick tries again.
         }
+        liveTick++;
       }
       scheduleLive();
     }, 60000);
@@ -442,14 +450,24 @@
   const scored = p => p.locked && typeof p.pts === 'number';
   const playDay = ymd => new Date(ymd + 'T12:00:00Z').toLocaleDateString('en-US', {weekday: 'short', timeZone: 'UTC'});
 
-  // When a player's game kicks off this week, in the viewer's own time zone ("Sun 1:00 PM").
+  // When a team plays this week, in the viewer's own time zone ("Sun 1:00 PM"):
+  // ESPN's kickoff time, else the day from Sleeper's schedule, else "Bye".
+  function teamKick(team) {
+    if (!S.snap) return '';
+    const t = SCC.teamAbbr(team), games = S.snap.games || {};
+    const k = S.snap.kickoffs && S.snap.kickoffs[t];
+    if (k) {
+      const d = new Date(k[0]), day = d.toLocaleDateString([], {weekday: 'short'});
+      return k[1] ? day + ', time TBD' : day + ' ' + d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+    }
+    if (games[t] && games[t].kick) return playDay(games[t].kick);
+    return t && Object.keys(games).length ? 'Bye' : '';
+  }
+
   function kickText(p) {
     if (!S.snap) return '';
     if (p.bye && Number(p.bye) === Number(S.snap.week)) return 'Bye';
-    const k = S.snap.kickoffs && S.snap.kickoffs[SCC.teamAbbr(p.team)];
-    if (!k) return p.kick ? playDay(p.kick) : '';
-    const d = new Date(k[0]), day = d.toLocaleDateString([], {weekday: 'short'});
-    return k[1] ? day + ', time TBD' : day + ' ' + d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+    return teamKick(p.team) || (p.kick ? playDay(p.kick) : '');
   }
 
   // The player's name with his kickoff beside it; a long name shortens, the time never does.
@@ -488,6 +506,102 @@
           <span class="right"><a class="btn small" href="https://x.com/${esc(a.handle)}" target="_blank" rel="noopener">Open on X</a></span>
         </li>`).join('')}</ul>
       <p class="fine">X doesn't let apps show posts without a paid plan, so each account opens in the X app or on x.com.</p>`;
+  }
+
+  /* ---- Matchup */
+
+  async function loadMatchups(quiet) {
+    if (!S.snap || S.match.busy) return;
+    S.match.busy = true;
+    if (!quiet && S.ui.tab === 'matchup') render();
+    try {
+      const data = await API.collectMatchups(S.snap);
+      S.match = {busy: false, data, error: '', at: Date.now(), week: S.snap.week};
+    } catch (e) {
+      Object.assign(S.match, {busy: false, error: 'Could not load this week\'s matchups: ' + (e && e.message ? e.message : e)});
+    }
+    if (S.ui.tab === 'matchup') render();
+  }
+
+  // A player's game this week: 'pre', 'in_game' or 'complete' (or nothing on a bye).
+  const gameOf = team => ((S.snap && S.snap.games) || {})[SCC.teamAbbr(team)] || null;
+
+  // Points so far (players whose game has started) and projection, for one side's starters.
+  function sideTotals(side, cfg) {
+    let pts = 0, proj = 0, live = false, done = true, started = false;
+    side.players.forEach(p => {
+      if (!p || p.empty) return;
+      const g = gameOf(p.team);
+      if (g && g.state !== 'pre') { pts += p.pts || 0; started = true; }
+      if (g && g.state === 'in_game') live = true;
+      if (g && g.state !== 'complete') done = false;
+      proj += SCC.projFor(S.proj, p.id, cfg.ppr) || 0;
+    });
+    return {pts, proj, live, done: done && started, started};
+  }
+
+  // Laid out like Sleeper's matchup: headshots, short names ("J. Allen"), points toward the middle.
+  const HEADSHOT = 'https://sleepercdn.com/content/nfl/players/thumb/';
+  const LOGO = 'https://sleepercdn.com/images/team_logos/nfl/';
+  const initials = name => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  const shortName = p => {
+    const parts = String(p.name || '').split(' ');
+    return p.pos === 'DEF' || parts.length < 2 ? p.name : parts[0][0] + '. ' + parts.slice(1).join(' ');
+  };
+
+  function playerPhoto(p) {
+    const src = p.pos === 'DEF' ? LOGO + String(p.team || '').toLowerCase() + '.png'
+      : /^\d+$/.test(String(p.id || '')) ? HEADSHOT + p.id + '.jpg' : '';
+    return src ? `<img class="mphoto" src="${esc(src)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<span class="mphoto"></span>';
+  }
+
+  function matchInfo(p, side) {
+    if (!p || p.empty) return `<div class="minfo ${side}"><span class="mphoto"></span><div class="mtext"><b class="muted">Empty</b></div></div>`;
+    const g = gameOf(p.team);
+    const when = g && g.state !== 'pre'
+      ? `<span class="mstate${g.state === 'in_game' ? ' live' : ''}">${g.state === 'in_game' ? 'LIVE' : 'FINAL'}</span>`
+      : `<em class="kick">${esc(teamKick(p.team))}</em>`;
+    return `<div class="minfo ${side}">${playerPhoto(p)}<div class="mtext"><b>${esc(shortName(p))}</b>
+      <small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}</small><small>${when}</small></div></div>`;
+  }
+
+  // Points once his game starts (grey 0.0 before), his projection underneath.
+  function matchPts(p, cfg, side) {
+    if (!p || p.empty) return `<div class="mpts-col ${side}"></div>`;
+    const g = gameOf(p.team), started = g && g.state !== 'pre', proj = SCC.projFor(S.proj, p.id, cfg.ppr);
+    return `<div class="mpts-col ${side}"><b${started ? '' : ' class="muted"'}>${fmt(started ? p.pts : 0)}</b>${proj !== null ? `<small>${fmt(proj)}</small>` : ''}</div>`;
+  }
+
+  function matchCard(m) {
+    const head = `<header class="card-h"><div><h3>${esc(m.cfg.key)}</h3><p>${esc(SCC.describeLeague(m.cfg))}</p></div></header>`;
+    if (m.error) return `<article class="card league">${head}<p class="note">Couldn't load this matchup: ${esc(m.error)}</p></article>`;
+    if (m.none) return `<article class="card league">${head}<p class="note">No matchup this week.</p></article>`;
+    const a = sideTotals(m.me, m.cfg), b = sideTotals(m.opp, m.cfg);
+    const status = a.live || b.live ? '<span class="vs live">LIVE</span>' : a.done && b.done ? '<span class="vs">FINAL</span>' : '<span class="vs">VS</span>';
+    const lead = (x, y) => (x.started || y.started) && x.pts > y.pts ? ' lead' : '';
+    const pic = s => (s.avatar ? avatar(s.avatar, 36)
+      : `<span class="avatar blank initials" style="width:36px;height:36px">${esc(initials(s.name))}</span>`);
+    const team = (s, cls) => `<div class="bside ${cls}">${pic(s)}<div class="sinfo"><b class="bname">${esc(s.name)}</b><small>${esc(s.record || '')}</small></div></div>`;
+    const score = (t, o, cls) => `<div class="bscore ${cls}${lead(t, o)}"><span class="btotal">${fmt(t.pts)}</span><small>${fmt(t.proj)}</small></div>`;
+    const rows = m.cfg.lineup.map((slot, i) => `<li class="mrow">${matchInfo(m.me.players[i], 'me')}${matchPts(m.me.players[i], m.cfg, 'me')}
+      <span class="mslot">${esc(slotName(slot))}</span>${matchPts(m.opp.players[i], m.cfg, 'opp')}${matchInfo(m.opp.players[i], 'opp')}</li>`).join('');
+    return `<article class="card league match">${head}
+      <div class="board">${team(m.me, 'me')}${score(a, b, 'me')}${status}${score(b, a, 'opp')}${team(m.opp, 'opp')}</div>
+      <ol class="mlist">${rows}</ol></article>`;
+  }
+
+  function screenMatchup() {
+    if (!S.snap) return emptyState();
+    const M = S.match;
+    let h = `<div class="bar match-bar"><p class="lede">Your lineup against this week's opponent in every league, as both are set right now.</p>
+      <button class="btn ghost small" data-action="matchups" ${M.busy ? 'disabled' : ''}>${M.busy ? 'Loading…' : 'Reload'}</button></div>`;
+    if (gamesLive()) {
+      h += `<p class="fine live-note">Games are on: scores update every couple of minutes while Matchup is open${M.at ? ` (last ${esc(when(M.at))})` : ''}.</p>`;
+    }
+    if (M.error) h += `<div class="banner stop">${esc(M.error)}</div>`;
+    if (!M.data) return h + (M.busy ? '<div class="empty-note">Loading this week\'s matchups…</div>' : '');
+    if (!M.data.length) return h + '<div class="empty-note">No leagues to show.</div>';
+    return h + M.data.map(matchCard).join('') + (Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper.</p>' : '');
   }
 
   /* ---- Rosters */
@@ -1121,7 +1235,7 @@
   };
 
   const SCREENS = {
-    lineups: screenLineups, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
+    lineups: screenLineups, matchup: screenMatchup, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
     score: screenScore, ranks: screenRanks, settings: screenSettings
   };
 
@@ -1134,6 +1248,7 @@
     render();
     window.scrollTo(0, 0);
     if (tab === 'score' && S.snap && !S.score.data && !S.score.busy && !S.score.error) loadScore(S.score.week || S.snap.week);
+    if (tab === 'matchup' && S.snap && (!S.match.data || S.match.week !== S.snap.week)) loadMatchups();
   }
 
   $('tabs').addEventListener('click', e => {
@@ -1161,6 +1276,7 @@
     const a = t.dataset.action;
     if (a === 'score') loadScore(S.score.week || S.snap.week);
     else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
+    else if (a === 'matchups') loadMatchups();
     else if (a === 'espn-start') startEspnOnly();
     else if (a === 'espn-team') pickEspnTeam(t.dataset.team);
     else if (a === 'espn-cancel') { S.espn.pick = null; render(); }

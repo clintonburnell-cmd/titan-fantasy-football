@@ -19,6 +19,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
   const {league: L1} = await T.espnLeagues();
+  const BOX = JSON.stringify(T.espnBoxscore(L1));
   const server = http.createServer((req, res) => {
     const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     const f = path.join(T.ROOT, u === '/' ? 'index.html' : u);
@@ -52,9 +53,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     if (m.method === 'Fetch.requestPaused') {
       const url = m.params.request.url;
       const headers = [{name: 'access-control-allow-origin', value: ORIGIN}, {name: 'content-type', value: 'application/json'}];
+      // The browser's CORS check before a request with ESPN's week-filter header.
+      if (m.params.request.method === 'OPTIONS') {
+        send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: 204, body: '', responseHeaders: [
+          {name: 'access-control-allow-origin', value: ORIGIN}, {name: 'access-control-allow-headers', value: 'x-fantasy-filter'},
+          {name: 'access-control-allow-methods', value: 'GET'}]});
+        return;
+      }
       const ok = url.includes('/leagues/' + L1.id);
+      const body = !ok ? '{}' : /mBoxscore/.test(url) ? BOX : JSON.stringify(L1);
       send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: ok ? 200 : 401, responseHeaders: headers,
-        body: Buffer.from(ok ? JSON.stringify(L1) : '{}').toString('base64')});
+        body: Buffer.from(body).toString('base64')});
     }
   });
   const ev = async x => (await send('Runtime.evaluate', {expression: x, awaitPromise: true, returnByValue: true})).result?.result?.value;
@@ -104,6 +113,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(games.length === 4 && ['starters locked', 'starters yet to play', 'bench locked', 'bench yet to play'].every(l => games.some(t => t.endsWith(l))),
     'game tiles: ' + games.join(' | '));
   check(count('starters locked') + count('starters yet to play') <= 9, 'starter counts fit the lineup');
+  await tab('matchup');
+  check(await waitFor(`!!document.querySelector('.match .board')`, 30000), 'the Matchup tab loads');
+  const mu = await ev(`({board: ((document.querySelector('.match .board') || {}).innerText || (document.querySelector('.card.league') || {}).innerText || '').replace(/\\n/g, ' '),
+    rows: document.querySelectorAll('.match .mrow').length,
+    opp: [...document.querySelectorAll('.match .minfo.opp b')].map(b => b.innerText).filter(Boolean).length,
+    tabs: [...document.querySelectorAll('#tabs [data-tab]')].map(b => b.innerText).slice(0, 3).join(' | ')})`);
+  check(/Team 1/.test(mu.board) && /Team 2/.test(mu.board) && mu.rows === 9 && mu.opp === 9, `scoreboard (${mu.board}) and both lineups, 9 spots each`);
+  check(mu.tabs === 'Lineups | Matchup | Rosters', 'the Matchup tab sits between Lineups and Rosters');
   await tab('byes');
   check(await ev(`!!document.querySelector('table.byes')`), 'the Byes table renders');
   await tab('score');

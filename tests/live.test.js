@@ -45,6 +45,12 @@ if (!T.sleeperUser) {
   const n = await API.livePoints(snap, true);
   check(typeof n === 'number' && !!snap.pointsAt, `a live score update ran (${n} players with points)`);
 
+  section('matchups');
+  const mus = await API.collectMatchups(snap);
+  const full = mus.filter(x => x.me && x.opp && x.opp.players.length === x.cfg.lineup.length);
+  check(mus.length === snap.leagues.length && full.length + mus.filter(x => x.none).length === mus.length && !mus.some(x => x.error),
+    `this week's matchups: ${full.length} with both lineups, ${mus.filter(x => x.none).length} with none`);
+
   section('projections, kickoff record, Weeks');
   const proj = await API.fetchProjections(snap.season, snap.week);
   check(Object.keys(proj).length > 300, `${Object.keys(proj).length} projections for week ${snap.week}`);

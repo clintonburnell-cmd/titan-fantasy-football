@@ -107,6 +107,16 @@ async function espnLeagues() {
   return {season, league: build(false), superflex: build(true)};
 }
 
+/* A week's box score for a test league: team 1 plays team 2, 3 plays 4, and so
+   on, each side's roster as set, with ESPN's team names. */
+function espnBoxscore(league) {
+  const side = t => ({teamId: t.id, totalPoints: 0, rosterForCurrentScoringPeriod: {entries: t.roster.entries}});
+  const schedule = [];
+  for (let i = 0; i + 1 < league.teams.length; i += 2) schedule.push({matchupPeriodId: 1, home: side(league.teams[i]), away: side(league.teams[i + 1])});
+  return {id: league.id, scoringPeriodId: 1, schedule, members: league.members,
+    teams: league.teams.map(t => ({id: t.id, location: t.location, nickname: t.nickname, owners: t.owners}))};
+}
+
 /* Answers ESPN league requests from the given test leagues ({id: json, or 401,
    or a function (url, opts) returning a Response}). Any other ESPN league id
    throws, so a test can never read a real person's league. Returns an undo. */
@@ -126,6 +136,6 @@ function stubEspn(leagues) {
 
 module.exports = {
   ROOT, FIXTURES, check, section, skip, done, crash, app, cached, nflState,
-  sleeperPlayers, sampleRanks, espnLeagues, stubEspn,
+  sleeperPlayers, sampleRanks, espnLeagues, espnBoxscore, stubEspn,
   sleeperUser: process.env.TITAN_SLEEPER_USER || ''
 };
