@@ -51,7 +51,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   `sw.js` shows them. Keep each alert's key (`kind|week|league|…`) stable, or people get repeats.
 - Wide browser windows (900px and up) get the website look from the "website look" block in
   `styles.css`: a menu-style header, a centred 1100px page with one league per row (the owner prefers
-  that to two across, and centred to set left), league chips that wrap, a footer row, and from 1200px the faded Titan art fixed to the right. It's scoped
+  that to two across, and centred to set left), league chips that wrap, a footer row, from 1100px a 1280px page where Lineups,
+  Matchup and Rosters list their leagues down a sticky left side (`jumpBar` hands them to `sideNav`,
+  and the chips hide; the filters stay on top), and from 1200px the faded Titan art fixed to the right. It's scoped
   to `html:not(.in-app)`, so phones, the Android app and home-screen copies keep the app look.
   Check new screens at 390px and at 1280px. On computers Rosters draws tables (`rosterTable`,
   when `wide()`); keep `data-find` on every row so the player search still works.

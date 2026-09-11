@@ -209,6 +209,27 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   /* Expand all and Collapse all, quieter. */
   html:not(.in-app) .match-tools .link { font-size: .8rem; color: var(--muted); }
 }
+/* Wider still: the page grows to 1280px and Lineups, Matchup and Rosters list
+   their leagues down the left side, like Sleeper's website (sideNav in app.js).
+   The list stays in view below the sticky header; filters stay above the cards. */
+@media (min-width: 1100px) {
+  html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .progress { max-width: 1280px; }
+  html:not(.in-app) .with-side { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; align-items: start; }
+  html:not(.in-app) .side-main { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  html:not(.in-app) .side { position: sticky; top: 130px; max-height: calc(100vh - 150px); overflow-y: auto; display: grid; gap: 2px; scrollbar-width: thin; }
+}
+.side-h { font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 2px 12px 8px; }
+.side-link { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; cursor: pointer;
+  font: inherit; font-size: .86rem; font-weight: 600; line-height: 1.3; color: var(--muted);
+  background: none; border: 0; border-left: 2px solid transparent; border-radius: 0 8px 8px 0; padding: 8px 12px; }
+.side-link span { display: grid; gap: 1px; min-width: 0; }
+.side-link small { font-size: .7rem; font-weight: 500; color: var(--faint); }
+.side-link:hover { color: var(--text); background: var(--surface); }
+.side-link.on { color: var(--text); background: var(--surface); border-left-color: var(--accent-2); }
+.side-link .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--swap); }
+.side-link .dot.off { visibility: hidden; }
+.side-link[hidden] { display: none; }
+
 /* Titan's banner art, faded and fixed off to the right, where a wide window
    has room beside the page. The cards stay solid in front of it. */
 @media (min-width: 1200px) {
@@ -474,7 +495,7 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
   padding: 6px 12px; font: inherit; font-size: .8rem; font-weight: 600; }
 .jump-chip:hover { border-color: var(--accent); }
 .jump-chip .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--swap); margin-right: 6px; vertical-align: middle; }
-.card.league, .roster-card { scroll-margin-top: 8.5rem; }
+.card.league, .roster-card, .card.match { scroll-margin-top: 8.5rem; }
 /* The Rosters search hides rows and leagues in place. */
 .row[hidden], .card[hidden], .jump-chip[hidden], .empty-note[hidden], .fine[hidden], .rdiv[hidden] { display: none !important; }
 /* Rosters, like Sleeper's: starters by spot, then Bench and Reserve sections. */

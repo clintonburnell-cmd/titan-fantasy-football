@@ -65,6 +65,10 @@
   // A wide browser window (the website look); Rosters draws tables there.
   const WIDE = window.matchMedia ? window.matchMedia('(min-width: 900px)') : null;
   const wide = () => !!(WIDE && WIDE.matches) && !(IN_PLAY_APP || STANDALONE);
+  // Wider still: Lineups, Matchup and Rosters list their leagues down the left side (sideNav).
+  const SIDE = window.matchMedia ? window.matchMedia('(min-width: 1100px)') : null;
+  const side = () => !!(SIDE && SIDE.matches) && !(IN_PLAY_APP || STANDALONE);
+  let sideItems = null; // the leagues a screen hands to the sidebar while it's drawn
   const IOS_HINT_KEY = 'titan.iosHint.v1';
   const SHARE_ICON = '<svg class="share-ico" viewBox="0 0 24 24" aria-label="Share"><path d="M12 3v12M8 7l4-4 4 4" fill="none" ' +
     'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 10H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12' +
@@ -329,8 +333,12 @@
     view.dataset.tab = S.account ? S.ui.tab : 'welcome'; // lets wide screens lay out each screen
     if (!S.account) { document.title = 'Titan Fantasy Football Manager'; view.innerHTML = iosHint() + screenWelcome(); return; }
     const err = S.error ? `<div class="banner stop">${esc(S.error)}</div>` : '';
-    view.innerHTML = `<h2 class="sr-only">${TAB_NAMES[S.ui.tab]}</h2>` + iosHint() + demoBanner() + err + SCREENS[S.ui.tab]();
+    sideItems = null;
+    const body = `<h2 class="sr-only">${TAB_NAMES[S.ui.tab]}</h2>` + iosHint() + demoBanner() + err + SCREENS[S.ui.tab]();
+    // On a wide computer window Lineups, Matchup and Rosters put their leagues down the left side.
+    view.innerHTML = sideItems ? `<div class="with-side">${sideNav(sideItems)}<div class="side-main">${body}</div></div>` : body;
     if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
+    spySide();
     syncUrl(false);
   }
 
@@ -497,12 +505,38 @@
     <button class="link" data-action="fold-none" data-kind="${kind}">Collapse all</button></div>`;
   const foldAttrs = (kind, cfg) => `id="${anchor(cfg)}" data-fold="${kind}" data-id="${esc(cfg.id)}"${isOpen(kind, cfg.id) ? ' open' : ''}`;
 
-  // Quick navigation: chips that jump to a league's card further down the page.
+  // Quick navigation to a league's card further down the page: chips above the
+  // leagues, or on a wide computer window a list down the left side (sideNav,
+  // drawn by render). chips=false gives the sidebar only.
   const anchor = cfg => 'lg-' + String(cfg.id).replace(/[^\w-]/g, '_');
-  function jumpBar(items) {
+  function jumpBar(items, chips = true) {
+    if (side()) { sideItems = items; return ''; }
+    if (!chips || items.length < 2) return '';
     return `<nav class="jump" aria-label="Jump to a league">${items.map(x => `<button type="button" class="jump-chip" data-jump="${anchor(x.cfg)}">${
       x.flag ? '<i class="dot" title="Needs action"></i>' : ''}${esc(x.cfg.key)}</button>`).join('')}</nav>`;
   }
+  function sideNav(items) {
+    // When some leagues have a needs-action dot, the others keep an empty slot so the names line up.
+    const dots = items.some(x => x.flag);
+    return `<nav class="side" aria-label="Your leagues"><p class="side-h">${plural(items.length, 'league')}</p>${items.map(x =>
+      `<button type="button" class="side-link" data-jump="${anchor(x.cfg)}">${x.flag ? '<i class="dot" title="Needs action"></i>'
+        : dots ? '<i class="dot off" aria-hidden="true"></i>' : ''}<span>${
+        esc(x.cfg.key)}<small>${siteName(x.cfg)}</small></span></button>`).join('')}</nav>`;
+  }
+  // The sidebar marks the league at the top of the window as the page scrolls.
+  let spyQueued = false;
+  function spySide() {
+    spyQueued = false;
+    const links = [...view.querySelectorAll('.side [data-jump]')].filter(b => !b.hidden);
+    if (!links.length) return;
+    let cur = links[0];
+    for (const b of links) {
+      const card = document.getElementById(b.dataset.jump);
+      if (card && !card.hidden && card.getBoundingClientRect().top <= 160) cur = b;
+    }
+    links.forEach(b => { b.classList.toggle('on', b === cur); b.setAttribute('aria-current', b === cur ? 'location' : 'false'); });
+  }
+  window.addEventListener('scroll', () => { if (!spyQueued) { spyQueued = true; requestAnimationFrame(spySide); } }, {passive: true});
 
   function screenLineups() {
     if (!S.snap) return emptyState();
@@ -530,7 +564,7 @@
     h += `<div class="chips" role="group" aria-label="Filter leagues">${filters
       .filter(f => f.id === 'all' || f.id === 'action' || f.n > 0 || f.id === pickF.id)
       .map(f => `<button class="chip" data-filter="${f.id}" aria-pressed="${f.id === pickF.id}">${esc(f.label)} ${f.n}</button>`).join('')}</div>`;
-    if (list.length > 1) h += jumpBar(list.map(L => ({cfg: L.cfg, flag: !!needsAction(L)})));
+    if (list.length) h += jumpBar(list.map(L => ({cfg: L.cfg, flag: !!needsAction(L)})));
     if (list.length) h += foldTools('lineup');
     if (!A.leagues.length) {
       h += `<div class="empty-note">No leagues to show. ${S.snap.available && S.snap.available.length
@@ -792,6 +826,8 @@
     if (gamesLive()) {
       h += `<p class="fine live-note">Games are on: scores update every couple of minutes while Matchup is open${M.at ? ` (last ${esc(when(M.at))})` : ''}.</p>`;
     }
+    // The leagues down the left side on a wide computer window (Matchup has no chips).
+    jumpBar((M.data && M.data.length ? M.data : S.A.leagues).map(x => ({cfg: x.cfg})), false);
     if (M.error) h += `<div class="banner stop">${esc(M.error)}</div>`;
     if (!M.data) return h + (M.busy ? '<div class="empty-note">Loading this week\'s matchups…</div>' : '');
     if (!M.data.length) return h + '<div class="empty-note">No leagues to show.</div>';
@@ -813,7 +849,7 @@
       ${leagues.map(L => `<option ${L.cfg.key === pick ? 'selected' : ''}>${esc(L.cfg.key)}</option>`).join('')}
     </select></label></div>
     <p class="fine" data-find-count hidden></p>`;
-    if (shown.length > 1) h += jumpBar(shown.map(L => ({cfg: L.cfg})));
+    if (shown.length) h += jumpBar(shown.map(L => ({cfg: L.cfg})));
     if (shown.length) h += foldTools('roster');
     h += '<p class="empty-note" data-find-none hidden>No player on your rosters matches that.</p>';
     h += '<div class="league-grid">' + shown.map(L => {
@@ -899,7 +935,8 @@
       count.hidden = !q || !rows;
       count.textContent = rows ? `${plural(rows, 'match', 'matches')} in ${plural(hits.size, 'league')}` : '';
     }
-    view.querySelectorAll('.jump [data-jump]').forEach(b => { b.hidden = !!q && !hits.has(b.dataset.jump); });
+    view.querySelectorAll('.jump [data-jump], .side [data-jump]').forEach(b => { b.hidden = !!q && !hits.has(b.dataset.jump); });
+    spySide();
   }
 
   /* ---- Exposure */
@@ -1824,8 +1861,11 @@
     s.src = '/sync.js';
     document.body.appendChild(s);
   }
-  // Rosters switch between tables and the phone list as the window crosses the website-look width.
-  if (WIDE && WIDE.addEventListener) WIDE.addEventListener('change', () => { if (S.ui.tab === 'rosters') render(); });
+  // Rosters switch between tables and the phone list as the window crosses the website-look width,
+  // and Lineups, Matchup and Rosters gain or lose the league sidebar at 1100px.
+  const relayout = () => { if (['lineups', 'matchup', 'rosters'].includes(S.ui.tab)) render(); };
+  if (WIDE && WIDE.addEventListener) WIDE.addEventListener('change', relayout);
+  if (SIDE && SIDE.addEventListener) SIDE.addEventListener('change', relayout);
   if (IN_PLAY_APP) document.querySelectorAll('[data-tip]').forEach(el => { el.hidden = true; });
   analyze();
   render();

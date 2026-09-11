@@ -298,9 +298,25 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     `a computer gets the website look: a menu with the section underlined, one league per row (${desk.width}px), a three-column footer, the Titan beside the page, the tip jar in the footer`);
   check(await waitFor(`!document.getElementById('acct').hidden && getComputedStyle(document.getElementById('acct')).display === 'block' &&
     /Sign in/.test(document.getElementById('acct').innerText)`, 20000), 'the header offers Sign in at the top right');
+  // The league sidebar: one link per card, left of the cards, sticky, and no chips.
+  const sideOk = `(() => { const s = document.querySelector('.with-side > .side'), cards = document.querySelectorAll('.side-main [id^="lg-"]');
+    if (!s || !cards.length) return false;
+    return s.querySelectorAll('[data-jump]').length === cards.length && !document.querySelector('.jump') &&
+      s.getBoundingClientRect().right < cards[0].getBoundingClientRect().left && getComputedStyle(s).position === 'sticky'; })()`;
+  check(await waitFor(sideOk, 5000), 'Lineups list the leagues down the left side, beside the cards, with the filters still on top');
+  if (await ev(`document.querySelectorAll('.side [data-jump]').length > 1`)) {
+    await ev(`document.querySelectorAll('.side [data-jump]')[1].click(); true`);
+    check(await waitFor(`document.querySelectorAll('.side [data-jump]')[1].classList.contains('on')`, 4000),
+      'a league in the sidebar takes you to its card and stays marked');
+  }
+  await ev('scrollTo(0, 0); true');
   await tab('rosters');
   check(await waitFor(`document.querySelectorAll('.rtable').length > 0 && document.querySelector('.rtable thead tr').children.length >= 7`, 5000),
     'Rosters show as tables on a computer');
+  check(await waitFor(sideOk, 5000), 'Rosters list the leagues down the left side too');
+  await send('Emulation.setDeviceMetricsOverride', {width: 1000, height: 900, deviceScaleFactor: 1, mobile: false});
+  await sleep(500);
+  check(await ev(`!document.querySelector('.side')`), 'a narrower computer window (1000px) drops the sidebar');
   check(await ev(`(() => { const j = document.querySelector('.jump'); if (!j) return true; const r = j.getBoundingClientRect().right;
     return getComputedStyle(j).flexWrap === 'wrap' && [...j.querySelectorAll('.jump-chip')].every(c => c.getBoundingClientRect().right <= r + 1 && c.scrollWidth <= c.clientWidth + 1); })()`),
     'the league chips wrap onto more lines instead of running off the edge');
