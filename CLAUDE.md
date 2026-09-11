@@ -43,6 +43,9 @@ live site, so site changes reach it without a new upload. What's done and what's
 - Folding (Lineups, Rosters, Matchup) goes through `isOpen`, `setFold` and `foldAll` in
   `app.js`, keyed by `FOLD_KEY`. Only a person's tap on a header is saved (`tapped`); code
   that opens or closes a league (the Rosters search, jump chips) must not save it.
+- A new rankings format: study the person's file locally, then test with a few made-up rows in
+  the same format (see The Hall's test in `tests/engine.test.js`). Never commit a ranking
+  site's actual file; many are paid. Name known sources in `parseRanks`'s `source`.
 - Rosters follow Sleeper's order: `L.rows` for starters, then the bench by `POS_ORDER`,
   then Reserve (IR and taxi, `heldAs`). Keep new roster views in that order.
 - Show new ESPN or Yahoo features only once they work; don't promise them in the app or the listing.

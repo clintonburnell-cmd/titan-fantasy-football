@@ -57,7 +57,7 @@ website (such as alerts) to pass review.
 | Byes | How many of your players are off each week, per league |
 | Results | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points (Sleeper leagues; ESPN scoring is next) |
 | News | News-only X accounts (@UnderdogNFL), each opening on X. X doesn't let apps read posts without a paid plan |
-| Rankings | Import and manage weekly rankings |
+| Rankings | Import weekly rankings (your own CSV or a sheet paste, Late-Round, FantasyPros, The Hall) and view any saved week by position |
 | Settings | Linked Sleeper account, ESPN leagues and login, which leagues Titan manages, refresh log |
 
 ## Rules worth knowing
@@ -212,3 +212,4 @@ No build step and no dependencies. It runs on any static host.
 | `v1.2.0` | Weeks tab (weeks 1 to 18, calls and projections frozen at kickoff by the server job), saved-rankings viewer, projections on Lineups, bye-week needs per league, ESPN leagues (public and private), and Link more leagues in Settings |
 | `v1.3.0` | Matchup tab like Sleeper's (collapsible leagues, scores and a chance-to-win bar, both lineups); live and final scores; the Tuesday week switch; kickoff times; headshots and team logos; game-status tiles; league jump chips and a Rosters player search; players whose game has started left alone; Weeks renamed Results; tests in the repo and CLAUDE.md |
 | `v1.4.0` | Lineups filters by problem (lineup changes, empty spots, out or doubtful, questionable, on bye, unranked starters, wire upgrades) and an ON BYE call for starters on bye; Rosters in Sleeper's order (starters by spot, bench by position, IR and taxi under Reserve); fold and unfold leagues on Lineups and Rosters, with Expand all and Collapse all everywhere |
+| `v1.5.0` | The Hall's weekly rankings import (one overall list; its misspelled position column, @ matchups and LVR read correctly; IDP rows skipped), with the source named in the import message |
