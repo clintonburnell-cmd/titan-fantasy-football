@@ -1483,6 +1483,46 @@
     return out;
   }
 
+  /* The players whose news people want to hear about: everyone in their lineups, each
+     with the leagues he starts in (n is the name as norm() reads it). The server keeps
+     this with each person's alert settings between checks. */
+  function newsWatch(analysis) {
+    var by = {};
+    ((analysis && analysis.leagues) || []).forEach(function (L) {
+      var league = L.cfg.name || L.cfg.key;
+      (L.rows || []).forEach(function (r) {
+        var n = r.p && r.p.name ? norm(r.p.name) : '';
+        if (!n) return;
+        var w = by[n] = by[n] || {n: n, name: r.p.name, leagues: []};
+        if (w.leagues.indexOf(league) < 0) w.leagues.push(league);
+      });
+    });
+    return Object.keys(by).map(function (k) { return by[k]; });
+  }
+
+  /* News alerts: each story (espn.js newsFrom) that tags a watched starter, once per
+     story and player (key news|week|story|player, marked in opts.sent), at most three at
+     a time so a busy news day doesn't flood the phone. Each opens the story. */
+  var NEWS_MAX = 3;
+  function newsAlertsFor(stories, watch, opts) {
+    opts = opts || {};
+    var sent = opts.sent || {}, byName = {}, out = [];
+    (watch || []).forEach(function (w) { byName[w.n] = w; });
+    (stories || []).forEach(function (s) {
+      (s.athletes || []).forEach(function (a) {
+        var w = byName[norm(a.name)];
+        if (!w || out.length >= NEWS_MAX) return;
+        var key = ['news', opts.week, s.id, w.n].join('|');
+        if (sent[key]) return;
+        sent[key] = 1;
+        var head = /[.!?]$/.test(s.headline) ? s.headline : s.headline + '.';
+        out.push({key: key, kind: 'news', title: 'News: ' + w.name, url: s.url,
+          body: head + ' He\'s in your ' + andJoin(w.leagues) + ' lineup' + (w.leagues.length > 1 ? 's' : '') + '.'});
+      });
+    });
+    return out;
+  }
+
   function andJoin(a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
 
   function injWord(tag) {
@@ -1499,7 +1539,7 @@
     lineupPoints: lineupPoints, draftPicks: draftPicks,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
-    alertsFor: alertsFor,
+    alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,
     gameStates: gameStates, weekProgress: weekProgress,
     rankKey: rankKey, rankLabel: rankLabel, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,

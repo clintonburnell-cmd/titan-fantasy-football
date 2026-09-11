@@ -145,6 +145,34 @@ function fakeUser(db) {
     notOn === 'failed-precondition' && gone === 'not-found' && Object.keys(tdb.private.alerts.tokens).join() === 'good',
     `a test alert goes only to the asking device; one without alerts on is told (${notOn}); a dead one is forgotten (${gone})`);
 
+  section('news alerts');
+  pushed.length = 0;
+  const story = (id, at, names) => ({id, at, headline: 'Story ' + id, text: '', url: 'https://www.espn.com/nfl/story/_/id/' + id,
+    athletes: names.map(n => ({id: '', name: n})), teams: []});
+  const nNow = Date.parse('2026-09-12T15:00:00Z');
+  const watching = [{n: SCC.norm('Rome Odunze'), name: 'Rome Odunze', leagues: ['L1']}];
+  const ndb = {private: {alerts: {tokens: {good: {at: 1}}, prefs: {news: true}, watch: watching, sent: {}}}};
+  const offdb = {private: {alerts: {tokens: {good: {at: 1}}, prefs: {news: false}, watch: watching}}};
+  let nMeta = {checkedAt: nNow - 15 * 60000};
+  const nDeps = stories => ({now: nNow, fetchNews: async () => stories,
+    metaRef: {get: async () => ({data: () => nMeta}), set: async v => { nMeta = v; }},
+    userDocs: async () => [{ref: fakeUser(ndb)}, {ref: fakeUser(offdb)}]});
+  const nFeed = [story('1', nNow - 5 * 60000, ['Rome Odunze']), story('2', nNow - 5 * 60000, ['Somebody Else']), story('3', nNow - 5 * 3600 * 1000, ['Rome Odunze'])];
+  const n1 = await job.newsAlerts(1, nDeps(nFeed));
+  const n2 = await job.newsAlerts(1, nDeps(nFeed));
+  check(n1 === 1 && n2 === 0 && pushed.length === 1 && pushed[0].data.url === 'https://www.espn.com/nfl/story/_/id/1' &&
+    pushed[0].data.title === 'News: Rome Odunze' && pushed[0].tokens.join() === 'good',
+    'a new story about a starter goes out once and opens the story; old stories, other players and people who turned news off are skipped');
+  check(nMeta.checkedAt === nNow && JSON.stringify(ndb.private.alerts.watch) === JSON.stringify(watching) && ndb.private.alerts.sent['news|1|1|' + watching[0].n] === 1,
+    'the check time is saved for next time; the watch list is kept and the story remembered');
+  check(await job.newsAlerts(1, nDeps([story('4', nNow - 60000, ['Somebody Else'])])) === 0, 'no story about a starter, no alert');
+  let nReads = 0;
+  const nRead = async () => { nReads++; return [story('9', 1, [])]; };
+  const t0n = 2e12, l1 = await job.latestNews(t0n, nRead), l2 = await job.latestNews(t0n + 60000, nRead), l3 = await job.latestNews(t0n + 100000, nRead);
+  const l4 = await job.latestNews(t0n + 300000, async () => { throw new Error('down'); });
+  check(nReads === 2 && l1.stories.length === 1 && l2.at === t0n && l3.at === t0n + 100000 && l4.at === l3.at,
+    'the News tab\'s feed: one read of ESPN is shared for 90 seconds, and the last copy serves if ESPN is down');
+
   const pid = Object.keys(lg.players)[0], wasLocked = lg.players[pid].locked;
   db.history['1'].leagues['espn:99999901'].players[pid].rank = -7;
   await job.freezeForUser(fakeUser(db), account, ctx);

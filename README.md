@@ -63,6 +63,11 @@ website (such as alerts) to pass review.
 
 ## Screens
 
+The News tab shows ESPN's latest NFL stories, newest first, refreshing every couple of minutes while
+it's open. Stories about players on your rosters are marked "Your player", with a filter for just
+those, and each story opens on ESPN. With alerts on, Titan also sends "News about your starters":
+its server checks ESPN every 15 minutes, all week, and tapping the alert opens the story.
+
 The Trade tab weighs a trade with any team in a league: pick the league and a trade partner, tap
 players on both rosters, and Titan totals each side with FantasyCalc's trade values for the league's
 format (redraft or dynasty, 1 QB or superflex, team count, PPR), plus a waiver pickup's value for each roster spot an

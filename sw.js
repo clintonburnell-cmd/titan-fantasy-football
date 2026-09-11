@@ -44,6 +44,8 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const url = new URL((event.notification.data && event.notification.data.url) || '/app/', self.location.origin).href;
+  // A news alert opens the story itself; the others open Titan (or bring it forward).
+  if (!url.startsWith(self.location.origin)) { event.waitUntil(self.clients.openWindow(url)); return; }
   event.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(list => {
     const open = list.find(c => c.url.startsWith(self.location.origin + '/app'));
     return open ? open.focus() : self.clients.openWindow(url);

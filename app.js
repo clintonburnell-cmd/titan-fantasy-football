@@ -104,7 +104,8 @@
     projAt: 0, // when they were last fetched (0: not yet this visit)
     view: {week: 0, pos: 'QB'}, // the saved rankings open on the Rankings tab
     // The Trade tab: each league's teams, FantasyCalc's values by league format, and the trade being built.
-    trade: {teams: {}, values: {}, pick: {league: '', partner: '', give: [], get: []}}
+    trade: {teams: {}, values: {}, pick: {league: '', partner: '', give: [], get: []}},
+    news: {busy: false, at: 0, list: null, error: ''} // ESPN's latest stories, on the News tab
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
   // An address like /app/matchup opens that screen.
@@ -730,8 +731,69 @@
 
   /* ---- News */
 
+  /* ESPN's latest NFL news, read through Titan's server (/api/news: ESPN turns some
+     browsers away), refreshed every couple of minutes while the tab is open. Stories that tag someone on your rosters are marked, with a filter for them.
+     The loader never draws synchronously, so screenNews can start it. */
+  const NEWS_EVERY = 2 * 60000;
+  async function loadNews() {
+    if (S.news.busy) return;
+    S.news.busy = true;
+    try {
+      const res = await fetch('/api/news');
+      if (!res.ok) throw new Error('answered ' + res.status);
+      const j = await res.json();
+      // at: when Titan asked (for the refresh); from: when the server read ESPN.
+      Object.assign(S.news, {list: j.stories || [], at: Date.now(), from: j.at || Date.now(), error: ''});
+    }
+    catch (e) { S.news.error = 'Could not load the news from ESPN.'; }
+    S.news.busy = false;
+    if (S.ui.tab === 'news') render();
+  }
+  setInterval(() => {
+    if (S.ui.tab === 'news' && !document.hidden && S.news.list && Date.now() - S.news.at > NEWS_EVERY) loadNews();
+  }, 30000);
+
+  const ago = ts => {
+    const m = Math.round((Date.now() - ts) / 60000);
+    return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 24 * 60 ? Math.round(m / 60) + ' hr ago' : when(ts);
+  };
+
+  // Everyone on your rosters by name (as norm() reads it), with the leagues he's in.
+  function rosterNames() {
+    const m = {};
+    ((S.A && S.A.leagues) || []).forEach(L => L.roster.forEach(p => {
+      const k = SCC.norm(p.name);
+      if (k) (m[k] = m[k] || new Set()).add(L.cfg.key);
+    }));
+    return m;
+  }
+
+  function newsRow(s, yours, mine) {
+    return `<li class="news-item${yours.length ? ' mine' : ''}"><a class="news-link" href="${esc(s.url)}" target="_blank" rel="noopener">
+      <span class="news-text"><b>${esc(s.headline)}</b>${s.text && s.text !== s.headline ? `<small>${esc(s.text)}</small>` : ''}
+        <span class="news-meta">${esc(ago(s.at))}${s.video ? ' · Video' : ''}${s.plus ? ' · ESPN+' : ''}</span></span>
+      ${s.image ? `<img class="news-img" src="${esc(s.image)}" alt="" loading="lazy" width="96" height="64">` : ''}</a>
+      ${yours.length ? `<div class="news-tags">${yours.map(a => {
+        const ls = [...mine[SCC.norm(a.name)]];
+        return `<span class="ntag">Your player: ${esc(a.name)} <small>${esc(ls.length === 1 ? ls[0] : ls.length + ' leagues')}</small></span>`;
+      }).join('')}</div>` : ''}</li>`;
+  }
+
   function screenNews() {
-    return `<p class="lede">Breaking NFL news from accounts that only post news. Tap one to see its latest posts on X.</p>
+    const N = S.news;
+    if (!N.list && !N.busy && !N.error) loadNews();
+    const mine = rosterNames(), list = N.list || [];
+    const yoursIn = s => s.athletes.filter(a => mine[SCC.norm(a.name)]);
+    const yours = list.filter(s => yoursIn(s).length), shown = S.ui.newsMine ? yours : list;
+    let h = `<p class="lede">The latest NFL news from <a href="https://www.espn.com/nfl/" target="_blank" rel="noopener">ESPN</a>, newest first${
+      N.from ? `, updated ${esc(when(N.from))}` : ''}. It refreshes every couple of minutes while this tab is open.</p>
+      <div class="chips" role="group" aria-label="Filter the news"><button class="chip" data-news="all" aria-pressed="${!S.ui.newsMine}">All news ${list.length}</button>
+        <button class="chip" data-news="mine" aria-pressed="${!!S.ui.newsMine}">Your players ${yours.length}</button></div>`;
+    if (N.error) h += `<div class="banner stop">${esc(N.error)} <button class="link" data-action="news-retry">Try again</button></div>`;
+    if (!N.list) h += N.error ? '' : '<div class="empty-note">Loading the latest news…</div>';
+    else if (!shown.length) h += `<div class="empty-note">${S.ui.newsMine ? 'Nothing about your players in ESPN\'s latest news.' : 'No news right now.'}</div>`;
+    else h += `<ul class="card news-list">${shown.map(s => newsRow(s, yoursIn(s), mine)).join('')}</ul>`;
+    return h + `<h3 class="news-h">Insiders on X</h3><p class="fine">Accounts that only post news. Tap one to see its latest posts on X.</p>
       <ul class="card list">${NEWS_ACCOUNTS.map(a => `
         <li class="row xrow"><span class="pos" aria-hidden="true">X</span>
           <span class="who"><b>${esc(a.name)}</b><small>@${esc(a.handle)} · ${esc(a.about)}</small></span>
@@ -1506,8 +1568,8 @@
   /* Game-day alerts, chosen per device by signed-in people. The server job
      sends them (SCC.alertsFor); sw.js shows them. */
   function alertsCard() {
-    const head = `<h3>Game-day alerts</h3><p class="fine">Titan can tell you when a starter is ruled out, and check your lineups
-      about 75 minutes before each kickoff, once inactives are out.</p>`;
+    const head = `<h3>Game-day alerts</h3><p class="fine">Titan can tell you when a starter is ruled out or in the news, and check
+      your lineups about 75 minutes before each kickoff, once inactives are out.</p>`;
     const card = inner => `<section class="card pad">${head}${inner}</section>`;
     if (!S.sync.user) return card('<p class="help">Sign in with Google above to turn them on.</p>');
     if (IS_IOS && !STANDALONE) {
@@ -1520,7 +1582,8 @@
     const box = (k, label, sub) => `<li><label class="check"><input type="checkbox" data-alert="${k}" ${a.prefs[k] ? 'checked' : ''}>
       <span><b>${label}</b><small>${sub}</small></span></label></li>`;
     return card(`<ul class="lg-list">${box('out', 'Starter ruled out', 'Someone in your lineup is ruled out, doubtful or on IR, with who Titan would start instead')}
-        ${box('check', 'Lineup check', 'About 75 minutes before each kickoff: a starter ruled out or on bye, or an empty spot')}</ul>
+        ${box('check', 'Lineup check', 'About 75 minutes before each kickoff: a starter ruled out or on bye, or an empty spot')}
+        ${box('news', 'News about your starters', 'When ESPN posts a story about someone in your lineup, checked every 15 minutes. Tap the alert to read it')}</ul>
       ${S.alertsError ? `<div class="banner stop">${esc(S.alertsError)}</div>` : ''}
       ${a.permission === 'denied' && !a.on ? '<p class="fine">Notifications are blocked for Titan in this browser. Allow them in the site settings, then try again.</p>' : ''}
       <div class="bar"><button class="btn${a.on ? ' ghost' : ''}" data-action="${a.on ? 'alerts-off' : 'alerts-on'}" ${S.alertsBusy ? 'disabled' : ''}>${
@@ -1529,7 +1592,7 @@
       ${a.on ? '<p class="fine">Alerts are on for this device. Send a test to check it shows them.</p>' : ''}`);
   }
 
-  const alertPrefs = () => Object.assign({out: true, check: true}, S.alerts && S.alerts.prefs);
+  const alertPrefs = () => Object.assign({out: true, check: true, news: true}, S.alerts && S.alerts.prefs);
 
   async function alertsToggle(on) {
     if (!S.sync.api || S.alertsBusy) return;
@@ -1925,9 +1988,10 @@
     // A tap on a league's header folds or unfolds it; the toggle listener remembers it.
     const head = e.target.closest('details[data-fold] > summary');
     if (head) { tapped = head.parentElement; return; }
-    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
+    if (t.dataset.news) { S.ui.newsMine = t.dataset.news === 'mine'; saveUi(); return render(); }
     if (t.dataset.trade) {
       const list = S.trade.pick[t.dataset.trade], i = list.indexOf(t.dataset.pid);
       if (i >= 0) list.splice(i, 1);
@@ -1947,6 +2011,7 @@
     if (a === 'score') loadScore(S.score.week || S.snap.week);
     else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
     else if (a === 'matchups') loadMatchups();
+    else if (a === 'news-retry') { S.news.error = ''; loadNews(); }
     else if (a === 'trade-clear') { S.trade.pick.give = []; S.trade.pick.get = []; render(); }
     else if (a === 'trade-retry') {
       [S.trade.teams, S.trade.values].forEach(m => Object.keys(m).forEach(k => { if (m[k].error) delete m[k]; }));

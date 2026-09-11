@@ -118,20 +118,59 @@ async function alertUser(userRef, analysis, ctx) {
     kickoffs: [...new Set(Object.values(kicks).map(k => Number(k[0])))],
     kickAt: p => { const k = kicks[SCC.teamAbbr(p.team)]; return k ? Number(k[0]) : 0; },
     want: Object.assign({out: true, check: true}, doc.prefs || {})});
-  return list.length ? deliver(ref, list, sent) : 0;
+  // The starters the news check watches until the next alert check (newsAlerts).
+  const watch = SCC.newsWatch(analysis);
+  if (list.length) return deliver(ref, list, sent, {watch});
+  if (JSON.stringify(doc.watch || []) !== JSON.stringify(watch)) {
+    const latest = (await ref.get()).data() || {};
+    await ref.set(Object.assign({}, latest, {watch}));
+  }
+  return 0;
+}
+
+/* News about people's starters, checked on every run (every 15 minutes, every day of
+   the season). ESPN's latest stories are read once; only when one has come in since the
+   last check (with half an hour's overlap, since ESPN can post a story a little late)
+   and tags a player are people's saved starters (the watch list from their last alert
+   check) looked through. Returns how many alerts went out. */
+const NEWS_OVERLAP = 30 * 60000, NEWS_MAX_AGE = 3 * 3600 * 1000;
+async function newsAlerts(week, deps = {}) {
+  const now = deps.now || Date.now();
+  const metaRef = deps.metaRef || db.doc('meta/news');
+  const meta = (await metaRef.get()).data() || {};
+  let stories;
+  try { stories = await (deps.fetchNews || ESPN.fetchNews)(); }
+  catch (e) { logger.warn('ESPN news unavailable: ' + e.message); return 0; }
+  const since = Math.max((meta.checkedAt || 0) - NEWS_OVERLAP, now - NEWS_MAX_AGE);
+  await metaRef.set({checkedAt: now});
+  const fresh = stories.filter(s => s.at > since && s.athletes.length);
+  if (!fresh.length) return 0;
+  const docs = deps.userDocs ? await deps.userDocs() : (await db.collection('users').get()).docs;
+  let n = 0;
+  for (const u of docs) {
+    const ref = u.ref.collection('private').doc('alerts');
+    const doc = (await ref.get()).data();
+    if (!doc || !doc.tokens || !Object.keys(doc.tokens).length || !doc.watch || (doc.prefs && doc.prefs.news === false)) continue;
+    const sent = {};
+    for (const k in doc.sent || {}) if (k.split('|')[1] === String(week)) sent[k] = 1;
+    const list = SCC.newsAlertsFor(fresh, doc.watch, {week, sent});
+    if (list.length) n += await deliver(ref, list, sent).catch(e => { logger.warn('could not send one user\'s news: ' + e.message); return 0; });
+  }
+  return n;
 }
 
 /* Sends each alert to every device on file, forgets devices that no longer
    accept alerts, and saves what was sent. The document is read again just
    before writing, so a device added meanwhile isn't lost. */
-async function deliver(ref, list, sent) {
+async function deliver(ref, list, sent, extra) {
   const doc = (await ref.get()).data() || {};
   let tokens = Object.keys(doc.tokens || {});
   const dead = new Set();
   let n = 0;
   for (const a of list) {
     if (!tokens.length) break;
-    const res = await sendPush({tokens, data: {title: a.title, body: a.body, url: '/app/', tag: a.key},
+    // A news alert opens its story; the others open Titan.
+    const res = await sendPush({tokens, data: {title: a.title, body: a.body, url: a.url || '/app/', tag: a.key},
       webpush: {headers: {Urgency: 'high', TTL: '7200'}}});
     res.responses.forEach((r, i) => {
       const code = r.error && r.error.code;
@@ -143,7 +182,7 @@ async function deliver(ref, list, sent) {
   const latest = (await ref.get()).data() || {};
   const keep = {};
   for (const t in latest.tokens || {}) if (!dead.has(t)) keep[t] = latest.tokens[t];
-  await ref.set(Object.assign({}, latest, {tokens: keep, sent}));
+  await ref.set(Object.assign({}, latest, extra || {}, {tokens: keep, sent}));
   return n;
 }
 
@@ -152,6 +191,9 @@ async function run() {
   const season = String(state.season);
   const week = Number(state.week);
   if (state.season_type !== 'regular' || !week) { logger.debug('not the regular season'); return 'off-season'; }
+
+  // News about people's starters goes out as it breaks: every run, every day of the season.
+  const news = await newsAlerts(week).catch(e => { logger.warn('news alerts failed: ' + e.message); return 0; });
 
   // Game days: each player's call freezes at his kickoff, and alerts go out.
   // Injury reports come out through the week, so on other days people with
@@ -163,7 +205,7 @@ async function run() {
   const et = new Date(new Date().toLocaleString('en-US', {timeZone: 'America/New_York'}));
   const gameDay = games.some(g => g.date === today || g.status === 'in_game');
   const reportTime = [12, 16, 20].includes(et.getHours()) && et.getMinutes() < 15;
-  if (!gameDay && !reportTime) { logger.debug('no games today'); return 'no games today'; }
+  if (!gameDay && !reportTime) { logger.debug('no games today'); return news ? `no games today, ${news} news alert(s)` : 'no games today'; }
 
   const players = await playerMap();
   API.store.set(API.PLAYERS_KEY, {ts: Date.now(), map: players});
@@ -186,8 +228,8 @@ async function run() {
     catch (e) { failed++; logger.warn('could not check one user: ' + e.message); }
   }
   const what = gameDay ? 'saved calls for' : 'checked alerts for';
-  logger.info(`week ${week}: ${what} ${done} user(s), ${sent} alert(s) sent, ${failed} failed`);
-  return `week ${week}: ${what} ${done}, ${sent} alerts, ${failed} failed`;
+  logger.info(`week ${week}: ${what} ${done} user(s), ${sent} alert(s) and ${news} news alert(s) sent, ${failed} failed`);
+  return `week ${week}: ${what} ${done}, ${sent} alerts, ${news} news, ${failed} failed`;
 }
 
 exports.freezeCalls = onSchedule({
@@ -351,5 +393,30 @@ exports.tradeValues = onRequest({region: 'us-central1', memory: '256MiB', maxIns
   }
 });
 
-exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
+/* ESPN's latest NFL news for the News tab. Browsers can't always read ESPN's feed
+   themselves (its bot protection turns some away, and it refuses the check a browser
+   sometimes makes first), so Titan's server reads it and shares one copy: kept in memory
+   for 90 seconds, and by browsers and Firebase Hosting's CDN for up to two minutes. If
+   ESPN can't be reached, the last copy serves. */
+const NEWS_KEEP = 90 * 1000;
+let newsCache = null;
+async function latestNews(now = Date.now(), fetchNews = () => ESPN.fetchNews()) {
+  if (newsCache && now - newsCache.at < NEWS_KEEP) return newsCache;
+  try { newsCache = {at: now, stories: await fetchNews()}; }
+  catch (e) { if (newsCache) return newsCache; throw e; }
+  return newsCache;
+}
+
+exports.espnNews = onRequest({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 20, invoker: 'public'}, async (req, res) => {
+  try {
+    const out = await latestNews();
+    res.set('Cache-Control', 'public, max-age=60, s-maxage=120');
+    res.json(out);
+  } catch (e) {
+    logger.warn('ESPN news unavailable: ' + e.message);
+    res.status(502).json({error: 'News is unavailable right now.'});
+  }
+});
+
+exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
   setSend: fn => { sendPush = fn; }};

@@ -27,8 +27,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const inLeague = [].concat(...L1.teams.map(t => ESPNJS.buildLeague(ESPNJS.leagueCfg(L1, {id: L1.id, teamId: t.id}, {}), L1, tradePlayers).roster));
   const VALUES = JSON.stringify({at: Date.now(), values: inLeague.filter(p => p.pos !== 'DEF' && p.pos !== 'K').map((p, i) => ({
     s: /^\d+$/.test(p.id) ? p.id : '', e: String(p.espnId), n: p.name, p: p.pos, t: p.team, v: 9000 - i * 40, r: i + 1, pr: 1, tr: i % 3 ? 120 : -80}))});
+  // A stand-in for ESPN's news feed: a story about the test team's QB, and one about nobody on it.
+  const newsQb = inLeague.find(p => p.pos === 'QB').name, newsAt = new Date(Date.now() - 10 * 60000).toISOString();
+  const NEWS = JSON.stringify({articles: [
+    {id: 101, type: 'HeadlineNews', headline: newsQb + ' is set to start', description: 'Test story.', published: newsAt,
+      links: {web: {href: 'https://www.espn.com/nfl/story/_/id/101'}}, categories: [{type: 'athlete', athleteId: 1, description: newsQb}]},
+    {id: 102, type: 'Story', headline: 'Another NFL story', description: '', published: newsAt,
+      links: {web: {href: 'https://www.espn.com/nfl/story/_/id/102'}}, categories: [{type: 'athlete', athleteId: 2, description: 'Somebody Else'}]}]});
   const server = http.createServer((req, res) => {
     const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    // Titan's /api/news: the stand-in stories, trimmed the way the server trims ESPN's.
+    if (u === '/api/news') {
+      res.writeHead(200, {'content-type': 'application/json'});
+      return res.end(JSON.stringify({at: Date.now(), stories: ESPNJS.newsFrom(JSON.parse(NEWS))}));
+    }
     if (u === '/api/trade-values') {
       tradeAsked.push(req.url);
       res.writeHead(200, {'content-type': 'application/json'});
@@ -268,6 +280,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'on a phone the trade fits inside its card (nothing cut off on the right)');
   check(await ev(`document.querySelectorAll('.trade-sum .tlineup p').length === 3`),
     'each team\'s projected starters, before and after: ' + (await text('.trade-sum .tlineup')).replace(/\s+/g, ' ').slice(0, 90));
+
+  T.section('the News tab');
+  await tab('news');
+  check(await waitFor(`document.querySelectorAll('.news-item').length === 2`, 15000), 'ESPN\'s latest stories show');
+  check(await ev(`document.querySelectorAll('.news-item.mine .ntag').length === 1`), 'a story about a player on your roster is marked: ' + await text('.ntag'));
+  await ev(`document.querySelector('[data-news="mine"]').click(); true`);
+  check(await waitFor(`document.querySelectorAll('.news-item').length === 1 && document.querySelectorAll('.news-item.mine').length === 1`, 3000),
+    'the Your players filter shows just those');
+  await ev(`document.querySelector('[data-news="all"]').click(); true`);
+  check(await ev(`!!document.querySelector('.news-item a[href="https://www.espn.com/nfl/story/_/id/101"][target="_blank"]') && document.querySelectorAll('.xrow').length > 0`),
+    'each story opens on ESPN, and the insiders on X are still listed');
 
   if (T.sleeperUser) {
     T.section('linking Sleeper as well');

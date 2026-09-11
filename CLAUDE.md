@@ -57,6 +57,14 @@ live site, so site changes reach it without a new upload. What's done and what's
   to `html:not(.in-app)`, so phones, the Android app and home-screen copies keep the app look.
   Check new screens at 390px and at 1280px. On computers Rosters draws tables (`rosterTable`,
   when `wide()`); keep `data-find` on every row so the player search still works.
+- The News tab reads ESPN's public NFL news feed (`ESPN.fetchNews`, site.api.espn.com; unofficial, so
+  keep the link back to each story) through Titan's server (`espnNews` at `/api/news`, one shared read
+  kept 90 seconds, CDN two minutes: ESPN's bot protection turns some browsers away, headless Chrome
+  included, and refuses CORS preflights) every two minutes while open, marking stories that tag players on
+  the person's rosters. News alerts: each alert check saves the person's starters (`SCC.newsWatch`) as
+  `watch` in their alerts doc; `newsAlerts` runs on every 15-minute run all week, reads the feed once
+  and only looks at people when a new story tags a player (`SCC.newsAlertsFor`, at most 3 at a time,
+  key `news|week|story|player`). A news alert's tap opens the story (sw.js).
 - The Trade tab uses FantasyCalc's trade values. Their terms: call only `/values/current`, cache on
   Titan's server (the `tradeValues` function keeps each format in Firestore `tradeValues/{format}` for a
   day; the app reads `/api/trade-values`, never FantasyCalc), and credit FantasyCalc with a visible link

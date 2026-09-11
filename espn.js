@@ -299,6 +299,34 @@
 
   /* Kickoff times for every NFL game of the season, from ESPN's public NFL
      schedule: {team: {week: [kickoff time in ms, time still to be set]}}. */
+  /* ESPN's latest NFL news (the public feed behind espn.com/nfl), newest first, trimmed
+     to what Titan shows: headline, summary, link, picture, when, whether it's a video or
+     ESPN+, and the players and teams the story tags. */
+  var NEWS = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=50';
+  async function fetchNews() {
+    var browser = typeof window !== 'undefined';
+    var res = await fetch(NEWS, browser ? {credentials: 'omit', cache: 'no-store'} : {});
+    if (!res.ok) throw new Error('ESPN news answered ' + res.status);
+    return newsFrom(await res.json());
+  }
+
+  function newsFrom(json) {
+    var https = function (u) { return /^https:\/\//.test(u || '') ? u : ''; };
+    return ((json && json.articles) || []).map(function (a) {
+      var cats = a.categories || [];
+      return {
+        id: String(a.id || ''), at: Date.parse(a.published || a.lastModified || '') || 0,
+        headline: cleanName(a.headline), text: cleanName(a.description),
+        url: https(a.links && a.links.web && a.links.web.href), image: https(((a.images || [])[0] || {}).url),
+        video: a.type === 'Media', plus: !!a.premium,
+        athletes: cats.filter(function (c) { return c.type === 'athlete' && c.description; })
+          .map(function (c) { return {id: String(c.athleteId || ''), name: cleanName(c.description)}; }),
+        teams: cats.filter(function (c) { return c.type === 'team' && c.team && c.team.abbreviation; })
+          .map(function (c) { return c.team.abbreviation; })
+      };
+    }).filter(function (s) { return s.id && s.headline && s.url; }).sort(function (a, b) { return b.at - a.at; });
+  }
+
   async function fetchKickoffs(season) {
     var browser = typeof window !== 'undefined';
     var res = await fetch(BASE + season + '?view=proTeamSchedules_wl', browser ? {credentials: 'omit'} : {});
@@ -366,7 +394,7 @@
     fetchLeague: fetchLeague, setTransport: setTransport, parseLeagueId: parseLeagueId, normSwid: normSwid,
     leagueCfg: leagueCfg, teamsOf: teamsOf, ownedTeam: ownedTeam, buildLeague: buildLeague, slimLeague: slimLeague,
     fetchPoints: fetchPoints, pointsFromBoxscore: pointsFromBoxscore, fetchKickoffs: fetchKickoffs, kickoffsFrom: kickoffsFrom,
-    fetchMatchup: fetchMatchup, matchupFrom: matchupFrom, toSleeper: toSleeper,
+    fetchMatchup: fetchMatchup, matchupFrom: matchupFrom, toSleeper: toSleeper, fetchNews: fetchNews, newsFrom: newsFrom,
     SLOT: SLOT, POS: POS, TEAM: TEAM
   };
 
