@@ -4,9 +4,10 @@
  * time the app opens, with the cached copy as the offline fallback. Sleeper's
  * API is never touched here: live data always comes straight from Sleeper.
  */
-const CACHE = 'titan-v6';
-const SHELL = ['./', 'index.html', 'styles.css', 'engine.js', 'espn.js', 'sleeper.js', 'syncplan.js', 'app.js', 'sync.js',
-  'icon.svg', 'icon-192.png', 'apple-touch-icon.png', 'manifest.webmanifest', 'privacy.html'];
+const CACHE = 'titan-v7';
+// The website (the root page) and the app (/app/), with everything the app loads.
+const SHELL = ['./', 'index.html', 'site.css', 'app/', 'app/index.html', 'styles.css', 'engine.js', 'espn.js', 'sleeper.js',
+  'syncplan.js', 'app.js', 'sync.js', 'icon.svg', 'icon-192.png', 'apple-touch-icon.png', 'manifest.webmanifest', 'privacy.html'];
 
 /* Each file is cached on its own with put(). cache.addAll() failed intermittently
    in Chrome with "Entry already exists", and any single failure there rejects
@@ -43,6 +44,6 @@ self.addEventListener('fetch', event => {
         return res;
       })
       .catch(() => caches.match(req, {ignoreSearch: true})
-        .then(hit => hit || caches.match('index.html')))
+        .then(hit => hit || caches.match(new URL(req.url).pathname.startsWith('/app') ? 'app/index.html' : 'index.html')))
   );
 });

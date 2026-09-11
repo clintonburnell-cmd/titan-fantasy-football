@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Titan Fantasy Football Manager</title>
+  <script>
+    // The app, at /app/ (the website is the root page). Every file loads by
+    // absolute path. The old GitHub Pages address forwards to the app here.
+    if (location.hostname === 'clintonburnell-cmd.github.io') {
+      location.replace('https://titanfantasyfootball.com/app/' + location.search + location.hash);
+    }
+  </script>
+  <meta name="description" content="One place to manage every Sleeper and ESPN league you play. Import your own rankings and get start/sit calls, swaps and waiver upgrades based on them.">
+  <meta name="theme-color" content="#0a0f1a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Titan">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-in">
+      <div class="brand">
+        <img src="/icon.svg" alt="" width="34" height="34">
+        <div><h1>Titan Fantasy Football Manager</h1><p id="meta">Every Sleeper and ESPN league, your rankings</p></div>
+      </div>
+      <div class="top-actions">
+      <a class="tip" data-tip href="https://ko-fi.com/titandev" target="_blank" rel="noopener">
+        <span class="tip-cup" aria-hidden="true">☕</span><span class="tip-text"><b>Like my work?</b> <span>Consider a tip!</span></span>
+      </a>
+      <button id="refresh" class="refresh" type="button" aria-label="Refresh from Sleeper" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Refresh</span>
+      </button>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Sections" hidden>
+      <div class="tabs-in">
+        <button type="button" data-tab="lineups">Lineups</button>
+        <button type="button" data-tab="matchup">Matchup</button>
+        <button type="button" data-tab="rosters">Rosters</button>
+        <button type="button" data-tab="exposure">Exposure</button>
+        <button type="button" data-tab="byes">Byes</button>
+        <button type="button" data-tab="score">Results</button>
+        <button type="button" data-tab="news">News</button>
+        <button type="button" data-tab="ranks">Rankings</button>
+        <button type="button" data-tab="settings">Settings</button>
+      </div>
+    </nav>
+  </header>
+
+  <div id="progress" class="progress" role="status" hidden></div>
+  <main id="view" class="wrap"></main>
+  <footer class="foot wrap">
+    Titan Fantasy Football Manager isn't affiliated with or endorsed by Sleeper or ESPN. <a href="/privacy.html">Privacy</a> · <a href="/?home">About Titan</a>
+  </footer>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="/engine.js"></script>
+  <script src="/espn.js"></script>
+  <script src="/sleeper.js"></script>
+  <script src="/syncplan.js"></script>
+  <script src="/app.js"></script>
+  <script type="module" src="/sync.js"></script>
+</body>
+</html>

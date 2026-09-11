@@ -219,7 +219,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; }
 .move { display: grid; grid-template-columns: 2.9rem minmax(0, 1fr); gap: 1px 10px; padding: 5px 0; font-size: .88rem; }
 .move .slot { grid-row: span 2; align-self: center; }
 .mv em { font-style: normal; color: var(--muted); font-size: .8rem; }
-.mv::before { display: inline-block; width: 2.3rem; font-size: .68rem; font-weight: 800; letter-spacing: .05em; }
+.mv::before { display: inline-block; width: 2.9rem; font-size: .68rem; font-weight: 800; letter-spacing: .05em; }
 .mv.out::before { content: "OUT"; color: #ff8278; }
 .mv.in::before { content: "IN"; color: var(--ok); }
 .mv.in { font-weight: 600; }

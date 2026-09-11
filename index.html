@@ -5,68 +5,228 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Titan Fantasy Football Manager</title>
   <script>
-    // Titan's home is titanfantasyfootball.com (Firebase Hosting); the old GitHub
-    // Pages address forwards to it. titan-fantasy-football.web.app keeps working
-    // too: the Android app is tied to it, and a device's saved data stays with its address.
-    if (location.hostname === 'clintonburnell-cmd.github.io') {
-      location.replace('https://titanfantasyfootball.com/' + location.search + location.hash);
-    }
+    // The website is for new visitors. Anyone already using Titan goes straight
+    // to the app at /app/: a saved account on this device, a copy installed on
+    // the home screen, or the Android app (it opens /?source=play). /?home always
+    // shows the website. The old GitHub Pages address forwards here.
+    (function () {
+      var q = location.search;
+      if (location.hostname === 'clintonburnell-cmd.github.io') {
+        location.replace('https://titanfantasyfootball.com/' + q + location.hash);
+        return;
+      }
+      if (/[?&]home\b/.test(q)) return;
+      var play = /[?&]source=play\b/.test(q) || document.referrer.indexOf('android-app://') === 0;
+      var installed = navigator.standalone === true ||
+        (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+      var linked = false;
+      try { linked = !!JSON.parse(localStorage.getItem('titan.account.v1') || 'null'); } catch (e) {}
+      if (play || installed || linked) location.replace('/app/' + q + location.hash);
+    })();
   </script>
   <meta name="description" content="One place to manage every Sleeper and ESPN league you play. Import your own rankings and get start/sit calls, swaps and waiver upgrades based on them.">
+  <link rel="canonical" href="https://titanfantasyfootball.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Titan Fantasy Football Manager">
+  <meta property="og:description" content="Every league in one place. Every call from your rankings.">
+  <meta property="og:url" content="https://titanfantasyfootball.com/">
+  <meta property="og:image" content="https://titanfantasyfootball.com/icon-512.png">
   <meta name="theme-color" content="#0a0f1a">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Titan">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/site.css">
 </head>
 <body>
-  <header class="top">
-    <div class="top-in">
-      <div class="brand">
-        <img src="icon.svg" alt="" width="34" height="34">
-        <div><h1>Titan Fantasy Football Manager</h1><p id="meta">Every Sleeper and ESPN league, your rankings</p></div>
-      </div>
-      <div class="top-actions">
-      <a class="tip" data-tip href="https://ko-fi.com/titandev" target="_blank" rel="noopener">
-        <span class="tip-cup" aria-hidden="true">☕</span><span class="tip-text"><b>Like my work?</b> <span>Consider a tip!</span></span>
-      </a>
-      <button id="refresh" class="refresh" type="button" aria-label="Refresh from Sleeper" hidden>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>Refresh</span>
-      </button>
-      </div>
+  <header class="site-top">
+    <div class="site-in">
+      <a class="site-brand" href="/?home"><img src="/icon.svg" alt="" width="30" height="30"><b><span class="long">Titan Fantasy Football Manager</span><span class="short">Titan</span></b></a>
+      <nav class="site-nav" aria-label="Sections">
+        <a href="#leagues">Leagues</a>
+        <a href="#rankings">Rankings</a>
+        <a href="#features">Features</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="btn site-cta" href="/app/">Open Titan</a>
     </div>
-    <nav class="tabs" id="tabs" aria-label="Sections" hidden>
-      <div class="tabs-in">
-        <button type="button" data-tab="lineups">Lineups</button>
-        <button type="button" data-tab="matchup">Matchup</button>
-        <button type="button" data-tab="rosters">Rosters</button>
-        <button type="button" data-tab="exposure">Exposure</button>
-        <button type="button" data-tab="byes">Byes</button>
-        <button type="button" data-tab="score">Results</button>
-        <button type="button" data-tab="news">News</button>
-        <button type="button" data-tab="ranks">Rankings</button>
-        <button type="button" data-tab="settings">Settings</button>
-      </div>
-    </nav>
   </header>
 
-  <div id="progress" class="progress" role="status" hidden></div>
-  <main id="view" class="wrap"></main>
-  <footer class="foot wrap">
-    Titan Fantasy Football Manager isn't affiliated with or endorsed by Sleeper or ESPN. <a href="privacy.html">Privacy</a>
-  </footer>
-  <div id="toast" class="toast" role="status" hidden></div>
+  <main>
+    <section class="hero">
+      <div class="site-in hero-in">
+        <div>
+          <p class="eyebrow">Fantasy football, one place</p>
+          <h1>Every league in one place. <span>Every call from your rankings.</span></h1>
+          <p class="hero-sub">Titan brings your Sleeper and ESPN leagues together, then checks every lineup against the rankings you import: who to start, who to sit, the swaps to make and the free agents worth grabbing.</p>
+          <div class="ctas">
+            <a class="btn big" href="/app/">Open Titan</a>
+            <a class="btn ghost big" href="#rankings">How rankings work</a>
+          </div>
+          <p class="fine">Free. No Sleeper password. Works in the browser on any phone or computer.</p>
+        </div>
 
-  <script src="engine.js"></script>
-  <script src="espn.js"></script>
-  <script src="sleeper.js"></script>
-  <script src="syncplan.js"></script>
-  <script src="app.js"></script>
-  <script type="module" src="sync.js"></script>
+        <div>
+          <div class="demo" aria-label="A sample lineup in Titan">
+            <div class="card league">
+              <div class="card-h"><div><h3>Sample League</h3><p>12 teams · Half PPR · Redraft · projected <b class="pts-proj">121.6</b></p></div><span class="pill p-swap">2 changes</span></div>
+              <div class="moves">
+                <div class="moves-h"><h4>Make these changes in Sleeper</h4><span class="btn ghost small">Open in Sleeper ↗</span></div>
+                <div class="move"><span class="slot">RB</span>
+                  <span class="mv out">Tyrell Banks <em>RB31</em></span>
+                  <span class="mv in">Jalen Pierce <em>RB18</em></span>
+                </div>
+                <div class="move"><span class="slot">FLEX</span>
+                  <span class="mv out to">Rico Vance <em>to WR, Thu 8:15 PM</em></span>
+                  <span class="mv in">Isaiah Moore <em>from WR, Sun 4:25 PM</em></span>
+                </div>
+                <p class="fine">Later kickoffs go in FLEX, so a late scratch can still be covered from your bench.</p>
+              </div>
+              <ol class="lineup">
+                <li class="row r-ok"><span class="slot">QB</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/phi.png" alt=""></span>
+                  <span class="who"><span class="name-line"><b>Marcus Hale</b><em class="kick">Sun 1:00 PM</em></span><small>QB · PHI · proj 21.4</small></span>
+                  <span class="right"><span class="rank">QB4</span><span class="verdict v-ok">OK</span></span></li>
+                <li class="row r-ok"><span class="slot">RB</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/atl.png" alt=""></span>
+                  <span class="who"><span class="name-line"><b>Dre Collins</b><em class="kick">Sun 1:00 PM</em></span><small>RB · ATL · proj 18.9</small></span>
+                  <span class="right"><span class="rank">RB1</span><span class="verdict v-ok">OK</span></span></li>
+                <li class="row r-swap"><span class="slot">RB</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/ten.png" alt=""></span>
+                  <span class="who"><span class="name-line"><b>Tyrell Banks</b><em class="kick">Sun 1:00 PM</em></span><small>RB · TEN · proj 8.7</small></span>
+                  <span class="right"><span class="rank">RB31</span><span class="verdict v-swap">SWAP OUT</span></span></li>
+                <li class="row r-ok"><span class="slot">WR</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/lar.png" alt=""></span>
+                  <span class="who"><span class="name-line"><b>Isaiah Moore</b><em class="kick">Sun 4:25 PM</em></span><small>WR · LAR · proj 16.2</small></span>
+                  <span class="right"><span class="rank">WR6</span><span class="verdict v-ok">OK</span></span></li>
+                <li class="row r-ok"><span class="slot">TE</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/ari.png" alt=""></span>
+                  <span class="who"><span class="name-line"><b>Evan Brooks</b><em class="kick">Sun 4:05 PM</em></span><small>TE · ARI · proj 12.8</small></span>
+                  <span class="right"><span class="rank">TE3</span><span class="verdict v-ok">OK</span></span></li>
+                <li class="row r-ok"><span class="slot">FLEX</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/cin.png" alt=""></span>
+                  <span class="who"><span class="name-line"><b>Rico Vance</b><em class="kick">Thu 8:15 PM</em></span><small>WR · CIN · proj 17.5</small></span>
+                  <span class="right"><span class="rank">WR4</span><span class="verdict v-ok">OK</span></span></li>
+              </ol>
+            </div>
+          </div>
+          <p class="demo-label">A sample lineup: made-up players, Titan's real layout.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="site-sec" id="leagues">
+      <div class="site-in">
+        <span class="tag">One place</span>
+        <h2>All your leagues, side by side</h2>
+        <p class="sec-sub">Stop jumping between apps. Titan loads every league with its own lineup format and scoring, and shows them together.</p>
+        <div class="panels">
+          <div class="panel"><span class="tag">Sleeper</span><h3>Link your username</h3>
+            <p>No password. Titan reads what your Sleeper profile already shows, and every league you're in loads on its own.</p></div>
+          <div class="panel"><span class="tag">ESPN</span><h3>Add a league by ID or link</h3>
+            <p>Public leagues need nothing else. For private ones, you can save your ESPN login to your own Titan account.</p></div>
+          <div class="panel"><span class="tag">Together</span><h3>One screen for game day</h3>
+            <p>Lineups, matchups, rosters, injuries, bye weeks and live scores for every league, with quick jumps between them.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="site-sec" id="rankings">
+      <div class="site-in">
+        <span class="tag">Your rankings</span>
+        <h2>Import your rankings. Get your calls.</h2>
+        <p class="sec-sub">Titan's calls come from the rankings you trust. Import them each week, and every lineup in every league is checked against them.</p>
+        <div class="split">
+          <div>
+            <ol class="steps">
+              <li><div><b>Build or export your rankings</b><span>Your own spreadsheet, or a ranking site's CSV export. One file for every position, or one file per position.</span></div></li>
+              <li><div><b>Import them in Titan</b><span>Choose the file or paste it on the Rankings tab. Titan reads the players, positions and ranks.</span></div></li>
+              <li><div><b>Follow the calls</b><span>Every slot gets a call, with the exact swaps to make and the free agents worth a claim.</span></div></li>
+            </ol>
+            <div class="formats" aria-label="Formats Titan reads">
+              <span>Your own CSV</span><span>A spreadsheet paste</span><span>Late-Round</span><span>FantasyPros</span><span>The Hall</span>
+            </div>
+            <p class="fine" style="margin-top:14px">No rankings yet? Titan starts with Sleeper's weekly projections, in each league's own scoring, and they fill any position your file leaves out.</p>
+          </div>
+          <div class="flow">
+            <h4>Your file</h4>
+            <div class="csv-wrap"><pre class="csv"><b>Player,Pos,Team,Rank</b>
+Dre Collins,RB,ATL,1
+Rico Vance,WR,CIN,4
+Jalen Pierce,RB,PIT,18
+Tyrell Banks,RB,TEN,31</pre></div>
+            <div class="flow-arrow" aria-hidden="true">↓</div>
+            <h4>Titan's calls</h4>
+            <div class="call">
+              <div><span class="verdict v-swap">SWAP</span>Start Jalen Pierce over Tyrell Banks<em>RB18 vs RB31</em></div>
+              <div><span class="verdict v-ok">OK</span>Dre Collins stays at RB<em>RB1</em></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="site-sec" id="features">
+      <div class="site-in">
+        <span class="tag">Features</span>
+        <h2>Everything for game day</h2>
+        <div class="features">
+          <div class="feature"><h3>Start/sit calls</h3><p>Every lineup slot gets a call: OK, swap out, do not start, on bye or locked.</p></div>
+          <div class="feature"><h3>Late games in FLEX</h3><p>Later kickoffs go in your FLEX, so a late scratch can still be covered from the bench.</p></div>
+          <div class="feature"><h3>Live scores</h3><p>Points update about every minute while games are on, then show as final.</p></div>
+          <div class="feature"><h3>Matchups</h3><p>Both lineups side by side, the score and your chance to win, in every league.</p></div>
+          <div class="feature"><h3>Waiver upgrades</h3><p>Ranked players nobody in your league has, better than who you're starting.</p></div>
+          <div class="feature"><h3>Injury flags</h3><p>Out, doubtful and questionable tags on your starters, fresh every time you open Titan.</p></div>
+          <div class="feature"><h3>Bye weeks</h3><p>Every upcoming bye, league by league, with the positions you'll need to cover.</p></div>
+          <div class="feature"><h3>Results</h3><p>Weeks 1 to 18: your score against the projection, and what your rankings would have scored.</p></div>
+          <div class="feature"><h3>Exposure</h3><p>Players you own across several teams, and a search across all your rosters.</p></div>
+          <div class="feature"><h3>Open in Sleeper or ESPN</h3><p>One tap from any league to its team page, to make the changes.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="site-sec" id="private">
+      <div class="site-in">
+        <span class="tag">Private by design</span>
+        <h2>Your leagues, your data</h2>
+        <ul class="checks">
+          <li><b>No Sleeper password.</b> Titan reads what your Sleeper profile already shows.</li>
+          <li><b>Read-only.</b> Titan never changes your lineups, makes claims or trades.</li>
+          <li><b>Your rankings stay yours.</b> Kept on your device, or synced to your own Google sign-in if you choose.</li>
+          <li><b>No ads, no tracking.</b> Titan doesn't sell or share anything. <a href="/privacy.html">Read the privacy policy</a>.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="site-sec" id="faq">
+      <div class="site-in">
+        <span class="tag">FAQ</span>
+        <h2>Questions</h2>
+        <div class="faq">
+          <details><summary>Is Titan free?</summary><p>Yes. There's an optional tip jar if you'd like to support it.</p></details>
+          <details><summary>Which platforms does Titan work with?</summary><p>Sleeper and ESPN. Link Sleeper with your username, and add ESPN leagues by their ID or link.</p></details>
+          <details><summary>Do I need my own rankings?</summary><p>No. Until you import some, Titan uses Sleeper's weekly projections in each league's scoring. Import yours whenever you like and they take over.</p></details>
+          <details><summary>What ranking files can I import?</summary><p>A CSV file or a spreadsheet paste with player, position, team and rank columns, plus the export formats of Late-Round, FantasyPros and The Hall.</p></details>
+          <details><summary>Can Titan set my lineup for me?</summary><p>No. Sleeper and ESPN don't let outside apps change lineups, so Titan shows the exact changes to make and a button that opens the team in Sleeper or ESPN.</p></details>
+          <details><summary>Does it work on my phone?</summary><p>Yes. Titan runs in any phone or computer browser, and you can add it to your home screen like an app.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="site-sec cta-band">
+      <div class="site-in">
+        <h2>Bring your leagues together</h2>
+        <p class="sec-sub">Link Sleeper or add an ESPN league, import your rankings, and see every call in one place.</p>
+        <div class="ctas"><a class="btn big" href="/app/">Open Titan</a></div>
+        <p class="fine">Free, with no password needed.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="site-in">
+      <span>© 2026 Titan Fantasy Football Manager. Not affiliated with or endorsed by Sleeper, ESPN or any rankings site.</span>
+      <nav class="foot-links" aria-label="More">
+        <a href="/app/">Open Titan</a>
+        <a href="/privacy.html">Privacy</a>
+        <a href="mailto:gainalphatrading@gmail.com">Contact</a>
+        <a href="https://ko-fi.com/titandev" target="_blank" rel="noopener">Tip jar</a>
+      </nav>
+    </div>
+  </footer>
 </body>
 </html>

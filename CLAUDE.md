@@ -13,6 +13,8 @@ live site, so site changes reach it without a new upload. What's done and what's
 
 | File | What it does |
 |---|---|
+| `index.html`, `site.css` | The website at the root: what Titan is, features, FAQ. It sends anyone already using Titan (a saved account, a home-screen copy, the Android app's `/?source=play`) to the app, keeping the query; `/?home` always shows the website |
+| `app/index.html` | The app's page, at `/app/`. It loads every file by absolute path (`/app.js`, `/styles.css`) |
 | `engine.js` | All the rules, pure (runs in the browser, in Node tests and in the server job): rankings parsing, start/sit, waiver ideas, exposure, byes, projections, kickoff freezing, weekly scoring |
 | `sleeper.js` | Sleeper API, the refresh (`collect`) for Sleeper and ESPN leagues, browser storage |
 | `espn.js` | ESPN adapter: reads leagues, turns them into `buildLeague`'s shape, matches players to Sleeper ids |
@@ -36,6 +38,8 @@ live site, so site changes reach it without a new upload. What's done and what's
 - A change to `engine.js`, `espn.js` or `sleeper.js` needs the functions redeployed too: the
   predeploy step copies them into `functions/shared/`.
 - Adding a file the app loads: add it to `SHELL` in `sw.js` and bump `CACHE`.
+- The Android app opens `/?source=play`. The website's forward to `/app/` (with the query) must
+  keep working, or the Play app shows the website instead of the app.
 - When a refresh's saved data gains a field the screens rely on, bump the snapshot version
   (`v` in `collect`, `sleeper.js`) and the matching check at the end of `app.js`, so devices
   holding an older snapshot refresh on open instead of showing gaps.

@@ -22,7 +22,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const BOX = JSON.stringify(T.espnBoxscore(L1));
   const server = http.createServer((req, res) => {
     const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    const f = path.join(T.ROOT, u === '/' ? 'index.html' : u);
+    const f = path.join(T.ROOT, u.endsWith('/') ? u + 'index.html' : u);
     if (!f.startsWith(path.normalize(T.ROOT)) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
     res.writeHead(200, {'content-type': TYPES[path.extname(f)] || 'application/octet-stream', 'cache-control': 'no-cache'});
     fs.createReadStream(f).pipe(res);
@@ -79,7 +79,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await send('Runtime.enable');
   await send('Fetch.enable', {patterns: [{urlPattern: '*fantasy.espn.com*leagues*'}]});
   await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 2, mobile: true});
+  T.section('the website');
   await send('Page.navigate', {url: ORIGIN + '/'});
+  check(await waitFor('!!document.querySelector(".hero h1")', 20000), 'a first visit to / shows the website');
+  const web = await ev(`({h1: document.querySelector('.hero h1').innerText.replace(/\\n/g, ' '), open: document.querySelectorAll('a[href="/app/"]').length,
+    wide: document.documentElement.scrollWidth <= innerWidth})`);
+  check(/one place/i.test(web.h1) && web.open >= 3 && web.wide, `"${web.h1}", ${web.open} Open Titan links, fits a 390px phone`);
+
+  T.section('the app, at /app/');
+  await send('Page.navigate', {url: ORIGIN + '/app/'});
   check(await waitFor('!!document.querySelector("[data-form=link]")', 20000), 'the welcome screen loads');
   check(/Sleeper and ESPN/.test(await text('.welcome .lede')), 'the welcome mentions Sleeper and ESPN');
 
@@ -236,6 +244,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   } else {
     T.skip('linking a Sleeper account (set TITAN_SLEEPER_USER to run it)');
   }
+
+  T.section('who the website sends to the app');
+  const go = async url => { await send('Page.navigate', {url: ORIGIN + url}); await sleep(1500); return ev('location.pathname + location.search'); };
+  check(await go('/') === '/app/', 'someone already using Titan who opens / lands in the app');
+  check(await go('/?home') === '/?home' && await ev('!!document.querySelector(".hero h1")'), '/?home shows the website even so');
+  check(await go('/?source=play') === '/app/?source=play', 'the Android app\'s address (/?source=play) goes straight to the app');
+  await waitFor('!!document.querySelector("#tabs")', 20000);
 
   check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'nothing is wider than a 390px phone');
   check(!problems.length, problems.length ? 'page errors:\n    ' + problems.join('\n    ') : 'no page errors');

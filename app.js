@@ -329,7 +329,7 @@
 
   function screenWelcome() {
     return `<section class="welcome">
-      <img src="icon.svg" alt="" width="76" height="76">
+      <img src="/icon.svg" alt="" width="76" height="76">
       <h2>Titan Fantasy Football Manager</h2>
       <p class="lede">One place to manage every league you play on Sleeper and ESPN. Import your own rankings, and Titan tells you who to start, who to sit and who to pick up, based on them.</p>
       <form class="card pad" data-form="link" novalidate>
@@ -1547,7 +1547,7 @@
 
   // Offline shell + installable app. Needs https (or localhost).
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
 
   /* --------------------------------------------------------------- boot */
