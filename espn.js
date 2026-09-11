@@ -196,7 +196,7 @@
       roster.push({
         id: p.sid || ('espn:' + e.playerId), espnId: e.playerId, name: p.name, pos: p.pos, team: p.team,
         start: start, slot: start ? slot : '', bye: byes[p.team] || '',
-        inj: p.inj, outish: false, locked: false, held: slot === 'IR'
+        inj: p.inj, outish: false, locked: false, held: slot === 'IR', heldAs: slot === 'IR' ? 'IR' : ''
       });
     });
 

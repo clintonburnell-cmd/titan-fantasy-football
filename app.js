@@ -670,20 +670,33 @@
     if (shown.length > 1) h += jumpBar(shown.map(L => ({cfg: L.cfg})));
     h += '<p class="empty-note" data-find-none hidden>No player on your rosters matches that.</p>';
     h += shown.map(L => {
-      const list = L.roster.slice().sort((a, b) =>
-        a.start !== b.start ? (a.start ? -1 : 1) : SCC.rankKey(a) - SCC.rankKey(b));
+      // Sleeper's order: the starters spot by spot, then the bench by position
+      // (QB, RB, WR, TE, K, DEF, then IDP), best rank first, then IR and taxi.
+      const byPos = (a, b) => posOrder(a.pos) - posOrder(b.pos) || SCC.rankKey(a) - SCC.rankKey(b) || a.name.localeCompare(b.name);
+      const bench = L.roster.filter(p => !p.start && !p.held).sort(byPos);
+      const held = L.roster.filter(p => !p.start && p.held).sort(byPos);
+      const row = (p, label, cls) => {
+        const sub = [p.pos, p.team, p.opp && 'vs ' + p.opp, has(p.implied) && 'implied ' + p.implied, p.bye && 'bye ' + p.bye].filter(Boolean).join(' · ');
+        const find = [SCC.norm(p.name), String(p.team || '').toLowerCase(), String(p.pos || '').toLowerCase()].join(' ');
+        return `<li class="row${p.start ? ' is-start' : ''}" data-find=" ${esc(find)} "><span class="slot${cls ? ' ' + cls : ''}"${
+          p.start ? ` data-pos="${esc(p.pos)}"` : ''}>${esc(label)}</span>${headshot(p)}
+          <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small></span>
+          <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : ''}</span></li>`;
+      };
+      const starters = L.rows.map(r => (r.p ? row(r.p, slotName(r.slot))
+        : `<li class="row r-stop" data-find=" "><span class="slot">${esc(slotName(r.slot))}</span><span class="pphoto"><span class="hs"></span></span>
+          <span class="who"><b>Empty</b></span><span class="right"></span></li>`)).join('');
       return `<article class="card roster-card" id="${anchor(L.cfg)}"><header class="card-h"><div><h3>${esc(L.cfg.key)}</h3>
         <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></header>
-        <ul class="roster">${list.map(p => {
-          const sub = [p.pos, p.team, p.opp && 'vs ' + p.opp, has(p.implied) && 'implied ' + p.implied, p.bye && 'bye ' + p.bye].filter(Boolean).join(' · ');
-          const find = [SCC.norm(p.name), String(p.team || '').toLowerCase(), String(p.pos || '').toLowerCase()].join(' ');
-          return `<li class="row${p.start ? ' is-start' : ''}" data-find=" ${esc(find)} "><span class="slot">${p.start ? 'START' : ''}</span>${headshot(p)}
-            <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small></span>
-            <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : ''}</span></li>`;
-        }).join('')}</ul></article>`;
+        <ul class="roster">${starters}${bench.length ? '<li class="rdiv">Bench</li>' + bench.map(p => row(p, 'BN')).join('') : ''}${
+          held.length ? '<li class="rdiv">Reserve</li>' + held.map(p => row(p, p.heldAs || 'IR', 'held')).join('') : ''}</ul></article>`;
     }).join('');
     return h;
   }
+
+  // Sleeper's position order, for benches: QB, RB, WR, TE, K, DEF, then IDP.
+  const POS_ORDER = {QB: 0, RB: 1, WR: 2, TE: 3, K: 4, DEF: 5, DL: 6, DE: 6, DT: 6, LB: 7, DB: 8, CB: 8, S: 8};
+  const posOrder = pos => (POS_ORDER[pos] !== undefined ? POS_ORDER[pos] : 9);
 
   /* Filters the Rosters page in place as the search is typed (no redraw, so the
      box keeps its cursor): matching rows stay, leagues without a match and
@@ -700,6 +713,7 @@
         if (show) n++;
       });
       card.hidden = !!q && !n;
+      card.querySelectorAll('.rdiv').forEach(d => { d.hidden = !!q; });
       if (q && n) { rows += n; hits.add(card.id); }
     });
     const none = view.querySelector('[data-find-none]'), count = view.querySelector('[data-find-count]');

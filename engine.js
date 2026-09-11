@@ -705,7 +705,8 @@
     }
     // Stashed on IR or the taxi squad: rostered, but can't be started.
     var held = {};
-    (mine.reserve || []).concat(mine.taxi || []).forEach(function (x) { held[String(x)] = 1; });
+    (mine.reserve || []).forEach(function (x) { held[String(x)] = 'IR'; });
+    (mine.taxi || []).forEach(function (x) { held[String(x)] = 'TAXI'; });
 
     var roster = ids.map(function (id) {
       var info = playerInfo(players, id);
@@ -714,7 +715,7 @@
         start: starters.indexOf(String(id)) >= 0,
         slot: slotOf[String(id)] || '',
         bye: byeOf(info.team),
-        inj: '', outish: false, locked: false, held: !!held[String(id)]
+        inj: '', outish: false, locked: false, held: !!held[String(id)], heldAs: held[String(id)] || ''
       };
     });
 

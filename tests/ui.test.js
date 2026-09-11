@@ -130,6 +130,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(count('starters locked') + count('starters yet to play') <= 9, 'starter counts fit the lineup');
   T.section('player search on Rosters');
   await tab('rosters');
+  const order = await ev(`[...document.querySelectorAll('.roster-card .roster > li')].map(li => li.classList.contains('rdiv') ? '|' + li.innerText.toUpperCase() + '|'
+    : li.querySelector('.slot').innerText + ':' + ((li.querySelector('.who small') || {}).innerText || '').split(' · ')[0])`);
+  const startLabels = order.slice(0, 9).map(x => x.split(':')[0]).join(' ');
+  const benchPos = order.slice(order.indexOf('|BENCH|') + 1, order.indexOf('|RESERVE|')).map(x => x.split(':')[1]);
+  const posRank = {QB: 0, RB: 1, WR: 2, TE: 3, K: 4, DEF: 5};
+  check(startLabels === 'QB RB RB WR WR TE FLEX K DEF', 'Rosters list the starters spot by spot, like Sleeper: ' + startLabels);
+  check(benchPos.length === 6 && benchPos.every((p, i) => i === 0 || posRank[benchPos[i - 1]] <= posRank[p]) &&
+    order[order.length - 1].startsWith('IR:'), `then the bench by position (${benchPos.join(' ')}) and the IR player under Reserve`);
   const someone = (await ev(`(document.querySelector('.roster .row .name-line b') || {}).innerText || ''`)).split(' ').pop();
   const search = async q => {
     await ev(`(() => { const i = document.querySelector('[data-roster-search]'); i.focus(); i.value = ${JSON.stringify(q)};

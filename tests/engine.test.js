@@ -181,6 +181,13 @@ const keptX = SCC.keepStartedRanks([{name: 'Slow Back', pos: 'RB', rank: 55}],
 check(keptX.length === 1 && keptX[0].name === 'Played Qb' && keptX[0].rank === 4,
   'new rankings keep the old rank of a started player they left out, and nobody else\'s');
 
+section('IR and taxi');
+const heldLg = SCC.buildLeague({id: 'H', key: 'H', lineup: ['QB']}, [{owner_id: 'u', roster_id: 1, players: ['1', '2', '3'], starters: ['1'],
+  reserve: ['2'], taxi: ['3']}], 'u', {1: ['A Qb', 'QB', 'KC'], 2: ['B Rb', 'RB', 'KC'], 3: ['C Wr', 'WR', 'KC']});
+const heldOf = id => heldLg.roster.find(p => p.id === id);
+check(heldOf('2').held && heldOf('2').heldAs === 'IR' && heldOf('3').held && heldOf('3').heldAs === 'TAXI' && !heldOf('1').held,
+  'a Sleeper roster keeps IR and taxi players apart');
+
 section('a starter on bye');
 const byeLg = {id: 'B', key: 'B', name: 'B', lineup: ['QB']};
 const byeRos = [pl('q1', 'Bye Qb', 'QB', 'KC', {bye: 5}), pl('q2', 'Backup Qb', 'QB', 'BUF', {bye: 7, start: false, slot: ''})];

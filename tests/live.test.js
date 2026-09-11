@@ -34,6 +34,7 @@ if (!T.sleeperUser) {
   check(snap.leagues.length > 0, `${snap.leagues.length} leagues loaded`);
   const A = SCC.analyzeAll(snap, weekly);
   check(A.leagues.every(L => L.rows.length === L.cfg.lineup.length), 'every lineup spot gets a verdict');
+  check(A.leagues.every(L => L.rows.map(r => r.slot).join() === L.cfg.lineup.join()), 'Lineups list each league\'s spots in Sleeper\'s own order');
   check(SCC.exposure(A.leagues).active === snap.leagues.length, 'exposure counts every team');
   check(SCC.byeNeeds(A.leagues, snap.week).length === snap.leagues.length, 'bye-week needs checked for every league');
 
@@ -47,7 +48,8 @@ if (!T.sleeperUser) {
 
   section('matchups');
   const mus = await API.collectMatchups(snap);
-  const full = mus.filter(x => x.me && x.opp && x.opp.players.length === x.cfg.lineup.length);
+  const full = mus.filter(x => x.me && x.opp && x.opp.players.length === x.cfg.lineup.length &&
+    [x.me, x.opp].every(s => s.players.map(p => p.slot).join() === x.cfg.lineup.join()));
   check(mus.length === snap.leagues.length && full.length + mus.filter(x => x.none).length === mus.length && !mus.some(x => x.error),
     `this week's matchups: ${full.length} with both lineups, ${mus.filter(x => x.none).length} with none`);
 
