@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="130 -40 440 790" width="440" height="790" role="img" aria-labelledby="titan-title">
+  <title id="titan-title">A Titan lifting a football overhead</title>
+  <defs>
+    <!-- One light for the whole figure: the glowing football above him. -->
+    <linearGradient id="skin" gradientUnits="userSpaceOnUse" x1="0" y1="110" x2="0" y2="740">
+      <stop offset="0" stop-color="#2e4a7c"/>
+      <stop offset=".45" stop-color="#17264a"/>
+      <stop offset="1" stop-color="#0b1323"/>
+    </linearGradient>
+    <linearGradient id="cape" gradientUnits="userSpaceOnUse" x1="200" y1="300" x2="548" y2="640">
+      <stop offset="0" stop-color="#17614f"/>
+      <stop offset="1" stop-color="#0a1d25"/>
+    </linearGradient>
+    <linearGradient id="crest" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#74f2b9"/>
+      <stop offset="1" stop-color="#1f7a57"/>
+    </linearGradient>
+    <radialGradient id="ball" cx=".4" cy=".3" r=".8">
+      <stop offset="0" stop-color="#dc8e52"/>
+      <stop offset=".55" stop-color="#9a4b20"/>
+      <stop offset="1" stop-color="#5b2912"/>
+    </radialGradient>
+    <radialGradient id="halo" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#f1fff6" stop-opacity=".6"/>
+      <stop offset=".3" stop-color="#4cc790" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#4cc790" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Backlit: a thin blue rim on the outer edge and a soft green glow around it. -->
+    <filter id="rim" x="-35%" y="-25%" width="170%" height="150%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="1.8" result="thick"/>
+      <feFlood flood-color="#9db9ff" result="blue"/>
+      <feComposite in="blue" in2="thick" operator="in" result="edge"/>
+      <feGaussianBlur in="thick" stdDeviation="14" result="soft"/>
+      <feFlood flood-color="#4cc790" flood-opacity=".38" result="green"/>
+      <feComposite in="green" in2="soft" operator="in" result="glow"/>
+      <feMerge><feMergeNode in="glow"/><feMergeNode in="edge"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shine" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Light off the football -->
+  <g fill="#fff" opacity=".07">
+    <polygon points="300,92 293,-40 307,-40" transform="rotate(-64 300 92)"/>
+    <polygon points="300,92 293,-40 307,-40" transform="rotate(-42 300 92)"/>
+    <polygon points="300,92 293,-40 307,-40" transform="rotate(-21 300 92)"/>
+    <polygon points="300,92 293,-40 307,-40"/>
+    <polygon points="300,92 293,-40 307,-40" transform="rotate(21 300 92)"/>
+    <polygon points="300,92 293,-40 307,-40" transform="rotate(42 300 92)"/>
+    <polygon points="300,92 293,-40 307,-40" transform="rotate(64 300 92)"/>
+  </g>
+  <circle cx="300" cy="92" r="150" fill="url(#halo)"/>
+  <ellipse cx="300" cy="740" rx="170" ry="10" fill="#000" opacity=".45"/>
+
+  <!-- The Titan -->
+  <g filter="url(#rim)">
+    <path fill="url(#cape)" d="M214 300 C196 380 190 470 204 560 C240 610 300 628 380 624 C460 640 520 612 548 556 C500 520 454 450 404 298 Z"/>
+    <g fill="url(#skin)">
+      <path d="M236 540 C222 572 206 600 204 628 C200 660 192 690 190 716 L164 738 L216 738 L224 718 C230 690 238 662 242 632 C252 600 272 570 288 548 Z"/>
+      <path d="M364 540 C378 572 394 600 396 628 C400 660 408 690 410 716 L436 738 L384 738 L376 718 C370 690 362 662 358 632 C348 600 328 570 312 548 Z"/>
+      <path d="M244 488 L356 488 L372 552 L228 552 Z"/>
+      <rect x="240" y="472" width="120" height="20" rx="4"/>
+      <path d="M192 298 C228 290 268 298 300 302 C332 298 372 290 408 298 C424 318 414 362 396 394 C382 422 366 452 358 478 L242 478 C234 452 218 422 204 394 C186 362 176 318 192 298 Z"/>
+      <path d="M280 250 L320 250 L326 306 L274 306 Z"/>
+      <path d="M186 304 C158 286 142 250 142 214 C142 190 158 168 184 150 C204 136 218 126 228 118 L256 126 C238 142 208 164 190 196 C180 230 200 280 244 320 Z"/>
+      <path d="M414 304 C442 286 458 250 458 214 C458 190 442 168 416 150 C396 136 382 126 372 118 L344 126 C362 142 392 164 410 196 C420 230 400 280 356 320 Z"/>
+      <path d="M300 176 C332 176 354 198 356 228 C358 252 352 272 340 290 L316 296 C312 284 310 272 308 262 L292 262 C290 272 288 284 284 296 L260 290 C248 272 242 252 244 228 C246 198 268 176 300 176 Z"/>
+      <path d="M222 122 C218 104 232 92 250 94 C264 96 272 108 268 122 C262 136 232 138 222 122 Z"/>
+      <path d="M378 122 C382 104 368 92 350 94 C336 96 328 108 332 122 C338 136 368 138 378 122 Z"/>
+    </g>
+    <path fill="url(#crest)" d="M292 180 C289 164 291 150 300 142 C309 150 311 164 308 180 Z"/>
+  </g>
+
+  <!-- Cape folds; muscle, armour and helmet lines -->
+  <g fill="none" stroke="#04110f" stroke-opacity=".35" stroke-width="3" stroke-linecap="round">
+    <path d="M424 360 C442 450 474 520 520 566 M404 430 C414 506 432 562 470 612"/>
+  </g>
+  <g fill="none" stroke="#9db9ff" stroke-opacity=".22" stroke-width="2.2" stroke-linecap="round">
+    <path d="M246 338 C266 360 288 360 298 346 M354 338 C334 360 312 360 302 346"/>
+    <path d="M300 350 L300 466"/>
+    <path d="M276 392 Q300 398 324 392 M278 420 Q300 426 322 420 M282 446 Q300 452 318 446"/>
+    <path d="M200 310 C184 292 168 268 160 240 M400 310 C416 292 432 268 440 240"/>
+    <path d="M260 490 L249 552 M276 490 L269 552 M292 490 L290 552 M308 490 L310 552 M324 490 L331 552 M340 490 L351 552"/>
+    <path d="M210 632 Q218 640 228 634 M390 632 Q382 640 372 634"/>
+    <path d="M254 212 Q300 202 346 212"/>
+  </g>
+
+  <!-- The helmet's T-shaped opening, glowing -->
+  <path filter="url(#shine)" fill="#5fe0a6" d="M262 222 L338 222 L338 234 L307 234 L305 262 L295 262 L293 234 L262 234 Z"/>
+
+  <!-- The football, held from below -->
+  <path d="M212 92 C238 40 362 40 388 92 C362 144 238 144 212 92 Z" fill="url(#ball)"/>
+  <path d="M238 68 C270 50 330 50 362 68" fill="none" stroke="#ffd3a6" stroke-opacity=".32" stroke-width="3" stroke-linecap="round"/>
+  <g stroke="#f6f1e7" stroke-linecap="round">
+    <path d="M266 79 L334 79" stroke-width="3"/>
+    <path d="M273 72 L273 86 M285 72 L285 86 M297 72 L297 86 M309 72 L309 86 M321 72 L321 86" stroke-width="3.4"/>
+  </g>
+</svg>

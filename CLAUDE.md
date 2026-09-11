@@ -14,6 +14,7 @@ live site, so site changes reach it without a new upload. What's done and what's
 | File | What it does |
 |---|---|
 | `index.html`, `site.css` | The website at the root: what Titan is, features, FAQ. It sends anyone already using Titan (a saved account, a home-screen copy, the Android app's `/?source=play`) to the app, keeping the query; `/?home` always shows the website |
+| `titan.svg` | The Titan banner art (hand-drawn vector). The Play feature graphic (`titan-android/store/feature-graphic.html`) uses it too: re-render that after changing it |
 | `app/index.html` | The app's page, at `/app/`. It loads every file by absolute path (`/app.js`, `/styles.css`) |
 | `engine.js` | All the rules, pure (runs in the browser, in Node tests and in the server job): rankings parsing, start/sit, waiver ideas, exposure, byes, projections, kickoff freezing, weekly scoring |
 | `sleeper.js` | Sleeper API, the refresh (`collect`) for Sleeper and ESPN leagues, browser storage |
