@@ -118,6 +118,23 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(games.length === 4 && ['starters locked', 'starters yet to play', 'bench locked', 'bench yet to play'].every(l => games.some(t => t.endsWith(l))),
     'game tiles: ' + games.join(' | '));
   check(count('starters locked') + count('starters yet to play') <= 9, 'starter counts fit the lineup');
+  T.section('player search on Rosters');
+  await tab('rosters');
+  const someone = (await ev(`(document.querySelector('.roster .row .name-line b') || {}).innerText || ''`)).split(' ').pop();
+  const search = async q => {
+    await ev(`(() => { const i = document.querySelector('[data-roster-search]'); i.focus(); i.value = ${JSON.stringify(q)};
+      i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
+    await sleep(150);
+    return ev(`({rows: [...document.querySelectorAll('.roster .row')].filter(r => !r.hidden).length, none: !document.querySelector('[data-find-none]').hidden,
+      count: document.querySelector('[data-find-count]').innerText, focused: !!document.activeElement && 'rosterSearch' in document.activeElement.dataset})`);
+  };
+  const found = await search(someone);
+  check(found.rows >= 1 && !found.none && found.focused && /match/.test(found.count), `searching "${someone}" finds ${found.count}, the box keeps its cursor`);
+  const nobody = await search('zzqqxx');
+  check(nobody.rows === 0 && nobody.none, 'a search with no match says so');
+  const cleared = await search('');
+  check(cleared.rows === 16 && !cleared.none, 'clearing the search shows every player again');
+
   await tab('matchup');
   check(await waitFor(`!!document.querySelector('.match .board')`, 30000), 'the Matchup tab loads');
   const mu = await ev(`({board: ((document.querySelector('.match .board') || {}).innerText || (document.querySelector('.card.league') || {}).innerText || '').replace(/\\n/g, ' '),
@@ -138,6 +155,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     await sleep(300);
     await submit('link', 'username', T.sleeperUser);
     check(await waitFor(`document.querySelectorAll('.league').length >= 2`, 120000), 'Sleeper and ESPN leagues show together');
+    const jumps = await ev(`document.querySelectorAll('.jump [data-jump]').length`);
+    check(jumps >= 2 && jumps === await ev(`document.querySelectorAll('.card.league').length`), `a chip for every league at the top of Lineups (${jumps})`);
+    // The second league: the last sits at the page's end, which can't scroll to the top.
+    await ev(`document.querySelectorAll('.jump [data-jump]')[1].click(); true`);
+    await sleep(1200);
+    const landed = await ev(`Math.round(document.getElementById(document.querySelectorAll('.jump [data-jump]')[1].dataset.jump).getBoundingClientRect().top)`);
+    check(landed >= 0 && landed < 260, `a chip jumps to its league (the card now starts ${landed}px from the top, below the header)`);
     await tab('ranks');
     await ev(`(() => { const ta = document.querySelector('textarea[data-draft="text"]'); ta.value = ${JSON.stringify(T.sampleRanks())};
       ta.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);

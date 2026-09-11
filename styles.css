@@ -338,6 +338,19 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .score-chip.live small { color: var(--stop); }
 .live-note { color: var(--muted); }
 
+/* Quick navigation: chips that jump to a league's card (Lineups, Rosters). The
+   cards stop just below the sticky header. */
+.jump { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.jump::-webkit-scrollbar { display: none; }
+.jump-chip { flex: none; max-width: 13rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px;
+  padding: 6px 12px; font: inherit; font-size: .8rem; font-weight: 600; }
+.jump-chip:hover { border-color: var(--accent); }
+.jump-chip .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--swap); margin-right: 6px; vertical-align: middle; }
+.card.league, .roster-card { scroll-margin-top: 8.5rem; }
+/* The Rosters search hides rows and leagues in place. */
+.row[hidden], .card[hidden], .jump-chip[hidden], .empty-note[hidden], .fine[hidden] { display: none !important; }
+
 /* Matchup, laid out like Sleeper's: a scoreboard, then each lineup spot with your
    player on the left and your opponent's on the right, points toward the middle. */
 .match-bar { flex-wrap: nowrap; align-items: center; justify-content: space-between; }

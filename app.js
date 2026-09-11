@@ -69,6 +69,7 @@
     sync: {ready: false, api: null, user: null, state: 'off', error: '', at: 0},
     espn: {busy: false, error: '', pick: null, login: null, openLogin: false}, // adding ESPN leagues
     match: {busy: false, data: null, error: '', at: 0, week: 0}, // this week's matchups, loaded on the Matchup tab
+    rosterQuery: '', // the Rosters page's player search
     proj: {}, // Sleeper's projections for the snapshot's week
     view: {week: 0, pos: 'QB'} // the saved rankings open on the Rankings tab
   };
@@ -266,6 +267,7 @@
     if (!S.account) { view.innerHTML = iosHint() + screenWelcome(); return; }
     const err = S.error ? `<div class="banner stop">${esc(S.error)}</div>` : '';
     view.innerHTML = iosHint() + err + SCREENS[S.ui.tab]();
+    if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
   }
 
   function emptyState() {
@@ -347,6 +349,13 @@
   const VERDICT = {'OK': 'ok', 'UNRANKED': 'unranked', 'SWAP OUT': 'swap', 'DO NOT START': 'stop', 'FILL SLOT': 'stop', 'LOCKED': 'locked'};
   const needsAction = L => L.moves.length || L.stops || L.hurt.length;
 
+  // Quick navigation: chips that jump to a league's card further down the page.
+  const anchor = cfg => 'lg-' + String(cfg.id).replace(/[^\w-]/g, '_');
+  function jumpBar(items) {
+    return `<nav class="jump" aria-label="Jump to a league">${items.map(x => `<button type="button" class="jump-chip" data-jump="${anchor(x.cfg)}">${
+      x.flag ? '<i class="dot" title="Needs action"></i>' : ''}${esc(x.cfg.key)}</button>`).join('')}</nav>`;
+  }
+
   function screenLineups() {
     if (!S.snap) return emptyState();
     const A = S.A;
@@ -373,6 +382,7 @@
       <button class="chip" data-filter="all" aria-pressed="${S.ui.filter !== 'action'}">All ${A.leagues.length}</button>
       <button class="chip" data-filter="action" aria-pressed="${S.ui.filter === 'action'}">Needs action ${nAction}</button>
     </div>`;
+    if (list.length > 1) h += jumpBar(list.map(L => ({cfg: L.cfg, flag: !!needsAction(L)})));
     if (!A.leagues.length) {
       h += `<div class="empty-note">No leagues to show. ${S.snap.available && S.snap.available.length
         ? 'Switch some on in <button class="link" data-go="settings">Settings</button>.'
@@ -420,7 +430,7 @@
     const st = L.stops ? ['stop', plural(L.stops, 'problem')]
       : L.moves.length ? ['swap', plural(L.moves.length, 'change')]
       : ['ok', 'Set'];
-    let h = `<article class="card league">
+    let h = `<article class="card league" id="${anchor(L.cfg)}">
       <header class="card-h"><div><h3>${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg) + projLine(L))}</p></div><span class="pill p-${st[0]}">${st[1]}</span></header>`;
     if (L.moves.length) {
       h += `<div class="moves"><h4>Make these changes in Sleeper</h4>${L.moves.map(m => `
@@ -615,23 +625,55 @@
     const leagues = S.A.leagues;
     const pick = leagues.some(L => L.cfg.key === S.ui.league) ? S.ui.league : 'all';
     const shown = pick === 'all' ? leagues : leagues.filter(L => L.cfg.key === pick);
-    let h = `<div class="bar"><label class="field"><span>League</span><select data-ui="league">
+    let h = `<div class="bar"><label class="field grow"><span>Find a player</span><input type="search" data-roster-search
+        placeholder="Name, team or position" value="${esc(S.rosterQuery)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+      <label class="field"><span>League</span><select data-ui="league">
       <option value="all">All leagues</option>
       ${leagues.map(L => `<option ${L.cfg.key === pick ? 'selected' : ''}>${esc(L.cfg.key)}</option>`).join('')}
-    </select></label></div>`;
+    </select></label></div>
+    <p class="fine" data-find-count hidden></p>`;
+    if (shown.length > 1) h += jumpBar(shown.map(L => ({cfg: L.cfg})));
+    h += '<p class="empty-note" data-find-none hidden>No player on your rosters matches that.</p>';
     h += shown.map(L => {
       const list = L.roster.slice().sort((a, b) =>
         a.start !== b.start ? (a.start ? -1 : 1) : SCC.rankKey(a) - SCC.rankKey(b));
-      return `<article class="card"><header class="card-h"><div><h3>${esc(L.cfg.key)}</h3>
+      return `<article class="card roster-card" id="${anchor(L.cfg)}"><header class="card-h"><div><h3>${esc(L.cfg.key)}</h3>
         <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></header>
         <ul class="roster">${list.map(p => {
           const sub = [p.pos, p.team, p.opp && 'vs ' + p.opp, has(p.implied) && 'implied ' + p.implied, p.bye && 'bye ' + p.bye].filter(Boolean).join(' · ');
-          return `<li class="row${p.start ? ' is-start' : ''}"><span class="slot">${p.start ? 'START' : ''}</span>${headshot(p)}
+          const find = [SCC.norm(p.name), String(p.team || '').toLowerCase(), String(p.pos || '').toLowerCase()].join(' ');
+          return `<li class="row${p.start ? ' is-start' : ''}" data-find=" ${esc(find)} "><span class="slot">${p.start ? 'START' : ''}</span>${headshot(p)}
             <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small></span>
             <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : ''}</span></li>`;
         }).join('')}</ul></article>`;
     }).join('');
     return h;
+  }
+
+  /* Filters the Rosters page in place as the search is typed (no redraw, so the
+     box keeps its cursor): matching rows stay, leagues without a match and
+     their jump chips hide. Matches name, team or position. */
+  function applyRosterSearch() {
+    const q = SCC.norm(S.rosterQuery || '').trim();
+    const hits = new Set();
+    let rows = 0;
+    view.querySelectorAll('.roster-card').forEach(card => {
+      let n = 0;
+      card.querySelectorAll('.roster .row').forEach(row => {
+        const show = !q || row.dataset.find.includes(' ' + q) || row.dataset.find.includes(q);
+        row.hidden = !show;
+        if (show) n++;
+      });
+      card.hidden = !!q && !n;
+      if (q && n) { rows += n; hits.add(card.id); }
+    });
+    const none = view.querySelector('[data-find-none]'), count = view.querySelector('[data-find-count]');
+    if (none) none.hidden = !q || rows > 0;
+    if (count) {
+      count.hidden = !q || !rows;
+      count.textContent = rows ? `${plural(rows, 'match', 'matches')} in ${plural(hits.size, 'league')}` : '';
+    }
+    view.querySelectorAll('.jump [data-jump]').forEach(b => { b.hidden = !!q && !hits.has(b.dataset.jump); });
   }
 
   /* ---- Exposure */
@@ -1271,9 +1313,14 @@
   });
 
   view.addEventListener('click', e => {
-    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
+    if (t.dataset.jump) {
+      const card = document.getElementById(t.dataset.jump);
+      if (card) card.scrollIntoView({behavior: 'smooth', block: 'start'});
+      return;
+    }
     if (t.dataset.linkTab) { S.ui.linkTab = t.dataset.linkTab; saveUi(); return render(); }
     if (t.dataset.filter) { S.ui.filter = t.dataset.filter; saveUi(); return render(); }
     if (t.dataset.viewPos) { S.view.pos = t.dataset.viewPos; return render(); }
@@ -1324,7 +1371,10 @@
 
   view.addEventListener('input', e => {
     const t = e.target;
-    if (t.dataset.draft === 'text') {
+    if ('rosterSearch' in t.dataset) {
+      S.rosterQuery = t.value;
+      applyRosterSearch();
+    } else if (t.dataset.draft === 'text') {
       S.draft.text = t.value;
       S.draft.file = '';
       S.draft.parsed = parseDraft();

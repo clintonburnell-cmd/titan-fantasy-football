@@ -48,9 +48,9 @@ website (such as alerts) to pass review.
 
 | Screen | What it shows |
 |---|---|
-| Lineups | Each league's lineup as set in Sleeper, with a verdict on every slot, the changes to make, wire upgrades and injuries |
+| Lineups | Each league's lineup as set in Sleeper, with a verdict on every slot, the changes to make, wire upgrades and injuries; chips at the top jump to any league |
 | Matchup | Each league's head-to-head this week: both teams' scores and projections, then your lineup and your opponent's spot by spot, with points, kickoff times and projections |
-| Rosters | Every rostered player per league, with rank, tier, opponent and bye |
+| Rosters | Every rostered player per league, with rank, tier, opponent and bye; a player search (name, team or position) and chips that jump to any league |
 | Exposure | Players on two or more of your teams |
 | Byes | How many of your players are off each week, per league |
 | Weeks | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points (Sleeper leagues; ESPN scoring is next) |
