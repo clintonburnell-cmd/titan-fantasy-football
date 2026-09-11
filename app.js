@@ -493,8 +493,9 @@
     return c;
   }
 
-  // The lineup's points so far once games start, and Sleeper's projection for it
-  // (plus Titan's lineup's, before kickoff, when that differs).
+  // The lineup's points so far once games start (in green), and Sleeper's
+  // projection for it (in bold), plus Titan's lineup's, before kickoff, when
+  // that differs. Returns HTML (numbers and fixed words only).
   function projLine(L) {
     const starters = L.roster.filter(p => p.start);
     const played = starters.filter(scored);
@@ -502,12 +503,12 @@
     if (played.length) {
       const pts = played.reduce((t, p) => t + p.pts, 0);
       const final = starters.every(p => p.game === 'complete');
-      s = ` · ${final ? 'scored' : 'scored so far'} ${fmt(pts)}${starters.some(p => p.game === 'in_game') ? ' (live)' : ''}`;
+      s = ` · ${final ? 'scored' : 'scored so far'} <b class="pts-actual">${fmt(pts)}</b>${starters.some(p => p.game === 'in_game') ? ' (live)' : ''}`;
     }
     const mine = SCC.sumProj(starters.map(p => ({proj: projOf(p, L.cfg)})));
     if (!mine) return s;
     const titan = SCC.sumProj((L.opt || []).filter(o => o.p).map(o => ({proj: projOf(o.p, L.cfg)})));
-    return s + ` · projected ${fmt(mine)}${!played.length && Math.abs(titan - mine) >= 0.1 ? `, Titan's lineup ${fmt(titan)}` : ''}`;
+    return s + ` · projected <b class="pts-proj">${fmt(mine)}</b>${!played.length && Math.abs(titan - mine) >= 0.1 ? `, Titan's lineup ${fmt(titan)}` : ''}`;
   }
 
   // Where a league's lineup is set: the team's page on Sleeper or ESPN.
@@ -525,7 +526,7 @@
       : L.moves.length ? ['swap', plural(L.moves.length, 'change')]
       : ['ok', 'Set'];
     let h = `<details class="card league fold" ${foldAttrs('lineup', L.cfg)}>
-      <summary class="card-h"><div><h3>${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg) + projLine(L))}</p></div><span class="pill p-${st[0]}">${st[1]}</span></summary>`;
+      <summary class="card-h"><div><h3>${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg)) + projLine(L)}</p></div><span class="pill p-${st[0]}">${st[1]}</span></summary>`;
     if (L.moves.length) {
       // A starter changing spots shows where he goes or comes from, and when he plays.
       h += `<div class="moves"><div class="moves-h"><h4>Make these changes in ${siteName(L.cfg)}</h4>${openSite(L.cfg)}</div>${L.moves.map(m => `

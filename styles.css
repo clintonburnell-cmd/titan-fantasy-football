@@ -124,6 +124,9 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; }
 .card-h div { min-width: 0; }
 .card-h h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-h p { color: var(--muted); font-size: .78rem; }
+/* A lineup's points so far (soft green) against its projection (bold, brightest text). */
+.card-h .pts-actual { color: var(--ok); font-weight: 800; }
+.card-h .pts-proj { color: var(--text); font-weight: 800; }
 
 .pill { flex: none; font-size: .72rem; font-weight: 800; letter-spacing: .03em; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
 .p-ok { background: var(--ok-soft); color: var(--ok); }
