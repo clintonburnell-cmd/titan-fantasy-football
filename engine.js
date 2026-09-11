@@ -145,12 +145,13 @@
   }
 
   /* Sleeper roster ids are numeric, except team defences, whose id IS the team
-     abbreviation. Those are named "<ABBR> D/ST" to match the rankings. */
+     abbreviation. Those are named "<ABBR> D/ST" to match the rankings. An ESPN
+     player Sleeper's list doesn't have ("espn:<id>") is looked up like anyone. */
   function playerInfo(players, id) {
     var key = String(id);
-    if (!/^\d+$/.test(key)) return {name: key + ' D/ST', pos: 'DEF', team: key};
     var e = players && players[key];
     if (e) return {name: e[0], pos: e[1], team: e[2]};
+    if (!/^\d+$/.test(key) && key.indexOf(':') < 0) return {name: key + ' D/ST', pos: 'DEF', team: key};
     return {name: 'id ' + key, pos: '?', team: ''};
   }
 

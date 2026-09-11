@@ -441,16 +441,18 @@
     return n;
   }
 
-  /* Rosters, matchups and the schedule for one week, for the Scorecard. */
+  /* Rosters, matchups and the schedule for one week, for the Results tab.
+     Sleeper leagues: the week's rosters and matchups. ESPN leagues: the week's
+     box score for the person's team, shaped the same way (espnWeek). */
   async function collectScores(account, leagues, week, season) {
     var sched = await getJson(SCHEDULE + season);
     if (!sched || !sched.length) throw new Error('could not read the NFL schedule');
     var prog = SCC.weekProgress(sched, week);
+    var userId = String(account.userId || '');
     var espn = leagues.filter(function (l) { return l.platform === 'espn'; });
     leagues = leagues.filter(function (l) { return l.platform !== 'espn'; });
-    var out = {week: week, userId: account.userId, started: prog.started, done: prog.done,
-      total: prog.total, leagues: [], players: {},
-      skipped: espn.map(function (l) { return l.key + ': ESPN weekly scores are coming soon'; })};
+    var out = {week: week, userId: userId, started: prog.started, done: prog.done,
+      total: prog.total, leagues: [], players: {}, skipped: []};
     if (!prog.started) return out;
 
     var players = await loadPlayers();
@@ -460,14 +462,55 @@
         getJson(API + '/league/' + l.id + '/matchups/' + week).catch(function () { return null; })
       ]);
     }));
+    var boxes = await Promise.all(espn.map(function (l) {
+      if (l.teamId === null || l.teamId === undefined) return {error: 'pick your team in Settings'};
+      return ESPN.fetchMatchup(l.espnId, season, week, l.teamId)
+        .then(function (m) { return m || {error: 'no matchup that week'}; })
+        .catch(function (e) {
+          var why = String((e && (e.code || '') + ' ' + (e.message || '')) || e);
+          return {error: /private|permission|precondition|unauthenticated/i.test(why) ? 'private, so it needs your ESPN login (Settings)' : 'could not read ESPN'};
+        });
+    }));
     var missing = missingIds([].concat.apply([], sets.map(function (s) {
       return (s[1] || []).map(function (m) { return m.players; });
     })), players);
     if (missing.length) await resolveMissing(missing, players);
 
-    out.players = players;
+    // ESPN players Sleeper's list doesn't have are added for this week only,
+    // on top of the shared list rather than into it.
+    var pmap = Object.create(players);
+    out.players = pmap;
     out.leagues = leagues.map(function (l, i) { return {cfg: l, rosters: sets[i][0], matchups: sets[i][1]}; });
+    espn.forEach(function (l, i) {
+      var b = boxes[i];
+      if (b.error) out.skipped.push(l.key + ': ' + b.error);
+      else out.leagues.push(espnWeek(l, b.me, pmap, userId));
+    });
     return out;
+  }
+
+  /* One ESPN team's week in the shape of Sleeper's rosters and matchups, so
+     SCC.scoreWeek scores it like any league: its players (Sleeper ids where
+     matched), its starters in lineup order, and each player's points. */
+  function espnWeek(lg, me, players, userId) {
+    ESPN.toSleeper(me.players, players);
+    var ids = [], pts = {}, used = {};
+    me.players.forEach(function (p) {
+      ids.push(p.id);
+      pts[p.id] = p.pts;
+      if (!players[p.id]) players[p.id] = [p.name, p.pos, p.team];
+    });
+    var starters = lg.lineup.map(function (slot) {
+      for (var i = 0; i < me.players.length; i++) {
+        var p = me.players[i];
+        if (!used[i] && p.start && p.slot === slot) { used[i] = 1; return p.id; }
+      }
+      return '0';
+    });
+    var rosterId = Number(me.teamId);
+    return {cfg: lg,
+      rosters: [{roster_id: rosterId, owner_id: userId, players: ids}],
+      matchups: [{roster_id: rosterId, matchup_id: 1, players: ids, starters: starters, players_points: pts}]};
   }
 
   /* Sleeper's weekly projections (RotoWire's numbers), trimmed and kept for an hour. */

@@ -216,7 +216,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await tab('byes');
   check(await ev(`!!document.querySelector('table.byes')`), 'the Byes table renders');
   await tab('score');
-  check(await waitFor(`/ESPN weekly scores are coming soon/.test(document.body.innerText)`, 30000), 'the Results tab says ESPN scoring is coming');
+  check(await waitFor(`[...document.querySelectorAll('details.score .sname')].some(s => /Titan Test League/.test(s.innerText))`, 30000),
+    'the Results tab scores the ESPN league');
   check(await ev(`document.querySelector('#tabs [data-tab="score"]').innerText === 'Results'`), 'the tab is called Results');
 
   if (T.sleeperUser) {

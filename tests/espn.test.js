@@ -73,7 +73,9 @@ const {check, section} = T;
   check(Asf.rows.some(r => r.slot === 'SUPER_FLEX' && r.p), 'the superflex spot is filled');
 
   section('refresh with ESPN leagues');
-  const undo = T.stubEspn({99999901: L1, 99999902: SF, 99999903: 401});
+  // Each test league answers with its box score when Titan asks for one.
+  const serve = L => url => new Response(JSON.stringify(/mBoxscore/.test(url) ? T.espnBoxscore(L) : L), {status: 200});
+  const undo = T.stubEspn({99999901: serve(L1), 99999902: serve(SF), 99999903: 401});
   const espnOnly = {userId: '', username: '', displayName: 'My leagues', prefs: {},
     espn: {leagues: [{id: '99999901', teamId: 1}, {id: '99999902', teamId: 2}, {id: '99999903', teamId: 1, name: 'Secret League'}]}};
   const s1 = await API.collect(espnOnly, null, null);
@@ -81,7 +83,14 @@ const {check, section} = T;
   const priv = s1.available.find(l => l.id === 'espn:99999903');
   check(priv && priv.error === 'private' && priv.active === false && priv.key === 'Secret League', 'a private league is listed with its reason, switched off');
   const sc1 = await API.collectScores(espnOnly, s1.leagues.map(x => x.cfg), 1, s1.season);
-  check(sc1.skipped.length === 2 && sc1.leagues.length === 0, 'the Results tab lists ESPN leagues as not scored yet');
+  const W1 = SCC.scoreWeek(sc1, weekly);
+  const r1 = W1.rows.find(r => r.key === 'Titan Test League');
+  check(sc1.leagues.length === 2 && !sc1.skipped.length && W1.rows.length === 2 && r1 && r1.detail.filter(x => x.slot !== 'bench').length === 9,
+    `the Results tab scores ESPN leagues from the week's box score (${W1.rows.length} leagues, 9 spots in the first)`);
+  check(r1 && r1.roster.length === 16 && r1.roster.every(p => p.pos && p.pos !== '?') && r1.roster.filter(p => p.rank !== null).length >= 6,
+    'every ESPN player is named and placed, and ranked players get their rank');
+  check(!Object.prototype.hasOwnProperty.call(await API.loadPlayers(), 'espn:' + L1.teams[0].roster.entries[0].playerId),
+    'players Sleeper\'s list lacks are added for that week only, not to the saved list');
 
   if (T.sleeperUser) {
     const me = await API.lookupUser(T.sleeperUser);

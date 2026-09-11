@@ -65,7 +65,7 @@ website (such as alerts) to pass review.
 | Rosters | Every league's roster in Sleeper's order: the starters spot by spot, then the bench by position (QB, RB, WR, TE, K, DEF), then IR and taxi under Reserve, each with headshot, rank, tier, opponent, bye, kickoff time and live points; a player search (name, team or position), chips that jump to any league, and leagues that fold like Lineups |
 | Exposure | Players on two or more of your teams |
 | Byes | How many of your players are off each week, per league |
-| Results | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points (Sleeper leagues; ESPN scoring is next) |
+| Results | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points (Sleeper and ESPN leagues; ESPN weeks come from ESPN's box score for that week) |
 | News | News-only X accounts (@UnderdogNFL), each opening on X. X doesn't let apps read posts without a paid plan |
 | Rankings | Import weekly rankings (your own CSV or a sheet paste, Late-Round, FantasyPros, The Hall) and view any saved week by position; until you import, lineups run on the default rankings from Sleeper's projections |
 | Settings | Linked Sleeper account, ESPN leagues and login, which leagues Titan manages, refresh log |
