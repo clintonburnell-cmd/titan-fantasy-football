@@ -139,6 +139,26 @@ html { scroll-behavior: smooth; }
 .cta-band .sec-sub { margin-inline: auto; }
 .cta-band .ctas { justify-content: center; }
 
+/* ---------------------------------------------------------------- guides */
+
+.guide { max-width: 800px; padding-block: 40px 64px; }
+.guide .crumbs { color: var(--faint); font-size: .84rem; margin-bottom: 14px; }
+.guide .crumbs a { color: var(--muted); text-decoration: none; }
+.guide h1 { font-size: clamp(1.8rem, 4.2vw, 2.6rem); line-height: 1.12; letter-spacing: -.02em; font-weight: 850; }
+.guide .lead { color: var(--muted); font-size: 1.1rem; margin-top: 14px; }
+.guide h2 { font-size: 1.3rem; margin-top: 38px; letter-spacing: -.01em; }
+.guide p, .guide li { color: var(--muted); font-size: 1rem; line-height: 1.65; }
+.guide p { margin-top: 12px; }
+.guide b { color: var(--text); }
+.guide ol, .guide ul { margin: 12px 0 0; padding-left: 1.3rem; display: grid; gap: 8px; }
+.guide code { background: var(--surface-2); color: var(--text); padding: 1px 6px; border-radius: 6px; }
+.guide .csv-wrap { margin-top: 14px; }
+.note-box { border: 1px solid rgb(76 199 144 / .3); background: var(--ok-soft); border-radius: 12px; padding: 12px 14px; margin-top: 22px; }
+.guide .note-box { color: var(--text); }
+.guide-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
+.guide-cta .btn.big { width: auto; padding-inline: 22px; }
+.site-nav a[aria-current="page"] { color: var(--text); }
+
 /* ---------------------------------------------------------------- footer */
 
 .site-foot { border-top: 1px solid var(--line); padding-block: 28px 44px; color: var(--faint); font-size: .84rem; }

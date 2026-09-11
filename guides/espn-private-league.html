@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>How to Add a Private ESPN Fantasy Football League | Titan Fantasy Football Manager</title>
+  <meta name="description" content="Add a public or private ESPN fantasy football league to Titan by its league ID. For private leagues, here's how to find your espn_s2 and SWID cookies and how Titan keeps them.">
+  <link rel="canonical" href="https://titanfantasyfootball.com/guides/espn-private-league.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Titan Fantasy Football Manager">
+  <meta property="og:title" content="How to add your ESPN fantasy football league, public or private">
+  <meta property="og:description" content="League ID, espn_s2 and SWID: everything you need to bring an ESPN league into Titan.">
+  <meta property="og:url" content="https://titanfantasyfootball.com/guides/espn-private-league.html">
+  <meta property="og:image" content="https://titanfantasyfootball.com/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0a0f1a">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/site.css">
+</head>
+<body>
+  <header class="site-top">
+    <div class="site-in">
+      <a class="site-brand" href="/"><img src="/icon.svg" alt="" width="30" height="30"><b><span class="long">Titan Fantasy Football Manager</span><span class="short">Titan</span></b></a>
+      <nav class="site-nav" aria-label="Guides">
+        <a href="/guides/import-fantasy-rankings.html">Import rankings</a>
+        <a href="/guides/sleeper-start-sit.html">Sleeper</a>
+        <a href="/guides/espn-private-league.html" aria-current="page">ESPN</a>
+      </nav>
+      <a class="btn site-cta" href="/app/">Open Titan</a>
+    </div>
+  </header>
+
+  <main class="site-in guide">
+    <p class="crumbs"><a href="/">Titan</a> › Guides</p>
+    <h1>How to add your ESPN fantasy football league, public or private</h1>
+    <p class="lead">Titan reads ESPN leagues by their league ID. Public leagues need nothing else. Private leagues also
+      need your ESPN login, which Titan keeps in your own account.</p>
+
+    <h2>Find your league ID</h2>
+    <p>Open your league on fantasy.espn.com. The address in your browser contains <code>leagueId=</code> followed by a
+      number, like <code>leagueId=123456789</code>. You can paste that whole link into Titan, or just the number.</p>
+
+    <h2>Add it in Titan</h2>
+    <ol>
+      <li>Open Titan and go to <b>Settings</b>, then <b>Link more leagues?</b>, then <b>ESPN</b>.
+        (New to Titan? On the first screen, tap <b>Add an ESPN league instead</b>.)</li>
+      <li>Paste the league link or ID.</li>
+      <li>Pick your team from the list. Titan loads the league with its own lineup spots and scoring.</li>
+    </ol>
+    <p>If the league is public, you're done. If ESPN says it's private, Titan asks for your ESPN login.</p>
+
+    <h2>Private leagues: your ESPN login</h2>
+    <p>ESPN only shows a private league to its members, so Titan needs the two cookies ESPN's website uses to keep you
+      signed in: <code>espn_s2</code> and <code>SWID</code>. First, sign in to Titan with Google (Settings, then
+      <b>Sync across your devices</b>), because the login is saved to your own Titan account.</p>
+    <p>To find the two values, on a computer:</p>
+    <ol>
+      <li>Sign in at <b>fantasy.espn.com</b> in Chrome or Edge.</li>
+      <li>Open the developer tools: <b>F12</b> on Windows, or <b>Cmd + Option + I</b> on a Mac.</li>
+      <li>Go to <b>Application</b>, then <b>Cookies</b>, then <b>https://fantasy.espn.com</b>. (In Firefox it's <b>Storage</b>, then <b>Cookies</b>.)</li>
+      <li>Find <code>espn_s2</code> and <code>SWID</code> and copy each value.</li>
+      <li>Paste them into Titan's ESPN login form and save.</li>
+    </ol>
+
+    <h2>How Titan keeps your ESPN login</h2>
+    <ul>
+      <li>It's saved only to your Titan account, which only you can read.</li>
+      <li>Titan's server uses it for one thing: reading your ESPN leagues, which a browser can't do for a private league.</li>
+      <li>The app never shows it again, and <b>Settings → Link more leagues? → ESPN → Remove my ESPN login</b> deletes it.</li>
+      <li>Because those cookies keep you signed in to ESPN, signing out of ESPN on every device also makes a saved copy stop working.</li>
+    </ul>
+    <p>The <a href="/privacy.html">privacy policy</a> has the details.</p>
+
+    <h2>What you get</h2>
+    <p>ESPN leagues get everything Sleeper leagues do: start/sit calls from your rankings, the changes to make with an
+      <b>Open in ESPN</b> button, live scores, your weekly matchup with a chance to win, and weekly Results. See
+      <a href="/guides/import-fantasy-rankings.html">how to import your rankings</a> to put your own calls behind it.</p>
+
+    <div class="guide-cta"><a class="btn big" href="/app/">Open Titan</a><a class="btn ghost big" href="/app/?demo">Try a demo</a></div>
+  </main>
+
+  <footer class="site-foot">
+    <div class="site-in">
+      <span>© 2026 Titan Fantasy Football Manager. Not affiliated with or endorsed by the NFL or any NFL team, Sleeper, ESPN or any rankings site.</span>
+      <nav class="foot-links" aria-label="More">
+        <a href="/">Home</a>
+        <a href="/guides/import-fantasy-rankings.html">Rankings guide</a>
+        <a href="/guides/sleeper-start-sit.html">Sleeper guide</a>
+        <a href="/privacy.html">Privacy</a>
+        <a href="mailto:gainalphatrading@gmail.com">Contact</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

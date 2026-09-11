@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>How to Import Your Fantasy Football Rankings | Titan Fantasy Football Manager</title>
+  <meta name="description" content="Import your weekly fantasy football rankings as a CSV, from your own spreadsheet, Late-Round, FantasyPros or The Hall, and get start/sit calls for every Sleeper and ESPN league.">
+  <link rel="canonical" href="https://titanfantasyfootball.com/guides/import-fantasy-rankings.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Titan Fantasy Football Manager">
+  <meta property="og:title" content="How to import your fantasy football rankings">
+  <meta property="og:description" content="Turn your weekly rankings into start/sit calls for every Sleeper and ESPN league.">
+  <meta property="og:url" content="https://titanfantasyfootball.com/guides/import-fantasy-rankings.html">
+  <meta property="og:image" content="https://titanfantasyfootball.com/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0a0f1a">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/site.css">
+</head>
+<body>
+  <header class="site-top">
+    <div class="site-in">
+      <a class="site-brand" href="/"><img src="/icon.svg" alt="" width="30" height="30"><b><span class="long">Titan Fantasy Football Manager</span><span class="short">Titan</span></b></a>
+      <nav class="site-nav" aria-label="Guides">
+        <a href="/guides/import-fantasy-rankings.html" aria-current="page">Import rankings</a>
+        <a href="/guides/sleeper-start-sit.html">Sleeper</a>
+        <a href="/guides/espn-private-league.html">ESPN</a>
+      </nav>
+      <a class="btn site-cta" href="/app/">Open Titan</a>
+    </div>
+  </header>
+
+  <main class="site-in guide">
+    <p class="crumbs"><a href="/">Titan</a> › Guides</p>
+    <h1>How to import your fantasy football rankings</h1>
+    <p class="lead">Titan's start/sit calls come from the rankings you trust. Here's how to get your weekly rankings
+      into Titan, from your own spreadsheet or a ranking site's export, and what Titan does with them.</p>
+
+    <h2>What Titan does with your rankings</h2>
+    <p>Once a week's rankings are in, Titan checks every lineup in every league you play, on Sleeper and ESPN, against
+      them. Each lineup spot gets a call, you see the exact swaps to make, and Titan points out free agents your rankings
+      like better than someone you're starting. Players whose game has already kicked off keep their rank and are never
+      swapped out.</p>
+    <p>Until you import rankings for a week, Titan uses Sleeper's weekly projections in each league's own scoring. Those
+      also fill any position your file leaves out, so a file with no kickers still gives you a kicker call.</p>
+
+    <h2>Step 1: Get your rankings into a file</h2>
+    <p>Titan reads a CSV file, or cells copied straight out of a spreadsheet. The simplest layout is one row per player:</p>
+    <div class="csv-wrap"><pre class="csv"><b>Player,Pos,Team,Rank</b>
+Josh Allen,QB,BUF,1
+Bijan Robinson,RB,ATL,1
+Ja'Marr Chase,WR,CIN,2
+Denver Broncos,DEF,DEN,1</pre></div>
+    <p>You can add <code>Opp</code>, <code>Implied</code> and <code>Tier</code> columns too. Titan also reads these exports as they are:</p>
+    <ul>
+      <li><b>Late-Round</b>: the side-by-side position tables (<code>QB Rank, QB Player, …, FLEX Rank, FLEX Player, …</code>).
+        Running backs, receivers and tight ends are ranked by the FLEX table.</li>
+      <li><b>FantasyPros</b>: one file per position. Import the QB, K and DST files, plus the FLEX file for RB, WR and TE,
+        which gives the overall ranks FLEX spots need.</li>
+      <li><b>The Hall</b>: the weekly rankings, one overall list of every position. Defensive players (LB, DB, DL) are skipped.</li>
+    </ul>
+
+    <h2>Step 2: Import them in Titan</h2>
+    <ol>
+      <li>Open Titan and go to the <b>Rankings</b> tab.</li>
+      <li>Pick the week the rankings are for.</li>
+      <li>Choose your file, or paste the rows into the box.</li>
+      <li>Check the preview: it shows how many players Titan read at each position.</li>
+      <li>Tap <b>Save</b>. Every lineup is re-checked right away.</li>
+    </ol>
+    <p>A file that ranks only some positions is added to that week and replaces just those positions, so you can import a
+      FantasyPros QB file, then the FLEX file, then the kickers.</p>
+
+    <h2>Step 3: Follow the calls</h2>
+    <p>The <b>Lineups</b> tab now orders every league by your rankings. Each spot says OK, swap out, do not start, on bye
+      or locked, and the changes to make are listed at the top of each league with a button that opens the team in
+      Sleeper or ESPN. Titan can't change lineups itself, because neither site lets outside apps do that.</p>
+
+    <h2>Tips</h2>
+    <ul>
+      <li><b>Which rank to use:</b> an overall (FLEX) rank for running backs, receivers and tight ends, and a position
+        rank for quarterbacks, kickers and defenses. In a superflex league, Titan compares quarterbacks with everyone else
+        by the same numbers.</li>
+      <li><b>Defenses:</b> name them by team. <code>LAC D/ST</code>, <code>Los Angeles Chargers</code> and <code>LAC</code> all work.</li>
+      <li><b>Mid-week updates:</b> import again whenever your rankings change. Players who've already played keep the rank they had.</li>
+      <li><b>More than one device:</b> sign in with Google in Settings and your rankings follow you. Only you can see them.</li>
+    </ul>
+    <p class="note-box">No rankings yet? Titan works from the first minute with Sleeper's projections, and you can
+      <a href="/app/?demo">try a demo</a> first without linking anything.</p>
+
+    <div class="guide-cta"><a class="btn big" href="/app/">Open Titan</a><a class="btn ghost big" href="/app/?demo">Try a demo</a></div>
+  </main>
+
+  <footer class="site-foot">
+    <div class="site-in">
+      <span>© 2026 Titan Fantasy Football Manager. Not affiliated with or endorsed by the NFL or any NFL team, Sleeper, ESPN or any rankings site.</span>
+      <nav class="foot-links" aria-label="More">
+        <a href="/">Home</a>
+        <a href="/guides/sleeper-start-sit.html">Sleeper guide</a>
+        <a href="/guides/espn-private-league.html">ESPN guide</a>
+        <a href="/privacy.html">Privacy</a>
+        <a href="mailto:gainalphatrading@gmail.com">Contact</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
