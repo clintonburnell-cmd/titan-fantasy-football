@@ -21,16 +21,22 @@ check(SCC.playerValue(idx, {id: '4046'}).v === 9000 && SCC.playerValue(idx, {id:
   SCC.playerValue(idx, {id: '9509', espnId: 1}).v === 5000 && SCC.playerValue(idx, {id: '1'}) === null,
   'found by Sleeper id, or by ESPN id for an ESPN player Titan couldn\'t match; none for a player without a value');
 
-section('weighing a trade');
-const star = SCC.tradeVerdict([10000], [5000, 5000]);
-check(star.get.raw === 10000 && Math.round(star.get.adj) === 8706 && star.winner === 'them',
-  `giving a 10,000 star for two 5,000 players loses: they weigh ${Math.round(star.get.adj)}`);
-check(Math.abs(SCC.tradeSide([5000, 5000, star.even]).adj - 10000) < 1, `adding a player worth ${Math.round(star.even)} to the lighter side evens it`);
-const fair = SCC.tradeVerdict([5000], [5200]);
-check(fair.fair && fair.winner === 'even' && fair.even === 0, 'within 5% is fair');
-const win = SCC.tradeVerdict([4000], [6000]);
-check(!win.fair && win.winner === 'you' && Math.round(win.diff) === 2000, 'getting more wins, by the difference');
-check(SCC.tradeVerdict([], []).fair && SCC.tradeSide([10000, 200]).adj < 10200, 'an empty trade is even; a small throw-in adds less than its value');
+section('weighing a trade, as FantasyCalc\'s calculator does');
+const it = (v, pick) => ({v, pick: !!pick});
+const star = SCC.tradeVerdict([it(10000)], [it(5000), it(5000)], 50);
+check(star.get.adj === 10000 && star.give.adj === 10050 && star.give.spot === 50 && star.get.spot === 0 && star.fair,
+  'values add up as they are; the side getting one player for two gets 50 for the roster spot it frees; within 5% is fair');
+const three = SCC.tradeVerdict([it(9000)], [it(3000), it(3000), it(3000)], 50);
+check(three.give.spot === 100 && three.give.adj === 9100, 'each extra roster spot adds another waiver pickup');
+const win = SCC.tradeVerdict([it(4000)], [it(6000)], 50);
+check(!win.fair && win.winner === 'you' && win.diff === 2000 && win.give.spot === 0, 'one for one: no roster-spot value; getting more wins, by the difference');
+check(win.even === 2050, `evening it takes a player worth the difference plus the roster spot he costs them (${win.even})`);
+const pk = SCC.tradeVerdict([it(3000), it(2837, true)], [it(5800)], 50);
+check(pk.get.spot === 0 && pk.give.adj === 5837, 'draft picks take no roster spot');
+check(SCC.tradeVerdict([], [], 50).fair, 'an empty trade is even');
+const many = Array.from({length: 320}, (_, i) => ({p: 'RB', v: 10000 - i * 30}));
+check(SCC.waiverValue(many) === 10000 - 299 * 30 && SCC.waiverValue([{p: 'QB', v: 900}, {p: 'PICK', v: 50}, {p: 'WR', v: 120}]) === 120 && SCC.waiverValue([]) === 0,
+  'a waiver pickup is worth about the 300th-best player; with fewer listed, the last player (picks aside)');
 
 section('draft picks (dynasty)');
 const dp = SCC.draftPicks([1, 2, 3], [{season: '2027', round: 1, roster_id: 2, owner_id: 1}, {season: '2028', round: 2, roster_id: 1, owner_id: 3},

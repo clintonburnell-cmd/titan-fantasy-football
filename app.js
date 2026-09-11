@@ -1738,7 +1738,7 @@
       const res = await fetch('/api/trade-values?' + q);
       if (!res.ok) throw new Error('answered ' + res.status);
       const j = await res.json();
-      S.trade.values[k] = {at: j.at, idx: SCC.valueIndex(j.values)};
+      S.trade.values[k] = {at: j.at, idx: SCC.valueIndex(j.values), waiver: SCC.waiverValue(j.values)};
     } catch (e) {
       S.trade.values[k] = {error: 'Could not load the trade values.'};
     }
@@ -1792,7 +1792,7 @@
     const assets = t => t.roster.concat(t.picks || []);
     const give = P.give.map(id => assets(me).find(p => p.id === id)).filter(Boolean);
     const get = partner ? P.get.map(id => assets(partner).find(p => p.id === id)).filter(Boolean) : [];
-    if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth);
+    if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth, V.waiver);
     return h + `<div class="trade-teams">${tradeRoster(d.cfg, me, 'give', val)}${partner ? tradeRoster(d.cfg, partner, 'get', val)
       : '<div class="card pad"><p class="lede">Pick a trade partner to see their roster.</p></div>'}</div>`;
   }
@@ -1842,12 +1842,17 @@
   }
 
   // The trade so far: both sides, the verdict, a balance bar, what would even it out, and the lineups.
-  function tradeSummary(cfg, me, partner, give, get, worth) {
-    const R = SCC.tradeVerdict(give.map(worth), get.map(worth)), any = give.length || get.length;
+  function tradeSummary(cfg, me, partner, give, get, worth, waiver) {
+    const items = list => list.map(p => ({v: worth(p), pick: p.pos === 'PICK'}));
+    const R = SCC.tradeVerdict(items(give), items(get), waiver), any = give.length || get.length;
     const chips = (list, which) => list.length ? list.map(p => `<button type="button" class="chip tchip" data-trade="${which}" data-pid="${esc(p.id)}" title="Take out of the trade">${
       esc(p.name)} <small>${worth(p) ? thousands(worth(p)) : '–'}</small> ✕</button>`).join('') : '<span class="fine">Nobody yet</span>';
     const total = (R.give.adj + R.get.adj) || 1, pg = Math.round(R.get.adj / total * 100);
-    const tot = (s, n) => `<p class="ttot">${thousands(s.raw)}${n > 1 ? `<small>weighs ${thousands(s.adj)}</small>` : ''}</p>`;
+    // A side's total, with the roster-spot value in it spelled out.
+    const tot = (s, whose) => {
+      const n = waiver ? Math.round(s.spot / waiver) : 0;
+      return `<p class="ttot">${thousands(s.adj)}${n ? `<small>includes ${thousands(s.spot)} for ${whose} open roster spot${n > 1 ? 's' : ''}</small>` : ''}</p>`;
+    };
     let verdict;
     if (!any) verdict = 'Tap players below to build a trade: yours to give, theirs to get.';
     else if (!give.length || !get.length) verdict = `Add players from ${!give.length ? 'your team' : esc(partner.name)} too.`;
@@ -1866,13 +1871,13 @@
     }
     return `<section class="card pad trade-sum">
       <div class="tsides">
-        <div><h3>You give</h3><div class="chips">${chips(give, 'give')}</div>${tot(R.give, give.length)}</div>
-        <div><h3>You get</h3><div class="chips">${chips(get, 'get')}</div>${tot(R.get, get.length)}</div>
+        <div><h3>You give</h3><div class="chips">${chips(give, 'give')}</div>${tot(R.give, 'their')}</div>
+        <div><h3>You get</h3><div class="chips">${chips(get, 'get')}</div>${tot(R.get, 'your')}</div>
       </div>
-      ${any ? `<div class="winbar" title="Each side's share of the trade, stars weighted"><span class="wp me${pg <= 50 ? ' up' : ''}">${100 - pg}%</span>
+      ${any ? `<div class="winbar" title="Each side's share of the trade"><span class="wp me${pg <= 50 ? ' up' : ''}">${100 - pg}%</span>
         <span class="wbar"><i class="wopp" style="width:${100 - pg}%"></i><i class="wme" style="width:${pg}%"></i></span><span class="wp opp${pg >= 50 ? ' up' : ''}">${pg}%</span></div>` : ''}
       <p class="tverdict">${verdict}</p>${even}${lineupImpact(cfg, me, partner, give, get)}
-      <p class="fine">Stars count for more than their total, as in real trades: two players worth 5,000 weigh about 8,700 against one worth 10,000.${
+      <p class="fine">Values add up as they are, since FantasyCalc's values already count stars for more. In an uneven trade, the side getting fewer players also gets a waiver pickup's value (about the 300th-best player) for each roster spot it frees, as FantasyCalc's own calculator does.${
         any ? ' <button class="link" data-action="trade-clear">Clear the trade</button>' : ''}</p>
     </section>`;
   }

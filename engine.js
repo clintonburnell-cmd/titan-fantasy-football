@@ -233,28 +233,48 @@
     return e || idx.bySleeper[String(p.id)] || null;
   }
 
-  /* One side of a trade. Stars count for more than their total, as in real trades:
-     the values are combined as (sum of value^1.25)^(1/1.25), so two players worth
-     5,000 weigh about 8,700 against one worth 10,000, and a small throw-in adds little. */
-  var STAR = 1.25, FAIR = 0.05;
-  function tradeSide(values) {
-    var raw = 0, pow = 0;
-    (values || []).forEach(function (v) {
-      v = Math.max(0, Number(v) || 0);
-      raw += v;
-      pow += Math.pow(v, STAR);
-    });
-    return {raw: raw, adj: Math.pow(pow, 1 / STAR)};
+  /* What a waiver pickup is worth: about the 300th-best player, as FantasyCalc's own
+     calculator assumes (the last player listed when fewer are listed; draft picks aside). */
+  function waiverValue(list) {
+    var vals = (list || []).filter(function (x) { return x.p !== 'PICK'; })
+      .map(function (x) { return Number(x.v) || 0; }).sort(function (a, b) { return b - a; });
+    return vals.length ? vals[Math.min(299, vals.length - 1)] : 0;
   }
 
-  /* Both sides weighed: fair within 5% of the bigger side; otherwise who wins, by how
-     much, and what one more player on the lighter side would need to be worth to even it. */
-  function tradeVerdict(give, get) {
-    var a = tradeSide(give), b = tradeSide(get);
-    var big = Math.max(a.adj, b.adj), small = Math.min(a.adj, b.adj), diff = b.adj - a.adj;
-    var fair = big === 0 || Math.abs(diff) <= FAIR * big;
-    return {give: a, get: b, diff: diff, fair: fair, winner: fair ? 'even' : diff > 0 ? 'you' : 'them',
-      even: fair ? 0 : Math.pow(Math.pow(big, STAR) - Math.pow(small, STAR), 1 / STAR)};
+  // One side's values added up, and how many players it moves (draft picks take no roster spot).
+  function sideSum(items) {
+    var raw = 0, n = 0;
+    (items || []).forEach(function (x) {
+      raw += Math.max(0, Number(x.v) || 0);
+      if (!x.pick) n++;
+    });
+    return {raw: raw, n: n};
+  }
+
+  // Both totals: the side getting fewer players gains a waiver pickup for each roster spot it frees.
+  function withSpots(a, b, w) {
+    return [a.raw + Math.max(0, b.n - a.n) * w, b.raw + Math.max(0, a.n - b.n) * w];
+  }
+
+  /* Both sides of a trade, weighed the way FantasyCalc's calculator does. The values add
+     up as they are (FantasyCalc's values already count stars for more: they sit on an
+     exponential curve), and in an uneven trade the side getting fewer players gets
+     `waiver` for each roster spot it frees. give and get are [{v, pick}]. Fair within 5%
+     of the bigger side; otherwise who wins, by how much, and what one more player on the
+     lighter side would need to be worth to even it (counting the roster spot he takes). */
+  var FAIR = 0.05;
+  function tradeVerdict(give, get, waiver) {
+    var w = Math.max(0, Number(waiver) || 0), a = sideSum(give), b = sideSum(get), t = withSpots(a, b, w);
+    a.adj = t[0]; a.spot = t[0] - a.raw;
+    b.adj = t[1]; b.spot = t[1] - b.raw;
+    var big = Math.max(a.adj, b.adj), diff = b.adj - a.adj;
+    var fair = big === 0 || Math.abs(diff) <= FAIR * big, even = 0;
+    if (!fair) {
+      var light = diff > 0 ? a : b, heavy = diff > 0 ? b : a;
+      var t2 = withSpots({raw: light.raw, n: light.n + 1}, heavy, w);
+      even = Math.max(0, t2[1] - t2[0]);
+    }
+    return {give: a, get: b, diff: diff, fair: fair, winner: fair ? 'even' : diff > 0 ? 'you' : 'them', even: even};
   }
 
   /* A roster's best starting lineup by projected points, for the Trade tab's before and
@@ -1475,7 +1495,7 @@
     norm: norm, teamAbbr: teamAbbr, byeOf: byeOf, byesFromSchedule: byesFromSchedule, setByes: setByes,
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
-    tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, tradeSide: tradeSide, tradeVerdict: tradeVerdict,
+    tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict,
     lineupPoints: lineupPoints, draftPicks: draftPicks,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,

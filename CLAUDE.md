@@ -64,7 +64,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   jar not commercial use; selling Titan would need FantasyCalc's written permission. The trade summary
   also shows each team's best lineup by this week's projections before and after (`SCC.lineupPoints`),
   and dynasty Sleeper leagues list each team's next three drafts' picks (`SCC.draftPicks` from
-  `/traded_picks`, rounds 1 to 4) at FantasyCalc's plain pick values; ESPN doesn't share pick trades.
+  `/traded_picks`, rounds 1 to 4) at FantasyCalc's plain pick values; ESPN doesn't share pick trades. Sides add up plainly (FantasyCalc's
+  values already count stars for more, so don't add a star bonus) plus FantasyCalc's roster-spot
+  adjustment: a waiver pickup (`SCC.waiverValue`, about the 300th-best player) per spot freed.
 - Every league name shows `leagueIcon(cfg)`: the league's picture (`cfg.pic`: Sleeper's league avatar,
   or your team's logo in an ESPN league, kept through `slimLeague`) with a lettered site badge in the
   corner (not the sites' logos), or a plain football when there's no picture. Give Yahoo a `pic` too.

@@ -65,8 +65,8 @@ website (such as alerts) to pass review.
 
 The Trade tab weighs a trade with any team in a league: pick the league and a trade partner, tap
 players on both rosters, and Titan totals each side with FantasyCalc's trade values for the league's
-format (redraft or dynasty, 1 QB or superflex, team count, PPR), weighting stars the way real trades
-do, says who wins and suggests players that would even it out. It also shows each team's best
+format (redraft or dynasty, 1 QB or superflex, team count, PPR), plus a waiver pickup's value for each roster spot an
+uneven trade frees (as FantasyCalc's own calculator does), says who wins and suggests players that would even it out. It also shows each team's best
 starting lineup by this week's projections before and after the trade, and in dynasty Sleeper
 leagues each team's draft picks for the next three drafts (who owns which comes from Sleeper's
 traded picks) can go in the trade too. Titan's server fetches the values from
