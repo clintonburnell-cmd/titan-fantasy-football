@@ -357,7 +357,7 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .bscore.lead .btotal { color: var(--ok); }
 .vs { justify-self: center; font-size: .66rem; font-weight: 800; letter-spacing: .06em; color: var(--muted); }
 .vs.live { color: var(--stop); }
-.bside .initials { flex: none; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1;
+.bside .avatar.initials { flex: none; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1;
   font-size: .78rem; font-weight: 800; color: var(--muted); }
 .mlist { list-style: none; margin: 0; padding: 0; }
 .mrow { padding: 8px 12px; border-top: 1px solid var(--line); }
@@ -367,7 +367,19 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .mtext b { font-weight: 600; font-size: .86rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mtext small { color: var(--muted); font-size: .68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mtext .kick { font-size: .68rem; }
-.mphoto { flex: none; display: inline-block; width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: var(--line); }
+/* A player's headshot with his team's logo in the corner, like Sleeper's (Lineups,
+   Rosters, and smaller on Matchup). A defense shows its logo. */
+.pphoto { position: relative; flex: none; display: inline-block; width: min(2.3rem, 100%); aspect-ratio: 1; justify-self: center; }
+.pphoto .hs { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: var(--surface-2); }
+.pphoto .tl { position: absolute; right: -4px; bottom: -3px; width: 42%; height: 42%; border-radius: 50%; object-fit: contain;
+  background: var(--surface); padding: 1px; box-shadow: 0 0 0 1px var(--line); }
+.pphoto.sm { width: 30px; }
+.slot[data-pos="QB"] { color: #fc2b6d; }
+.slot[data-pos="RB"] { color: #20ceb8; }
+.slot[data-pos="WR"] { color: #59a7ff; }
+.slot[data-pos="TE"] { color: #feae58; }
+.slot[data-pos="K"] { color: #c96cff; }
+.slot[data-pos="DEF"] { color: #e07a58; }
 .mpts-col { display: grid; justify-items: end; font-variant-numeric: tabular-nums; }
 .mpts-col.opp { justify-items: start; }
 .mpts-col b { font-size: .98rem; font-weight: 800; }
@@ -379,7 +391,7 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .mstate.live { color: var(--stop); }
 @media (max-width: 400px) {
   .board, .mrow { grid-template-columns: minmax(0, 1fr) 2.6rem 2.2rem 2.6rem minmax(0, 1fr); column-gap: 4px; padding-inline: 10px; }
-  .mphoto { width: 24px; height: 24px; }
+  .pphoto.sm { width: 24px; }
 }
 
 /* Lineups: what to act on (three tiles), then this week's games (four). */

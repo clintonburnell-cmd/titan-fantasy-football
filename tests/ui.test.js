@@ -108,6 +108,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(kicks.length >= 8 && kicks.every(k => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b|^Bye$/.test(k)),
     `kickoff day and time beside each name (${kicks.length} of 9), e.g. "${kicks[0]}"`);
   check(await ev(`getComputedStyle(document.querySelector('.lineup .kick')).fontStyle === 'italic'`), 'in italics');
+  const pics = await ev(`({faces: [...document.querySelectorAll('.lineup .pphoto img.hs')].map(i => i.getAttribute('src')),
+    logos: document.querySelectorAll('.lineup .pphoto img.tl').length})`);
+  check(pics.faces.length === 9 && pics.faces.filter(s => /sleepercdn\.com\/content\/nfl\/players\/thumb\/\d+\.jpg$/.test(s)).length === 8 &&
+    pics.faces.some(s => /team_logos\/nfl\/[a-z]+\.png$/.test(s)) && pics.logos === 8,
+    `Sleeper headshots with team logos (${pics.faces.length} photos, ${pics.logos} logos; the defense is its logo)`);
   const games = await ev(`[...document.querySelectorAll('.tiles-games .tile')].map(t => t.innerText.replace(/\\n/g, ' '))`);
   const count = label => Number((games.find(t => t.endsWith(label)) || '').split(' ')[0]);
   check(games.length === 4 && ['starters locked', 'starters yet to play', 'bench locked', 'bench yet to play'].every(l => games.some(t => t.endsWith(l))),

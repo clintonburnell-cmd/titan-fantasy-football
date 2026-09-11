@@ -485,13 +485,13 @@
 
   function lineupRow(r, cfg) {
     if (!r.p) {
-      return `<li class="row r-stop"><span class="slot">${esc(slotName(r.slot))}</span><span class="pos"></span>
+      return `<li class="row r-stop"><span class="slot">${esc(slotName(r.slot))}</span><span class="pphoto"><span class="hs"></span></span>
         <span class="who"><b>Slot empty</b></span><span class="right"><span class="verdict v-stop">FILL SLOT</span></span></li>`;
     }
     const p = r.p, v = VERDICT[r.verdict] || 'ok';
     const proj = projOf(p, cfg);
-    const sub = [p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
-    return `<li class="row r-${v}"><span class="slot">${esc(slotName(r.slot))}</span>${pos(p.pos)}
+    const sub = [p.pos, p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
+    return `<li class="row r-${v}"><span class="slot" data-pos="${esc(p.pos)}">${esc(slotName(r.slot))}</span>${headshot(p)}
       <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small></span>
       <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : `<span class="verdict v-${v}">${esc(r.verdict)}</span>`}</span></li>`;
   }
@@ -549,19 +549,23 @@
     return p.pos === 'DEF' || parts.length < 2 ? p.name : parts[0][0] + '. ' + parts.slice(1).join(' ');
   };
 
-  function playerPhoto(p) {
-    const src = p.pos === 'DEF' ? LOGO + String(p.team || '').toLowerCase() + '.png'
-      : /^\d+$/.test(String(p.id || '')) ? HEADSHOT + p.id + '.jpg' : '';
-    return src ? `<img class="mphoto" src="${esc(src)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<span class="mphoto"></span>';
+  // A player's Sleeper headshot with his team's logo in the corner; a defense is its logo.
+  // Used on Lineups, Rosters and (smaller) Matchup.
+  function headshot(p, small) {
+    const team = String(p.team || '').toLowerCase(), logo = team ? LOGO + team + '.png' : '';
+    const face = p.pos === 'DEF' ? logo : /^\d+$/.test(String(p.id || '')) ? HEADSHOT + p.id + '.jpg' : '';
+    return `<span class="pphoto${small ? ' sm' : ''}">${face
+      ? `<img class="hs" src="${esc(face)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<span class="hs"></span>'}${
+      p.pos !== 'DEF' && logo ? `<img class="tl" src="${esc(logo)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</span>`;
   }
 
   function matchInfo(p, side) {
-    if (!p || p.empty) return `<div class="minfo ${side}"><span class="mphoto"></span><div class="mtext"><b class="muted">Empty</b></div></div>`;
+    if (!p || p.empty) return `<div class="minfo ${side}"><span class="pphoto sm"><span class="hs"></span></span><div class="mtext"><b class="muted">Empty</b></div></div>`;
     const g = gameOf(p.team);
     const when = g && g.state !== 'pre'
       ? `<span class="mstate${g.state === 'in_game' ? ' live' : ''}">${g.state === 'in_game' ? 'LIVE' : 'FINAL'}</span>`
       : `<em class="kick">${esc(teamKick(p.team))}</em>`;
-    return `<div class="minfo ${side}">${playerPhoto(p)}<div class="mtext"><b>${esc(shortName(p))}</b>
+    return `<div class="minfo ${side}">${headshot(p, true)}<div class="mtext"><b>${esc(shortName(p))}</b>
       <small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}</small><small>${when}</small></div></div>`;
   }
 
@@ -621,8 +625,8 @@
       return `<article class="card"><header class="card-h"><div><h3>${esc(L.cfg.key)}</h3>
         <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></header>
         <ul class="roster">${list.map(p => {
-          const sub = [p.team, p.opp && 'vs ' + p.opp, has(p.implied) && 'implied ' + p.implied, p.bye && 'bye ' + p.bye].filter(Boolean).join(' · ');
-          return `<li class="row${p.start ? ' is-start' : ''}"><span class="slot">${p.start ? 'START' : ''}</span>${pos(p.pos)}
+          const sub = [p.pos, p.team, p.opp && 'vs ' + p.opp, has(p.implied) && 'implied ' + p.implied, p.bye && 'bye ' + p.bye].filter(Boolean).join(' · ');
+          return `<li class="row${p.start ? ' is-start' : ''}"><span class="slot">${p.start ? 'START' : ''}</span>${headshot(p)}
             <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small></span>
             <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : ''}</span></li>`;
         }).join('')}</ul></article>`;
