@@ -13,7 +13,8 @@
 
   var API = 'https://api.sleeper.app/v1';
   var SCHEDULE = 'https://api.sleeper.app/schedule/nfl/regular/';
-  var PLAYERS_KEY = 'titan.players.v1';
+  var PLAYERS_KEY = 'titan.players.v2'; // v2 keeps each player's depth chart order (backup alerts)
+  var OLD_PLAYERS_KEYS = ['titan.players.v1'];
   // Names, positions and teams barely move week to week, and the full list is
   // ~14 MB, so it is kept for a few days. Injuries are pulled fresh every refresh.
   var PLAYERS_TTL = 3 * 24 * 3600 * 1000;
@@ -81,6 +82,7 @@
   /* ------------------------------------------------------------ players */
 
   async function loadPlayers(say) {
+    OLD_PLAYERS_KEYS.forEach(function (k) { store.del(k); }); // an older copy only takes up room
     var cached = store.get(PLAYERS_KEY);
     if (cached && cached.map && Date.now() - cached.ts < PLAYERS_TTL) return cached.map;
     try {

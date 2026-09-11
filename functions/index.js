@@ -26,6 +26,7 @@ db.settings({ignoreUndefinedProperties: true});
 const SLEEPER = 'https://api.sleeper.app';
 const PROJ_POS = '&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=K&position[]=DEF';
 const PLAYERS_TTL = 3 * 24 * 3600 * 1000;
+const PLAYERS_V = 2; // raised when trimPlayers keeps more (2: depth chart order), so the saved copy is rebuilt
 let warm = null; // the trimmed player list, kept between runs on a warm instance
 // Sends one alert to many devices (Firebase Cloud Messaging); tests swap it out.
 let sendPush = msg => getMessaging().sendEachForMulticast(msg);
@@ -48,7 +49,7 @@ async function playerMap() {
   const ref = db.doc('meta/players');
   try {
     const saved = await ref.get();
-    if (saved.exists && saved.get('gz') && Date.now() - saved.get('ts') < PLAYERS_TTL) {
+    if (saved.exists && saved.get('gz') && saved.get('v') === PLAYERS_V && Date.now() - saved.get('ts') < PLAYERS_TTL) {
       warm = {ts: saved.get('ts'), map: unpack(saved.get('gz'))};
       return warm.map;
     }
@@ -57,7 +58,7 @@ async function playerMap() {
   }
   warm = {ts: Date.now(), map: SCC.trimPlayers(await getJson(SLEEPER + '/v1/players/nfl'))};
   // Best effort: failing to cache the list must not stop anyone's calls being saved.
-  await ref.set({ts: warm.ts, gz: pack(warm.map)}).catch(e => logger.warn('could not cache the player list: ' + e.message));
+  await ref.set({ts: warm.ts, gz: pack(warm.map), v: PLAYERS_V}).catch(e => logger.warn('could not cache the player list: ' + e.message));
   return warm.map;
 }
 
@@ -117,6 +118,7 @@ async function alertUser(userRef, analysis, ctx) {
   const list = SCC.alertsFor(analysis, {week: ctx.week, now: Date.now(), sent,
     kickoffs: [...new Set(Object.values(kicks).map(k => Number(k[0])))],
     kickAt: p => { const k = kicks[SCC.teamAbbr(p.team)]; return k ? Number(k[0]) : 0; },
+    players: ctx.players, // depth charts, to name a ruled-out starter's free backup
     want: Object.assign({out: true, check: true}, doc.prefs || {})});
   // The starters the news check watches until the next alert check (newsAlerts).
   const watch = SCC.newsWatch(analysis);

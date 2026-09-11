@@ -48,7 +48,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   refuses everyone else and returns totals only: never add per-person details to it.
 - Alerts: `SCC.alertsFor` decides (pure, tested), `alertUser` and `deliver` in `functions/index.js`
   send Firebase Cloud Messaging data messages to the tokens in `users/{uid}/private/alerts`, and
-  `sw.js` shows them. Keep each alert's key (`kind|week|league|…`) stable, or people get repeats.
+  `sw.js` shows them. Keep each alert's key stable, or people get repeats: `out|week|league|player|tag`
+  (names the starter's backup when he's a free agent there: depth chart order is index 3 of each
+  trimmed player), `check|week|kickoff` (one alert covering every league), `news|week|story|player`.
 - Wide browser windows (900px and up) get the website look from the "website look" block in
   `styles.css`: a menu-style header, a centred 1100px page with one league per row (the owner prefers
   that to two across, and centred to set left), league chips that wrap, a footer row, from 1100px a 1280px page where Lineups,

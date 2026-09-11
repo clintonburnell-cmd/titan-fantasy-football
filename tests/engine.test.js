@@ -308,4 +308,20 @@ check(SCC.alertsFor(aA, {week: 5, now: KC1 - 60 * 60000, kickoffs: [KC1, BUF1], 
   'alerts someone turned off stay off');
 check(SCC.alertsFor(aA, {week: 5, now: KC1 - 3 * 3600e3, kickoffs: [KC1, BUF1], kickAt: aKick, sent: {}, want: {out: false, check: true}}).length === 0,
   'no lineup check while kickoff is still hours away');
+
+section('one lineup check for every league, and free backups');
+const aLg2 = {id: 'a2', key: 'Second League', name: 'Second League', lineup: ['RB', 'WR', 'FLEX'], ppr: 1};
+const two = SCC.analyzeAll({week: 5, kickoffs: {KC: [KC1, false], BUF: [BUF1, false]},
+  leagues: [{cfg: aLg, roster: aRoster(), takenNorm: {}, takenAbbr: {}}, {cfg: aLg2, roster: aRoster(), takenNorm: {[SCC.norm('Backup Back')]: 1}, takenAbbr: {}}]}, aRanks);
+const both = SCC.alertsFor(two, {week: 5, now: KC1 - 60 * 60000, kickoffs: [KC1, BUF1], kickAt: aKick, sent: {}, want: {out: false, check: true}});
+check(both.length === 1 && both[0].title === 'Lineup check: 2 leagues' && /Alert League: Hurt Back \(Out\)/.test(both[0].body) &&
+  /Second League: /.test(both[0].body) && both[0].url === '/app/lineups' && both[0].key === 'check|5|' + KC1,
+  'one lineup check covers every league with something wrong: ' + (both[0] && both[0].body));
+const depthPlayers = {'11': ['Hurt Back', 'RB', 'KC', 1], '21': ['Backup Back', 'RB', 'KC', 2], '22': ['Third Back', 'RB', 'KC', 3], '23': ['KC Wideout', 'WR', 'KC', 2]};
+const cuffs = SCC.alertsFor(two, {week: 5, now: KC1 - 5 * 3600e3, kickoffs: [KC1, BUF1], kickAt: aKick, sent: {}, players: depthPlayers, want: {out: true, check: false}});
+const inFirst = cuffs.find(a => /Alert League/.test(a.body)), inSecond = cuffs.find(a => /Second League/.test(a.body));
+check(cuffs.length === 2 && /His backup, Backup Back, is a free agent there\./.test(inFirst.body) && !/backup/.test(inSecond.body),
+  'a ruled-out starter\'s backup is named where he\'s a free agent, and not where someone has him: ' + inFirst.body);
+check(SCC.playerInfo({'9': ['A B', 'RB', 'KC', 2]}, '9').depth === 2 && SCC.trimPlayers({'9': {first_name: 'A', last_name: 'B', position: 'RB', team: 'KC', depth_chart_order: 2}})['9'][3] === 2,
+  'the player list keeps each player\'s place on the depth chart');
 T.done();

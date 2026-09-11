@@ -1594,8 +1594,8 @@
     if (!a.supported) return card('<p class="help">This browser can\'t show alerts. Chrome, Edge and Firefox can, and so can the Titan app.</p>');
     const box = (k, label, sub) => `<li><label class="check"><input type="checkbox" data-alert="${k}" ${a.prefs[k] ? 'checked' : ''}>
       <span><b>${label}</b><small>${sub}</small></span></label></li>`;
-    return card(`<ul class="lg-list">${box('out', 'Starter ruled out', 'Someone in your lineup is ruled out, doubtful or on IR, with who Titan would start instead')}
-        ${box('check', 'Lineup check', 'About 75 minutes before each kickoff: a starter ruled out or on bye, or an empty spot')}
+    return card(`<ul class="lg-list">${box('out', 'Starter ruled out', 'Someone in your lineup is ruled out, doubtful or on IR, with who Titan would start instead, and his backup when he\'s a free agent')}
+        ${box('check', 'Lineup check', 'About 75 minutes before each kickoff, one alert for all your leagues: a starter ruled out or on bye, or an empty spot')}
         ${box('news', 'News about your starters', 'When ESPN posts a story about someone in your lineup, checked every 15 minutes. Tap the alert to read it')}</ul>
       ${S.alertsError ? `<div class="banner stop">${esc(S.alertsError)}</div>` : ''}
       ${a.permission === 'denied' && !a.on ? '<p class="fine">Notifications are blocked for Titan in this browser. Allow them in the site settings, then try again.</p>' : ''}

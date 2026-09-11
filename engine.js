@@ -139,7 +139,8 @@
       if (!/^\d+$/.test(id)) continue;
       var p = full[id];
       if (!p || !PLAYER_POS[p.position]) continue;
-      map[id] = [fullName(p) || ('id ' + id), p.position, p.team || ''];
+      // Name, position, team, and his place on the team's depth chart (0: none), for backup alerts.
+      map[id] = [fullName(p) || ('id ' + id), p.position, p.team || '', Number(p.depth_chart_order) || 0];
     }
     return map;
   }
@@ -150,7 +151,7 @@
   function playerInfo(players, id) {
     var key = String(id);
     var e = players && players[key];
-    if (e) return {name: e[0], pos: e[1], team: e[2]};
+    if (e) return {name: e[0], pos: e[1], team: e[2], depth: e[3] || 0};
     if (!/^\d+$/.test(key) && key.indexOf(':') < 0) return {name: key + ' D/ST', pos: 'DEF', team: key};
     return {name: 'id ' + key, pos: '?', team: ''};
   }
@@ -1598,28 +1599,41 @@
   function alertsFor(analysis, opts) {
     opts = opts || {};
     var sent = opts.sent || {}, want = opts.want || {out: true, check: true}, now = opts.now || Date.now();
-    var out = [];
+    var out = [], leagues = (analysis && analysis.leagues) || [];
     var add = function (a) { if (!sent[a.key]) { sent[a.key] = 1; out.push(a); } };
     // Who Titan would put in a starter's place: the player coming into his spot.
     var instead = function (L, p) {
       var m = L.moves.filter(function (x) { return x.out && x.out.id === p.id; })[0];
       return m ? m.inn : null;
     };
-    var windows = (opts.kickoffs || []).filter(function (k) { return k - now >= CHECK_FROM && k - now <= CHECK_TO; });
-    ((analysis && analysis.leagues) || []).forEach(function (L) {
-      var name = L.cfg.name || L.cfg.key, id = String(L.cfg.id);
-      if (want.out) {
+    // A ruled-out starter's backup (the next man on his team's depth chart, from opts.players),
+    // when nobody in the league has him.
+    var depth = opts.players ? depthCharts(opts.players) : null;
+    var freeBackup = function (L, p) {
+      if (!depth || !HANDCUFF[p.pos]) return null;
+      var mine = playerInfo(opts.players, p.id).depth || 0;
+      var b = (depth[teamAbbr(p.team) + '|' + p.pos] || []).filter(function (x) { return x.id !== String(p.id) && x.depth > mine; })[0];
+      return b && !(L.takenNorm || {})[norm(b.name)] ? b : null;
+    };
+    if (want.out) {
+      leagues.forEach(function (L) {
+        var name = L.cfg.name || L.cfg.key, id = String(L.cfg.id);
         L.rows.forEach(function (r) {
           var p = r.p;
           if (!p || p.locked || !p.outish) return;
-          var sub = instead(L, p);
-          add({key: ['out', opts.week, id, p.id, p.inj].join('|'), kind: 'out',
+          var sub = instead(L, p), b = freeBackup(L, p);
+          add({key: ['out', opts.week, id, p.id, p.inj].join('|'), kind: 'out', url: '/app/lineups',
             title: p.name + ' is ' + injWord(p.inj),
-            body: 'He\'s in your ' + name + ' lineup. ' + (sub ? 'Titan would start ' + sub.name + ' instead.' : 'Titan has nobody to start in his place.')});
+            body: 'He\'s in your ' + name + ' lineup. ' + (sub ? 'Titan would start ' + sub.name + ' instead.' : 'Titan has nobody to start in his place.') +
+              (b ? ' His backup, ' + b.name + ', is a free agent there.' : '')});
         });
-      }
-      if (!want.check) return;
-      windows.forEach(function (k) {
+      });
+    }
+    if (!want.check) return out;
+    // One lineup check for each kickoff about an hour away, covering every league with something still wrong.
+    (opts.kickoffs || []).filter(function (k) { return k - now >= CHECK_FROM && k - now <= CHECK_TO; }).forEach(function (k) {
+      var parts = [], names = [];
+      leagues.forEach(function (L) {
         var problems = [], subs = [];
         L.rows.forEach(function (r) {
           var p = r.p;
@@ -1632,12 +1646,30 @@
           if (sub) subs.push(sub.name);
         });
         if (!problems.length) return;
-        add({key: ['check', opts.week, id, k].join('|'), kind: 'check',
-          title: 'Lineup check: ' + name,
-          body: 'Games start in about an hour. Still in your lineup: ' + andJoin(problems) + '.' +
-            (subs.length ? ' Titan would start ' + andJoin(subs) + '.' : '')});
+        var name = L.cfg.name || L.cfg.key;
+        names.push(name);
+        parts.push(name + ': ' + andJoin(problems) + (subs.length ? ' (Titan would start ' + andJoin(subs) + ')' : ''));
       });
+      if (!parts.length) return;
+      add({key: ['check', opts.week, k].join('|'), kind: 'check', url: '/app/lineups',
+        title: 'Lineup check: ' + (names.length === 1 ? names[0] : names.length + ' leagues'),
+        body: 'Games start in about an hour. ' + parts.join('. ') + '.'});
     });
+    return out;
+  }
+
+  // Positions whose backup is worth picking up when the starter is out.
+  var HANDCUFF = {QB: 1, RB: 1, TE: 1};
+  // Each team's depth chart at those positions, from Sleeper's player list (trimPlayers keeps the order).
+  function depthCharts(players) {
+    var out = {};
+    for (var id in players) {
+      var e = players[id];
+      if (!e || !e[3] || !HANDCUFF[e[1]] || !e[2]) continue;
+      var k = teamAbbr(e[2]) + '|' + e[1];
+      (out[k] = out[k] || []).push({id: id, name: e[0], depth: Number(e[3])});
+    }
+    for (var key in out) out[key].sort(function (a, b) { return a.depth - b.depth; });
     return out;
   }
 
