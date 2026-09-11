@@ -606,9 +606,12 @@ details.match > summary::-webkit-details-marker { display: none; }
 .odds-bar i { display: block; height: 100%; background: var(--ok); }
 @media (max-width: 560px) {
   .stand .st-opt { display: none; }
-  .stand .st-team { min-width: 0; }
+  /* Just the number, and long team names break, so the odds always fit beside the team and record. */
+  .stand .st-team { min-width: 0; overflow-wrap: anywhere; }
   .stand th, .stand td { padding: 8px; }
-  .st-odds { min-width: 6.5rem; }
+  .st-odds { min-width: 0; }
+  .odds-bar { display: none; }
+  .st-odds b { min-width: 0; }
 }
 
 /* The News tab: ESPN's latest stories, the ones about your players marked. */
