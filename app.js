@@ -346,8 +346,24 @@
 
   /* ---- Lineups */
 
-  const VERDICT = {'OK': 'ok', 'UNRANKED': 'unranked', 'SWAP OUT': 'swap', 'DO NOT START': 'stop', 'FILL SLOT': 'stop', 'LOCKED': 'locked'};
+  const VERDICT = {'OK': 'ok', 'UNRANKED': 'unranked', 'SWAP OUT': 'swap', 'DO NOT START': 'stop', 'ON BYE': 'stop', 'FILL SLOT': 'stop', 'LOCKED': 'locked'};
   const needsAction = L => L.moves.length || L.stops || L.hurt.length;
+
+  /* The Lineups filters: every league, any that need action, and each kind of
+     problem on its own. Players whose game has started can't be changed, so
+     they don't count. A chip shows only when a league has that problem. */
+  const starter = (L, f) => L.rows.some(r => r.p && !r.p.locked && f(r.p));
+  const LEAGUE_FILTERS = [
+    {id: 'all', label: 'All', test: () => true},
+    {id: 'action', label: 'Needs action', test: L => !!needsAction(L)},
+    {id: 'changes', label: 'Lineup changes', test: L => L.moves.length > 0},
+    {id: 'empty', label: 'Empty spots', test: L => L.rows.some(r => !r.p)},
+    {id: 'out', label: 'Out or doubtful', test: L => starter(L, p => p.outish)},
+    {id: 'questionable', label: 'Questionable', test: L => starter(L, p => p.inj && !p.outish)},
+    {id: 'bye', label: 'On bye', test: L => starter(L, p => p.onBye)},
+    {id: 'unranked', label: 'Unranked starters', test: L => starter(L, p => p.rank === null && !p.onBye)},
+    {id: 'wire', label: 'Wire upgrades', test: L => L.wire.length > 0}
+  ];
 
   // Quick navigation: chips that jump to a league's card further down the page.
   const anchor = cfg => 'lg-' + String(cfg.id).replace(/[^\w-]/g, '_');
@@ -359,8 +375,9 @@
   function screenLineups() {
     if (!S.snap) return emptyState();
     const A = S.A;
-    const nAction = A.leagues.filter(needsAction).length;
-    const list = S.ui.filter === 'action' ? A.leagues.filter(needsAction) : A.leagues;
+    const filters = LEAGUE_FILTERS.map(f => Object.assign({n: A.leagues.filter(f.test).length}, f));
+    const pickF = filters.find(f => f.id === S.ui.filter) || filters[0];
+    const list = A.leagues.filter(pickF.test);
     let h = ranksBanner(A.ranks, S.snap.week);
     if (gamesLive()) {
       h += `<p class="fine live-note">Games are on: scores update about every minute while Lineups is open${
@@ -378,17 +395,19 @@
       ${tile(G.benchLocked, 'bench locked', 'muted')}
       ${tile(G.benchLeft, 'bench yet to play', 'muted')}
     </section>`;
-    h += `<div class="chips" role="group" aria-label="Filter leagues">
-      <button class="chip" data-filter="all" aria-pressed="${S.ui.filter !== 'action'}">All ${A.leagues.length}</button>
-      <button class="chip" data-filter="action" aria-pressed="${S.ui.filter === 'action'}">Needs action ${nAction}</button>
-    </div>`;
+    h += `<div class="chips" role="group" aria-label="Filter leagues">${filters
+      .filter(f => f.id === 'all' || f.id === 'action' || f.n > 0 || f.id === pickF.id)
+      .map(f => `<button class="chip" data-filter="${f.id}" aria-pressed="${f.id === pickF.id}">${esc(f.label)} ${f.n}</button>`).join('')}</div>`;
     if (list.length > 1) h += jumpBar(list.map(L => ({cfg: L.cfg, flag: !!needsAction(L)})));
     if (!A.leagues.length) {
       h += `<div class="empty-note">No leagues to show. ${S.snap.available && S.snap.available.length
         ? 'Switch some on in <button class="link" data-go="settings">Settings</button>.'
         : S.account.userId ? `Sleeper shows no ${esc(S.snap.season)} leagues on this account.`
         : 'Add an ESPN league or link Sleeper in <button class="link" data-go="settings">Settings</button>.'}</div>`;
-    } else if (!list.length) h += `<div class="empty-note">Nothing to do. Every lineup matches your rankings.</div>`;
+    } else if (!list.length) {
+      h += `<div class="empty-note">${pickF.id === 'action' ? 'Nothing to do. Every lineup matches your rankings.'
+        : `No leagues with ${esc(pickF.label.toLowerCase())} right now.`}</div>`;
+    }
     const credit = Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper.</p>' : '';
     return h + list.map(leagueCard).join('') + credit;
   }
@@ -748,7 +767,7 @@
   /* ---- Results (each week's scores; the tab id is still 'score') */
 
   // How Titan's call on a player reads in a week's record.
-  const CALL = {'OK': 'start', 'START': 'start', 'BENCH': 'bench', 'SWAP OUT': 'swap out', 'DO NOT START': "don't start",
+  const CALL = {'OK': 'start', 'START': 'start', 'BENCH': 'bench', 'SWAP OUT': 'swap out', 'DO NOT START': "don't start", 'ON BYE': 'on bye',
     'UNRANKED': 'unranked', 'LOCKED': 'locked', 'FILL SLOT': 'fill slot'};
 
   function screenScore() {

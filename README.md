@@ -48,7 +48,7 @@ website (such as alerts) to pass review.
 
 | Screen | What it shows |
 |---|---|
-| Lineups | Each league's lineup as set, with a verdict on every slot, the changes to make, wire upgrades and injuries. Every player shows his Sleeper headshot and team logo, his kickoff time (in the viewer's time zone) and projection, and once his game starts, his points marked LIVE or FINAL. Tiles count lineup changes, injured starters, wire upgrades, and starters and bench players locked or yet to play; chips at the top jump to any league |
+| Lineups | Each league's lineup as set, with a verdict on every slot, the changes to make, wire upgrades and injuries. Every player shows his Sleeper headshot and team logo, his kickoff time (in the viewer's time zone) and projection, and once his game starts, his points marked LIVE or FINAL. Tiles count lineup changes, injured starters, wire upgrades, and starters and bench players locked or yet to play. Filters: all, needs action, or one problem at a time (lineup changes, empty spots, out or doubtful, questionable, on bye, unranked starters, wire upgrades); chips at the top jump to any league |
 | Matchup | Each league's head-to-head this week, collapsed to a header with both scores and a chance-to-win bar, like Sleeper's; open it for avatars, records, projected totals, and both lineups spot by spot with headshots, points, kickoff times and projections |
 | Rosters | Every rostered player per league with headshot, rank, tier, opponent, bye, kickoff time and live points; a player search (name, team or position) and chips that jump to any league |
 | Exposure | Players on two or more of your teams |
@@ -61,7 +61,8 @@ website (such as alerts) to pass review.
 ## Rules worth knowing
 
 - **Rankings are the only order.** Unranked players sit last. Out, Doubtful and
-  IR players sit below even unranked ones.
+  IR players sit below even unranked ones, and so does a player on bye that week:
+  a starter on bye gets ON BYE and his backup goes in.
 - **Locks follow Sleeper.** Each player locks at his own game's kickoff. A
   locked starter keeps his slot, and a locked bench player can't come in.
 - **Supported slots:** QB, RB, WR, TE, FLEX, W/R flex, W/T flex, SUPER_FLEX, K,

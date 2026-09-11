@@ -181,6 +181,16 @@ const keptX = SCC.keepStartedRanks([{name: 'Slow Back', pos: 'RB', rank: 55}],
 check(keptX.length === 1 && keptX[0].name === 'Played Qb' && keptX[0].rank === 4,
   'new rankings keep the old rank of a started player they left out, and nobody else\'s');
 
+section('a starter on bye');
+const byeLg = {id: 'B', key: 'B', name: 'B', lineup: ['QB']};
+const byeRos = [pl('q1', 'Bye Qb', 'QB', 'KC', {bye: 5}), pl('q2', 'Backup Qb', 'QB', 'BUF', {bye: 7, start: false, slot: ''})];
+const byeRanks = SCC.weeklyMap([{name: 'Bye Qb', pos: 'QB', team: 'KC', rank: 1}, {name: 'Backup Qb', pos: 'QB', team: 'BUF', rank: 20}]);
+const onBye = SCC.analyzeAll({week: 5, leagues: [{cfg: byeLg, roster: byeRos, takenNorm: {}, takenAbbr: {}}]}, byeRanks).leagues[0];
+check(onBye.rows[0].verdict === 'ON BYE' && onBye.stops === 1 && onBye.moves.length === 1 && onBye.moves[0].inn.name === 'Backup Qb',
+  'his bye week: ON BYE, even ranked first, and his backup goes in');
+const notBye = SCC.analyzeAll({week: 6, leagues: [{cfg: byeLg, roster: byeRos, takenNorm: {}, takenAbbr: {}}]}, byeRanks).leagues[0];
+check(notBye.rows[0].verdict === 'OK' && !notBye.moves.length && !notBye.stops, 'any other week he starts as normal');
+
 section('chance to win a matchup');
 const team = (projs, state, pts) => projs.map((proj, i) => ({proj, state: state || 'pre', pts: pts ? pts[i] : 0}));
 const even = SCC.winProbability(team([15, 15, 15]), team([15, 15, 15]));

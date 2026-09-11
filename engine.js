@@ -549,7 +549,7 @@
     // anyone tagged Out/Doubtful/IR sits below even the unranked — the optimiser
     // must never hand you an injured player as a recommendation.
     var base = (p.rank === null || p.rank === undefined) ? 100000 : Number(p.rank);
-    return p.outish ? 900000 + base : base;
+    return p.outish || p.onBye ? 900000 + base : base;
   }
 
   /* Ranks at 1000+ are the "outside the overall top 100" sentinel; the real
@@ -778,8 +778,10 @@
 
   /* ------------------------------------------------------------ analysis */
 
-  function analyzeLeague(d, weekly) {
+  function analyzeLeague(d, weekly, week) {
     var slots = d.cfg.lineup;
+    // A player whose team is on bye this week can't score: he's benched like an Out player.
+    d.roster.forEach(function (p) { p.onBye = !!week && !!p.bye && Number(p.bye) === Number(week); });
     // With no ranks there is no order to follow, so nothing counts as a swap —
     // otherwise every unranked starter would "lose" to an unranked bench player.
     var ranked = Object.keys(weekly).length > 0;
@@ -793,11 +795,12 @@
     act.forEach(function (o) {
       if (!o.p) { rows.push({slot: o.slot, p: null, verdict: 'FILL SLOT'}); stops++; return; }
       var p = o.p, verdict = 'OK';
-      if (p.outish) verdict = 'DO NOT START';
+      if (p.onBye) verdict = 'ON BYE';
+      else if (p.outish) verdict = 'DO NOT START';
       else if (!optIds[p.id] && ranked) verdict = 'SWAP OUT';
       else if (p.rank === null) verdict = 'UNRANKED';
       if (p.locked) verdict = 'LOCKED';
-      if (verdict === 'DO NOT START') stops++;
+      if (verdict === 'DO NOT START' || verdict === 'ON BYE') stops++;
       rows.push({slot: o.slot, p: p, verdict: verdict});
     });
 
@@ -843,7 +846,7 @@
       return analyzeLeague({
         cfg: d.cfg, roster: attachRanks(d.roster, weekly),
         takenNorm: d.takenNorm || {}, takenAbbr: d.takenAbbr || {}, started: started
-      }, weekly);
+      }, weekly, snap && snap.week);
     });
 
     var changes = [], hurtStarters = [], wireLines = [], stops = 0, locked = 0;

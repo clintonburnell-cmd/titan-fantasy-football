@@ -104,6 +104,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await tab('lineups');
   const lineup = await ev(`({h: (document.querySelector('.league .card-h') || {}).innerText || '', n: document.querySelectorAll('.lineup .row').length})`);
   check(/Titan Test League/.test(lineup.h) && /ESPN/.test(lineup.h) && lineup.n === 9, 'Lineups shows the ESPN league, 9 spots');
+  const chips = await ev(`[...document.querySelectorAll('[data-filter]')].map(b => ({id: b.dataset.filter, n: Number(b.innerText.match(/(\\d+)$/)[1])}))`);
+  let chipsOk = chips.length >= 2 && chips[0].id === 'all' && chips[1].id === 'action';
+  for (const c of chips) {
+    await ev(`document.querySelector('[data-filter="${c.id}"]').click(); true`);
+    await sleep(150);
+    if (await ev(`document.querySelectorAll('.card.league').length`) !== c.n) chipsOk = false;
+  }
+  await ev(`document.querySelector('[data-filter="all"]').click(); true`);
+  await sleep(150);
+  check(chipsOk, `each filter shows exactly its leagues (${chips.map(c => c.id + ' ' + c.n).join(', ')})`);
   const kicks = await ev(`[...document.querySelectorAll('.lineup .kick')].map(k => k.innerText)`);
   check(kicks.length >= 8 && kicks.every(k => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b|^Bye$/.test(k)),
     `kickoff day and time beside each name (${kicks.length} of 9), e.g. "${kicks[0]}"`);
