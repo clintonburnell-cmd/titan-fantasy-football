@@ -2,7 +2,8 @@
 
 A static web app (no build step, no dependencies) plus two Firebase Cloud Functions. Live at
 https://titanfantasyfootball.com (Porkbun domain on Firebase Hosting; also served, and kept, at
-https://titan-fantasy-football.web.app, which the Android app is tied to; never redirect it)
+https://titan-fantasy-football.web.app, where the first Android test build pointed; never redirect it.
+The Android app opens titanfantasyfootball.com/app/?source=play since the v1.11.0 build)
 (Firebase project `titan-fantasy-football`, Blaze plan);
 code at github.com/clintonburnell-cmd/titan-fantasy-football. The Google Play app is a Trusted Web
 Activity kept outside this repo (`D:\Claude\titan-android`, with `PLAY-LISTING.md`); it loads the
