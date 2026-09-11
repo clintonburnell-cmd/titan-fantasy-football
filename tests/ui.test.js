@@ -314,6 +314,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`document.querySelectorAll('.rtable').length > 0 && document.querySelector('.rtable thead tr').children.length >= 7`, 5000),
     'Rosters show as tables on a computer');
   check(await waitFor(sideOk, 5000), 'Rosters list the leagues down the left side too');
+  await tab('score');
+  check(await waitFor(sideOk, 30000), 'and so does Results, one link per scored league');
+  await tab('rosters');
   await send('Emulation.setDeviceMetricsOverride', {width: 1000, height: 900, deviceScaleFactor: 1, mobile: false});
   await sleep(500);
   check(await ev(`!document.querySelector('.side')`), 'a narrower computer window (1000px) drops the sidebar');

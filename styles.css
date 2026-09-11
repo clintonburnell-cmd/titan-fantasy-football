@@ -209,7 +209,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   /* Expand all and Collapse all, quieter. */
   html:not(.in-app) .match-tools .link { font-size: .8rem; color: var(--muted); }
 }
-/* Wider still: the page grows to 1280px and Lineups, Matchup and Rosters list
+/* Wider still: the page grows to 1280px and Lineups, Matchup, Rosters and Results list
    their leagues down the left side, like Sleeper's website (sideNav in app.js).
    The list stays in view below the sticky header; filters stay above the cards. */
 @media (min-width: 1100px) {
@@ -495,7 +495,7 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
   padding: 6px 12px; font: inherit; font-size: .8rem; font-weight: 600; }
 .jump-chip:hover { border-color: var(--accent); }
 .jump-chip .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--swap); margin-right: 6px; vertical-align: middle; }
-.card.league, .roster-card, .card.match { scroll-margin-top: 8.5rem; }
+.card.league, .roster-card, .card.match, .card.score { scroll-margin-top: 8.5rem; }
 /* The Rosters search hides rows and leagues in place. */
 .row[hidden], .card[hidden], .jump-chip[hidden], .empty-note[hidden], .fine[hidden], .rdiv[hidden] { display: none !important; }
 /* Rosters, like Sleeper's: starters by spot, then Bench and Reserve sections. */

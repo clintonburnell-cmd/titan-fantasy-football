@@ -65,7 +65,7 @@
   // A wide browser window (the website look); Rosters draws tables there.
   const WIDE = window.matchMedia ? window.matchMedia('(min-width: 900px)') : null;
   const wide = () => !!(WIDE && WIDE.matches) && !(IN_PLAY_APP || STANDALONE);
-  // Wider still: Lineups, Matchup and Rosters list their leagues down the left side (sideNav).
+  // Wider still: Lineups, Matchup, Rosters and Results list their leagues down the left side (sideNav).
   const SIDE = window.matchMedia ? window.matchMedia('(min-width: 1100px)') : null;
   const side = () => !!(SIDE && SIDE.matches) && !(IN_PLAY_APP || STANDALONE);
   let sideItems = null; // the leagues a screen hands to the sidebar while it's drawn
@@ -335,7 +335,7 @@
     const err = S.error ? `<div class="banner stop">${esc(S.error)}</div>` : '';
     sideItems = null;
     const body = `<h2 class="sr-only">${TAB_NAMES[S.ui.tab]}</h2>` + iosHint() + demoBanner() + err + SCREENS[S.ui.tab]();
-    // On a wide computer window Lineups, Matchup and Rosters put their leagues down the left side.
+    // On a wide computer window Lineups, Matchup, Rosters and Results put their leagues down the left side.
     view.innerHTML = sideItems ? `<div class="with-side">${sideNav(sideItems)}<div class="side-main">${body}</div></div>` : body;
     if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
     spySide();
@@ -1015,6 +1015,9 @@
       rank, Titan's call, projection and points.</p>`;
     if (S.score.error) h += `<div class="banner swap">${esc(S.score.error)}</div>`;
     const D = S.score.data;
+    // The leagues down the left side on a wide computer window, as on Lineups (Results has no chips).
+    const cfgOf = key => (S.A.leagues.find(L => L.cfg.key === key) || {}).cfg || {id: key, key};
+    jumpBar(D && D.rows.length ? D.rows.map(r => ({cfg: cfgOf(r.key)})) : S.A.leagues.map(L => ({cfg: L.cfg})), false);
     if (!D) return h;
 
     const T = D.totals, gained = Math.round((T.byRank - T.actual) * 10) / 10;
@@ -1039,7 +1042,7 @@
       : gained < 0 ? `Your lineups beat your rankings by <b class="good">${fmt(-gained)}</b>.` : 'Your lineups matched your rankings.'}${
       T.ct ? ` Close calls right: ${T.cw} of ${T.ct}.` : ''}</p>`;
     if (D.skipped.length) h += `<p class="fine">Skipped: ${esc(D.skipped.join('; '))}</p>`;
-    h += D.rows.map(r => `<details class="card score"><summary>
+    h += D.rows.map(r => `<details class="card score" id="${anchor(cfgOf(r.key))}"><summary>
         <span class="sname">${esc(r.key)}</span>
         <span class="n"><small>Actual</small>${fmt(r.actual)}</span>
         <span class="n"><small>Projected</small>${r.projActual ? fmt(r.projActual) : 'None'}</span>
@@ -1862,8 +1865,8 @@
     document.body.appendChild(s);
   }
   // Rosters switch between tables and the phone list as the window crosses the website-look width,
-  // and Lineups, Matchup and Rosters gain or lose the league sidebar at 1100px.
-  const relayout = () => { if (['lineups', 'matchup', 'rosters'].includes(S.ui.tab)) render(); };
+  // and Lineups, Matchup, Rosters and Results gain or lose the league sidebar at 1100px.
+  const relayout = () => { if (['lineups', 'matchup', 'rosters', 'score'].includes(S.ui.tab)) render(); };
   if (WIDE && WIDE.addEventListener) WIDE.addEventListener('change', relayout);
   if (SIDE && SIDE.addEventListener) SIDE.addEventListener('change', relayout);
   if (IN_PLAY_APP) document.querySelectorAll('[data-tip]').forEach(el => { el.hidden = true; });
