@@ -6,5 +6,5 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const out = path.join(__dirname, 'shared');
 fs.mkdirSync(out, {recursive: true});
-for (const f of ['engine.js', 'sleeper.js']) fs.copyFileSync(path.join(root, f), path.join(out, f));
-console.log('copied engine.js and sleeper.js into functions/shared');
+for (const f of ['engine.js', 'espn.js', 'sleeper.js']) fs.copyFileSync(path.join(root, f), path.join(out, f));
+console.log('copied engine.js, espn.js and sleeper.js into functions/shared');

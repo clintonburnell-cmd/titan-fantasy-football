@@ -1,11 +1,11 @@
 # Titan Fantasy Football Manager
 
 Start/sit calls, waiver upgrades, exposure and bye weeks across every Sleeper
-league you play in, ordered by your own rankings.
+and ESPN league you play in, ordered by your own rankings.
 
-Link a Sleeper username (no password needed). Titan finds your leagues and
-their lineup formats, then compares the lineups you have set with the ones
-your rankings would start.
+Link a Sleeper username (no password needed) and add ESPN leagues by ID. Titan
+finds your leagues and their lineup formats, then compares the lineups you have
+set with the ones your rankings would start.
 
 It grew out of a personal tool, the Sleeper Command Center, and uses the same
 start/sit rules, made to work for any Sleeper account.
@@ -15,7 +15,10 @@ start/sit rules, made to work for any Sleeper account.
 1. **Link**: enter a Sleeper username. Sleeper's public API returns the user ID,
    and every refresh re-reads the user's leagues, including each league's lineup
    slots, team count and scoring. A commissioner's format change is picked up
-   automatically.
+   automatically. ESPN leagues are added by league ID or link (`espn.js`): the
+   person picks their team (or Titan finds it from their saved ESPN login), and
+   every ESPN player is matched to the same player in Sleeper's list by name and
+   position, so injuries, locks, rankings and projections work the same way.
 2. **Import rankings**: a CSV file or a paste. Three layouts are read:
    one row per player (`Player, Pos, Team, Rank[, Opp, Implied, Tier]`);
    side-by-side position tables like Late-Round's export
@@ -50,9 +53,9 @@ website (such as alerts) to pass review.
 | Rosters | Every rostered player per league, with rank, tier, opponent and bye |
 | Exposure | Players on two or more of your teams |
 | Byes | How many of your players are off each week, per league |
-| Weeks | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points |
+| Weeks | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points (Sleeper leagues; ESPN scoring is next) |
 | Rankings | Import and manage weekly rankings |
-| Settings | Linked account, which leagues Titan manages, refresh log |
+| Settings | Linked Sleeper account, ESPN leagues and login, which leagues Titan manages, refresh log |
 
 ## Rules worth knowing
 
@@ -75,8 +78,12 @@ website (such as alerts) to pass review.
   link and league switches, and `users/{uid}/ranks/{week}` holds each week's
   rankings. `firestore.rules` lets only that signed-in person read or write
   their own data.
-- **Sleeper** is read directly from the device (`api.sleeper.app`). Titan has
-  no server of its own.
+- **Sleeper** is read directly from the device (`api.sleeper.app`).
+- **ESPN** (`lm-api-reads.fantasy.espn.com`, the JSON ESPN's own site reads; not a
+  documented API): public leagues are read from the device. Private leagues need the
+  member's `espn_s2` and `SWID` cookies, which a browser can't send to ESPN, so the
+  person saves them to `users/{uid}/private/espn` and the `espnLeague` callable
+  function reads the league with them and returns a slimmed copy.
 
 See `privacy.html`.
 
@@ -98,8 +105,9 @@ the Firebase Hosting domains; the GitHub Pages address forwards to
 
 `functions/index.js` is a scheduled Cloud Function (`freezeCalls`). Every 15 minutes on NFL
 game days it runs, for each person who signed in to sync, the same engine the app uses
-(`engine.js` and `sleeper.js`, copied in before each deploy): their live Sleeper rosters
-under their synced rankings, plus Sleeper's projections for the week. It saves the result
+(`engine.js`, `espn.js` and `sleeper.js`, copied in before each deploy): their live Sleeper
+and ESPN rosters (private ESPN leagues with their saved login) under their synced rankings,
+plus Sleeper's projections for the week. It saves the result
 to `users/{uid}/history/{week}` with `freezeWeek`, which keeps rewriting a player's entry
 until his game kicks off and never after. The Weeks tab scores each week against that
 frozen record. Scheduled functions need Firebase's pay-as-you-go (Blaze) plan.
@@ -124,13 +132,14 @@ https://titan-fantasy-football.web.app.
 index.html             Page shell
 styles.css             All styling
 engine.js              Start/sit, wire, exposure, bye and scorecard rules (pure; no page or network code)
-sleeper.js             Sleeper API calls, league discovery and browser storage
+sleeper.js             Sleeper API calls, league discovery, refresh and browser storage
+espn.js                ESPN leagues: reading them and matching their players to Sleeper's
 app.js                 Screens and interactions
 sw.js                  Service worker: offline shell, installable app
 manifest.webmanifest   App name and icons for installing
 icon*.svg / icon*.png  App icons (the PNGs are rendered from the SVGs)
 privacy.html           Privacy policy
-functions/             Server job: freezes each week's calls at kickoff
+functions/             Server: freezes each week's calls at kickoff; reads private ESPN leagues
 ```
 
 No build step and no dependencies. It runs on any static host.
@@ -145,14 +154,16 @@ No build step and no dependencies. It runs on any static host.
    with Bubblewrap (`com.titanfantasyfootball.app`), built and signed, and linked to the
    site by `/.well-known/assetlinks.json`. The Play Console account is in verification;
    then come the closed test Google requires of new personal accounts, and production.
-4. **Later: more fantasy platforms**, so one Titan account covers every league:
-   - **Yahoo Fantasy**: official Fantasy Sports API, signed in with Yahoo (OAuth).
-   - **ESPN Fantasy**: no official public API; unofficial endpoints work for public
-     leagues, and private leagues need the user's ESPN browser cookies.
-   - **NFL Fantasy** and **CBS Sports Fantasy**: need research on what each allows.
+4. **More fantasy platforms**, so one Titan account covers every league:
+   - **Done: ESPN Fantasy** (`espn.js`) for lineups, rosters, exposure, byes and the
+     kickoff record; public leagues by ID, private ones with the member's saved ESPN
+     login. Next: ESPN leagues on the Weeks tab.
+   - **Next: Yahoo Fantasy**: official Fantasy Sports API, signed in with Yahoo (OAuth),
+     with a registered Yahoo developer app and a server-side token exchange.
+   - **Later: NFL Fantasy** and **CBS Sports Fantasy**: need research on what each allows.
 
-   The engine already works on a neutral roster format (`buildLeague` output), so each
-   platform needs its own adapter like `sleeper.js`, not a rewrite.
+   The engine works on a neutral roster format (`buildLeague` output), so each platform
+   is an adapter that produces it, like `sleeper.js` and `espn.js`, not a rewrite.
 
 ## Save points
 

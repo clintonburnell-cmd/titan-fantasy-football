@@ -11,7 +11,7 @@
       location.replace('https://titan-fantasy-football.web.app/' + location.search + location.hash);
     }
   </script>
-  <meta name="description" content="Start/sit calls, waiver upgrades, exposure and bye weeks across every Sleeper league you play in, ordered by your own rankings.">
+  <meta name="description" content="Start/sit calls, waiver upgrades, exposure and bye weeks across every Sleeper and ESPN league you play in, ordered by your own rankings.">
   <meta name="theme-color" content="#0a0f1a">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -27,7 +27,7 @@
     <div class="top-in">
       <div class="brand">
         <img src="icon.svg" alt="" width="34" height="34">
-        <div><h1>Titan Fantasy Football Manager</h1><p id="meta">Start/sit for every Sleeper league</p></div>
+        <div><h1>Titan Fantasy Football Manager</h1><p id="meta">Start/sit for every Sleeper and ESPN league</p></div>
       </div>
       <div class="top-actions">
       <a class="tip" data-tip href="https://ko-fi.com/titandev" target="_blank" rel="noopener">
@@ -56,11 +56,12 @@
   <div id="progress" class="progress" role="status" hidden></div>
   <main id="view" class="wrap"></main>
   <footer class="foot wrap">
-    Titan Fantasy Football Manager isn't affiliated with or endorsed by Sleeper. <a href="privacy.html">Privacy</a>
+    Titan Fantasy Football Manager isn't affiliated with or endorsed by Sleeper or ESPN. <a href="privacy.html">Privacy</a>
   </footer>
   <div id="toast" class="toast" role="status" hidden></div>
 
   <script src="engine.js"></script>
+  <script src="espn.js"></script>
   <script src="sleeper.js"></script>
   <script src="syncplan.js"></script>
   <script src="app.js"></script>

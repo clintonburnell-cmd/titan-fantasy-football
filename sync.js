@@ -16,6 +16,7 @@ import {
 import {
   initializeFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import {getFunctions, httpsCallable} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 
 const App = window.TitanApp;
 const Plan = window.TitanSyncPlan;
@@ -41,6 +42,12 @@ provider.setCustomParameters({prompt: 'select_account'});
 
 const userDoc = uid => doc(db, 'users', uid);
 const weekDoc = (uid, w) => doc(db, 'users', uid, 'ranks', String(w));
+// The person's ESPN login (espn_s2 and SWID), for private ESPN leagues. Owner-only
+// like everything under users/{uid}; only Titan's server reads the cookie back.
+const espnDoc = uid => doc(db, 'users', uid, 'private', 'espn');
+// Private ESPN leagues are read by Titan's server with that login (functions/index.js).
+const readEspnLeague = httpsCallable(getFunctions(app, 'us-central1'), 'espnLeague');
+const ESPN = window.EspnAPI;
 const why = e => (e && (e.code || e.message)) || String(e);
 let listeners = [];
 
@@ -139,13 +146,24 @@ const api = {
     return s.exists() ? s.data() : null;
   },
 
+  async saveEspnLogin(creds) {
+    const u = auth.currentUser;
+    if (!u) throw new Error('Sign in first.');
+    await setDoc(espnDoc(u.uid), {s2: String(creds.s2 || '').trim(), swid: ESPN.normSwid(creds.swid), savedAt: Date.now()});
+  },
+
+  async deleteEspnLogin() {
+    const u = auth.currentUser;
+    if (u) await deleteDoc(espnDoc(u.uid));
+  },
+
   /* Removes everything Titan stores for this person, then the sign-in itself.
      Google asks for a fresh sign-in first if the last one was a while ago. */
   async deleteAccount() {
     const u = auth.currentUser;
     if (!u) return;
     stopListening();
-    for (const sub of ['ranks', 'history']) {
+    for (const sub of ['ranks', 'history', 'private']) {
       const docs = await getDocs(collection(db, 'users', u.uid, sub));
       await Promise.all(docs.docs.map(d => deleteDoc(d.ref)));
     }
@@ -167,9 +185,15 @@ getRedirectResult(auth).catch(e => App.setSync({state: 'error', error: 'Sign-in 
 onAuthStateChanged(auth, user => {
   if (!user) {
     stopListening();
+    if (ESPN) ESPN.setTransport(null);
+    App.setEspnLogin(null);
     App.setSync({user: null, state: 'off', at: 0});
     return;
   }
+  if (ESPN) ESPN.setTransport(args => readEspnLeague(args).then(r => r.data));
+  // The app only learns whether a login is saved, and the SWID (to find the person's team).
+  getDoc(espnDoc(user.uid)).then(s => App.setEspnLogin(s.exists() ? {saved: true, swid: s.data().swid, savedAt: s.data().savedAt} : null))
+    .catch(() => App.setEspnLogin(null));
   App.setSync({user: {name: user.displayName || '', email: user.email || '', photo: user.photoURL || ''}});
   reconcile(user.uid).catch(e => App.setSync({state: 'error', error: 'Sync failed: ' + why(e)}));
 });

@@ -194,7 +194,7 @@
 
   function describeLeague(l) {
     var scoring = l.ppr >= 1 ? 'PPR' : l.ppr >= 0.5 ? 'Half PPR' : l.ppr > 0 ? l.ppr + ' PPR' : 'Standard';
-    return [l.teams ? l.teams + ' teams' : '', scoring, l.kind, l.bestBall ? 'Best ball' : '']
+    return [l.platform === 'espn' ? 'ESPN' : '', l.teams ? l.teams + ' teams' : '', scoring, l.kind, l.bestBall ? 'Best ball' : '']
       .filter(Boolean).join(' · ');
   }
 
@@ -648,7 +648,8 @@
       d.roster.forEach(function (p) {
         var x = details[p.id];
         if (x && x.team && x.team !== p.team) { p.team = x.team; p.bye = byeOf(x.team); }
-        p.inj = x ? x.inj : '';
+        // A player Sleeper can't look up (an unmatched ESPN player) keeps the tag his league gave him.
+        if (x) p.inj = x.inj;
         p.outish = !!(p.inj && INJ_OUT[p.inj.split(' ')[0]]);
         if (p.inj) tagged[p.id] = 1;
       });
@@ -1032,7 +1033,7 @@
   /* `history` is the week's frozen record (freezeWeek output) or null, and
      `projMap` is Sleeper's projections for the week, used where nothing froze. */
   function scoreWeek(res, weekly, history, projMap) {
-    var rows = [], skipped = [];
+    var rows = [], skipped = (res.skipped || []).slice();
     var T = {actual: 0, byRank: 0, perfect: 0, projActual: 0, projByRank: 0, cw: 0, ct: 0};
     var hist = (history && history.leagues) || {};
     res.leagues.forEach(function (x) {

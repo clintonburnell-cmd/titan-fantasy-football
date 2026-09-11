@@ -24,7 +24,7 @@
     <h2>On your device</h2>
     <p>Titan keeps these in your browser's storage on your own device:</p>
     <ul>
-      <li>The Sleeper username you link, and the league switches you choose.</li>
+      <li>The Sleeper username you link, the ESPN leagues you add (league ID and which team is yours), and the league switches you choose.</li>
       <li>The rankings you import.</li>
       <li>A copy of your last refresh (rosters, injuries and game locks) so the app opens instantly.</li>
       <li>A trimmed copy of Sleeper's public player list (names, positions and teams).</li>
@@ -36,13 +36,19 @@
       Cloud Firestore, stored in the United States) to keep these the same across your devices:</p>
     <ul>
       <li>Your Google account's name, email address and profile picture, used only to sign you in and show who is signed in.</li>
-      <li>The Sleeper account you linked (username, user ID, display name and profile picture ID) and your league switches.</li>
+      <li>The Sleeper account you linked (username, user ID, display name and profile picture ID), the ESPN leagues you added,
+        and your league switches.</li>
       <li>The rankings you import, week by week.</li>
+      <li>Your ESPN login, only if you save it for private ESPN leagues: the <code>espn_s2</code> and <code>SWID</code> cookies
+        ESPN's website uses to keep you signed in.</li>
     </ul>
+    <p>Titan's server uses a saved ESPN login only to read your ESPN leagues, which a browser can't do for a private league
+      itself. The app never shows it again, and <b>Settings → ESPN leagues → Remove my ESPN login</b> deletes it. Because those
+      cookies keep you signed in to ESPN, signing out of ESPN on every device also makes a saved copy stop working.</p>
     <p>Only you can read or change your synced data: Titan's database rules allow access to a person's data only when that
       same person is signed in. Titan doesn't read it, share it or sell it.</p>
     <p>While you're signed in, Titan's server also keeps a record of each week: on NFL game days, every 15 minutes, it reads
-      your linked Sleeper leagues and your synced rankings, and saves each player's rank, Titan's call and his projected points
+      your linked Sleeper and ESPN leagues and your synced rankings, and saves each player's rank, Titan's call and his projected points
       under your account, frozen at his game's kickoff. The Weeks tab compares your results with that record.</p>
     <p>To delete everything, open <b>Settings → Sync across your devices → Delete my Titan account</b>. That removes your synced
       data and your Titan sign-in. Signing out stops syncing on that device without deleting anything.</p>
@@ -52,6 +58,8 @@
       <li><b>Sleeper</b> (<code>api.sleeper.app</code>): your device reads your leagues directly, the same information anyone can
         see on your public Sleeper profile. Titan has no password for your Sleeper account and cannot change your lineups,
         make claims or trade. Projected points also come from Sleeper, which gets them from RotoWire.</li>
+      <li><b>ESPN</b> (<code>fantasy.espn.com</code>): only if you add ESPN leagues. Public leagues are read by your device directly;
+        private ones by Titan's server with the ESPN login you saved. Titan can't change your ESPN lineups either.</li>
       <li><b>Google</b>: Firebase, for sign-in and sync if you choose to sign in, and for hosting the app.</li>
       <li><b>Ko-fi</b>: only if you tap the tip jar on the website. Tips are handled entirely by Ko-fi, and Titan never sees
         your payment details.</li>
@@ -67,7 +75,7 @@
     <h2>Contact</h2>
     <p>Questions or requests: <a href="https://github.com/clintonburnell-cmd/titan-fantasy-football/issues">open an issue on GitHub</a>.</p>
 
-    <p class="fine">Titan Fantasy Football Manager isn't affiliated with or endorsed by Sleeper.</p>
+    <p class="fine">Titan Fantasy Football Manager isn't affiliated with or endorsed by Sleeper or ESPN.</p>
   </main>
 </body>
 </html>

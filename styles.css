@@ -321,6 +321,10 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .saved li:first-child { border-top: 0; }
 .saved small { display: block; color: var(--muted); font-size: .76rem; }
 .saved-btns { display: flex; gap: 6px; flex: none; }
+.field.grow { flex: 1 1 12rem; }
+.pick { display: grid; gap: 8px; }
+.pick .chip small { color: var(--faint); font-weight: 500; }
+.login-form { display: grid; gap: 10px; margin-top: 8px; }
 #ranks-view { scroll-margin-top: 8.5rem; } /* clear the sticky header */
 .view-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .rank small.good { color: var(--ok); }

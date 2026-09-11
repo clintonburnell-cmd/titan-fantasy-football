@@ -9,6 +9,7 @@
   'use strict';
 
   var SCC = root.SCC || (typeof require === 'function' ? require('./engine.js') : null);
+  var ESPN = root.EspnAPI || (typeof require === 'function' ? require('./espn.js') : null);
 
   var API = 'https://api.sleeper.app/v1';
   var SCHEDULE = 'https://api.sleeper.app/schedule/nfl/regular/';
@@ -153,12 +154,38 @@
 
   /* ------------------------------------------------------------- refresh */
 
-  /* Everything the lineup screens need, pulled live for one account. Nothing
+  // League names are how the screens tell leagues apart, so a name used on both
+  // Sleeper and ESPN gets a number.
+  function uniqueKeys(list) {
+    var seen = {};
+    list.forEach(function (l) {
+      var k = l.key;
+      for (var n = 2; seen[k]; n++) k = l.key + ' (' + n + ')';
+      seen[k] = 1;
+      l.key = k;
+    });
+  }
+
+  // A saved ESPN league that couldn't be read this time: listed with the reason.
+  function unreadEspn(link, known, error) {
+    var id = 'espn:' + link.id;
+    var old = (known || []).filter(function (k) { return k.id === id; })[0];
+    return Object.assign({}, old || {id: id, platform: 'espn', espnId: String(link.id), teamId: link.teamId === undefined ? null : link.teamId,
+      key: link.name || ('ESPN league ' + link.id), name: link.name || ('ESPN league ' + link.id),
+      lineup: [], teams: 0, ppr: 0, kind: '', bestBall: false, exposure: true}, {error: error, active: false});
+  }
+
+  /* Everything the lineup screens need, pulled live for one account: its Sleeper
+     leagues (if a Sleeper username is linked) and its saved ESPN leagues. Nothing
      here depends on the rankings, so new rankings can be applied later without
-     refetching. `known` is the last league list, used if Sleeper's fails. */
-  async function collect(account, progress, known) {
+     refetching. `known` is the last league list, used if Sleeper's fails.
+     `opts.espnCreds` is an ESPN login for private leagues (server only; the
+     browser reads those through Titan's server instead). */
+  async function collect(account, progress, known, opts) {
     progress = progress || function () {};
+    opts = opts || {};
     var prefs = account.prefs || {};
+    var espnLinks = ESPN && account.espn ? account.espn.leagues || [] : [];
     var log = [];
     var say = function (m) { log.push(m); };
     say('Refresh started ' + stamp(new Date()));
@@ -173,13 +200,17 @@
 
     progress('Finding your leagues…');
     var found = await Promise.all([
-      discoverLeagues(account.userId, leagueSeason, prefs).catch(function () { return null; }),
+      account.userId ? discoverLeagues(account.userId, leagueSeason, prefs).catch(function () { return null; }) : [],
       getJson(SCHEDULE + season).catch(function () { return null; }),
-      loadPlayers(say)
+      loadPlayers(say),
+      Promise.all(espnLinks.map(function (l) {
+        return ESPN.fetchLeague(l.id, leagueSeason, {creds: opts.espnCreds, week: week})
+          .catch(function (e) { return {error: e.message || String(e)}; });
+      }))
     ]);
-    var all = found[0], sched = found[1], players = found[2];
+    var all = found[0], sched = found[1], players = found[2], espnRes = found[3];
     if (!all) {
-      all = (known || []).map(function (l) {
+      all = (known || []).filter(function (l) { return l.platform !== 'espn'; }).map(function (l) {
         var p = prefs[l.id];
         return Object.assign({}, l, p && p.active !== undefined ? {active: !!p.active} : {});
       });
@@ -187,11 +218,31 @@
     }
     var byes = SCC.setByes(sched && sched.length ? SCC.byesFromSchedule(sched) : null);
 
-    var leagues = all.filter(function (l) { return l.active; });
-    say(all.length + ' league(s) on ' + account.displayName + '\'s Sleeper account, ' + leagues.length + ' switched on.');
+    var espnJson = {};
+    espnLinks.forEach(function (link, i) {
+      var r = espnRes[i] || {error: 'not read'};
+      if (!r.json) {
+        all.push(unreadEspn(link, known, r.error));
+        say('ESPN league ' + link.id + ': ' + (r.error === 'private'
+          ? 'private, so it needs your ESPN login (Settings)' : r.error) + '.');
+        return;
+      }
+      var cfg = ESPN.leagueCfg(r.json, link, prefs);
+      espnJson[cfg.id] = r.json;
+      all.push(cfg);
+    });
+    uniqueKeys(all);
 
-    progress('Pulling ' + leagues.length + ' leagues from Sleeper…');
-    var sets = await Promise.all(leagues.map(function (l) {
+    var leagues = all.filter(function (l) { return l.active; });
+    var fromSleeper = leagues.filter(function (l) { return l.platform !== 'espn'; });
+    var fromEspn = leagues.filter(function (l) { return l.platform === 'espn'; });
+    if (account.userId) {
+      say(all.length - espnLinks.length + ' league(s) on ' + account.displayName + '\'s Sleeper account, ' + fromSleeper.length + ' switched on.');
+    }
+    if (espnLinks.length) say(espnLinks.length + ' ESPN league(s) saved, ' + fromEspn.length + ' switched on.');
+
+    progress('Pulling ' + leagues.length + ' leagues…');
+    var sets = await Promise.all(fromSleeper.map(function (l) {
       return getJson(API + '/league/' + l.id + '/rosters').catch(function () { return null; });
     }));
 
@@ -204,11 +255,18 @@
     }
 
     var live = [];
-    leagues.forEach(function (lg, i) {
+    fromSleeper.forEach(function (lg, i) {
       var d = SCC.buildLeague(lg, sets[i], account.userId, players);
       if (d.error) { say(lg.key + ': ' + d.error + ', skipped.'); return; }
       live.push(d);
       say(lg.key + ': ' + d.roster.length + ' players, ' + d.startCount + ' starting.');
+    });
+    fromEspn.forEach(function (lg) {
+      var d = ESPN.buildLeague(lg, espnJson[lg.id], players);
+      if (d.error) { say(lg.key + ' (ESPN): ' + d.error + ', skipped.'); return; }
+      live.push(d);
+      say(lg.key + ' (ESPN): ' + d.roster.length + ' players, ' + d.startCount + ' starting' +
+        (d.unmatched ? ', ' + d.unmatched + ' not found in Sleeper\'s player list' : '') + '.');
     });
 
     var snap = {at: Date.now(), week: week, season: season, available: all, byes: byes, leagues: live, log: log};
@@ -244,8 +302,11 @@
     var sched = await getJson(SCHEDULE + season);
     if (!sched || !sched.length) throw new Error('could not read the NFL schedule');
     var prog = SCC.weekProgress(sched, week);
+    var espn = leagues.filter(function (l) { return l.platform === 'espn'; });
+    leagues = leagues.filter(function (l) { return l.platform !== 'espn'; });
     var out = {week: week, userId: account.userId, started: prog.started, done: prog.done,
-      total: prog.total, leagues: [], players: {}};
+      total: prog.total, leagues: [], players: {},
+      skipped: espn.map(function (l) { return l.key + ': ESPN weekly scores are coming soon'; })};
     if (!prog.started) return out;
 
     var players = await loadPlayers();

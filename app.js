@@ -9,7 +9,7 @@
 (() => {
   'use strict';
 
-  const {SCC, SleeperAPI: API} = window;
+  const {SCC, SleeperAPI: API, EspnAPI: ESPN} = window;
   const store = API.store;
   const KEY = {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
   const STALE_MS = 5 * 60 * 1000;
@@ -67,6 +67,7 @@
     draft: {week: 0, text: '', parsed: null, file: '', pos: ''},
     link: {busy: false, error: ''},
     sync: {ready: false, api: null, user: null, state: 'off', error: '', at: 0},
+    espn: {busy: false, error: '', pick: null, login: null, openLogin: false}, // adding ESPN leagues
     proj: {}, // Sleeper's projections for the snapshot's week
     view: {week: 0, pos: 'QB'} // the saved rankings open on the Rankings tab
   };
@@ -211,7 +212,7 @@
 
   function paintHeader() {
     const s = S.snap, a = S.account;
-    $('meta').textContent = !a ? 'Start/sit for every Sleeper league'
+    $('meta').textContent = !a ? 'Start/sit for every Sleeper and ESPN league'
       : s ? `${a.displayName} · Week ${s.week} · updated ${when(s.at)}`
       : `${a.displayName} · not pulled yet`;
     const b = $('refresh');
@@ -254,7 +255,7 @@
     return `<section class="welcome">
       <img src="icon.svg" alt="" width="76" height="76">
       <h2>Titan Fantasy Football Manager</h2>
-      <p class="lede">Start/sit calls, waiver upgrades, exposure and bye weeks across every league you play on Sleeper, ordered by your own rankings.</p>
+      <p class="lede">Start/sit calls, waiver upgrades, exposure and bye weeks across every league you play on Sleeper and ESPN, ordered by your own rankings.</p>
       <form class="card pad" data-form="link" novalidate>
         <label class="field block"><span>Your Sleeper username</span>
           <input name="username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"
@@ -263,6 +264,7 @@
         <button class="btn big" type="submit" ${S.link.busy ? 'disabled' : ''}>${S.link.busy ? 'Finding you…' : 'Link Sleeper account'}</button>
         <p class="fine">No password. Titan only reads what Sleeper already shows publicly, and it can't change your lineups.</p>
       </form>
+      <p class="fine">Play on ESPN? <button class="link" data-action="espn-start">Add an ESPN league instead</button>, and link Sleeper later if you like.</p>
       <div class="sync-welcome" data-sync-slot="welcome">${syncWelcome()}</div>
       <ol class="how">
         <li><b>Link</b> your Sleeper username, and your leagues and lineup formats load automatically.</li>
@@ -285,7 +287,9 @@
         render();
         return;
       }
-      S.account = Object.assign(u, {prefs: {}, updatedAt: Date.now()});
+      // Linking Sleeper to an account that already has ESPN leagues keeps them.
+      const prev = S.account || {};
+      S.account = Object.assign(u, {prefs: prev.prefs || {}, updatedAt: Date.now()}, prev.espn ? {espn: prev.espn} : {});
       store.set(KEY.account, S.account);
       pushAccount();
       S.snap = null;
@@ -325,7 +329,8 @@
     if (!A.leagues.length) {
       h += `<div class="empty-note">No leagues to show. ${S.snap.available && S.snap.available.length
         ? 'Switch some on in <button class="link" data-go="settings">Settings</button>.'
-        : `Sleeper shows no ${esc(S.snap.season)} leagues on this account.`}</div>`;
+        : S.account.userId ? `Sleeper shows no ${esc(S.snap.season)} leagues on this account.`
+        : 'Add an ESPN league or link Sleeper in <button class="link" data-go="settings">Settings</button>.'}</div>`;
     } else if (!list.length) h += `<div class="empty-note">Nothing to do. Every lineup matches your rankings.</div>`;
     const credit = Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper.</p>' : '';
     return h + list.map(leagueCard).join('') + credit;
@@ -698,17 +703,168 @@
     render();
   }
 
+  /* ---- ESPN leagues */
+
+  const espnLinks = () => (S.account && S.account.espn && S.account.espn.leagues) || [];
+  const espnSeason = () => (S.snap && S.snap.season) || String(new Date().getFullYear());
+
+  function espnSettings() {
+    const E = S.espn, links = espnLinks();
+    const cfgOf = id => ((S.snap && S.snap.available) || []).filter(l => l.id === 'espn:' + id)[0];
+    let h = '<h3>ESPN leagues</h3>';
+    h += links.length ? `<ul class="saved">${links.map(l => {
+      const c = cfgOf(l.id);
+      const note = !c ? 'Added. It loads on the next refresh.'
+        : c.error === 'private' ? 'Private: save your ESPN login below to read it.'
+        : c.error ? 'Could not read it: ' + c.error : SCC.describeLeague(c);
+      return `<li><span><b>${esc(c && !c.error ? c.key : l.name || 'ESPN league ' + l.id)}</b><small${c && c.error ? ' class="bad-text"' : ''}>${
+        esc((l.teamName ? l.teamName + ' · ' : '') + note)}</small></span>
+        <button class="btn ghost small" data-action="espn-remove" data-id="${esc(l.id)}">Remove</button></li>`;
+    }).join('')}</ul>` : '<p class="fine">None yet.</p>';
+    if (E.pick) {
+      h += `<div class="pick"><p><b>Which team is yours in ${esc(E.pick.name)}?</b></p><div class="chips">${E.pick.teams.map(t =>
+        `<button class="chip" data-action="espn-team" data-team="${esc(t.id)}">${esc(t.name)}${t.manager ? ` <small>${esc(t.manager)}</small>` : ''}</button>`).join('')}</div>
+        <button class="link" data-action="espn-cancel">Cancel</button></div>`;
+    }
+    h += `<form class="bar" data-form="espn-add" novalidate>
+        <label class="field grow"><span>League ID or ESPN link</span><input name="league" autocapitalize="off" autocorrect="off"
+          spellcheck="false" placeholder="e.g. 1234567" ${E.busy ? 'disabled' : ''}></label>
+        <button class="btn" type="submit" ${E.busy ? 'disabled' : ''}>${E.busy ? 'Finding it…' : 'Add league'}</button></form>`;
+    if (E.error) h += `<div class="banner stop">${esc(E.error)}</div>`;
+    h += `<p class="fine">The ID is the number after <code>leagueId=</code> in the league's address on fantasy.espn.com. Titan only reads your league; it can't change your lineup.</p>
+      <details class="help"${E.openLogin ? ' open' : ''}><summary>Private leagues: your ESPN login</summary><div data-espn-login>${espnLoginHtml()}</div></details>`;
+    return h;
+  }
+
+  function espnLoginHtml() {
+    if (!S.sync.user) {
+      return `<p>Private ESPN leagues need your ESPN login, kept in your private Titan account. <button class="link" data-action="sync-in">Sign in with Google</button> first.</p>`;
+    }
+    const L = S.espn.login;
+    if (L && L.saved) {
+      return `<p>Your ESPN login is saved in your private Titan account${L.savedAt ? ` (since ${esc(when(L.savedAt))})` : ''}. Titan's server uses it only to read your ESPN leagues.</p>
+        <p><button class="btn ghost small" data-action="espn-login-del">Remove my ESPN login</button></p>`;
+    }
+    return `<p>ESPN keeps private leagues behind your login. On a computer, sign in at fantasy.espn.com, open the browser's developer tools (F12),
+        then Application, Cookies, fantasy.espn.com, and copy the values of <b>espn_s2</b> and <b>SWID</b>.</p>
+      <form class="login-form" data-form="espn-login" novalidate>
+        <label class="field block"><span>espn_s2</span><input name="s2" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <label class="field block"><span>SWID</span><input name="swid" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"></label>
+        <button class="btn" type="submit">Save ESPN login</button></form>
+      <p class="fine">Saved only in your private Titan account; Titan's server uses them only to read your leagues. Remove them here anytime. Signing out of ESPN on every device also stops them working.</p>`;
+  }
+
+  // Starts an account with no Sleeper link, for people who play only on ESPN.
+  function startEspnOnly() {
+    S.account = {userId: '', username: '', displayName: 'My leagues', avatar: '', prefs: {}, espn: {leagues: []}, updatedAt: Date.now()};
+    store.set(KEY.account, S.account);
+    pushAccount();
+    S.snap = null;
+    store.del(KEY.snap);
+    S.ui.tab = 'settings';
+    saveUi();
+    render();
+    const input = view.querySelector('[data-form="espn-add"] input');
+    if (input) input.focus();
+  }
+
+  async function addEspn(text) {
+    const E = S.espn, id = ESPN.parseLeagueId(text);
+    E.pick = null;
+    if (!id) { E.error = 'Type the league ID (a number) or paste the league\'s ESPN link.'; return render(); }
+    if (espnLinks().some(l => String(l.id) === id)) { E.error = 'That league is already added.'; return render(); }
+    Object.assign(E, {busy: true, error: ''});
+    render();
+    const r = await ESPN.fetchLeague(id, espnSeason());
+    E.busy = false;
+    if (!r.json) {
+      E.error = r.error === 'not found' ? `ESPN has no league ${id} for the ${espnSeason()} season.`
+        : r.error !== 'private' ? 'Could not read it from ESPN: ' + r.error
+        : E.login && E.login.saved ? 'This league is private and your saved ESPN login can\'t open it. Check the espn_s2 and SWID values, and that this ESPN account is in the league.'
+        : 'This league is private. Save your ESPN login below, then add it again.';
+      if (r.error === 'private') E.openLogin = true;
+      return render();
+    }
+    const name = (r.json.settings && r.json.settings.name) || 'ESPN league ' + id;
+    const teams = ESPN.teamsOf(r.json);
+    const mine = E.login && E.login.swid ? ESPN.ownedTeam(r.json, E.login.swid) : null;
+    if (mine !== null) return saveEspnLink({id, teamId: mine, name, teamName: (teams.find(t => t.id === mine) || {}).name || ''});
+    E.pick = {id, name, teams};
+    render();
+  }
+
+  function saveEspnLinks(leagues) {
+    S.account.espn = {leagues};
+    S.account.updatedAt = Date.now();
+    store.set(KEY.account, S.account);
+    pushAccount();
+  }
+
+  function saveEspnLink(link) {
+    Object.assign(S.espn, {pick: null, error: ''});
+    saveEspnLinks(espnLinks().concat([link]));
+    toast(`${link.name} added.`);
+    refresh();
+  }
+
+  function pickEspnTeam(teamId) {
+    const P = S.espn.pick;
+    if (!P) return;
+    const t = P.teams.find(x => String(x.id) === String(teamId));
+    if (t) saveEspnLink({id: P.id, teamId: t.id, name: P.name, teamName: t.name});
+  }
+
+  function removeEspn(id) {
+    const l = espnLinks().find(x => String(x.id) === String(id));
+    if (!l || !confirm(`Remove ${l.name || 'this ESPN league'} from Titan?`)) return;
+    saveEspnLinks(espnLinks().filter(x => x !== l));
+    refresh();
+  }
+
+  async function saveEspnLogin(s2, swid) {
+    if (!s2.trim() || !swid.trim()) { toast('Paste both espn_s2 and SWID.'); return; }
+    try {
+      await S.sync.api.saveEspnLogin({s2, swid});
+      S.espn.login = {saved: true, swid: ESPN.normSwid(swid), savedAt: Date.now()};
+      S.espn.error = '';
+      toast('ESPN login saved to your private Titan account.');
+      render();
+      refresh();
+    } catch (e) {
+      toast('Could not save it: ' + (e.code || e.message));
+    }
+  }
+
+  async function deleteEspnLogin() {
+    if (!confirm('Remove your ESPN login from Titan? Private ESPN leagues stop loading until you save it again.')) return;
+    try {
+      await S.sync.api.deleteEspnLogin();
+      S.espn.login = null;
+      render();
+      refresh();
+    } catch (e) {
+      toast('Could not remove it: ' + (e.code || e.message));
+    }
+  }
+
   /* ---- Settings */
 
   function screenSettings() {
     const a = S.account;
     const all = (S.snap && S.snap.available) || [];
+    const sleeper = a.userId
+      ? `<div class="account">${avatar(a.avatar, 44)}<div><b>${esc(a.displayName)}</b><small>@${esc(a.username)}</small></div>
+        <button class="btn ghost small" data-action="unlink">${espnLinks().length ? 'Unlink' : 'Switch account'}</button></div>`
+      : `<form class="bar" data-form="link" novalidate>
+          <label class="field grow"><span>Sleeper username</span><input name="username" autocomplete="username" autocapitalize="off"
+            autocorrect="off" spellcheck="false" value="${esc(S.link.name || '')}" ${S.link.busy ? 'disabled' : ''}></label>
+          <button class="btn" type="submit" ${S.link.busy ? 'disabled' : ''}>${S.link.busy ? 'Finding you…' : 'Link Sleeper'}</button></form>
+        ${S.link.error ? `<div class="banner stop">${esc(S.link.error)}</div>` : ''}`;
     let h = `<section class="card pad" data-sync-slot="settings">${syncSettings()}</section>
-      <section class="card pad"><h3>Sleeper account</h3>
-      <div class="account">${avatar(a.avatar, 44)}<div><b>${esc(a.displayName)}</b><small>@${esc(a.username)}</small></div>
-        <button class="btn ghost small" data-action="unlink">Switch account</button></div></section>
+      <section class="card pad"><h3>Sleeper account</h3>${sleeper}</section>
+      <section class="card pad">${espnSettings()}</section>
       <section class="card pad"><h3>Leagues</h3>
-        <p class="fine">Found automatically on Sleeper, with each league's own lineup format. Switch off any you don't want Titan to manage.</p>
+        <p class="fine">Your Sleeper leagues are found automatically and your ESPN leagues are the ones added above, each with its own lineup format. Switch off any you don't want Titan to manage.</p>
         ${all.length ? `<ul class="lg-list">${all.map(l => `<li><label class="check">
           <input type="checkbox" data-league="${esc(l.id)}" ${l.active ? 'checked' : ''}>
           <span><b>${esc(l.key)}</b><small>${esc(SCC.describeLeague(l))} · ${esc(l.lineup.map(slotName).join(' '))}</small></span></label></li>`).join('')}</ul>
@@ -738,6 +894,18 @@
   }
 
   function unlink() {
+    // With ESPN leagues saved, only the Sleeper link goes; the account stays.
+    if (espnLinks().length) {
+      if (!confirm('Unlink this Sleeper account? Your ESPN leagues and rankings stay.')) return;
+      Object.assign(S.account, {userId: '', username: '', displayName: 'My leagues', avatar: '', updatedAt: Date.now()});
+      store.set(KEY.account, S.account);
+      pushAccount();
+      S.snap = null;
+      store.del(KEY.snap);
+      render();
+      refresh();
+      return;
+    }
     if (!confirm('Unlink this Sleeper account from Titan on this device? Your rankings stay.')) return;
     S.account = null;
     S.snap = null;
@@ -795,6 +963,8 @@
     view.querySelectorAll('[data-sync-slot]').forEach(el => {
       el.innerHTML = el.dataset.syncSlot === 'welcome' ? syncWelcome() : syncSettings();
     });
+    const login = view.querySelector('[data-espn-login]');
+    if (login) login.innerHTML = espnLoginHtml();
   }
 
   // The bridge sync.js talks to. The app never depends on it being there.
@@ -802,7 +972,8 @@
     local: () => ({account: S.account, ranks: S.ranks}),
     applyAccount(account) {
       const newUser = !S.account || S.account.userId !== account.userId;
-      const newPrefs = !newUser && JSON.stringify(S.account.prefs || {}) !== JSON.stringify(account.prefs || {});
+      const newPrefs = !newUser && (JSON.stringify(S.account.prefs || {}) !== JSON.stringify(account.prefs || {}) ||
+        JSON.stringify(S.account.espn || {}) !== JSON.stringify(account.espn || {}));
       S.account = Object.assign({}, account);
       store.set(KEY.account, S.account);
       if (newUser) { S.snap = null; S.A = null; store.del(KEY.snap); }
@@ -826,7 +997,9 @@
       // Signing in makes the week's saved record readable: score again with it.
       if (patch.state === 'on' && S.ui.tab === 'score' && S.score.data && !S.score.data.history && !S.score.busy) loadScore(S.score.week);
     },
-    syncReady(api) { S.sync.api = api; S.sync.ready = true; paintSync(); }
+    syncReady(api) { S.sync.api = api; S.sync.ready = true; paintSync(); },
+    // Whether this person has an ESPN login saved (never the login itself).
+    setEspnLogin(login) { S.espn.login = login; paintSync(); }
   };
 
   const SCREENS = {
@@ -852,9 +1025,12 @@
   $('refresh').addEventListener('click', refresh);
 
   view.addEventListener('submit', e => {
-    if (e.target.dataset.form !== 'link') return;
+    const form = e.target.dataset.form, el = e.target.elements;
+    if (!form) return;
     e.preventDefault();
-    linkAccount(e.target.elements.username.value);
+    if (form === 'link') linkAccount(el.username.value);
+    else if (form === 'espn-add') addEspn(el.league.value);
+    else if (form === 'espn-login') saveEspnLogin(el.s2.value, el.swid.value);
   });
 
   view.addEventListener('click', e => {
@@ -866,6 +1042,11 @@
     const a = t.dataset.action;
     if (a === 'score') loadScore(S.score.week || S.snap.week);
     else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
+    else if (a === 'espn-start') startEspnOnly();
+    else if (a === 'espn-team') pickEspnTeam(t.dataset.team);
+    else if (a === 'espn-cancel') { S.espn.pick = null; render(); }
+    else if (a === 'espn-remove') removeEspn(t.dataset.id);
+    else if (a === 'espn-login-del') deleteEspnLogin();
     else if (a === 'ranks-save') saveRanks();
     else if (a === 'ranks-del') deleteRanks(Number(t.dataset.week));
     else if (a === 'leagues-save') saveLeagues();
