@@ -19,13 +19,13 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'matchup', 'rosters', 'exposure', 'byes', 'score', 'news', 'ranks', 'settings'];
+  const TABS = ['lineups', 'matchup', 'rosters', 'exposure', 'byes', 'score', 'news', 'ranks', 'trade', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', rosters: 'Rosters', exposure: 'Exposure', byes: 'Byes',
-    score: 'Results', news: 'News', ranks: 'Rankings', settings: 'Settings'};
+    score: 'Results', news: 'News', ranks: 'Rankings', trade: 'Trade', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
   const SLUG = {lineups: 'lineups', matchup: 'matchup', rosters: 'rosters', exposure: 'exposure', byes: 'byes',
-    score: 'results', news: 'news', ranks: 'rankings', settings: 'settings'};
+    score: 'results', news: 'news', ranks: 'rankings', trade: 'trade', settings: 'settings'};
   const tabFromPath = () => {
     const m = location.pathname.match(/^\/app\/([a-z]+)\/?$/);
     return (m && Object.keys(SLUG).find(t => SLUG[t] === m[1])) || '';
@@ -102,7 +102,9 @@
     alertsError: '',
     proj: {}, // Sleeper's projections for the snapshot's week
     projAt: 0, // when they were last fetched (0: not yet this visit)
-    view: {week: 0, pos: 'QB'} // the saved rankings open on the Rankings tab
+    view: {week: 0, pos: 'QB'}, // the saved rankings open on the Rankings tab
+    // The Trade tab: each league's teams, FantasyCalc's values by league format, and the trade being built.
+    trade: {teams: {}, values: {}, pick: {league: '', partner: '', give: [], get: []}}
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
   // An address like /app/matchup opens that screen.
@@ -220,6 +222,7 @@
       S.proj = await API.fetchProjections(snap.season, snap.week);
       S.projAt = Date.now();
       if (S.score.week === snap.week) S.score.data = null; // live points have moved
+      S.trade.teams = {}; // rosters may have changed too
     } catch (e) {
       S.error = 'Refresh failed: ' + (e && e.message ? e.message : e);
     } finally {
@@ -1716,9 +1719,135 @@
     setEspnLogin(login) { S.espn.login = login; paintSync(); }
   };
 
+  /* ---- Trade */
+
+  /* Trade values are FantasyCalc's (fantasycalc.com), read through Titan's server
+     (/api/trade-values), which asks FantasyCalc for each league format at most once a
+     day, as FantasyCalc asks. FantasyCalc must be credited, with a link, wherever its
+     values show. Loaders never draw synchronously, so screenTrade can start them. */
+  const tradeKey = f => [f.dynasty ? 1 : 0, f.qbs, f.teams, f.ppr].join('-');
+  const thousands = n => Math.round(Number(n) || 0).toLocaleString('en-US');
+  const formatName = f => [f.dynasty ? 'dynasty' : 'redraft', f.qbs === 2 ? 'superflex' : '1 QB', f.teams + ' teams',
+    f.ppr === 1 ? 'PPR' : f.ppr === 0.5 ? 'half PPR' : 'standard scoring'].join(', ');
+
+  async function loadTradeValues(f) {
+    const k = tradeKey(f);
+    S.trade.values[k] = {busy: true};
+    try {
+      const q = new URLSearchParams({dynasty: f.dynasty ? 1 : 0, qbs: f.qbs, teams: f.teams, ppr: f.ppr});
+      const res = await fetch('/api/trade-values?' + q);
+      if (!res.ok) throw new Error('answered ' + res.status);
+      const j = await res.json();
+      S.trade.values[k] = {at: j.at, idx: SCC.valueIndex(j.values)};
+    } catch (e) {
+      S.trade.values[k] = {error: 'Could not load the trade values.'};
+    }
+    if (S.ui.tab === 'trade') render();
+  }
+
+  async function loadTradeTeams(d) {
+    const id = d.cfg.id;
+    S.trade.teams[id] = {busy: true};
+    try {
+      S.trade.teams[id] = {list: await API.leagueTeams(d.cfg, d.rosterId, S.snap.season)};
+    } catch (e) {
+      S.trade.teams[id] = {error: `Could not load the teams in ${d.cfg.key}: ${e && e.message ? e.message : e}.`};
+    }
+    if (S.ui.tab === 'trade') render();
+  }
+
+  function screenTrade() {
+    if (DEMO) return demoOnly('Trades', 'The Trade tab weighs trades with the other teams in your real leagues, using FantasyCalc\'s trade values.');
+    if (!S.snap) return emptyState();
+    const leagues = S.snap.leagues || [];
+    if (!leagues.length) return '<div class="empty-note">No leagues to trade in yet.</div>';
+    const d = leagues.find(x => x.cfg.id === S.ui.tradeLeague) || leagues[0];
+    const f = SCC.tradeFormat(d.cfg), k = tradeKey(f);
+    if (!S.trade.values[k]) loadTradeValues(f);
+    if (!S.trade.teams[d.cfg.id]) loadTradeTeams(d);
+    const V = S.trade.values[k], T = S.trade.teams[d.cfg.id];
+    const teams = (T && T.list) || [], me = teams.find(t => t.mine);
+    const partner = teams.find(t => !t.mine && t.id === S.ui.tradePartner) || null;
+    const P = S.trade.pick;
+    if (P.league !== d.cfg.id || P.partner !== (partner ? partner.id : '')) Object.assign(P, {league: d.cfg.id, partner: partner ? partner.id : '', give: [], get: []});
+
+    let h = `<p class="credit">Trade values by <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>${
+      V && V.at ? `, updated ${esc(when(V.at))}` : ''}. Titan isn't affiliated with FantasyCalc.</p>
+      <div class="bar">
+        <label class="field"><span>League</span><select data-ui="tradeLeague">${leagues.map(x =>
+          `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('')}</select></label>
+        <label class="field"><span>Trade partner</span><select data-ui="tradePartner"${teams.length ? '' : ' disabled'}>
+          <option value="">Pick a team</option>${teams.filter(t => !t.mine).map(t => `<option value="${esc(t.id)}"${t === partner ? ' selected' : ''}>${
+            esc(t.name)}${t.manager && t.manager !== t.name ? ' (' + esc(t.manager) + ')' : ''}</option>`).join('')}</select></label>
+      </div>
+      <p class="fine">Values for ${esc(formatName(f))}: what players like these go for in real trades.</p>`;
+    const retry = '<button class="link" data-action="trade-retry">Try again</button>';
+    if (T && T.error) return h + `<div class="banner stop">${esc(T.error)} ${retry}</div>`;
+    if (V && V.error) return h + `<div class="banner stop">${esc(V.error)} ${retry}</div>`;
+    if (!T || T.busy || !V || V.busy) return h + '<div class="empty-note">Loading the teams and their trade values…</div>';
+    if (!me) return h + `<div class="empty-note">Titan couldn't find your team in ${esc(d.cfg.key)}.</div>`;
+
+    const val = p => SCC.playerValue(V.idx, p), worth = p => (val(p) || {}).v || 0;
+    const give = P.give.map(id => me.roster.find(p => p.id === id)).filter(Boolean);
+    const get = partner ? P.get.map(id => partner.roster.find(p => p.id === id)).filter(Boolean) : [];
+    if (partner) h += tradeSummary(me, partner, give, get, worth);
+    return h + `<div class="trade-teams">${tradeRoster(me, 'give', val)}${partner ? tradeRoster(partner, 'get', val)
+      : '<div class="card pad"><p class="lede">Pick a trade partner to see their roster.</p></div>'}</div>`;
+  }
+
+  // One team's players, most valuable first. Tapping one puts it in the trade, or takes it out.
+  function tradeRoster(team, which, val) {
+    const picked = S.trade.pick[which];
+    const rows = team.roster.map(p => ({p, x: val(p)}))
+      .sort((a, b) => ((b.x || {}).v || 0) - ((a.x || {}).v || 0) || a.p.name.localeCompare(b.p.name));
+    return `<section class="card tteam"><header class="card-h"><div><h3>${esc(which === 'give' ? 'Your team' : team.name)}</h3>
+      <p>${which === 'give' ? esc(team.name) + ' · tap the players you\'d give' : 'Tap the players you\'d get'}</p></div></header>
+      <div class="trows">${rows.map(({p, x}) => `<button type="button" class="trow" data-trade="${which}" data-pid="${esc(p.id)}" aria-pressed="${picked.includes(p.id)}">
+        ${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}${
+          x && x.pr ? ' · ' + esc(p.pos + x.pr) : ''}</small></span>
+        <span class="tval">${x ? thousands(x.v) : '–'}${x && x.tr ? `<small class="${x.tr > 0 ? 'good' : 'amber'}" title="Change over the last 30 days">${
+          x.tr > 0 ? '▲' : '▼'} ${thousands(Math.abs(x.tr))}</small>` : ''}</span></button>`).join('')}</div></section>`;
+  }
+
+  // The trade so far: both sides, the verdict, a balance bar, and what would even it out.
+  function tradeSummary(me, partner, give, get, worth) {
+    const R = SCC.tradeVerdict(give.map(worth), get.map(worth)), any = give.length || get.length;
+    const chips = (list, which) => list.length ? list.map(p => `<button type="button" class="chip tchip" data-trade="${which}" data-pid="${esc(p.id)}" title="Take out of the trade">${
+      esc(p.name)} <small>${worth(p) ? thousands(worth(p)) : '–'}</small> ✕</button>`).join('') : '<span class="fine">Nobody yet</span>';
+    const total = (R.give.adj + R.get.adj) || 1, pg = Math.round(R.get.adj / total * 100);
+    const tot = (s, n) => `<p class="ttot">${thousands(s.raw)}${n > 1 ? `<small>weighs ${thousands(s.adj)}</small>` : ''}</p>`;
+    let verdict;
+    if (!any) verdict = 'Tap players below to build a trade: yours to give, theirs to get.';
+    else if (!give.length || !get.length) verdict = `Add players from ${!give.length ? 'your team' : esc(partner.name)} too.`;
+    else if (R.fair) verdict = '<b class="good">Fair trade.</b> The two sides are within 5% of each other.';
+    else if (R.winner === 'you') verdict = `<b class="good">You win this trade</b> by ${thousands(R.diff)}.`;
+    else verdict = `<b class="amber">${esc(partner.name)} wins this trade</b> by ${thousands(-R.diff)}.`;
+    let even = '';
+    if (give.length && get.length && !R.fair) {
+      // One more player from the side giving less, worth about R.even, would even it out.
+      const from = R.winner === 'you' ? me : partner, which = R.winner === 'you' ? 'give' : 'get', taken = S.trade.pick[which];
+      const near = from.roster.filter(p => !taken.includes(p.id) && worth(p) > 0)
+        .sort((a, b) => Math.abs(worth(a) - R.even) - Math.abs(worth(b) - R.even)).slice(0, 3);
+      even = `<p class="fine">To even it out, ${R.winner === 'you' ? 'you\'d add' : 'they\'d add'} a player worth about ${thousands(R.even)}${near.length ? ', like:' : '.'}</p>${
+        near.length ? `<div class="chips">${near.map(p => `<button type="button" class="chip" data-trade="${which}" data-pid="${esc(p.id)}">+ ${
+          esc(p.name)} <small>${thousands(worth(p))}</small></button>`).join('')}</div>` : ''}`;
+    }
+    return `<section class="card pad trade-sum">
+      <div class="tsides">
+        <div><h3>You give</h3><div class="chips">${chips(give, 'give')}</div>${tot(R.give, give.length)}</div>
+        <div><h3>You get</h3><div class="chips">${chips(get, 'get')}</div>${tot(R.get, get.length)}</div>
+      </div>
+      ${any ? `<div class="winbar" title="Each side's share of the trade, stars weighted"><span class="wp me${pg <= 50 ? ' up' : ''}">${100 - pg}%</span>
+        <span class="wbar"><i class="wopp" style="width:${100 - pg}%"></i><i class="wme" style="width:${pg}%"></i></span><span class="wp opp${pg >= 50 ? ' up' : ''}">${pg}%</span></div>` : ''}
+      <p class="tverdict">${verdict}</p>${even}
+      <p class="fine">Stars count for more than their total, as in real trades: two players worth 5,000 weigh about 8,700 against one worth 10,000.${
+        any ? ' <button class="link" data-action="trade-clear">Clear the trade</button>' : ''}</p>
+    </section>`;
+  }
+
   const SCREENS = {
     lineups: screenLineups, matchup: screenMatchup, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
-    score: screenScore, ranks: screenRanks, settings: screenSettings
+    score: screenScore, ranks: screenRanks, trade: screenTrade, settings: screenSettings
   };
 
   /* ------------------------------------------------------------- events */
@@ -1759,9 +1888,15 @@
     // A tap on a league's header folds or unfolds it; the toggle listener remembers it.
     const head = e.target.closest('details[data-fold] > summary');
     if (head) { tapped = head.parentElement; return; }
-    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
+    if (t.dataset.trade) {
+      const list = S.trade.pick[t.dataset.trade], i = list.indexOf(t.dataset.pid);
+      if (i >= 0) list.splice(i, 1);
+      else list.push(t.dataset.pid);
+      return render();
+    }
     if (t.dataset.jump) {
       const card = document.getElementById(t.dataset.jump);
       if (card && card.tagName === 'DETAILS' && !card.open) { tapped = card; card.open = true; }
@@ -1775,6 +1910,11 @@
     if (a === 'score') loadScore(S.score.week || S.snap.week);
     else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
     else if (a === 'matchups') loadMatchups();
+    else if (a === 'trade-clear') { S.trade.pick.give = []; S.trade.pick.get = []; render(); }
+    else if (a === 'trade-retry') {
+      [S.trade.teams, S.trade.values].forEach(m => Object.keys(m).forEach(k => { if (m[k].error) delete m[k]; }));
+      render();
+    }
     else if (a === 'fold-all' || a === 'fold-none') foldAll(t.dataset.kind, a === 'fold-all');
     else if (a === 'espn-start') startEspnOnly();
     else if (a === 'espn-team') pickEspnTeam(t.dataset.team);
@@ -1805,6 +1945,8 @@
   view.addEventListener('change', e => {
     const t = e.target;
     if (t.dataset.ui === 'league') { S.ui.league = t.value; saveUi(); render(); }
+    else if (t.dataset.ui === 'tradeLeague') { S.ui.tradeLeague = t.value; S.ui.tradePartner = ''; saveUi(); render(); }
+    else if (t.dataset.ui === 'tradePartner') { S.ui.tradePartner = t.value; saveUi(); render(); }
     else if (t.dataset.alert) {
       if (S.alerts) S.alerts.prefs[t.dataset.alert] = t.checked;
       if (S.sync.api && S.sync.user) S.sync.api.alertPrefs(alertPrefs()).catch(() => toast('Could not save that choice. Try again.'));

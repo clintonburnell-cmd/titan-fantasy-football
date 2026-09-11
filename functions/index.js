@@ -8,7 +8,7 @@
  * Stored at users/{uid}/history/{week}, readable only by that person.
  */
 const {onSchedule} = require('firebase-functions/v2/scheduler');
-const {onCall, HttpsError} = require('firebase-functions/v2/https');
+const {onCall, onRequest, HttpsError} = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const zlib = require('zlib');
 const {initializeApp} = require('firebase-admin/app');
@@ -289,5 +289,67 @@ exports.testAlert = onCall({region: 'us-central1', memory: '256MiB', maxInstance
 });
 
 // For local testing without Cloud Scheduler.
-exports._test = {run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
+/* FantasyCalc's trade values (fantasycalc.com) for the Trade tab, one league format
+   at a time. FantasyCalc's terms: call only its documented endpoint (/values/current),
+   cache on your own server (ideally a day), and credit it with a link wherever the
+   values show (the app does that). Each format is kept in Firestore at
+   tradeValues/{format}, which no browser can read; the app asks for it at
+   /api/trade-values on Titan's own address, so browsers never call FantasyCalc. */
+const FANTASYCALC = 'https://api.fantasycalc.com/values/current';
+const VALUES_TTL = 24 * 3600 * 1000;
+
+// A league format from the address, only as FantasyCalc offers them; null otherwise.
+function valuesFormat(q) {
+  q = q || {};
+  const flag = q.dynasty === undefined ? '0' : String(q.dynasty);
+  const dynasty = flag === '1' || flag === 'true' ? true : flag === '0' || flag === 'false' ? false : null;
+  const qbs = Number(q.qbs === undefined ? 1 : q.qbs), teams = Number(q.teams === undefined ? 12 : q.teams);
+  const ppr = Number(q.ppr === undefined ? 1 : q.ppr);
+  if (dynasty === null || ![1, 2].includes(qbs) || ![8, 10, 12, 14].includes(teams) || ![0, 0.5, 1].includes(ppr)) return null;
+  return {dynasty, qbs, teams, ppr};
+}
+const valuesKey = f => `${f.dynasty ? 'dynasty' : 'redraft'}-${f.qbs}qb-${f.teams}teams-${f.ppr}ppr`;
+
+// Just what the app uses: ids (Sleeper, ESPN), name, position, team, value, ranks and the 30-day trend.
+function slimValues(list) {
+  return (Array.isArray(list) ? list : []).filter(x => x && x.player && Number(x.value) > 0).map(x => {
+    const p = x.player;
+    return {s: p.sleeperId ? String(p.sleeperId) : '', e: p.espnId ? String(p.espnId) : '', n: p.name || '', p: p.position || '',
+      t: p.maybeTeam || '', v: Math.round(Number(x.value)), r: x.overallRank || 0, pr: x.positionRank || 0, tr: Math.round(Number(x.trend30Day) || 0)};
+  });
+}
+
+/* The values for one format: the saved copy if it's under a day old, else FantasyCalc's
+   latest (saved for next time). If FantasyCalc can't be reached, the last copy serves. */
+async function tradeValues(f, doc, now = Date.now(), get = getJson) {
+  const saved = (await doc.get()).data();
+  if (saved && saved.values && now - saved.at < VALUES_TTL) return saved;
+  let values;
+  try {
+    values = slimValues(await get(`${FANTASYCALC}?isDynasty=${f.dynasty}&numQbs=${f.qbs}&numTeams=${f.teams}&ppr=${f.ppr}`));
+    if (!values.length) throw new Error('FantasyCalc sent no values');
+  } catch (e) {
+    if (saved && saved.values) return saved;
+    throw e;
+  }
+  const out = {at: now, format: valuesKey(f), values};
+  await doc.set(out);
+  return out;
+}
+
+exports.tradeValues = onRequest({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 30, invoker: 'public'}, async (req, res) => {
+  const f = valuesFormat(req.query);
+  if (req.method !== 'GET' || !f) { res.status(400).json({error: 'Not a league format.'}); return; }
+  try {
+    const out = await tradeValues(f, db.doc('tradeValues/' + valuesKey(f)));
+    // Browsers and Firebase Hosting's CDN keep it for an hour, so most visits never reach this function.
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+    res.json({at: out.at, values: out.values});
+  } catch (e) {
+    logger.warn('trade values unavailable', {format: valuesKey(f), error: String(e && e.message || e)});
+    res.status(502).json({error: 'Trade values are unavailable right now.'});
+  }
+});
+
+exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
   setSend: fn => { sendPush = fn; }};

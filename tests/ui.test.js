@@ -20,8 +20,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const {league: L1} = await T.espnLeagues();
   const BOX = JSON.stringify(T.espnBoxscore(L1));
+  // A stand-in for Titan's /api/trade-values: a value for every player in the test
+  // league, best first, shaped the way the server trims FantasyCalc's.
+  T.app('engine.js');
+  const ESPNJS = T.app('espn.js'), tradePlayers = await T.sleeperPlayers(), tradeAsked = [];
+  const inLeague = [].concat(...L1.teams.map(t => ESPNJS.buildLeague(ESPNJS.leagueCfg(L1, {id: L1.id, teamId: t.id}, {}), L1, tradePlayers).roster));
+  const VALUES = JSON.stringify({at: Date.now(), values: inLeague.filter(p => p.pos !== 'DEF' && p.pos !== 'K').map((p, i) => ({
+    s: /^\d+$/.test(p.id) ? p.id : '', e: String(p.espnId), n: p.name, p: p.pos, t: p.team, v: 9000 - i * 40, r: i + 1, pr: 1, tr: i % 3 ? 120 : -80}))});
   const server = http.createServer((req, res) => {
     const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (u === '/api/trade-values') {
+      tradeAsked.push(req.url);
+      res.writeHead(200, {'content-type': 'application/json'});
+      return res.end(VALUES);
+    }
     let f = path.join(T.ROOT, u.endsWith('/') ? u + 'index.html' : u);
     // Like Firebase Hosting's rewrite: any /app/ address is the app page.
     if (u.startsWith('/app/') && !fs.existsSync(f)) f = path.join(T.ROOT, 'app', 'index.html');
@@ -238,6 +250,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`document.querySelector('[data-action="fold-none"][data-kind="score"]').click(); true`);
   check(scoreOpen && await ev(`[...document.querySelectorAll('details.score')].every(d => !d.open)`),
     'Results has Expand all and Collapse all, like the other tabs');
+
+  T.section('the Trade tab');
+  await tab('trade');
+  check(await waitFor(`document.querySelectorAll('[data-ui="tradePartner"] option').length > 1`, 30000), 'the Trade tab lists the other teams in the league');
+  check(tradeAsked.some(q => /dynasty=0/.test(q) && /qbs=1/.test(q) && /teams=10/.test(q) && /ppr=0\.5/.test(q)),
+    'values come from Titan\'s server, for the league\'s format: ' + (tradeAsked[0] || 'not asked'));
+  check(await ev(`!!document.querySelector('.credit a[href="https://fantasycalc.com"]')`), 'FantasyCalc is credited, with a link');
+  await ev(`(() => { const s = document.querySelector('[data-ui="tradePartner"]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
+  check(await waitFor(`document.querySelectorAll('.tteam').length === 2 && document.querySelectorAll('.tteam .trow').length > 20`, 5000),
+    'picking a partner shows both rosters');
+  await ev(`document.querySelector('.tteam [data-trade="give"]').click(); true`);
+  await ev(`document.querySelector('.tteam [data-trade="get"]').click(); true`);
+  check(await waitFor(`/win|Fair/.test((document.querySelector('.trade-sum .tverdict') || {}).textContent || '') && document.querySelectorAll('.trade-sum .tchip').length === 2`, 3000),
+    'a player from each side gets totals and a verdict: ' + await text('.trade-sum .tverdict'));
+  check(await ev(`[...document.querySelectorAll('.trade-sum *')].every(el => el.getBoundingClientRect().right <= document.querySelector('.trade-sum').getBoundingClientRect().right + 1)`),
+    'on a phone the trade fits inside its card (nothing cut off on the right)');
 
   if (T.sleeperUser) {
     T.section('linking Sleeper as well');

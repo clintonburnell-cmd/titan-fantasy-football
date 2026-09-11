@@ -436,6 +436,40 @@
     return sleeperMatchup(lg, rosterId, r[0], r[1], r[2], players);
   }
 
+  /* Every team in a league with its players, for the Trade tab. Sleeper: the league's
+     rosters and members. ESPN: the league read again, each team's roster built the way
+     the person's own is (Sleeper ids where matched). `rosterId` (Sleeper) or the
+     league's teamId (ESPN) marks the person's own team. */
+  async function leagueTeams(lg, rosterId, season) {
+    var players = await loadPlayers();
+    var slim = function (p) { return {id: p.id, espnId: p.espnId, name: p.name, pos: p.pos, team: p.team}; };
+    if (lg.platform === 'espn') {
+      var r = await ESPN.fetchLeague(lg.espnId, season);
+      if (!r.json) throw new Error(r.error === 'private' ? 'it\'s private, so it needs your ESPN login (Settings)' : (r.error || 'could not read ESPN'));
+      var names = {};
+      ESPN.teamsOf(r.json).forEach(function (t) { names[t.id] = t; });
+      return (r.json.teams || []).map(function (t) {
+        var d = ESPN.buildLeague(Object.assign({}, lg, {teamId: t.id}), r.json, players), n = names[t.id] || {};
+        return {id: String(t.id), name: n.name || ('Team ' + t.id), manager: n.manager || '', mine: t.id === lg.teamId,
+          roster: (d.roster || []).map(slim)};
+      });
+    }
+    var got = await Promise.all(['/rosters', '/users'].map(function (p) { return getJson(API + '/league/' + lg.id + p); }));
+    var rosters = got[0] || [], who = {};
+    var missing = missingIds(rosters.map(function (x) { return x.players; }), players);
+    if (missing.length) await resolveMissing(missing, players);
+    (got[1] || []).forEach(function (u) { who[u.user_id] = u; });
+    return rosters.map(function (x) {
+      var u = who[x.owner_id] || {};
+      return {id: String(x.roster_id), name: (u.metadata && u.metadata.team_name) || u.display_name || ('Team ' + x.roster_id),
+        manager: u.display_name || '', mine: x.roster_id === rosterId,
+        roster: (x.players || []).map(function (id) {
+          var info = SCC.playerInfo(players, id);
+          return slim({id: String(id), name: info.name, pos: info.pos, team: info.team});
+        })};
+    });
+  }
+
   /* One Sleeper league's matchup from its matchups, rosters and members. Each
      side's starters come in lineup order (Sleeper's `starters` follows it). */
   function sleeperMatchup(lg, rosterId, matchups, rosters, users, players) {
@@ -586,7 +620,7 @@
   var api = {
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
     collect: collect, collectScores: collectScores, livePoints: livePoints,
-    collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup,
+    collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
     fetchProjections: fetchProjections, PLAYERS_KEY: PLAYERS_KEY
   };

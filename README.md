@@ -63,6 +63,12 @@ website (such as alerts) to pass review.
 
 ## Screens
 
+The Trade tab weighs a trade with any team in a league: pick the league and a trade partner, tap
+players on both rosters, and Titan totals each side with FantasyCalc's trade values for the league's
+format (redraft or dynasty, 1 QB or superflex, team count, PPR), weighting stars the way real trades
+do, says who wins and suggests players that would even it out. Titan's server fetches the values from
+FantasyCalc at most once a day per format, and the tab credits FantasyCalc with a link.
+
 On computers and tablets, the app in a browser takes the website's look: its sections become a
 menu across the header, the page is a centred 1100px column (one league per row, as on a phone), the
 league chips wrap instead of scrolling (on wider windows the page grows to 1280px and Lineups,

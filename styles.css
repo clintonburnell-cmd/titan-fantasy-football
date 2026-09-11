@@ -531,6 +531,29 @@ details.match > summary::-webkit-details-marker { display: none; }
 .wbar i { display: block; height: 100%; }
 .wbar .wme { background: var(--ok); }
 .wbar .wopp { background: #5d6d8a; }
+
+/* The Trade tab: FantasyCalc's credit, both rosters (side by side when there's room),
+   and the trade being built above them. */
+.credit { font-size: .84rem; color: var(--muted); }
+.credit a { font-weight: 700; }
+.trade-teams { display: grid; gap: 12px; align-items: start; }
+@media (min-width: 720px) { .trade-teams { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.trows { display: grid; }
+.trow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 8px 14px; border: 0; border-top: 1px solid var(--line); background: none; color: inherit; font: inherit; cursor: pointer; }
+.trow:hover { background: var(--surface-2); }
+.trow[aria-pressed="true"] { background: rgb(58 103 234 / .16); box-shadow: inset 3px 0 0 var(--accent-2); }
+.tval { display: grid; justify-items: end; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tval small { font-size: .7rem; font-weight: 700; }
+.trade-sum { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.tsides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.tsides > div { min-width: 0; }
+.trade-sum .chip { white-space: normal; text-align: left; max-width: 100%; }
+.tsides h3 { font-size: .74rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 6px; }
+.ttot { margin-top: 8px; font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ttot small { display: block; font-size: .72rem; font-weight: 600; color: var(--muted); }
+.trade-sum .chip small { color: var(--muted); font-weight: 600; }
+.tverdict { font-size: .95rem; }
 .bproj { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .board, .mrow { display: grid; grid-template-columns: minmax(0, 1fr) 3rem 2.4rem 3rem minmax(0, 1fr); align-items: center; column-gap: 6px; }
 .board { padding: 14px 12px; border-top: 1px solid var(--line); }

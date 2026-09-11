@@ -41,6 +41,32 @@ function fakeUser(db) {
   section('helpers');
   check(job.ranksFor({1: rows}, 1) === rows && job.ranksFor({1: rows}, 3) === rows && job.ranksFor({2: ['x']}, 1)[0] === 'x' && job.ranksFor({}, 1).length === 0,
     'ranksFor: that week, else the latest earlier week, else the only week, else none');
+
+  section('trade values (FantasyCalc, cached by Titan\'s server)');
+  const tvFormat = job.valuesFormat({dynasty: '0', qbs: '2', teams: '10', ppr: '0.5'});
+  check(tvFormat && tvFormat.dynasty === false && tvFormat.qbs === 2 && tvFormat.teams === 10 && tvFormat.ppr === 0.5 &&
+    job.valuesKey(tvFormat) === 'redraft-2qb-10teams-0.5ppr', 'a league format from the address: ' + (tvFormat ? job.valuesKey(tvFormat) : 'none'));
+  check(job.valuesFormat({teams: '11'}) === null && job.valuesFormat({ppr: '2'}) === null && job.valuesFormat({dynasty: 'maybe'}) === null &&
+    job.valuesFormat({qbs: '3'}) === null, 'formats FantasyCalc doesn\'t offer are refused');
+  const fcList = [{player: {name: 'A', sleeperId: 4046, espnId: '3918298', position: 'QB', maybeTeam: 'BUF'}, value: 9000.4, overallRank: 1, positionRank: 1, trend30Day: 120},
+    {player: {name: 'Gone', sleeperId: '1'}, value: 0}];
+  const tvSlim = job.slimValues(fcList);
+  check(tvSlim.length === 1 && tvSlim[0].s === '4046' && tvSlim[0].e === '3918298' && tvSlim[0].v === 9000 && tvSlim[0].tr === 120 && tvSlim[0].pr === 1,
+    'kept small: ids, name, position, value, ranks and trend; players without a value dropped');
+  const tvStore = {}, tvDoc = k => ({get: async () => ({data: () => tvStore[k]}), set: async v => { tvStore[k] = v; }});
+  const tvAsked = [], tvFetch = async url => { tvAsked.push(url); return fcList; };
+  const tv0 = Date.parse('2026-09-11T12:00:00Z'), hour = 3600 * 1000;
+  const tvFirst = await job.tradeValues(tvFormat, tvDoc('k'), tv0, tvFetch);
+  const tvAgain = await job.tradeValues(tvFormat, tvDoc('k'), tv0 + hour, tvFetch);
+  check(tvAsked.length === 1 && tvFirst.values.length === 1 && tvAgain.at === tv0 &&
+    tvAsked[0] === 'https://api.fantasycalc.com/values/current?isDynasty=false&numQbs=2&numTeams=10&ppr=0.5',
+    'FantasyCalc is asked once, at its documented address; the saved copy serves the rest of the day');
+  await job.tradeValues(tvFormat, tvDoc('k'), tv0 + 25 * hour, tvFetch);
+  check(tvAsked.length === 2, 'a day later it asks again');
+  const tvDown = await job.tradeValues(tvFormat, tvDoc('k'), tv0 + 50 * hour, async () => { throw new Error('down'); });
+  let tvThrew = false;
+  try { await job.tradeValues(tvFormat, tvDoc('none'), tv0, async () => { throw new Error('down'); }); } catch (e) { tvThrew = true; }
+  check(tvDown.values.length === 1 && tvThrew, 'if FantasyCalc is down the last saved copy serves; with none saved, the failure is reported');
   const now = Date.parse('2026-09-11T12:00:00Z'), day = 24 * 3600 * 1000;
   const iso = ms => new Date(ms).toUTCString();
   const st = job.countStats(now,

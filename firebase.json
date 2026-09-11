@@ -17,6 +17,7 @@
       "functions/**"
     ],
     "rewrites": [
+      {"source": "/api/trade-values", "function": {"functionId": "tradeValues", "region": "us-central1"}},
       {"source": "/app/**", "destination": "/app/index.html"}
     ],
     "headers": [

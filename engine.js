@@ -200,6 +200,60 @@
       .filter(Boolean).join(' · ');
   }
 
+  /* ------------------------------------------------------------ trades */
+
+  /* A league's format as FantasyCalc prices trades: dynasty or redraft, one QB or two
+     (superflex), the nearest team count it offers (8, 10, 12, 14) and PPR (0, 0.5, 1). */
+  function tradeFormat(cfg) {
+    var lineup = cfg.lineup || [];
+    var qbs = lineup.indexOf('SUPER_FLEX') >= 0 || lineup.filter(function (s) { return s === 'QB'; }).length > 1 ? 2 : 1;
+    var n = Number(cfg.teams) || 12;
+    var teams = [8, 10, 12, 14].reduce(function (a, b) { return Math.abs(b - n) < Math.abs(a - n) ? b : a; });
+    var p = Number(cfg.ppr) || 0;
+    return {dynasty: cfg.kind === 'Dynasty', qbs: qbs, teams: teams, ppr: p >= 0.75 ? 1 : p >= 0.25 ? 0.5 : 0};
+  }
+
+  // FantasyCalc's values (as Titan's server trims them: s Sleeper id, e ESPN id, v value) by id.
+  function valueIndex(list) {
+    var bySleeper = {}, byEspn = {};
+    (list || []).forEach(function (x) {
+      if (x.s) bySleeper[x.s] = x;
+      if (x.e) byEspn[x.e] = x;
+    });
+    return {bySleeper: bySleeper, byEspn: byEspn};
+  }
+
+  // A player's value entry: ESPN players by their ESPN id first, everyone by Sleeper id. Null: no value.
+  function playerValue(idx, p) {
+    if (!idx || !p) return null;
+    var e = p.espnId !== undefined && p.espnId !== null ? idx.byEspn[String(p.espnId)] : null;
+    return e || idx.bySleeper[String(p.id)] || null;
+  }
+
+  /* One side of a trade. Stars count for more than their total, as in real trades:
+     the values are combined as (sum of value^1.25)^(1/1.25), so two players worth
+     5,000 weigh about 8,700 against one worth 10,000, and a small throw-in adds little. */
+  var STAR = 1.25, FAIR = 0.05;
+  function tradeSide(values) {
+    var raw = 0, pow = 0;
+    (values || []).forEach(function (v) {
+      v = Math.max(0, Number(v) || 0);
+      raw += v;
+      pow += Math.pow(v, STAR);
+    });
+    return {raw: raw, adj: Math.pow(pow, 1 / STAR)};
+  }
+
+  /* Both sides weighed: fair within 5% of the bigger side; otherwise who wins, by how
+     much, and what one more player on the lighter side would need to be worth to even it. */
+  function tradeVerdict(give, get) {
+    var a = tradeSide(give), b = tradeSide(get);
+    var big = Math.max(a.adj, b.adj), small = Math.min(a.adj, b.adj), diff = b.adj - a.adj;
+    var fair = big === 0 || Math.abs(diff) <= FAIR * big;
+    return {give: a, get: b, diff: diff, fair: fair, winner: fair ? 'even' : diff > 0 ? 'you' : 'them',
+      even: fair ? 0 : Math.pow(Math.pow(big, STAR) - Math.pow(small, STAR), 1 / STAR)};
+  }
+
   function slotLabel(slot) { return SLOT_LABEL[slot] || slot; }
 
   /* ------------------------------------------------------------- ranks */
@@ -1381,6 +1435,7 @@
     norm: norm, teamAbbr: teamAbbr, byeOf: byeOf, byesFromSchedule: byesFromSchedule, setByes: setByes,
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
+    tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, tradeSide: tradeSide, tradeVerdict: tradeVerdict,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor,
