@@ -104,7 +104,7 @@
     projAt: 0, // when they were last fetched (0: not yet this visit)
     view: {week: 0, pos: 'QB'}, // the saved rankings open on the Rankings tab
     // The Trade tab: each league's teams, FantasyCalc's values by league format, and the trade being built.
-    trade: {teams: {}, values: {}, pick: {league: '', partner: '', give: [], get: []}},
+    trade: {teams: {}, values: {}, pick: {league: '', partner: '', give: [], get: []}, ideas: {}},
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
     stand: {} // the Standings tab: each league's schedule ({busy, error, sched, result})
   };
@@ -224,7 +224,8 @@
       S.proj = await API.fetchProjections(snap.season, snap.week);
       S.projAt = Date.now();
       if (S.score.week === snap.week) S.score.data = null; // live points have moved
-      S.trade.teams = {}; // rosters may have changed too
+      S.trade.teams = {}; // rosters may have changed too, and with them the trade ideas
+      S.trade.ideas = {};
       S.stand = {}; // and scores
     } catch (e) {
       S.error = 'Refresh failed: ' + (e && e.message ? e.message : e);
@@ -1935,9 +1936,38 @@
     const assets = t => t.roster.concat(t.picks || []);
     const give = P.give.map(id => assets(me).find(p => p.id === id)).filter(Boolean);
     const get = partner ? P.get.map(id => assets(partner).find(p => p.id === id)).filter(Boolean) : [];
+    h += tradeIdeasCard(d.cfg, worth);
     if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth, V.waiver);
     return h + `<div class="trade-teams">${tradeRoster(d.cfg, me, 'give', val)}${partner ? tradeRoster(d.cfg, partner, 'get', val)
       : '<div class="card pad"><p class="lede">Pick a trade partner to see their roster.</p></div>'}</div>`;
+  }
+
+  /* Trade ideas (SCC.tradeIdeas) for the league on screen, found when asked (Find trades)
+     and kept until the league's teams reload. Open puts one in the trade builder. */
+  function findTrades() {
+    const d = ((S.snap && S.snap.leagues) || []).find(x => x.cfg.id === S.trade.pick.league);
+    const Tm = d && S.trade.teams[d.cfg.id], V = d && S.trade.values[tradeKey(SCC.tradeFormat(d.cfg))];
+    const me = Tm && Tm.list && Tm.list.find(t => t.mine);
+    if (!me || !V || !V.idx) return;
+    const value = p => (SCC.playerValue(V.idx, p) || {}).v || 0;
+    S.trade.ideas[d.cfg.id] = {list: SCC.tradeIdeas(me, Tm.list.filter(t => !t.mine), {value, slots: d.cfg.lineup, waiver: V.waiver, max: 6})};
+    render();
+  }
+
+  function tradeIdeasCard(cfg, worth) {
+    const I = S.trade.ideas[cfg.id];
+    const head = `<div class="tideas-h"><h3>Trade ideas</h3><button type="button" class="btn small${I ? ' ghost' : ''}" data-action="trade-find">${
+      I ? 'Look again' : 'Find trades'}</button></div>
+      <p class="fine">Fair trades (FantasyCalc's values within 5%) of one or two players each way that make your starting lineup
+        stronger, and theirs too where possible. Strength is the value of each team's best starters.</p>`;
+    if (!I) return `<section class="card pad tideas">${head}</section>`;
+    if (!I.list.length) return `<section class="card pad tideas">${head}<p class="empty-note">No fair trade in this league makes your starting lineup stronger right now.</p></section>`;
+    const names = list => list.map(p => `${esc(p.name)} <small>${thousands(worth(p))}</small>`).join(' + ');
+    const change = n => `<span class="${n > 0 ? 'good' : n < 0 ? 'amber' : ''}">${(n > 0 ? '+' : n < 0 ? '−' : '') + thousands(Math.abs(n))}</span>`;
+    return `<section class="card pad tideas">${head}<ol class="idea-list">${I.list.map((x, i) => `<li class="idea">
+        <div class="idea-t"><b>With ${esc(x.partner.name)}</b><span>You give ${names(x.give)} · you get ${names(x.get)}</span>
+          <small>Your starters ${change(x.myGain)} · theirs ${change(x.theirGain)}</small></div>
+        <button type="button" class="btn small ghost" data-idea="${i}">Open</button></li>`).join('')}</ol></section>`;
   }
 
   // A team's draft picks in a dynasty league: Sleeper says who owns which, ESPN doesn't.
@@ -2068,10 +2098,22 @@
     // A tap on a league's header folds or unfolds it; the toggle listener remembers it.
     const head = e.target.closest('details[data-fold] > summary');
     if (head) { tapped = head.parentElement; return; }
-    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
     if (t.dataset.news) { S.ui.newsMine = t.dataset.news === 'mine'; saveUi(); return render(); }
+    if (t.dataset.idea) {
+      // A trade idea goes into the builder: its partner, and both sides.
+      const x = ((S.trade.ideas[S.trade.pick.league] || {}).list || [])[Number(t.dataset.idea)];
+      if (!x) return;
+      S.ui.tradePartner = x.partner.id;
+      Object.assign(S.trade.pick, {partner: x.partner.id, give: x.give.map(p => p.id), get: x.get.map(p => p.id)});
+      saveUi();
+      render();
+      const sum = view.querySelector('.trade-sum');
+      if (sum) sum.scrollIntoView({behavior: 'smooth', block: 'start'});
+      return;
+    }
     if (t.dataset.trade) {
       const list = S.trade.pick[t.dataset.trade], i = list.indexOf(t.dataset.pid);
       if (i >= 0) list.splice(i, 1);
@@ -2096,6 +2138,7 @@
       [S.stand, S.trade.teams].forEach(m => Object.keys(m).forEach(k => { if (m[k].error) delete m[k]; }));
       render();
     }
+    else if (a === 'trade-find') findTrades();
     else if (a === 'trade-clear') { S.trade.pick.give = []; S.trade.pick.get = []; render(); }
     else if (a === 'trade-retry') {
       [S.trade.teams, S.trade.values].forEach(m => Object.keys(m).forEach(k => { if (m[k].error) delete m[k]; }));

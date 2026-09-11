@@ -74,7 +74,12 @@ live site, so site changes reach it without a new upload. What's done and what's
   and dynasty Sleeper leagues list each team's next three drafts' picks (`SCC.draftPicks` from
   `/traded_picks`, rounds 1 to 4) at FantasyCalc's plain pick values; ESPN doesn't share pick trades. Sides add up plainly (FantasyCalc's
   values already count stars for more, so don't add a star bonus) plus FantasyCalc's roster-spot
-  adjustment: a waiver pickup (`SCC.waiverValue`, about the 300th-best player) per spot freed.
+  adjustment: a waiver pickup (`SCC.waiverValue`, about the 300th-best player) per spot freed. Trade
+  ideas (`SCC.tradeIdeas`): fair 1-2 player trades that raise the value of your best starters
+  (`lineupPoints` with values, not one week's projections), at most two per partner.
+- The Standings tab (`SCC.standings`): records, all-play, luck, power and playoff odds from 5,000
+  seeded simulations; schedules from `API.leagueSchedule` (Sleeper matchups, or ESPN via
+  `ESPN.fetchSchedule`; private ESPN leagues through `espnLeague` kind `schedule`).
 - Two themes: white and blue by default, and dark (`theme.js` sets `data-theme="dark"` on `<html>`,
   remembered in localStorage `titan.theme`; a moon/sun button in the headers, and Appearance in
   Settings). Every colour that differs between them is a token in both `:root` blocks of `styles.css`

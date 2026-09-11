@@ -54,6 +54,20 @@ const pp = {a: 20, b: 15, c: 10, d: 12, e: 30};
 check(SCC.lineupPoints(ro, ['QB', 'RB', 'FLEX'], p => pp[p.id]) === 47, 'best lineup by projection: QB 20, RB 15, FLEX 12 (the IR player and the pick can\'t start)');
 check(SCC.lineupPoints(ro.filter(p => p.id !== 'b'), ['QB', 'RB', 'FLEX'], p => pp[p.id]) === 42, 'without the top RB the lineup drops to 42');
 
+section('trade ideas');
+const TV = {q1: 1000, r1: 3000, r2: 2800, r3: 2600, w1: 500, qa: 1000, wa1: 3000, wa2: 2800, wa3: 2700, ra: 400, qb: 1000, rb: 900, wb: 900};
+const P = (id, pos) => ({id, pos, name: id});
+const meT = {id: 'me', roster: [P('q1', 'QB'), P('r1', 'RB'), P('r2', 'RB'), P('r3', 'RB'), P('w1', 'WR')]};
+const teamA = {id: 'A', name: 'A', roster: [P('qa', 'QB'), P('wa1', 'WR'), P('wa2', 'WR'), P('wa3', 'WR'), P('ra', 'RB')]};
+const teamB = {id: 'B', name: 'B', roster: [P('qb', 'QB'), P('rb', 'RB'), P('wb', 'WR')]};
+const ideas = SCC.tradeIdeas(meT, [teamA, teamB], {value: p => TV[p.id] || 0, slots: ['QB', 'RB', 'WR', 'FLEX'], waiver: 50});
+const best = ideas[0], ids = l => l.map(p => p.id).join();
+check(best && best.partner.id === 'A' && ids(best.give) === 'r3,w1' && ids(best.get) === 'wa1' && best.myGain === 2500 && best.theirGain === 1900,
+  'the best idea: a spare RB and a weak WR for their top WR, both lineups stronger: ' + (best ? ids(best.give) + ' for ' + ids(best.get) + ', +' + best.myGain : 'none'));
+check(ideas.length >= 2 && ideas.every(x => x.verdict.fair && x.myGain > 0) && ideas.filter(x => x.partner.id === 'A').length <= 2 &&
+  new Set(ideas.map(x => ids(x.get))).size === ideas.length, 'every idea is fair and helps your lineup; at most two per team, each wanting someone different');
+check(!ideas.some(x => x.partner.id === 'B'), 'no idea where nothing fair helps');
+
 // sleeper.js reading a league's teams, with Sleeper's answers made up here (no network).
 section('a dynasty Sleeper league\'s teams and picks');
 (async () => {

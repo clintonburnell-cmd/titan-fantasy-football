@@ -291,6 +291,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await ev(`document.querySelectorAll('.trade-sum .tlineup p').length === 3`),
     'each team\'s projected starters, before and after: ' + (await text('.trade-sum .tlineup')).replace(/\s+/g, ' ').slice(0, 90));
 
+  await ev(`document.querySelector('[data-action="trade-find"]').click(); true`);
+  check(await waitFor(`document.querySelectorAll('.tideas .idea').length > 0 || /No fair trade/.test((document.querySelector('.tideas') || {}).textContent || '')`, 8000),
+    'Find trades suggests fair trades, or says there are none: ' + await ev(`document.querySelectorAll('.tideas .idea').length + ' idea(s)'`));
+  if (await ev(`document.querySelectorAll('.tideas .idea').length > 0`)) {
+    await ev(`document.querySelector('.tideas [data-idea]').click(); true`);
+    check(await waitFor(`document.querySelectorAll('.trade-sum .tchip').length >= 2 && /Fair/.test((document.querySelector('.trade-sum .tverdict') || {}).textContent || '')`, 3000),
+      'opening an idea fills in the trade, and it checks out as fair: ' + await text('.trade-sum .tverdict'));
+  }
+
   T.section('the Standings tab');
   await tab('standings');
   check(await waitFor(`document.querySelectorAll('table.stand tbody tr').length === 10`, 30000), 'every team in the league is listed');

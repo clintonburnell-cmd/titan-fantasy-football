@@ -280,6 +280,56 @@
     return {give: a, get: b, diff: diff, fair: fair, winner: fair ? 'even' : diff > 0 ? 'you' : 'them', even: even};
   }
 
+  /* Trade ideas for one team in a league: trades of one or two players each way (not two
+     for two) that FantasyCalc's calculator calls fair (tradeVerdict, roster spots counted)
+     and that make the team's starting lineup stronger. A lineup's strength here is the value
+     of its best starters (lineupPoints with values), which suits a trade better than one
+     week's projections. Trades that leave both lineups stronger come first; within each
+     group, ranked by our gain plus half theirs (up to ours). Each side offers its `top` (12)
+     most valuable players; at most two ideas per team and one per player wanted.
+     opts: {value(p), slots, waiver, max, top}. */
+  function tradeIdeas(me, others, opts) {
+    var value = opts.value, slots = opts.slots || [], waiver = opts.waiver || 0, max = opts.max || 6, top = opts.top || 12;
+    var pool = function (roster) {
+      return roster.filter(function (p) { return p.pos !== 'PICK' && value(p) > 0; })
+        .sort(function (a, b) { return value(b) - value(a); }).slice(0, top);
+    };
+    var strength = function (roster) { return lineupPoints(roster, slots, value); };
+    var combos = function (list) {
+      var out = list.map(function (p) { return [p]; });
+      for (var i = 0; i < list.length; i++) for (var j = i + 1; j < list.length; j++) out.push([list[i], list[j]]);
+      return out;
+    };
+    var items = function (list) { return list.map(function (p) { return {v: value(p)}; }); };
+    var without = function (roster, gone) { return roster.filter(function (p) { return !gone.some(function (g) { return g.id === p.id; }); }); };
+    var myBase = strength(me.roster), myCombos = combos(pool(me.roster)), ideas = [];
+    (others || []).forEach(function (o) {
+      var theirBase = strength(o.roster), theirCombos = combos(pool(o.roster));
+      myCombos.forEach(function (give) {
+        theirCombos.forEach(function (get) {
+          if (give.length === 2 && get.length === 2) return;
+          var R = tradeVerdict(items(give), items(get), waiver);
+          if (!R.fair) return;
+          var gain = strength(without(me.roster, give).concat(get)) - myBase;
+          if (gain <= 0) return;
+          ideas.push({partner: o, give: give, get: get, verdict: R, myGain: round2(gain),
+            theirGain: round2(strength(without(o.roster, get).concat(give)) - theirBase)});
+        });
+      });
+    });
+    // Trades that leave both lineups stronger come first: the other side is likelier to say yes.
+    var score = function (x) { return x.myGain + 0.5 * Math.min(x.theirGain, x.myGain); };
+    ideas.sort(function (a, b) { return (b.theirGain >= 0) - (a.theirGain >= 0) || score(b) - score(a); });
+    var perTeam = {}, wanted = {}, out = [];
+    ideas.forEach(function (x) {
+      if (out.length >= max || (perTeam[x.partner.id] || 0) >= 2 || x.get.some(function (p) { return wanted[p.id]; })) return;
+      perTeam[x.partner.id] = (perTeam[x.partner.id] || 0) + 1;
+      x.get.forEach(function (p) { wanted[p.id] = 1; });
+      out.push(x);
+    });
+    return out;
+  }
+
   /* A roster's best starting lineup by projected points, for the Trade tab's before and
      after. Players on IR or the taxi squad can't start, and draft picks don't play.
      `proj(p)` gives a player's points. */
@@ -1644,7 +1694,7 @@
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict,
-    lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings,
+    lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,
