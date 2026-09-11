@@ -50,8 +50,8 @@ live site, so site changes reach it without a new upload. What's done and what's
   send Firebase Cloud Messaging data messages to the tokens in `users/{uid}/private/alerts`, and
   `sw.js` shows them. Keep each alert's key (`kind|week|league|…`) stable, or people get repeats.
 - Wide browser windows (900px and up) get the website look from the "website look" block in
-  `styles.css`: a menu-style header, an 1100px page set left of centre with one league per row (the
-  owner prefers that to two across), league chips that wrap, a footer row, and from 1200px the faded Titan art fixed to the right. It's scoped
+  `styles.css`: a menu-style header, a centred 1100px page with one league per row (the owner prefers
+  that to two across, and centred to set left), league chips that wrap, a footer row, and from 1200px the faded Titan art fixed to the right. It's scoped
   to `html:not(.in-app)`, so phones, the Android app and home-screen copies keep the app look.
   Check new screens at 390px and at 1280px. On computers Rosters draws tables (`rosterTable`,
   when `wide()`); keep `data-find` on every row so the player search still works.
