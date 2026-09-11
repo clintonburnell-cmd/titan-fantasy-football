@@ -115,6 +115,19 @@ frozen record. Scheduled functions need Firebase's pay-as-you-go (Blaze) plan.
 Projections come from Sleeper's projections feed, which Sleeper licenses from RotoWire
 and doesn't officially document; the app says "Projections via Sleeper".
 
+## Testing
+
+```
+node tests/run.js                  # every test; the account-based ones skip without TITAN_SLEEPER_USER
+node tests/run.js engine espn      # just some of them
+```
+
+No test needs private data. Rankings come from `tests/fixtures/sample-rankings.csv` (built from
+Sleeper's public player order), ESPN test leagues are built from ESPN's public player list and
+never touch a real league, and a real Sleeper account is read from the `TITAN_SLEEPER_USER`
+environment variable. `functions.test.js` needs `npm install` in `functions/` once, and
+`ui.test.js` needs Chrome.
+
 ## Deploying
 
 ```
@@ -140,6 +153,8 @@ manifest.webmanifest   App name and icons for installing
 icon*.svg / icon*.png  App icons (the PNGs are rendered from the SVGs)
 privacy.html           Privacy policy
 functions/             Server: freezes each week's calls at kickoff; reads private ESPN leagues
+tests/                 node tests/run.js (see Testing)
+CLAUDE.md              Working notes for Claude Code: rules, commands, Windows quirks
 ```
 
 No build step and no dependencies. It runs on any static host.

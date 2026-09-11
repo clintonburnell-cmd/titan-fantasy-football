@@ -10,6 +10,8 @@
       "firestore.rules",
       "firestore.indexes.json",
       "README.md",
+      "CLAUDE.md",
+      "tests/**",
       "**/.git/**",
       "**/node_modules/**",
       "functions/**"
