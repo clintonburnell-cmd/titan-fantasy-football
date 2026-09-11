@@ -729,7 +729,8 @@
     const w = S.draft.week;
     const plan = mergePlan(P, w);
     const name = S.draft.file || 'paste';
-    S.ranks.weeks[w] = {rows: plan.rows, savedAt: Date.now(),
+    const kept = keepStarted(plan.rows, w);
+    S.ranks.weeks[w] = {rows: plan.rows.concat(kept), savedAt: Date.now(),
       source: plan.merged ? `${(plan.prev && plan.prev.source) || 'earlier import'} + ${name}` : name};
     if (!store.set(KEY.ranks, S.ranks)) { toast('Could not save. Browser storage is full or blocked.'); return; }
     pushWeek(w);
@@ -737,8 +738,19 @@
     if (S.score.week === w) S.score.data = null;
     analyze();
     render();
-    toast(plan.merged ? `Week ${w} ${plan.positions.join(', ')} rankings added. Lineups re-scored.`
-      : `Week ${w} rankings saved. Lineups re-scored.`);
+    toast((plan.merged ? `Week ${w} ${plan.positions.join(', ')} rankings added. Lineups re-scored.`
+      : `Week ${w} rankings saved. Lineups re-scored.`) +
+      (kept.length ? ` Kept the ranks of ${plural(kept.length, 'player')} whose games have started.` : ''));
+  }
+
+  /* Rankings files usually drop players whose games are over. For this week's
+     rostered players whose game has started, keep the rank they had, from the
+     rankings this import replaces. */
+  function keepStarted(rows, w) {
+    if (!S.snap || S.snap.week !== w) return [];
+    const started = {};
+    S.snap.leagues.forEach(d => d.roster.forEach(p => { if (p.locked) started[SCC.norm(p.name)] = 1; }));
+    return SCC.keepStartedRanks(rows, ranksFor(w).rows, started);
   }
 
   function deleteRanks(w) {

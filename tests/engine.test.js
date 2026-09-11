@@ -157,4 +157,27 @@ check(lk.roster[0].pts === 12.35 && lk.roster[1].pts === null && lk.roster[2].pt
 const byEspn = {roster: [{id: '9', espnId: 3918298, locked: true}]};
 SCC.applyPoints(byEspn, {3918298: 21.4}, true);
 check(byEspn.roster[0].pts === 21.4, 'ESPN points match by ESPN player id');
+
+section('players whose game has started');
+const lgX = {id: 'X', key: 'X', name: 'X', lineup: ['QB', 'RB', 'WR', 'K']};
+const pl = (id, name, pos, team, over) => Object.assign({id, name, pos, team, start: true, slot: pos, locked: false, inj: '', outish: false}, over);
+const rosX = [pl('q', 'Played Qb', 'QB', 'SEA', {locked: true}), pl('r', 'Slow Back', 'RB', 'KC'),
+  pl('w', 'Hurt Wideout', 'WR', 'SEA', {locked: true, inj: 'Out (knee)', outish: true}), pl('k', 'Done Kicker', 'K', 'SEA', {locked: true})];
+const wkX = SCC.weeklyMap([{name: 'Slow Back', pos: 'RB', team: 'KC', rank: 60}, {name: 'Free Qb', pos: 'QB', team: 'BUF', rank: 1},
+  {name: 'Early Back', pos: 'RB', team: 'SEA', rank: 5}, {name: 'Late Back', pos: 'RB', team: 'MIA', rank: 10},
+  {name: 'Free Kicker', pos: 'K', team: 'BUF', rank: 1}]);
+const takenX = {};
+rosX.forEach(p => { takenX[SCC.norm(p.name)] = 1; });
+const LX = SCC.analyzeAll({leagues: [{cfg: lgX, roster: rosX, takenNorm: takenX, takenAbbr: {}}],
+  games: {SEA: {state: 'complete'}, KC: {state: 'pre'}, MIA: {state: 'pre'}, BUF: {state: 'pre'}}}, wkX).leagues[0];
+const wireX = pos => LX.wire.find(x => x.pos === pos);
+check(!wireX('QB') && !wireX('K') && !wireX('WR'), 'no pickup is offered over a player whose game has started, ranked or not');
+check(wireX('RB') && wireX('RB').list.map(x => x.name).join() === 'Late Back', 'an RB upgrade is offered, but never a free agent whose game has started');
+check(LX.rows.filter(r => r.p.locked).every(r => r.verdict === 'LOCKED') && !LX.moves.length && !LX.stops, 'started players show LOCKED and are never swapped');
+check(!LX.hurt.length, 'an injured player whose game has started gets no warning');
+const keptX = SCC.keepStartedRanks([{name: 'Slow Back', pos: 'RB', rank: 55}],
+  [{name: 'Played Qb', pos: 'QB', rank: 4}, {name: 'Slow Back', pos: 'RB', rank: 60}, {name: 'Bench Guy', pos: 'WR', rank: 30}],
+  {[SCC.norm('Played Qb')]: 1, [SCC.norm('Slow Back')]: 1});
+check(keptX.length === 1 && keptX[0].name === 'Played Qb' && keptX[0].rank === 4,
+  'new rankings keep the old rank of a started player they left out, and nobody else\'s');
 T.done();

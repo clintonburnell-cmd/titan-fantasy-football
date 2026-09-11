@@ -291,6 +291,7 @@
 
     var games = sched && sched.length ? SCC.gameStates(sched, week) : {};
     var lk = SCC.applyLocks(live, games);
+    snap.games = games;
     if (!Object.keys(games).length) {
       say('Could not read the NFL game clock, so every player is being treated as still movable.');
     } else if (lk.total) {
@@ -336,7 +337,8 @@
   async function livePoints(snap, withEspn) {
     var sched = await getJson(SCHEDULE + snap.season);
     if (!sched || !sched.length) return 0;
-    SCC.applyLocks(snap.leagues, SCC.gameStates(sched, snap.week));
+    snap.games = SCC.gameStates(sched, snap.week);
+    SCC.applyLocks(snap.leagues, snap.games);
     var leagues = withEspn === false ? snap.leagues.filter(function (d) { return d.cfg.platform !== 'espn'; }) : snap.leagues;
     var n = await attachPoints(leagues, snap.week, snap.season, true);
     snap.pointsAt = Date.now();

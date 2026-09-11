@@ -483,6 +483,20 @@
     return today >= tuesday ? week + 1 : week;
   }
 
+  /* A new rankings file usually leaves out players whose games are already
+     over. Rostered players whose game has started keep the rank they had in the
+     rankings being replaced, so they don't turn "unranked" halfway through a
+     week. `startedNames` is keyed by norm(name). Returns the rows to keep. */
+  function keepStartedRanks(newRows, oldRows, startedNames) {
+    var have = {}, keep = [];
+    (newRows || []).forEach(function (r) { have[norm(r.name)] = 1; });
+    (oldRows || []).forEach(function (r) {
+      var k = norm(r.name);
+      if (startedNames[k] && !have[k]) { keep.push(r); have[k] = 1; }
+    });
+    return keep;
+  }
+
   /* Real points, in the league's own scoring, for players whose game has
      started; everyone else's stay empty. `points` is keyed by Sleeper player id,
      or by ESPN player id when `byEspn`. */
@@ -621,14 +635,16 @@
     return {wins: wins, total: total};
   }
 
-  /* Ranked players nobody in the league rosters, better than the bar. Returns at
-     most `limit`, best rank first. */
-  function freeAgents(posSet, weekly, takenNorm, takenAbbr, curRank, limit) {
+  /* Ranked players nobody in the league rosters, better than the bar, whose game
+     hasn't started (`started`: teams already playing or done this week). Returns
+     at most `limit`, best rank first. */
+  function freeAgents(posSet, weekly, takenNorm, takenAbbr, curRank, limit, started) {
     var out = [];
     for (var k in weekly) {
       var w = weekly[k];
       if (!posSet[w.pos] || w.rank === null) continue;
       if (w.pos === 'DEF' ? takenAbbr[teamAbbr(w.team)] : takenNorm[k]) continue;
+      if (started && started[teamAbbr(w.team)]) continue;
       if (curRank !== null && w.rank >= curRank) continue;
       out.push(w);
     }
@@ -762,33 +778,39 @@
     });
 
     // Wire scan. The bar is the WORST player currently filling a slot of this
-    // kind — he is the one a pickup would actually replace. Unranked means anyone
-    // ranked wins.
+    // kind: he is the one a pickup would actually replace. Unranked means anyone
+    // ranked wins. A player whose game has started can't be replaced this week,
+    // so he never sets the bar (a slot held only by such players gets no
+    // suggestion), and a free agent whose game has started can't help either.
     var wire = [];
     WIRE_GROUPS.forEach(function (g) {
       if (slots.indexOf(g.slot) < 0) return;
       var worst = null, anyUnranked = false, held = 0;
       opt.forEach(function (o) {
-        if (o.slot !== g.slot || !o.p) return;
+        if (o.slot !== g.slot || !o.p || o.p.locked) return;
         held++;
         if (o.p.rank === null) { anyUnranked = true; return; }
         if (worst === null || o.p.rank > worst.rank) worst = o.p;
       });
       if (!held) return;
       var bar = anyUnranked ? 100000 : (worst ? worst.rank : null);
-      var open = freeAgents(g.set, weekly, d.takenNorm, d.takenAbbr, bar, 3);
+      var open = freeAgents(g.set, weekly, d.takenNorm, d.takenAbbr, bar, 3, d.started);
       if (open.length) wire.push({pos: g.label, cur: anyUnranked ? null : worst, anyUnranked: anyUnranked, list: open});
     });
 
-    var hurt = d.roster.filter(function (p) { return p.start && p.inj; });
+    // Only starters who can still be benched are worth a warning.
+    var hurt = d.roster.filter(function (p) { return p.start && p.inj && !p.locked; });
     return {cfg: d.cfg, roster: d.roster, rows: rows, moves: moves, wire: wire, hurt: hurt, stops: stops, opt: opt};
   }
 
   function analyzeAll(snap, weekly) {
+    // Teams whose game has kicked off this week: their free agents are no use now.
+    var started = {}, games = (snap && snap.games) || {};
+    for (var t in games) if (games[t] && games[t].state !== 'pre') started[t] = 1;
     var leagues = ((snap && snap.leagues) || []).map(function (d) {
       return analyzeLeague({
         cfg: d.cfg, roster: attachRanks(d.roster, weekly),
-        takenNorm: d.takenNorm || {}, takenAbbr: d.takenAbbr || {}
+        takenNorm: d.takenNorm || {}, takenAbbr: d.takenAbbr || {}, started: started
       }, weekly);
     });
 
@@ -1109,7 +1131,8 @@
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
     trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
-    openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, applyPoints: applyPoints
+    openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, applyPoints: applyPoints,
+    keepStartedRanks: keepStartedRanks
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
