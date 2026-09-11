@@ -39,7 +39,8 @@ start/sit rules, made to work for any Sleeper account.
    DO NOT START, UNRANKED, LOCKED), with the exact swaps to make, ranked free
    agents nobody in the league has, and injured starters.
 
-Sleeper is read-only. Titan can't set lineups, claim waivers or trade.
+Sleeper is read-only. Titan can't set lineups, claim waivers or trade. Each league has an
+Open in Sleeper (or Open in ESPN) button that goes to that team's page to make the changes.
 
 The header has a Ko-fi tip jar ("Like my work? Consider a tip!"). It shows only on
 the website. The Google Play app opens `/?source=play`, and Titan hides the tip jar
@@ -56,7 +57,7 @@ website (such as alerts) to pass review.
 
 | Screen | What it shows |
 |---|---|
-| Lineups | Each league's lineup as set, with a verdict on every slot, the changes to make, wire upgrades and injuries. Every player shows his Sleeper headshot and team logo, his kickoff time (in the viewer's time zone) and projection, and once his game starts, his points marked LIVE or FINAL. Tiles count lineup changes, injured starters, wire upgrades, and starters and bench players locked or yet to play. Filters: all, needs action, or one problem at a time (lineup changes, empty spots, out or doubtful, questionable, on bye, unranked starters, wire upgrades); chips at the top jump to any league; each league folds to its header (remembered), with Expand all and Collapse all |
+| Lineups | Each league's lineup as set, with a verdict on every slot, the changes to make (with a button that opens the team in Sleeper or ESPN), wire upgrades and injuries. Every player shows his Sleeper headshot and team logo, his kickoff time (in the viewer's time zone) and projection, and once his game starts, his points marked LIVE or FINAL. Tiles count lineup changes, injured starters, wire upgrades, and starters and bench players locked or yet to play. Filters: all, needs action, or one problem at a time (lineup changes, empty spots, out or doubtful, questionable, on bye, unranked starters, wire upgrades); chips at the top jump to any league; each league folds to its header (remembered), with Expand all and Collapse all |
 | Matchup | Each league's head-to-head this week, collapsed to a header with both scores and a chance-to-win bar, like Sleeper's; open it for avatars, records, projected totals, and both lineups spot by spot with headshots, points, kickoff times and projections |
 | Rosters | Every league's roster in Sleeper's order: the starters spot by spot, then the bench by position (QB, RB, WR, TE, K, DEF), then IR and taxi under Reserve, each with headshot, rank, tier, opponent, bye, kickoff time and live points; a player search (name, team or position), chips that jump to any league, and leagues that fold like Lineups |
 | Exposure | Players on two or more of your teams |
@@ -74,6 +75,10 @@ website (such as alerts) to pass review.
   a starter on bye gets ON BYE and his backup goes in.
 - **Locks follow Sleeper.** Each player locks at his own game's kickoff. A
   locked starter keeps his slot, and a locked bench player can't come in.
+- **Latest kickoff in FLEX.** Of the players Titan would start, the latest kickoffs go in
+  SUPER_FLEX and FLEX and earlier ones in RB, WR and TE, so a late scratch can still be
+  covered from the bench. A lineup starting the right players the other way round gets one
+  change: a swap of spots. Players whose game has started never move.
 - **Supported slots:** QB, RB, WR, TE, FLEX, W/R flex, W/T flex, SUPER_FLEX, K,
   DEF, plus basic IDP slots. Best-ball leagues start switched off, because
   Sleeper sets their lineups itself.

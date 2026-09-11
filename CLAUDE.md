@@ -48,6 +48,9 @@ live site, so site changes reach it without a new upload. What's done and what's
 - A new rankings format: study the person's file locally, then test with a few made-up rows in
   the same format (see The Hall's test in `tests/engine.test.js`). Never commit a ranking
   site's actual file; many are paid. Name known sources in `parseRanks`'s `source`.
+- Titan's lineup is `optimal` (who starts, by rank) then `flexLate` (latest kickoffs in the flex
+  spots); `spotMoves` turns it into the changes shown. Route new lineup logic through them, and
+  never move a locked player.
 - Default rankings (`defaultRanks`, `rankingsBy` in `engine.js`) are Sleeper's weekly projections
   in each league's scoring. A week's import wins; the defaults fill positions it leaves out, or
   everything when nothing is imported. The app (`ranksFor`, `analyze`, Results, `keepStarted`)

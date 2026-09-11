@@ -262,4 +262,26 @@ const dA = SCC.analyzeAll({week: 1, leagues: [{cfg: lgStd, roster: flexRoster(),
   {cfg: lgFull, roster: flexRoster(), takenNorm: {}, takenAbbr: {}}]}, SCC.rankingsBy([], dProj, dPlayers));
 check(dA.leagues[0].moves.length === 1 && dA.leagues[0].moves[0].inn.name === 'Wr Deep' && dA.leagues[1].moves.length === 0,
   'each league by its own scoring: standard starts the receiver at FLEX, full PPR keeps the back');
+
+section('latest kickoff in FLEX');
+const kickRanks = SCC.weeklyMap([{name: 'Thu Back', pos: 'RB', team: 'KC', rank: 1}, {name: 'Sun Wideout', pos: 'WR', team: 'BUF', rank: 2},
+  {name: 'Mon Back', pos: 'RB', team: 'DAL', rank: 3}, {name: 'Bench Back', pos: 'RB', team: 'NYJ', rank: 50}]);
+const THU = Date.UTC(2026, 8, 11, 0, 15), SUN = Date.UTC(2026, 8, 13, 17), MON = Date.UTC(2026, 8, 15, 0, 15);
+const kickLg = {id: 'k', key: 'Kick', name: 'Kick', lineup: ['RB', 'WR', 'FLEX'], ppr: 1};
+const kp = (id, name, pos, team, slot, extra) => Object.assign({id, name, pos, team, start: !!slot, slot: slot || '', inj: '', outish: false, locked: false}, extra || {});
+const kickRoster = extra => [kp('1', 'Thu Back', 'RB', 'KC', 'FLEX', extra), kp('2', 'Sun Wideout', 'WR', 'BUF', 'WR'),
+  kp('3', 'Mon Back', 'RB', 'DAL', 'RB'), kp('4', 'Bench Back', 'RB', 'NYJ', '')];
+const kicks = {KC: [THU, false], BUF: [SUN, false], DAL: [MON, false], NYJ: [SUN, false]};
+const kickRun = (roster, kickoffs) => SCC.analyzeAll({week: 1, kickoffs, leagues: [{cfg: kickLg, roster, takenNorm: {}, takenAbbr: {}}]}, kickRanks).leagues[0];
+const K1 = kickRun(kickRoster(), kicks);
+check(K1.opt.map(o => o.p.name).join(', ') === 'Thu Back, Sun Wideout, Mon Back',
+  'Titan\'s lineup puts the Monday back in FLEX and the Thursday back at RB: ' + K1.opt.map(o => o.slot + ' ' + o.p.name).join(', '));
+const km = K1.moves;
+check(km.length === 1 && km[0].slot === 'FLEX' && km[0].inn.name === 'Mon Back' && km[0].from === 'RB' && km[0].out.name === 'Thu Back' && km[0].to === 'RB',
+  'the same players starting, spots traded: one change, shown at FLEX');
+check(K1.rows.every(r => r.verdict === 'OK'), 'nobody is marked to swap out');
+check(kickRun(kickRoster(), {}).moves.length === 0, 'without kickoff times, a lineup starting the right players is left alone');
+check(kickRun(kickRoster({locked: true}), kicks).moves.length === 0, 'once the Thursday game has started, he stays in FLEX');
+const byDay = kickRun(kickRoster().map(p => Object.assign(p, {kick: {KC: '2026-09-10', BUF: '2026-09-13', DAL: '2026-09-14', NYJ: '2026-09-13'}[p.team]})), {});
+check(byDay.moves.length === 1 && byDay.moves[0].inn.name === 'Mon Back', 'with only game days (the server job), the Monday back still goes in FLEX');
 T.done();

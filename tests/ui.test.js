@@ -106,6 +106,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'with nothing imported, Lineups runs on the default rankings');
   const lineup = await ev(`({h: (document.querySelector('.league .card-h') || {}).innerText || '', n: document.querySelectorAll('.lineup .row').length})`);
   check(/Titan Test League/.test(lineup.h) && /ESPN/.test(lineup.h) && lineup.n === 9, 'Lineups shows the ESPN league, 9 spots');
+  const site = await ev(`[...document.querySelectorAll('.card.league a.open-site')].map(a => a.innerText + ' ' + a.getAttribute('href'))`);
+  check(site.length === 1 && /^Open in ESPN/.test(site[0]) && site[0].includes('fantasy.espn.com/football/team?leagueId=' + L1.id + '&teamId=1&seasonId='),
+    'the league has a button to its team page: ' + site[0]);
   const chips = await ev(`[...document.querySelectorAll('[data-filter]')].map(b => ({id: b.dataset.filter, n: Number(b.innerText.match(/(\\d+)$/)[1])}))`);
   let chipsOk = chips.length >= 2 && chips[0].id === 'all' && chips[1].id === 'action';
   for (const c of chips) {
@@ -207,6 +210,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check(await waitFor(`document.querySelectorAll('.league').length >= 2`, 120000), 'Sleeper and ESPN leagues show together');
     const jumps = await ev(`document.querySelectorAll('.jump [data-jump]').length`);
     check(jumps >= 2 && jumps === await ev(`document.querySelectorAll('.card.league').length`), `a chip for every league at the top of Lineups (${jumps})`);
+    const sl = await ev(`[...document.querySelectorAll('.card.league a.open-site')].map(a => a.getAttribute('href')).filter(h => h.includes('sleeper.com'))`);
+    check(sl.length >= 1 && sl.every(h => /^https:\/\/sleeper\.com\/leagues\/\d+\/team$/.test(h)), `Sleeper leagues open their team page on sleeper.com (${sl.length})`);
     // The second league: the last sits at the page's end, which can't scroll to the top.
     await ev(`document.querySelectorAll('.jump [data-jump]')[1].click(); true`);
     await sleep(1200);

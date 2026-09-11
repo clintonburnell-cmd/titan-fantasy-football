@@ -510,6 +510,16 @@
     return s + ` · projected ${fmt(mine)}${!played.length && Math.abs(titan - mine) >= 0.1 ? `, Titan's lineup ${fmt(titan)}` : ''}`;
   }
 
+  // Where a league's lineup is set: the team's page on Sleeper or ESPN.
+  const siteName = cfg => cfg.platform === 'espn' ? 'ESPN' : 'Sleeper';
+  function lineupUrl(cfg) {
+    if (cfg.platform !== 'espn') return `https://sleeper.com/leagues/${encodeURIComponent(cfg.id)}/team`;
+    const team = cfg.teamId !== null && cfg.teamId !== undefined ? `&teamId=${encodeURIComponent(cfg.teamId)}` : '';
+    return `https://fantasy.espn.com/football/team?leagueId=${encodeURIComponent(cfg.espnId)}${team}&seasonId=${encodeURIComponent(S.snap ? S.snap.season : '')}`;
+  }
+  const openSite = cfg => `<a class="btn ghost small open-site" href="${esc(lineupUrl(cfg))}" target="_blank" rel="noopener">Open in ${siteName(cfg)} ↗</a>`;
+  const kickOf = p => kickText(p) ? ', ' + kickText(p) : '';
+
   function leagueCard(L) {
     const st = L.stops ? ['stop', plural(L.stops, 'problem')]
       : L.moves.length ? ['swap', plural(L.moves.length, 'change')]
@@ -517,11 +527,12 @@
     let h = `<details class="card league fold" ${foldAttrs('lineup', L.cfg)}>
       <summary class="card-h"><div><h3>${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg) + projLine(L))}</p></div><span class="pill p-${st[0]}">${st[1]}</span></summary>`;
     if (L.moves.length) {
-      h += `<div class="moves"><h4>Make these changes in Sleeper</h4>${L.moves.map(m => `
+      // A starter changing spots shows where he goes or comes from, and when he plays.
+      h += `<div class="moves"><div class="moves-h"><h4>Make these changes in ${siteName(L.cfg)}</h4>${openSite(L.cfg)}</div>${L.moves.map(m => `
         <div class="move"><span class="slot">${esc(slotName(m.slot))}</span>
-          <span class="mv out">${m.out ? `${esc(m.out.name)} <em>${esc(rl(m.out))}</em>` : '<em>nobody</em>'}</span>
-          <span class="mv in">${esc(m.inn.name)} <em>${esc(rl(m.inn))}${m.inn.opp ? ' vs ' + esc(m.inn.opp) : ''}</em></span>
-        </div>`).join('')}</div>`;
+          <span class="mv out${m.to ? ' to' : ''}">${m.out ? `${esc(m.out.name)} <em>${m.to ? `to ${esc(slotName(m.to))}${esc(kickOf(m.out))}` : esc(rl(m.out))}</em>` : '<em>nobody</em>'}</span>
+          <span class="mv in">${esc(m.inn.name)} <em>${m.from ? `from ${esc(slotName(m.from))}${esc(kickOf(m.inn))}` : esc(rl(m.inn)) + (m.inn.opp ? ' vs ' + esc(m.inn.opp) : '')}</em></span>
+        </div>`).join('')}${L.moves.some(m => m.from || m.to) ? '<p class="fine">Later kickoffs go in FLEX, so a late scratch can still be covered from your bench.</p>' : ''}</div>`;
     }
     h += `<ol class="lineup">${L.rows.map(r => lineupRow(r, L.cfg)).join('')}</ol>`;
     L.wire.forEach(w => {
@@ -533,6 +544,7 @@
     if (L.hurt.length) {
       h += `<p class="note hurt"><b>Injured in your lineup:</b> ${L.hurt.map(p => `${esc(p.name)} (${esc(p.inj)})`).join(', ')}</p>`;
     }
+    if (!L.moves.length) h += `<div class="card-foot">${openSite(L.cfg)}</div>`;
     return h + '</details>';
   }
 

@@ -681,6 +681,91 @@
     return out;
   }
 
+  /* Players for a list of spots, one each, or null if they can't all be
+     filled. Augmenting paths, as in openSlots. */
+  function matchSlots(slots, players) {
+    var owner = {}, bySlot = new Array(slots.length);
+    function assign(s, seen) {
+      for (var j = 0; j < players.length; j++) {
+        if (seen[j] || !slotFits(slots[s], players[j].pos)) continue;
+        seen[j] = 1;
+        if (owner[j] === undefined || assign(owner[j], seen)) { owner[j] = s; return true; }
+      }
+      return false;
+    }
+    for (var s = 0; s < slots.length; s++) if (!assign(s, {})) return null;
+    for (var j in owner) bySlot[owner[j]] = players[j];
+    return bySlot;
+  }
+
+  /* Titan's lineup with the latest kickoffs in the flex spots (widest first:
+     SUPER_FLEX, then FLEX, then W/R and W/T) and earlier starters in their own
+     position's spots, so a late scratch can still be covered from the bench.
+     Only spots change, never who starts, and players whose game has started
+     stay put. A tie keeps the player already in that flex spot, then puts the
+     lower-ranked one there. Last, a player who only sits in another spot of
+     the same kind (RB1 or RB2) goes back where he is now, so that doesn't show
+     as a change. `kickAt(p)` is his kickoff in ms. */
+  function flexLate(opt, act, kickAt) {
+    var slots = opt.map(function (o) { return o.slot; });
+    var out = opt.map(function (o) { return {slot: o.slot, p: o.p}; });
+    var actAt = {};
+    (act || []).forEach(function (o, i) { if (o.p) actAt[o.p.id] = i; });
+    var left = [], people = [];
+    out.forEach(function (o, i) { if (o.p && !o.p.locked) { left.push(i); people.push(o.p); } });
+    var slotsOf = function (idx) { return idx.map(function (i) { return slots[i]; }); };
+    left.filter(function (i) { return FLEX_ORDER[slots[i]]; })
+      .sort(function (a, b) { return FLEX_ORDER[slots[b]] - FLEX_ORDER[slots[a]] || a - b; })
+      .forEach(function (f) {
+        var rest = left.filter(function (i) { return i !== f; });
+        var cands = people.filter(function (p) { return slotFits(slots[f], p.pos); }).sort(function (a, b) {
+          return kickAt(b) - kickAt(a) || (actAt[b.id] === f) - (actAt[a.id] === f) || rankKey(b) - rankKey(a);
+        });
+        for (var c = 0; c < cands.length; c++) {
+          var others = people.filter(function (p) { return p !== cands[c]; });
+          if (matchSlots(slotsOf(rest), others)) { out[f].p = cands[c]; left = rest; people = others; return; }
+        }
+      });
+    var fill = matchSlots(slotsOf(left), people);
+    if (!fill) return opt;
+    left.forEach(function (i, k) { out[i].p = fill[k]; });
+    for (var pass = 0, moved = true; moved && pass < 30; pass++) {
+      moved = false;
+      for (var i = 0; i < out.length; i++) {
+        var p = out[i].p, j = p ? actAt[p.id] : undefined;
+        if (j === undefined || j === i || slots[j] !== slots[i]) continue;
+        out[i].p = out[j].p; out[j].p = p; moved = true;
+      }
+    }
+    return out;
+  }
+
+  /* Each spot whose player should change: who's there now (`out`) and who
+     belongs there (`inn`). `from` is the spot a player already starting moves
+     over from, and `to` the spot a player leaving this one moves to (empty
+     when he goes to the bench). Two starters just trading spots make one
+     change, shown at the flex spot: picking the late player there in Sleeper
+     swaps the two. */
+  function spotMoves(opt, act) {
+    var actAt = {}, optAt = {}, moves = [];
+    act.forEach(function (o, i) { if (o.p) actAt[o.p.id] = i; });
+    opt.forEach(function (o, i) { if (o.p) optAt[o.p.id] = i; });
+    opt.forEach(function (o, i) {
+      var cur = act[i] ? act[i].p : null;
+      if (!o.p || (cur && cur.id === o.p.id)) return;
+      var m = {slot: o.slot, out: cur, inn: o.p,
+        from: actAt[o.p.id] !== undefined ? act[actAt[o.p.id]].slot : '',
+        to: cur && optAt[cur.id] !== undefined ? opt[optAt[cur.id]].slot : ''};
+      var twin = -1;
+      for (var k = 0; k < moves.length; k++) {
+        if (cur && moves[k].out && moves[k].out.id === o.p.id && moves[k].inn.id === cur.id) { twin = k; break; }
+      }
+      if (twin < 0) moves.push(m);
+      else if (FLEX_ORDER[m.slot] && !FLEX_ORDER[moves[twin].slot]) moves[twin] = m;
+    });
+    return moves;
+  }
+
   /* Best lineup by ACTUAL points, in hindsight. Dedicated slots are filled before
      the flex ones so a flex slot never steals a player the strict slot needed. */
   function bestByPoints(roster, slots) {
@@ -844,7 +929,7 @@
     // otherwise every unranked starter would "lose" to an unranked bench player.
     var ranked = Object.keys(weekly).length > 0;
     var act = actualLineup(d.roster, slots);
-    var opt = optimal(d.roster, slots);
+    var opt = flexLate(optimal(d.roster, slots), act, d.kickAt || function () { return 0; });
     var optIds = {}, actIds = {};
     opt.forEach(function (o) { if (o.p) optIds[o.p.id] = 1; });
     act.forEach(function (o) { if (o.p) actIds[o.p.id] = 1; });
@@ -862,13 +947,10 @@
       rows.push({slot: o.slot, p: p, verdict: verdict});
     });
 
-    // The real swaps. Compare the SET of players, not slot order: the same nine
-    // guys arranged differently is not a change to go and make.
-    var comingIn = opt.filter(function (o) { return o.p && !actIds[o.p.id]; });
-    var goingOut = act.filter(function (o) { return o.p && !optIds[o.p.id]; });
-    var moves = !ranked ? [] : comingIn.map(function (o, i) {
-      return {slot: o.slot, out: goingOut[i] ? goingOut[i].p : null, inn: o.p};
-    });
+    // The changes to make, spot by spot: a new starter, or a starter moving
+    // between a flex spot and his position's spot (flexLate). The same players
+    // in other spots of the same kind (RB1 and RB2) is no change.
+    var moves = !ranked ? [] : spotMoves(opt, act);
 
     // Wire scan. The bar is the WORST player currently filling a slot of this
     // kind: he is the one a pickup would actually replace. Unranked means anyone
@@ -904,12 +986,19 @@
     var started = {}, games = (snap && snap.games) || {};
     for (var t in games) if (games[t] && games[t].state !== 'pre') started[t] = 1;
     var rankedCount = typeof weekly === 'function' ? 0 : Object.keys(weekly).length;
+    // When each player kicks off (ms): the time where it's known, else his game's day.
+    var kicks = (snap && snap.kickoffs) || {};
+    function kickAt(p) {
+      var k = kicks[teamAbbr(p.team)];
+      if (k && k[0]) return Number(k[0]) || 0;
+      return p.kick ? Date.parse(p.kick + 'T17:00:00Z') || 0 : 0;
+    }
     var leagues = ((snap && snap.leagues) || []).map(function (d) {
       var wk = rankingsFor(d.cfg);
       rankedCount = Math.max(rankedCount, Object.keys(wk).length);
       return analyzeLeague({
         cfg: d.cfg, roster: attachRanks(d.roster, wk),
-        takenNorm: d.takenNorm || {}, takenAbbr: d.takenAbbr || {}, started: started
+        takenNorm: d.takenNorm || {}, takenAbbr: d.takenAbbr || {}, started: started, kickAt: kickAt
       }, wk, snap && snap.week);
     });
 
@@ -939,9 +1028,11 @@
     if (changes.length) {
       log.push(changes.length + ' lineup change(s) your rankings want:');
       changes.forEach(function (c) {
-        log.push('   ' + c.league.name + ': start ' + c.move.inn.name + ' (' + rankLabel(c.move.inn.pos, c.move.inn.rank) + ')');
+        var m = c.move;
+        log.push('   ' + c.league.name + ': ' + (m.from ? 'move ' + m.inn.name + ' to ' + slotLabel(m.slot)
+          : 'start ' + m.inn.name + ' (' + rankLabel(m.inn.pos, m.inn.rank) + ')'));
       });
-      log.push('', 'Make the changes in the Sleeper app. Titan cannot set lineups.');
+      log.push('', 'Make the changes in Sleeper or ESPN. Titan cannot set lineups.');
     } else {
       log.push('Every lineup already matches your rankings.');
     }

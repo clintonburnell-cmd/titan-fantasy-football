@@ -220,6 +220,10 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; }
 .mv.out::before { content: "OUT"; color: #ff8278; }
 .mv.in::before { content: "IN"; color: var(--ok); }
 .mv.in { font-weight: 600; }
+.mv.to::before { content: "MOVE"; color: var(--swap); }
+.moves-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.moves-h h4 { margin-bottom: 0; }
+.card-foot { padding: 8px 14px 12px; display: flex; justify-content: flex-end; border-top: 1px solid var(--line); }
 
 .note { padding: 8px 14px; border-top: 1px solid var(--line); font-size: .82rem; color: var(--muted); }
 .note.wire b { color: var(--accent-2); }
