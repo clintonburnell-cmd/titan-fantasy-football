@@ -154,6 +154,30 @@
 
   /* ------------------------------------------------------------- refresh */
 
+  /* Every NFL team's kickoff times for the season (ESPN's public schedule), kept
+     for 12 hours: {team: {week: [time, time still to be set]}}. */
+  var KICK_TTL = 12 * 3600 * 1000;
+  async function loadKickoffs(season) {
+    var key = 'titan.kickoffs.v1.' + season, cached = store.get(key);
+    if (cached && cached.map && Date.now() - cached.ts < KICK_TTL) return cached.map;
+    try {
+      var map = await ESPN.fetchKickoffs(season);
+      if (map && Object.keys(map).length) {
+        store.set(key, {ts: Date.now(), map: map});
+        return map;
+      }
+    } catch (e) {
+      // Kickoff times are a nicety: without them the screens show the game day.
+    }
+    return cached ? cached.map : null;
+  }
+
+  function weekKickoffs(map, week) {
+    var out = {};
+    for (var team in map || {}) if (map[team][week]) out[team] = map[team][week];
+    return out;
+  }
+
   // League names are how the screens tell leagues apart, so a name used on both
   // Sleeper and ESPN gets a number.
   function uniqueKeys(list) {
@@ -200,9 +224,11 @@
     var found = await Promise.all([
       account.userId ? discoverLeagues(account.userId, leagueSeason, prefs).catch(function () { return null; }) : [],
       getJson(SCHEDULE + season).catch(function () { return null; }),
-      loadPlayers(say)
+      loadPlayers(say),
+      // Kickoff times are only for the screens, so the server job skips them.
+      typeof window !== 'undefined' ? loadKickoffs(season) : null
     ]);
-    var all = found[0], sched = found[1], players = found[2];
+    var all = found[0], sched = found[1], players = found[2], kickMap = found[3];
     // The schedule also settles the week: on the Tuesday after a week's last
     // game Titan moves on, even if Sleeper hasn't yet. ESPN lineups are per
     // week, so ESPN is read after this.
@@ -275,7 +301,9 @@
     });
 
     // v2: rosters carry what live scores need (roster ids, ESPN ids, the game clock).
-    var snap = {v: 2, at: Date.now(), week: week, season: season, available: all, byes: byes, leagues: live, log: log};
+    // v3: this week's kickoff times.
+    var snap = {v: 3, at: Date.now(), week: week, season: season, available: all, byes: byes, leagues: live, log: log,
+      kickoffs: weekKickoffs(kickMap, week)};
     if (!live.length) { say('No rosters loaded. Nothing to show.'); return snap; }
 
     progress('Checking injuries…');

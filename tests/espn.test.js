@@ -52,6 +52,17 @@ const {check, section} = T;
   check(bp && bp[firstId] === 21.4 && ESPN.pointsFromBoxscore(box, 5) === null, 'box score points are read for the right team');
   check(ESPN.slimLeague(L1).teams[0].roster.entries[0].playerPoolEntry.appliedStatTotal === 0, 'the server\'s slimmed league keeps points');
 
+  section('kickoff times');
+  const ko = ESPN.kickoffsFrom({settings: {proTeams: [
+    {id: 25, abbrev: 'SF', proGamesByScoringPeriod: {1: [{date: 1789432500000, startTimeTBD: false}]}},
+    {id: 28, abbrev: 'WSH', proGamesByScoringPeriod: {17: [{date: 1798000000000, startTimeTBD: true}]}},
+    {id: 0, abbrev: 'FA', proGamesByScoringPeriod: {}}]}});
+  check(ko.SF['1'][0] === 1789432500000 && ko.SF['1'][1] === false, 'a kickoff time per team and week');
+  check(ko.WAS && ko.WAS['17'][1] === true && !ko.FA, 'ESPN\'s WSH is WAS; a time still to be set is marked; free agents skipped');
+  const live = await ESPN.fetchKickoffs((await T.nflState()).league_season);
+  check(live && Object.keys(live).length === 32 && Object.values(live).every(t => Object.keys(t).length >= 16),
+    'ESPN\'s public schedule gives every team\'s kickoffs');
+
   section('analysis');
   SCC.applyDetails([d], {});
   const La = SCC.analyzeAll({leagues: [d], week: 1}, weekly).leagues[0];

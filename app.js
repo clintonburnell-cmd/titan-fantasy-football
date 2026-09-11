@@ -349,11 +349,17 @@
       h += `<p class="fine live-note">Games are on: scores update about every minute while Lineups is open${
         S.snap.pointsAt ? ` (last ${esc(when(S.snap.pointsAt))})` : ''}.</p>`;
     }
-    h += `<section class="tiles">
+    const G = gameCounts(A.leagues);
+    h += `<section class="tiles three">
       ${tile(A.changes.length, A.changes.length === 1 ? 'lineup change' : 'lineup changes', A.changes.length ? 'swap' : 'ok')}
       ${tile(A.hurtStarters.length, A.hurtStarters.length === 1 ? 'injured starter' : 'injured starters', A.hurtStarters.length ? 'stop' : 'ok')}
       ${tile(A.wireLines.length, A.wireLines.length === 1 ? 'wire upgrade' : 'wire upgrades', A.wireLines.length ? 'wire' : 'ok')}
-      ${tile(A.locked, 'players locked', 'muted')}
+    </section>
+    <section class="tiles tiles-games" aria-label="This week's games">
+      ${tile(G.startLocked, 'starters locked', 'muted')}
+      ${tile(G.startLeft, 'starters yet to play', G.startLeft ? 'ok' : 'muted')}
+      ${tile(G.benchLocked, 'bench locked', 'muted')}
+      ${tile(G.benchLeft, 'bench yet to play', 'muted')}
     </section>`;
     h += `<div class="chips" role="group" aria-label="Filter leagues">
       <button class="chip" data-filter="all" aria-pressed="${S.ui.filter !== 'action'}">All ${A.leagues.length}</button>
@@ -370,6 +376,20 @@
   }
 
   const projOf = (p, cfg) => SCC.projFor(S.proj, p.id, cfg.ppr);
+
+  /* This week's games across every lineup: starters and bench players whose
+     game has started (locked) or is still to come. Players on IR or a taxi
+     squad aren't counted, and players on bye are neither. */
+  function gameCounts(leagues) {
+    const c = {startLocked: 0, startLeft: 0, benchLocked: 0, benchLeft: 0};
+    leagues.forEach(L => L.roster.forEach(p => {
+      if (p.held) return;
+      const side = p.start ? 'start' : 'bench';
+      if (p.locked) c[side + 'Locked']++;
+      else if (p.game === 'pre') c[side + 'Left']++;
+    }));
+    return c;
+  }
 
   // The lineup's points so far once games start, and Sleeper's projection for it
   // (plus Titan's lineup's, before kickoff, when that differs).
@@ -421,6 +441,22 @@
   // A started player's points: LIVE while his game is on, FINAL once it's over.
   const scored = p => p.locked && typeof p.pts === 'number';
   const playDay = ymd => new Date(ymd + 'T12:00:00Z').toLocaleDateString('en-US', {weekday: 'short', timeZone: 'UTC'});
+
+  // When a player's game kicks off this week, in the viewer's own time zone ("Sun 1:00 PM").
+  function kickText(p) {
+    if (!S.snap) return '';
+    if (p.bye && Number(p.bye) === Number(S.snap.week)) return 'Bye';
+    const k = S.snap.kickoffs && S.snap.kickoffs[SCC.teamAbbr(p.team)];
+    if (!k) return p.kick ? playDay(p.kick) : '';
+    const d = new Date(k[0]), day = d.toLocaleDateString([], {weekday: 'short'});
+    return k[1] ? day + ', time TBD' : day + ' ' + d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+  }
+
+  // The player's name with his kickoff beside it; a long name shortens, the time never does.
+  function nameLine(p) {
+    const k = kickText(p);
+    return `<span class="name-line"><b>${esc(p.name)}</b>${k ? `<em class="kick">${esc(k)}</em>` : ''}</span>`;
+  }
   const scoreChip = p => `<span class="score-chip${p.game === 'in_game' ? ' live' : ''}"><b>${fmt(p.pts)}</b><small>${
     p.game === 'in_game' ? 'LIVE' : 'FINAL'}</small></span>`;
 
@@ -436,12 +472,9 @@
     }
     const p = r.p, v = VERDICT[r.verdict] || 'ok';
     const proj = projOf(p, cfg);
-    // Until his game kicks off, the day it's played: that's when his points start showing.
-    const day = !p.locked && p.kick ? playDay(p.kick) : '';
-    const game = p.opp ? 'vs ' + p.opp + (day ? ' ' + day : '') : day;
-    const sub = [p.team, game, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
+    const sub = [p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
     return `<li class="row r-${v}"><span class="slot">${esc(slotName(r.slot))}</span>${pos(p.pos)}
-      <span class="who"><b>${esc(p.name)}</b><small>${esc(sub)}${statusText(p)}</small></span>
+      <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small></span>
       <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : `<span class="verdict v-${v}">${esc(r.verdict)}</span>`}</span></li>`;
   }
 
@@ -476,7 +509,7 @@
         <ul class="roster">${list.map(p => {
           const sub = [p.team, p.opp && 'vs ' + p.opp, has(p.implied) && 'implied ' + p.implied, p.bye && 'bye ' + p.bye].filter(Boolean).join(' · ');
           return `<li class="row${p.start ? ' is-start' : ''}"><span class="slot">${p.start ? 'START' : ''}</span>${pos(p.pos)}
-            <span class="who"><b>${esc(p.name)}</b><small>${esc(sub)}${statusText(p)}</small></span>
+            <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small></span>
             <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : ''}</span></li>`;
         }).join('')}</ul></article>`;
     }).join('');
@@ -1197,7 +1230,7 @@
   if (IN_PLAY_APP) document.querySelectorAll('[data-tip]').forEach(el => { el.hidden = true; });
   analyze();
   render();
-  // A snapshot saved by an older version lacks what live scores need, so it's refreshed.
-  if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS || (S.snap.v || 0) < 2)) refresh();
+  // A snapshot saved by an older version lacks what live scores and kickoff times need, so it's refreshed.
+  if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS || (S.snap.v || 0) < 3)) refresh();
   else { loadProj(); scheduleLive(); }
 })();

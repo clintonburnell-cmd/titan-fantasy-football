@@ -337,6 +337,16 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .score-chip.live { border-color: rgb(226 87 76 / .55); background: rgb(226 87 76 / .12); }
 .score-chip.live small { color: var(--stop); }
 .live-note { color: var(--muted); }
+
+/* Lineups: what to act on (three tiles), then this week's games (four). */
+.tiles.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tiles-games .tile b { font-size: 1.15rem; }
+
+/* When the name and kickoff time don't both fit (a long name on a phone), the
+   time moves just under the name instead of cutting the name short. */
+.name-line { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 7px; row-gap: 0; min-width: 0; }
+.name-line b { min-width: 0; max-width: 100%; }
+.kick { flex: none; font-style: italic; font-size: .76rem; font-weight: 500; color: var(--muted); white-space: nowrap; }
 .login-form { display: grid; gap: 10px; margin-top: 8px; }
 #ranks-view { scroll-margin-top: 8.5rem; } /* clear the sticky header */
 .view-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

@@ -242,6 +242,28 @@
     return null;
   }
 
+  /* Kickoff times for every NFL game of the season, from ESPN's public NFL
+     schedule: {team: {week: [kickoff time in ms, time still to be set]}}. */
+  async function fetchKickoffs(season) {
+    var browser = typeof window !== 'undefined';
+    var res = await fetch(BASE + season + '?view=proTeamSchedules_wl', browser ? {credentials: 'omit'} : {});
+    return res.ok ? kickoffsFrom(await res.json()) : null;
+  }
+
+  function kickoffsFrom(json) {
+    var out = {};
+    ((json.settings && json.settings.proTeams) || []).forEach(function (t) {
+      var team = TEAM[t.id];
+      if (!team) return;
+      var weeks = t.proGamesByScoringPeriod || {};
+      Object.keys(weeks).forEach(function (w) {
+        var g = (weeks[w] || [])[0];
+        if (g && g.date) (out[team] = out[team] || {})[w] = [Number(g.date), !!g.startTimeTBD];
+      });
+    });
+    return out;
+  }
+
   function pointsFromBoxscore(json, teamId) {
     var out = null;
     (json.schedule || []).forEach(function (m) {
@@ -288,7 +310,7 @@
   var api = {
     fetchLeague: fetchLeague, setTransport: setTransport, parseLeagueId: parseLeagueId, normSwid: normSwid,
     leagueCfg: leagueCfg, teamsOf: teamsOf, ownedTeam: ownedTeam, buildLeague: buildLeague, slimLeague: slimLeague,
-    fetchPoints: fetchPoints, pointsFromBoxscore: pointsFromBoxscore,
+    fetchPoints: fetchPoints, pointsFromBoxscore: pointsFromBoxscore, fetchKickoffs: fetchKickoffs, kickoffsFrom: kickoffsFrom,
     SLOT: SLOT, POS: POS, TEAM: TEAM
   };
 
