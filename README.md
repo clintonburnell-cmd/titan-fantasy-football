@@ -26,7 +26,9 @@ start/sit rules, made to work for any Sleeper account.
    exports (`RK, PLAYER NAME, TEAM, OPP`), one file per position, where the position
    comes from the file name or the user's pick. A file ranking only some positions is
    added to that week and replaces just those positions. For RB/WR/TE, FantasyPros'
-   FLEX file gives the overall ranks FLEX slots need.
+   FLEX file gives the overall ranks FLEX slots need. The Hall's weekly rankings (`Rank,
+   Team, Player, Fantsy Position, Matchup, ...`) are one overall list of every position,
+   so they're read as they are; its IDP rows are skipped.
 3. **Follow the calls**: every lineup slot gets a verdict (OK, SWAP OUT,
    DO NOT START, UNRANKED, LOCKED), with the exact swaps to make, ranked free
    agents nobody in the league has, and injured starters.

@@ -59,6 +59,22 @@ const op = SCC.parseRanks(['"RK","PLAYER NAME",TEAM,"POS","OPP"', '"1","Lamar Ja
   '"2","Jahmyr Gibbs",DET,"RB1","vs. NO"', '"3","Ja\'Marr Chase",CIN,"WR1","vs. TB"', '"4","Trey McBride",ARI,"TE1","at LAC"'].join('\n'));
 check(op.rows.length === 4 && JSON.stringify(SCC.rankCounts(op.rows)) === '{"QB":1,"RB":1,"WR":1,"TE":1}', 'OP (superflex) file: every position on one scale');
 
+section('rankings: The Hall');
+const hall = SCC.parseRanks(['Rank,Team,Player,Fantsy Position,Matchup,SOS,Bye,Floor Proj,Consensus ProjCons Proj,DS Proj,CeilingProjCeil Proj,3D Proj',
+  '1,BAL,Lamar Jackson,QB,@IND,7.9%,13,20.40,19.5,23.20,29.00,23.80',
+  '23,DET,Jahmyr Gibbs,RB,NO,1%,6,12.0,15,16,24,18.90',
+  '26,LAR,Puka Nacua,WR,SF,2%,11,11,14,15,22,16.30',
+  '44,CLE,Carson Schwesinger,LB,@JAC,0%,11,8,9,9,12,10.1',
+  '65,LVR,Brock Bowers,TE,@MIA,3%,8,9,11,12,19,12.90',
+  '147,DAL,Brandon Aubrey,K,@NYG,1%,14,7,8,9,12,9.50',
+  '212,PIT,Pittsburgh Steelers,DEF,ATL,4%,5,5,7,8,12,8.10'].join('\n'));
+const h = name => hall.rows.find(r => r.name === name) || {};
+check(hall.source === 'The Hall' && hall.rows.length === 6 && hall.skipped.length === 1 && /LB/.test(hall.skipped[0].why),
+  `The Hall's export is read: ${hall.rows.length} players, the IDP row skipped`);
+check(h('Lamar Jackson').pos === 'QB' && h('Lamar Jackson').opp === 'IND' && h('Jahmyr Gibbs').rank === 23 && h('Puka Nacua').rank === 26,
+  'its misspelled position column, "@IND" matchups and one overall rank');
+check(h('Brock Bowers').team === 'LV' && !!h('PIT D/ST').name && h('PIT D/ST').pos === 'DEF', 'LVR is the Raiders (LV); defenses named by team');
+
 section('merging a week\'s files');
 const week = sample.rows.concat(dst.rows);
 const before = SCC.rankCounts(week);

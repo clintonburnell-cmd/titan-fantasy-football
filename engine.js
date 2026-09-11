@@ -21,7 +21,7 @@
     NE: 11, NO: 8, NYG: 8, NYJ: 13, PHI: 10, PIT: 9, SEA: 11, SF: 8, TB: 10, TEN: 9, WAS: 7};
   var byes = BYE_FALLBACK;
 
-  var ALIAS = {JAC: 'JAX', WSH: 'WAS', LA: 'LAR', ARZ: 'ARI'};
+  var ALIAS = {JAC: 'JAX', WSH: 'WAS', LA: 'LAR', ARZ: 'ARI', LVR: 'LV'};
   // Positions a ranking can hold.
   var POSITIONS = {QB: 1, RB: 1, WR: 1, TE: 1, K: 1, DEF: 1};
   // Positions worth keeping from Sleeper's player list (IDP included, for IDP leagues).
@@ -229,7 +229,7 @@
   }
 
   var HEADERS = {player: 'player', name: 'player', playername: 'player', pos: 'pos', position: 'pos',
-    team: 'team', rank: 'rank', rk: 'rank', wkrank: 'rank', overall: 'rank', opp: 'opp', opponent: 'opp',
+    team: 'team', rank: 'rank', rk: 'rank', wkrank: 'rank', overall: 'rank', opp: 'opp', opponent: 'opp', matchup: 'opp',
     implied: 'implied', tier: 'tier', tiers: 'tier', posrank: 'posRank'};
 
   function num(v) {
@@ -343,7 +343,9 @@
       if (!low.some(function (c) { return c === 'player' || c === 'name' || c === 'player name'; })) continue;
       cols = {};
       low.forEach(function (h, j) {
-        var k = HEADERS[h.replace(/[^a-z]/g, '')];
+        var key = h.replace(/[^a-z]/g, '');
+        // Exports name the position column differently ("Fantsy Position" in The Hall's).
+        var k = HEADERS[key] || (/position$/.test(key) ? 'pos' : '');
         if (k && cols[k] === undefined) cols[k] = j;
       });
       header = low;
@@ -383,7 +385,8 @@
         pos: pos,
         team: teamAbbr(r[cols.team]),
         rank: rank,
-        opp: String(r[cols.opp] == null ? '' : r[cols.opp]).trim().replace(/^(at|vs\.?|@)\s+/i, ''),
+        // "at IND", "vs. TB", "@IND" and "@ IND" all mean the opponent is IND.
+        opp: teamAbbr(String(r[cols.opp] == null ? '' : r[cols.opp]).trim().replace(/^(?:at\s+|vs\.?\s+|@\s*)/i, '')),
         implied: implied === null ? '' : implied,
         tier: tier === null ? '' : tier,
         posRank: cols.posRank !== undefined ? num(r[cols.posRank]) : pm && pm[2] ? Number(pm[2]) : single ? rank : null
@@ -395,7 +398,9 @@
       ? 'These ' + fixedPos + ' ranks are positional, so FLEX slots can\'t compare them fairly with other positions. ' +
         'For RB, WR and TE, FantasyPros\' FLEX rankings work best.'
       : '';
-    return {rows: rows, skipped: skipped, format: fantasyPros ? 'fantasypros' : single ? 'single' : 'rows',
+    // Known exports get named in the import message.
+    var source = fantasyPros ? 'FantasyPros' : header.indexOf('3d proj') >= 0 ? 'The Hall' : '';
+    return {rows: rows, skipped: skipped, format: fantasyPros ? 'fantasypros' : single ? 'single' : 'rows', source: source,
       position: single ? fixedPos : '', warning: warning, error: rows.length ? '' : 'No player rows found.'};
   }
 

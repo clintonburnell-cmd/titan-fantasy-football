@@ -922,6 +922,8 @@
               RB/WR/TE are ranked by the FLEX table.</li>
             <li><b>FantasyPros rankings</b>, one file per position. Import the QB, K and DST files, plus the FLEX
               file for RB/WR/TE. Each file is added to that week and replaces only its own position.</li>
+            <li><b>The Hall's weekly rankings</b>: one overall list of every position, read as it is. Defensive
+              players (LB, DB, DL) are skipped.</li>
           </ul>
           <p>Name defenses by team (<code>LAC D/ST</code>, <code>Los Angeles Chargers</code> or <code>LAC</code> all work).</p>
         </details>
@@ -989,7 +991,7 @@
     }
     const skipped = P.skipped.length
       ? ` · skipped ${P.skipped.length} (${esc(P.skipped.slice(0, 3).map(s => `${s.text}: ${s.why}`).join('; '))}${P.skipped.length > 3 ? '…' : ''})` : '';
-    const from = P.format === 'wide' ? ' from the position tables' : '';
+    const from = P.format === 'wide' ? ' from the position tables' : P.source ? ' from ' + P.source : '';
     return `<div class="banner ok"><b>${P.rows.length} players read${from}</b> · ${esc(countsText(P.rows))}${skipped}</div>${save}`;
   }
 
