@@ -43,6 +43,15 @@ const {check, section} = T;
   check(JSON.stringify(ds.roster) === JSON.stringify(d.roster),
     `the server's slimmed league reads the same (${Math.round(JSON.stringify(slim).length / 1024)} KB of ${Math.round(JSON.stringify(L1).length / 1024)} KB)`);
 
+  section('scores');
+  check(d.roster.every(p => p.espnId) && Object.keys(d.espnPoints).length === 16, 'each player keeps his ESPN id, and the league read carries this week\'s points');
+  const firstId = L1.teams[0].roster.entries[0].playerId;
+  const box = {schedule: [{home: {teamId: 1, rosterForCurrentScoringPeriod: {entries: [{playerId: firstId, playerPoolEntry: {appliedStatTotal: 21.4}}]}},
+    away: {teamId: 2, rosterForCurrentScoringPeriod: {entries: []}}}]};
+  const bp = ESPN.pointsFromBoxscore(box, 1);
+  check(bp && bp[firstId] === 21.4 && ESPN.pointsFromBoxscore(box, 5) === null, 'box score points are read for the right team');
+  check(ESPN.slimLeague(L1).teams[0].roster.entries[0].playerPoolEntry.appliedStatTotal === 0, 'the server\'s slimmed league keeps points');
+
   section('analysis');
   SCC.applyDetails([d], {});
   const La = SCC.analyzeAll({leagues: [d], week: 1}, weekly).leagues[0];

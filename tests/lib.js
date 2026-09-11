@@ -75,7 +75,7 @@ async function espnLeagues() {
     Object.keys(need).forEach(pos => {
       for (let round = 0; round < need[pos]; round++) teams.forEach(t => t.picks.push(byPos[pos].shift()));
     });
-    const entry = (p, slot, status) => ({playerId: p.id, lineupSlotId: slot, playerPoolEntry: {player: {
+    const entry = (p, slot, status) => ({playerId: p.id, lineupSlotId: slot, playerPoolEntry: {appliedStatTotal: 0, player: {
       id: p.id, fullName: p.fullName, defaultPositionId: p.defaultPositionId, proTeamId: p.proTeamId,
       eligibleSlots: p.eligibleSlots, injuryStatus: status || 'ACTIVE'}}});
     const lineupFor = t => {

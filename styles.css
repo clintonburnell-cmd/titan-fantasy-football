@@ -326,6 +326,17 @@ a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .pick .chip small { color: var(--faint); font-weight: 500; }
 [data-link-tab] small { opacity: .75; font-weight: 600; margin-left: 2px; }
 .link-pane { display: grid; gap: 10px; padding-top: 4px; }
+
+/* A started player's points on Lineups and Rosters: LIVE while his game is on, FINAL after. */
+.score-chip {
+  display: inline-grid; justify-items: center; line-height: 1.1; min-width: 3.2rem; padding: 3px 8px; margin-left: 8px;
+  border-radius: 8px; border: 1px solid rgb(76 199 144 / .4); background: rgb(76 199 144 / .12);
+}
+.score-chip b { font-size: .95rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.score-chip small { font-size: .58rem; font-weight: 800; letter-spacing: .06em; color: var(--muted); }
+.score-chip.live { border-color: rgb(226 87 76 / .55); background: rgb(226 87 76 / .12); }
+.score-chip.live small { color: var(--stop); }
+.live-note { color: var(--muted); }
 .login-form { display: grid; gap: 10px; margin-top: 8px; }
 #ranks-view { scroll-margin-top: 8.5rem; } /* clear the sticky header */
 .view-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

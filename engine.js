@@ -453,6 +453,49 @@
     return {total: total, started: started, done: done};
   }
 
+  function etDate(ms) { return new Date(ms).toLocaleDateString('en-CA', {timeZone: 'America/New_York'}); }
+  function addDays(ymd, n) {
+    var d = new Date(ymd + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  /* The week the lineup screens are about. Once every game of `week` is over
+     and the Tuesday after its last game has come (Eastern time), the next week
+     takes over, even if Sleeper hasn't moved on yet: scores clear and the next
+     week's projections show. A game still to be played holds the week. */
+  function effectiveWeek(week, schedule, now) {
+    week = Number(week) || 1;
+    var games = (schedule || []).filter(function (g) { return Number(g.week) === week; });
+    var lastWeek = 0;
+    (schedule || []).forEach(function (g) { if (Number(g.week) > lastWeek) lastWeek = Number(g.week); });
+    if (!games.length || week >= lastWeek) return week;
+    var today = etDate(now || Date.now()), last = '';
+    for (var i = 0; i < games.length; i++) {
+      var st = String(games[i].status || 'pre_game'), date = String(games[i].date || '');
+      if (st === 'in_game') return week;
+      if (st !== 'complete' && date >= today) return week;
+      if (date > last) last = date;
+    }
+    if (!last) return week;
+    var tuesday = addDays(last, 1);
+    while (new Date(tuesday + 'T12:00:00Z').getUTCDay() !== 2) tuesday = addDays(tuesday, 1);
+    return today >= tuesday ? week + 1 : week;
+  }
+
+  /* Real points, in the league's own scoring, for players whose game has
+     started; everyone else's stay empty. `points` is keyed by Sleeper player id,
+     or by ESPN player id when `byEspn`. */
+  function applyPoints(d, points, byEspn) {
+    var n = 0;
+    d.roster.forEach(function (p) {
+      var v = points ? points[byEspn ? p.espnId : p.id] : undefined;
+      p.pts = p.locked && v !== undefined && v !== null && isFinite(Number(v)) ? round2(Number(v)) : null;
+      if (p.pts !== null) n++;
+    });
+    return n;
+  }
+
   /* ------------------------------------------------------ start/sit core */
 
   function rankKey(p) {
@@ -636,7 +679,7 @@
       });
     });
 
-    return {cfg: lg, roster: roster, startCount: starters.length, takenNorm: takenNorm, takenAbbr: takenAbbr};
+    return {cfg: lg, roster: roster, startCount: starters.length, takenNorm: takenNorm, takenAbbr: takenAbbr, rosterId: mine.roster_id};
   }
 
   /* Fresh injury tags (never cached — a Doubtful tag is only true for one week)
@@ -664,6 +707,8 @@
       d.roster.forEach(function (p) {
         var g = games[teamAbbr(p.team)];
         p.locked = !!(g && g.state !== 'pre');
+        p.game = g ? g.state : ''; // 'pre', 'in_game' or 'complete'
+        p.kick = g ? g.kick : '';  // the game's date (Eastern)
         if (p.locked) total++;
       });
     });
@@ -1064,7 +1109,7 @@
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
     trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
-    openSlots: openSlots, byeNeeds: byeNeeds
+    openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, applyPoints: applyPoints
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

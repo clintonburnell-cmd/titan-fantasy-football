@@ -128,12 +128,20 @@ exports.freezeCalls = onSchedule({
    league comes back slimmed to what Titan reads. */
 exports.espnLeague = onCall({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 30}, async req => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
-  const {leagueId, season, week} = req.data || {};
-  if (!/^\d{1,12}$/.test(String(leagueId)) || !/^\d{4}$/.test(String(season)) || (week !== undefined && !/^\d{1,2}$/.test(String(week)))) {
+  const {leagueId, season, week, kind, teamId} = req.data || {};
+  const points = kind === 'points';
+  if (!/^\d{1,12}$/.test(String(leagueId)) || !/^\d{4}$/.test(String(season)) || (week !== undefined && !/^\d{1,2}$/.test(String(week))) ||
+      (points && (!/^\d{1,2}$/.test(String(week)) || !/^\d{1,3}$/.test(String(teamId))))) {
     throw new HttpsError('invalid-argument', 'Not an ESPN league.');
   }
   const login = (await db.doc(`users/${req.auth.uid}/private/espn`).get()).data();
   if (!login || !login.s2) throw new HttpsError('failed-precondition', 'No ESPN login saved.');
+  // Live scores: one team's points so far this week.
+  if (points) {
+    const pts = await ESPN.fetchPoints(String(leagueId), String(season), Number(week), Number(teamId), {creds: login});
+    if (!pts) throw new HttpsError('unavailable', 'ESPN had no scores for that team.');
+    return pts;
+  }
   const r = await ESPN.fetchLeague(String(leagueId), String(season), {creds: login, week: week ? Number(week) : undefined});
   if (r.error === 'private') throw new HttpsError('permission-denied', 'private');
   if (r.error) throw new HttpsError('unavailable', r.error);

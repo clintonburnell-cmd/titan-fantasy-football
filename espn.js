@@ -184,14 +184,17 @@
         inj: INJ[pl.injuryStatus] || ''};
     };
 
-    var roster = [], startCount = 0, unmatched = 0;
+    // Points come with the league for the week it was read for (ESPN player ids).
+    var roster = [], startCount = 0, unmatched = 0, espnPoints = {};
     entries(mine).forEach(function (e) {
       var p = info(e), slot = SLOT[e.lineupSlotId] || '';
       var start = !!inLineup[slot];
+      var pe = e.playerPoolEntry || {};
       if (start) startCount++;
       if (!p.sid) unmatched++;
+      if (pe.appliedStatTotal !== undefined) espnPoints[e.playerId] = pe.appliedStatTotal;
       roster.push({
-        id: p.sid || ('espn:' + e.playerId), name: p.name, pos: p.pos, team: p.team,
+        id: p.sid || ('espn:' + e.playerId), espnId: e.playerId, name: p.name, pos: p.pos, team: p.team,
         start: start, slot: start ? slot : '', bye: byes[p.team] || '',
         inj: p.inj, outish: false, locked: false, held: slot === 'IR'
       });
@@ -205,7 +208,53 @@
         else takenNorm[SCC.norm(p.name)] = 1;
       });
     });
-    return {cfg: cfg, roster: roster, startCount: startCount, takenNorm: takenNorm, takenAbbr: takenAbbr, unmatched: unmatched};
+    return {cfg: cfg, roster: roster, startCount: startCount, takenNorm: takenNorm, takenAbbr: takenAbbr,
+      unmatched: unmatched, espnPoints: espnPoints};
+  }
+
+  /* One team's points so far this week (ESPN player ids), from the week's box
+     scores: much lighter than reading the whole league again. If ESPN's
+     week filter finds no matchup (a two-week playoff matchup), it asks again
+     without it. Private leagues go through Titan's server, like fetchLeague. */
+  async function fetchPoints(id, season, week, teamId, opts) {
+    opts = opts || {};
+    var url = BASE + season + '/segments/0/leagues/' + id + '?view=mBoxscore&scoringPeriodId=' + week;
+    var browser = typeof window !== 'undefined';
+    var filtered = {'x-fantasy-filter': JSON.stringify({schedule: {filterMatchupPeriodIds: {value: [Number(week)]}}})};
+    var status = 0;
+    for (var i = 0; i < 2; i++) {
+      var headers = i === 0 ? Object.assign({}, filtered) : {};
+      if (!browser && opts.creds && opts.creds.s2) headers.Cookie = cookieHeader(opts.creds);
+      try {
+        var res = await fetch(url, browser ? {cache: 'no-store', credentials: 'omit', headers: headers} : {headers: headers});
+        status = res.status;
+        if (!res.ok) break;
+        var pts = pointsFromBoxscore(await res.json(), teamId);
+        if (pts) return pts;
+      } catch (e) {
+        status = 0;
+        break;
+      }
+    }
+    if (browser && transport && (status === 401 || status === 0)) {
+      return transport({leagueId: String(id), season: String(season), week: Number(week), kind: 'points', teamId: Number(teamId)});
+    }
+    return null;
+  }
+
+  function pointsFromBoxscore(json, teamId) {
+    var out = null;
+    (json.schedule || []).forEach(function (m) {
+      [m.home, m.away].forEach(function (side) {
+        if (!side || Number(side.teamId) !== Number(teamId)) return;
+        out = out || {};
+        ((side.rosterForCurrentScoringPeriod || {}).entries || []).forEach(function (e) {
+          var pe = e.playerPoolEntry || {};
+          if (pe.appliedStatTotal !== undefined) out[e.playerId] = pe.appliedStatTotal;
+        });
+      });
+    });
+    return out;
   }
 
   /* Only the parts of a league Titan reads, so the server's answer for a
@@ -228,8 +277,8 @@
       teams: (json.teams || []).map(function (t) {
         return {id: t.id, name: t.name || '', location: t.location || '', nickname: t.nickname || '', owners: t.owners || [],
           roster: {entries: entries(t).map(function (e) {
-            var pl = (e.playerPoolEntry && e.playerPoolEntry.player) || {};
-            return {playerId: e.playerId, lineupSlotId: e.lineupSlotId, playerPoolEntry: {player: {
+            var pe = e.playerPoolEntry || {}, pl = pe.player || {};
+            return {playerId: e.playerId, lineupSlotId: e.lineupSlotId, playerPoolEntry: {appliedStatTotal: pe.appliedStatTotal, player: {
               fullName: pl.fullName || '', defaultPositionId: pl.defaultPositionId, proTeamId: pl.proTeamId, injuryStatus: pl.injuryStatus || ''}}};
           })}};
       })
@@ -239,6 +288,7 @@
   var api = {
     fetchLeague: fetchLeague, setTransport: setTransport, parseLeagueId: parseLeagueId, normSwid: normSwid,
     leagueCfg: leagueCfg, teamsOf: teamsOf, ownedTeam: ownedTeam, buildLeague: buildLeague, slimLeague: slimLeague,
+    fetchPoints: fetchPoints, pointsFromBoxscore: pointsFromBoxscore,
     SLOT: SLOT, POS: POS, TEAM: TEAM
   };
 

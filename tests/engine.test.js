@@ -129,4 +129,32 @@ check(!SCC.byeNeeds([noK], 1)[0].needs.some(x => x.need.includes('K')), 'a spot 
 const sf = {cfg: {key: 'S', lineup: ['QB', 'RB', 'WR', 'TE', 'SUPER_FLEX']}, roster: [P('Qa', 'QB', 6), P('Qb', 'QB', 7), P('R', 'RB', 9), P('W', 'WR', 9), P('T', 'TE', 10)]};
 const s = SCC.byeNeeds([sf], 1)[0];
 check(s.needs.find(x => x.week === 6).need.join() === 'SFLX' && s.needs.find(x => x.week === 9).need.sort().join() === 'RB,WR', 'superflex: a QB off leaves the superflex short');
+
+section('which week the lineups show');
+const g = (week, date, status) => ({week, date, status, home: 'KC', away: 'BUF'});
+const sched = [g(1, '2026-09-10', 'complete'), g(1, '2026-09-13', 'complete'), g(1, '2026-09-14', 'complete'),
+  g(2, '2026-09-20', 'pre_game'), g(3, '2026-09-27', 'pre_game')];
+const et = iso => Date.parse(iso);
+check(SCC.effectiveWeek(1, sched, et('2026-09-15T03:00:00Z')) === 1, 'Monday night after the last game (Eastern): still week 1, final scores');
+check(SCC.effectiveWeek(1, sched, et('2026-09-15T14:00:00Z')) === 2, 'Tuesday: week 2, upcoming projections');
+check(SCC.effectiveWeek(2, sched, et('2026-09-15T14:00:00Z')) === 2, 'Sleeper already on week 2: stays week 2');
+const live = sched.map(x => (x.date === '2026-09-14' ? Object.assign({}, x, {status: 'in_game'}) : x));
+check(SCC.effectiveWeek(1, live, et('2026-09-15T14:00:00Z')) === 1, 'a game still in progress holds the week');
+const postponed = sched.concat([g(1, '2026-09-15', 'pre_game')]);
+check(SCC.effectiveWeek(1, postponed, et('2026-09-15T14:00:00Z')) === 1, 'a game moved to Tuesday holds the week');
+const sundayWeek = [g(2, '2026-09-20', 'complete'), g(3, '2026-09-27', 'pre_game')];
+check(SCC.effectiveWeek(2, sundayWeek, et('2026-09-21T15:00:00Z')) === 2 && SCC.effectiveWeek(2, sundayWeek, et('2026-09-22T15:00:00Z')) === 3,
+  'a week ending Sunday still switches on Tuesday');
+check(SCC.effectiveWeek(3, sched, et('2026-12-30T15:00:00Z')) === 3, 'the last week never moves past the schedule');
+
+section('points for started players');
+const lk = {roster: [{id: '1', team: 'KC'}, {id: '2', team: 'NYJ'}, {id: 'SEA', team: 'SEA'}]};
+SCC.applyLocks([lk], {KC: {state: 'in_game', kick: '2026-09-13'}, NYJ: {state: 'pre', kick: '2026-09-14'}, SEA: {state: 'complete', kick: '2026-09-10'}});
+check(lk.roster[0].game === 'in_game' && lk.roster[0].kick === '2026-09-13' && lk.roster[1].locked === false && lk.roster[2].game === 'complete',
+  'each player knows whether his game is on, over or still to come');
+SCC.applyPoints(lk, {1: 12.345, 2: 5, SEA: 7});
+check(lk.roster[0].pts === 12.35 && lk.roster[1].pts === null && lk.roster[2].pts === 7, 'points land only on players whose game has started');
+const byEspn = {roster: [{id: '9', espnId: 3918298, locked: true}]};
+SCC.applyPoints(byEspn, {3918298: 21.4}, true);
+check(byEspn.roster[0].pts === 21.4, 'ESPN points match by ESPN player id');
 T.done();

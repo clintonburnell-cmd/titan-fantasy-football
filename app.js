@@ -164,6 +164,7 @@
       setProgress('');
       analyze();
       render();
+      scheduleLive();
     }
   }
 
@@ -175,6 +176,34 @@
     if (!S.snap || S.snap.week !== week) return;
     S.proj = map;
     if (S.ui.tab === 'lineups') render();
+  }
+
+  /* Scores while games are on: about every minute, while the app is open on
+     Lineups, a light update (the game clock and each league's points, ESPN's
+     larger box scores every other time) instead of a full refresh. It runs on
+     game days until the week's games are over. */
+  let liveTimer = 0, liveTick = 0;
+  const etToday = () => new Date().toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+  const rostered = () => (S.snap ? [].concat(...S.snap.leagues.map(d => d.roster)) : []);
+  const gamesLive = () => rostered().some(p => p.game === 'in_game');
+  const gameDay = () => { const t = etToday(); return rostered().some(p => p.game === 'in_game' || (p.game === 'pre' && p.kick === t)); };
+
+  function scheduleLive() {
+    clearTimeout(liveTimer);
+    if (!gameDay()) return;
+    liveTimer = setTimeout(async () => {
+      if (document.visibilityState === 'visible' && S.ui.tab === 'lineups' && !S.busy && S.snap) {
+        try {
+          await API.livePoints(S.snap, gamesLive() && liveTick++ % 2 === 0);
+          store.set(KEY.snap, S.snap);
+          analyze();
+          if (S.ui.tab === 'lineups' && !S.busy) render();
+        } catch (e) {
+          // The next tick tries again.
+        }
+      }
+      scheduleLive();
+    }, 60000);
   }
 
   /* A week's results, scored against the record the server job froze at each
@@ -316,6 +345,10 @@
     const nAction = A.leagues.filter(needsAction).length;
     const list = S.ui.filter === 'action' ? A.leagues.filter(needsAction) : A.leagues;
     let h = ranksBanner(A.ranks, S.snap.week);
+    if (gamesLive()) {
+      h += `<p class="fine live-note">Games are on: scores update about every minute while Lineups is open${
+        S.snap.pointsAt ? ` (last ${esc(when(S.snap.pointsAt))})` : ''}.</p>`;
+    }
     h += `<section class="tiles">
       ${tile(A.changes.length, A.changes.length === 1 ? 'lineup change' : 'lineup changes', A.changes.length ? 'swap' : 'ok')}
       ${tile(A.hurtStarters.length, A.hurtStarters.length === 1 ? 'injured starter' : 'injured starters', A.hurtStarters.length ? 'stop' : 'ok')}
@@ -338,12 +371,21 @@
 
   const projOf = (p, cfg) => SCC.projFor(S.proj, p.id, cfg.ppr);
 
-  // Sleeper's projection for the lineup as set, and for Titan's lineup when that differs.
+  // The lineup's points so far once games start, and Sleeper's projection for it
+  // (plus Titan's lineup's, before kickoff, when that differs).
   function projLine(L) {
-    const mine = SCC.sumProj(L.roster.filter(p => p.start).map(p => ({proj: projOf(p, L.cfg)})));
-    if (!mine) return '';
+    const starters = L.roster.filter(p => p.start);
+    const played = starters.filter(scored);
+    let s = '';
+    if (played.length) {
+      const pts = played.reduce((t, p) => t + p.pts, 0);
+      const final = starters.every(p => p.game === 'complete');
+      s = ` · ${final ? 'scored' : 'scored so far'} ${fmt(pts)}${starters.some(p => p.game === 'in_game') ? ' (live)' : ''}`;
+    }
+    const mine = SCC.sumProj(starters.map(p => ({proj: projOf(p, L.cfg)})));
+    if (!mine) return s;
     const titan = SCC.sumProj((L.opt || []).filter(o => o.p).map(o => ({proj: projOf(o.p, L.cfg)})));
-    return ` · projected ${fmt(mine)}${Math.abs(titan - mine) >= 0.1 ? `, Titan's lineup ${fmt(titan)}` : ''}`;
+    return s + ` · projected ${fmt(mine)}${!played.length && Math.abs(titan - mine) >= 0.1 ? `, Titan's lineup ${fmt(titan)}` : ''}`;
   }
 
   function leagueCard(L) {
@@ -376,8 +418,13 @@
     return `<span class="rank">${p.rank === null ? 'NR' : esc(rl(p))}${has(p.tier) ? `<small>T${esc(p.tier)}</small>` : ''}</span>`;
   }
 
+  // A started player's points: LIVE while his game is on, FINAL once it's over.
+  const scored = p => p.locked && typeof p.pts === 'number';
+  const scoreChip = p => `<span class="score-chip${p.game === 'in_game' ? ' live' : ''}"><b>${fmt(p.pts)}</b><small>${
+    p.game === 'in_game' ? 'LIVE' : 'FINAL'}</small></span>`;
+
   function statusText(p) {
-    const s = [p.locked && 'Locked', p.inj].filter(Boolean).join(' · ');
+    const s = [p.locked && !scored(p) && 'Locked', p.inj].filter(Boolean).join(' · ');
     return s ? ` · <span class="${p.outish ? 'bad' : 'warn'}">${esc(s)}</span>` : '';
   }
 
@@ -391,7 +438,7 @@
     const sub = [p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
     return `<li class="row r-${v}"><span class="slot">${esc(slotName(r.slot))}</span>${pos(p.pos)}
       <span class="who"><b>${esc(p.name)}</b><small>${esc(sub)}${statusText(p)}</small></span>
-      <span class="right">${rankCell(p)}<span class="verdict v-${v}">${esc(r.verdict)}</span></span></li>`;
+      <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : `<span class="verdict v-${v}">${esc(r.verdict)}</span>`}</span></li>`;
   }
 
   /* ---- News */
@@ -426,7 +473,7 @@
           const sub = [p.team, p.opp && 'vs ' + p.opp, has(p.implied) && 'implied ' + p.implied, p.bye && 'bye ' + p.bye].filter(Boolean).join(' · ');
           return `<li class="row${p.start ? ' is-start' : ''}"><span class="slot">${p.start ? 'START' : ''}</span>${pos(p.pos)}
             <span class="who"><b>${esc(p.name)}</b><small>${esc(sub)}${statusText(p)}</small></span>
-            <span class="right">${rankCell(p)}</span></li>`;
+            <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : ''}</span></li>`;
         }).join('')}</ul></article>`;
     }).join('');
     return h;
@@ -1135,5 +1182,5 @@
   analyze();
   render();
   if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS)) refresh();
-  else loadProj();
+  else { loadProj(); scheduleLive(); }
 })();

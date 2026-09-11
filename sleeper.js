@@ -196,19 +196,24 @@
     if (week < 1) week = 1;
     var season = state && state.season ? String(state.season) : String(new Date().getFullYear());
     var leagueSeason = state && state.league_season ? String(state.league_season) : season;
-    say('NFL ' + season + ', week ' + week + '.');
-
     progress('Finding your leagues…');
     var found = await Promise.all([
       account.userId ? discoverLeagues(account.userId, leagueSeason, prefs).catch(function () { return null; }) : [],
       getJson(SCHEDULE + season).catch(function () { return null; }),
-      loadPlayers(say),
-      Promise.all(espnLinks.map(function (l) {
-        return ESPN.fetchLeague(l.id, leagueSeason, {creds: opts.espnCreds, week: week})
-          .catch(function (e) { return {error: e.message || String(e)}; });
-      }))
+      loadPlayers(say)
     ]);
-    var all = found[0], sched = found[1], players = found[2], espnRes = found[3];
+    var all = found[0], sched = found[1], players = found[2];
+    // The schedule also settles the week: on the Tuesday after a week's last
+    // game Titan moves on, even if Sleeper hasn't yet. ESPN lineups are per
+    // week, so ESPN is read after this.
+    var sleeperWeek = week;
+    if (sched && sched.length) week = SCC.effectiveWeek(week, sched, Date.now());
+    say('NFL ' + season + ', week ' + week + '.' +
+      (week !== sleeperWeek ? ' Week ' + sleeperWeek + '\'s games are over, so Titan shows week ' + week + '.' : ''));
+    var espnRes = await Promise.all(espnLinks.map(function (l) {
+      return ESPN.fetchLeague(l.id, leagueSeason, {creds: opts.espnCreds, week: week})
+        .catch(function (e) { return {error: e.message || String(e)}; });
+    }));
     if (!all) {
       all = (known || []).filter(function (l) { return l.platform !== 'espn'; }).map(function (l) {
         var p = prefs[l.id];
@@ -294,7 +299,48 @@
     } else {
       say('No games have kicked off yet. Every slot is still editable.');
     }
+    if (lk.total) {
+      progress('Getting this week\'s scores…');
+      say(await attachPoints(live, week, season, false) + ' of them have points so far.');
+    }
     return snap;
+  }
+
+  /* This week's points for every rostered player whose game has started: each
+     Sleeper league's matchup, and each ESPN league's box score (or, straight
+     after a refresh, the points that came with the league). A league whose
+     points can't be read keeps the ones it had. Returns how many players have points. */
+  async function attachPoints(live, week, season, fresh, creds) {
+    var sets = await Promise.all(live.map(function (d) {
+      if (!d.roster.some(function (p) { return p.locked; })) return null;
+      if (d.cfg.platform === 'espn') {
+        if (!fresh) return d.espnPoints || null;
+        return ESPN.fetchPoints(d.cfg.espnId, season, week, d.cfg.teamId, {creds: creds}).catch(function () { return null; });
+      }
+      return getJson(API + '/league/' + d.cfg.id + '/matchups/' + week).then(function (ms) {
+        var m = (ms || []).filter(function (x) { return x.roster_id === d.rosterId; })[0];
+        return m ? m.players_points || {} : null;
+      }).catch(function () { return null; });
+    }));
+    var n = 0;
+    live.forEach(function (d, i) {
+      if (sets[i]) SCC.applyPoints(d, sets[i], d.cfg.platform === 'espn');
+      d.roster.forEach(function (p) { if (typeof p.pts === 'number') n++; });
+    });
+    return n;
+  }
+
+  /* Fresh scores for a week in progress, without a full refresh: the game
+     clock, then each league's points. Updates `snap` in place. `withEspn`
+     false skips ESPN's larger box scores this time. */
+  async function livePoints(snap, withEspn) {
+    var sched = await getJson(SCHEDULE + snap.season);
+    if (!sched || !sched.length) return 0;
+    SCC.applyLocks(snap.leagues, SCC.gameStates(sched, snap.week));
+    var leagues = withEspn === false ? snap.leagues.filter(function (d) { return d.cfg.platform !== 'espn'; }) : snap.leagues;
+    var n = await attachPoints(leagues, snap.week, snap.season, true);
+    snap.pointsAt = Date.now();
+    return n;
   }
 
   /* Rosters, matchups and the schedule for one week, for the Scorecard. */
@@ -344,7 +390,7 @@
 
   var api = {
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
-    collect: collect, collectScores: collectScores,
+    collect: collect, collectScores: collectScores, livePoints: livePoints,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
     fetchProjections: fetchProjections, PLAYERS_KEY: PLAYERS_KEY
   };

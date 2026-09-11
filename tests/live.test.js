@@ -37,6 +37,14 @@ if (!T.sleeperUser) {
   check(SCC.exposure(A.leagues).active === snap.leagues.length, 'exposure counts every team');
   check(SCC.byeNeeds(A.leagues, snap.week).length === snap.leagues.length, 'bye-week needs checked for every league');
 
+  section('scores');
+  const started = snap.leagues.reduce((t, d) => t + d.roster.filter(p => p.locked).length, 0);
+  const withPts = () => snap.leagues.reduce((t, d) => t + d.roster.filter(p => typeof p.pts === 'number').length, 0);
+  if (started) check(withPts() >= started * 0.8, `${withPts()} of ${started} started players have points`);
+  else T.skip('no rostered player\'s game has started this week, so there are no points yet');
+  const n = await API.livePoints(snap, true);
+  check(typeof n === 'number' && !!snap.pointsAt, `a live score update ran (${n} players with points)`);
+
   section('projections, kickoff record, Weeks');
   const proj = await API.fetchProjections(snap.season, snap.week);
   check(Object.keys(proj).length > 300, `${Object.keys(proj).length} projections for week ${snap.week}`);
