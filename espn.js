@@ -29,7 +29,8 @@
     21: 'PHI', 22: 'ARI', 23: 'PIT', 24: 'LAC', 25: 'SF', 26: 'SEA', 27: 'TB', 28: 'WAS', 29: 'CAR', 30: 'JAX',
     33: 'BAL', 34: 'HOU'};
   // ESPN's injury statuses, as the tags Sleeper uses.
-  var INJ = {QUESTIONABLE: 'Questionable', DOUBTFUL: 'Doubtful', OUT: 'Out', INJURY_RESERVE: 'IR', SUSPENSION: 'Sus'};
+  var INJ = {QUESTIONABLE: 'Questionable', DAY_TO_DAY: 'Questionable', DOUBTFUL: 'Doubtful', OUT: 'Out',
+    INJURY_RESERVE: 'IR', SUSPENSION: 'Sus'};
 
   // How a private league is read in the browser: Titan's server, with the
   // signed-in person's saved ESPN login. Set by sync.js.
