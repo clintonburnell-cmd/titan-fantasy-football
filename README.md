@@ -48,9 +48,9 @@ website (such as alerts) to pass review.
 
 | Screen | What it shows |
 |---|---|
-| Lineups | Each league's lineup as set in Sleeper, with a verdict on every slot, the changes to make, wire upgrades and injuries; chips at the top jump to any league |
-| Matchup | Each league's head-to-head this week: both teams' scores and projections, then your lineup and your opponent's spot by spot, with points, kickoff times and projections |
-| Rosters | Every rostered player per league, with rank, tier, opponent and bye; a player search (name, team or position) and chips that jump to any league |
+| Lineups | Each league's lineup as set, with a verdict on every slot, the changes to make, wire upgrades and injuries. Every player shows his Sleeper headshot and team logo, his kickoff time (in the viewer's time zone) and projection, and once his game starts, his points marked LIVE or FINAL. Tiles count lineup changes, injured starters, wire upgrades, and starters and bench players locked or yet to play; chips at the top jump to any league |
+| Matchup | Each league's head-to-head this week, collapsed to a header with both scores and a chance-to-win bar, like Sleeper's; open it for avatars, records, projected totals, and both lineups spot by spot with headshots, points, kickoff times and projections |
+| Rosters | Every rostered player per league with headshot, rank, tier, opponent, bye, kickoff time and live points; a player search (name, team or position) and chips that jump to any league |
 | Exposure | Players on two or more of your teams |
 | Byes | How many of your players are off each week, per league |
 | Results | Any week, 1 to 18: your score against the projection frozen at kickoff, what your rankings would have scored, and the perfect-hindsight score, with a drop-down per league showing each player's frozen rank, call, projection and points (Sleeper leagues; ESPN scoring is next) |
@@ -68,6 +68,20 @@ website (such as alerts) to pass review.
   DEF, plus basic IDP slots. Best-ball leagues start switched off, because
   Sleeper sets their lineups itself.
 - **Byes come from Sleeper's schedule**, so they stay right every season.
+- **A player whose game has started is left alone.** He shows LOCKED or his score, is
+  never swapped out, and no waiver pickup is offered over him; free agents whose game
+  has started aren't suggested either. New rankings that leave him out keep his old rank.
+- **Live scores**, in each league's own scoring, come from Sleeper's matchups and ESPN's
+  box scores. While games are on they update about every minute with Lineups open (every
+  couple of minutes on Matchup, and ESPN's larger box scores every other minute).
+- **The week moves on Tuesday.** Once a week's games are over, the Tuesday after the last
+  one (Eastern time) Titan shows the next week, even if Sleeper hasn't moved yet: scores
+  clear and the upcoming projections show. A game still to be played holds the week.
+- **Chance to win** on Matchup is Titan's estimate: points so far plus what each player's
+  projection still expects, with the uncertainty of points still to come
+  (`winProbability` in `engine.js`).
+- **Saved data carries a version.** An older snapshot on a device is refreshed on open,
+  so a new field (like kickoff times) never waits for a manual refresh.
 
 ## Where data lives
 
@@ -79,7 +93,10 @@ website (such as alerts) to pass review.
   link and league switches, and `users/{uid}/ranks/{week}` holds each week's
   rankings. `firestore.rules` lets only that signed-in person read or write
   their own data.
-- **Sleeper** is read directly from the device (`api.sleeper.app`).
+- **Sleeper** is read directly from the device (`api.sleeper.app`); player headshots,
+  team logos and avatars load from Sleeper's image server (`sleepercdn.com`).
+- **ESPN's public NFL schedule** (`proTeamSchedules_wl`) gives every kickoff time. The
+  device reads it for everyone, Sleeper-only users included, and keeps it 12 hours.
 - **ESPN** (`lm-api-reads.fantasy.espn.com`, the JSON ESPN's own site reads; not a
   documented API): public leagues are read from the device. Private leagues need the
   member's `espn_s2` and `SWID` cookies, which a browser can't send to ESPN, so the
@@ -145,7 +162,7 @@ https://titan-fantasy-football.web.app.
 ```
 index.html             Page shell
 styles.css             All styling
-engine.js              Start/sit, wire, exposure, bye and scorecard rules (pure; no page or network code)
+engine.js              Start/sit, wire, exposure, bye, scoring and win-chance rules (pure; no page or network code)
 sleeper.js             Sleeper API calls, league discovery, refresh and browser storage
 espn.js                ESPN leagues: reading them and matching their players to Sleeper's
 app.js                 Screens and interactions
@@ -188,3 +205,4 @@ No build step and no dependencies. It runs on any static host.
 | `v1.0.0` | Web app for any Sleeper account, Google sign-in sync, the website-only tip jar, the News tab, and the signed Android app |
 | `v1.1.0` | Renamed Titan Fantasy Football Manager; FantasyPros rankings; the full title on phones |
 | `v1.2.0` | Weeks tab (weeks 1 to 18, calls and projections frozen at kickoff by the server job), saved-rankings viewer, projections on Lineups, bye-week needs per league, ESPN leagues (public and private), and Link more leagues in Settings |
+| `v1.3.0` | Matchup tab like Sleeper's (collapsible leagues, scores and a chance-to-win bar, both lineups); live and final scores; the Tuesday week switch; kickoff times; headshots and team logos; game-status tiles; league jump chips and a Rosters player search; players whose game has started left alone; Weeks renamed Results; tests in the repo and CLAUDE.md |

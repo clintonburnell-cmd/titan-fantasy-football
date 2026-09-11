@@ -57,9 +57,11 @@
     <ul>
       <li><b>Sleeper</b> (<code>api.sleeper.app</code>): your device reads your leagues directly, the same information anyone can
         see on your public Sleeper profile. Titan has no password for your Sleeper account and cannot change your lineups,
-        make claims or trade. Projected points also come from Sleeper, which gets them from RotoWire.</li>
-      <li><b>ESPN</b> (<code>fantasy.espn.com</code>): only if you add ESPN leagues. Public leagues are read by your device directly;
-        private ones by Titan's server with the ESPN login you saved. Titan can't change your ESPN lineups either.</li>
+        make claims or trade. Projected points also come from Sleeper, which gets them from RotoWire, and player photos,
+        team logos and avatars load from Sleeper's image server (<code>sleepercdn.com</code>).</li>
+      <li><b>ESPN</b> (<code>fantasy.espn.com</code>): your device reads ESPN's public NFL schedule for kickoff times, which
+        sends nothing about you. If you add ESPN leagues, public ones are read by your device directly and private ones by
+        Titan's server with the ESPN login you saved. Titan can't change your ESPN lineups either.</li>
       <li><b>Google</b>: Firebase, for sign-in and sync if you choose to sign in, and for hosting the app.</li>
       <li><b>Ko-fi</b>: only if you tap the tip jar on the website. Tips are handled entirely by Ko-fi, and Titan never sees
         your payment details.</li>

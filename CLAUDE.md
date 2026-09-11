@@ -34,6 +34,12 @@ live site, so site changes reach it without a new upload. What's done and what's
 - A change to `engine.js`, `espn.js` or `sleeper.js` needs the functions redeployed too: the
   predeploy step copies them into `functions/shared/`.
 - Adding a file the app loads: add it to `SHELL` in `sw.js` and bump `CACHE`.
+- When a refresh's saved data gains a field the screens rely on, bump the snapshot version
+  (`v` in `collect`, `sleeper.js`) and the matching check at the end of `app.js`, so devices
+  holding an older snapshot refresh on open instead of showing gaps.
+- Live scores refresh without a full refresh (`livePoints`, `loadMatchups`, `scheduleLive`):
+  keep them light. ESPN's box score is ~230 KB, so it's fetched every other tick.
+- The Results tab's internal id is still `score`; only its label changed.
 - Show new ESPN or Yahoo features only once they work; don't promise them in the app or the listing.
 
 ## Writing (app text, README, store listing)
