@@ -274,7 +274,8 @@
         (d.unmatched ? ', ' + d.unmatched + ' not found in Sleeper\'s player list' : '') + '.');
     });
 
-    var snap = {at: Date.now(), week: week, season: season, available: all, byes: byes, leagues: live, log: log};
+    // v2: rosters carry what live scores need (roster ids, ESPN ids, the game clock).
+    var snap = {v: 2, at: Date.now(), week: week, season: season, available: all, byes: byes, leagues: live, log: log};
     if (!live.length) { say('No rosters loaded. Nothing to show.'); return snap; }
 
     progress('Checking injuries…');

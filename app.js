@@ -420,6 +420,7 @@
 
   // A started player's points: LIVE while his game is on, FINAL once it's over.
   const scored = p => p.locked && typeof p.pts === 'number';
+  const playDay = ymd => new Date(ymd + 'T12:00:00Z').toLocaleDateString('en-US', {weekday: 'short', timeZone: 'UTC'});
   const scoreChip = p => `<span class="score-chip${p.game === 'in_game' ? ' live' : ''}"><b>${fmt(p.pts)}</b><small>${
     p.game === 'in_game' ? 'LIVE' : 'FINAL'}</small></span>`;
 
@@ -435,7 +436,10 @@
     }
     const p = r.p, v = VERDICT[r.verdict] || 'ok';
     const proj = projOf(p, cfg);
-    const sub = [p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
+    // Until his game kicks off, the day it's played: that's when his points start showing.
+    const day = !p.locked && p.kick ? playDay(p.kick) : '';
+    const game = p.opp ? 'vs ' + p.opp + (day ? ' ' + day : '') : day;
+    const sub = [p.team, game, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
     return `<li class="row r-${v}"><span class="slot">${esc(slotName(r.slot))}</span>${pos(p.pos)}
       <span class="who"><b>${esc(p.name)}</b><small>${esc(sub)}${statusText(p)}</small></span>
       <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : `<span class="verdict v-${v}">${esc(r.verdict)}</span>`}</span></li>`;
@@ -1193,6 +1197,7 @@
   if (IN_PLAY_APP) document.querySelectorAll('[data-tip]').forEach(el => { el.hidden = true; });
   analyze();
   render();
-  if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS)) refresh();
+  // A snapshot saved by an older version lacks what live scores need, so it's refreshed.
+  if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS || (S.snap.v || 0) < 2)) refresh();
   else { loadProj(); scheduleLive(); }
 })();
