@@ -52,6 +52,9 @@
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const STANDALONE = navigator.standalone === true ||
     !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  // The Android app and home-screen copies keep the app look even on a wide
+  // screen; only a browser window gets the website look (styles.css).
+  document.documentElement.classList.toggle('in-app', IN_PLAY_APP || STANDALONE);
   const IOS_HINT_KEY = 'titan.iosHint.v1';
   const SHARE_ICON = '<svg class="share-ico" viewBox="0 0 24 24" aria-label="Share"><path d="M12 3v12M8 7l4-4 4 4" fill="none" ' +
     'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 10H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12' +
@@ -310,6 +313,7 @@
 
   function render() {
     paintHeader();
+    view.dataset.tab = S.account ? S.ui.tab : 'welcome'; // lets wide screens lay out each screen
     if (!S.account) { view.innerHTML = iosHint() + screenWelcome(); return; }
     const err = S.error ? `<div class="banner stop">${esc(S.error)}</div>` : '';
     view.innerHTML = `<h2 class="sr-only">${TAB_NAMES[S.ui.tab]}</h2>` + iosHint() + demoBanner() + err + SCREENS[S.ui.tab]();
@@ -512,7 +516,8 @@
         : `No leagues with ${esc(pickF.label.toLowerCase())} right now.`}</div>`;
     }
     const credit = Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper.</p>' : '';
-    return h + list.map(leagueCard).join('') + credit;
+    // Leagues sit two across on wide screens (.league-grid).
+    return h + (list.length ? `<div class="league-grid">${list.map(leagueCard).join('')}</div>` : '') + credit;
   }
 
   const projOf = (p, cfg) => SCC.projFor(S.proj, p.id, cfg.ppr);
@@ -764,7 +769,7 @@
     if (M.error) h += `<div class="banner stop">${esc(M.error)}</div>`;
     if (!M.data) return h + (M.busy ? '<div class="empty-note">Loading this week\'s matchups…</div>' : '');
     if (!M.data.length) return h + '<div class="empty-note">No leagues to show.</div>';
-    return h + foldTools('match') + M.data.map(matchCard).join('') +
+    return h + foldTools('match') + '<div class="league-grid">' + M.data.map(matchCard).join('') + '</div>' +
       (Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper. Chance to win is Titan\'s estimate from them and the points so far.</p>' : '');
   }
 
@@ -785,7 +790,7 @@
     if (shown.length > 1) h += jumpBar(shown.map(L => ({cfg: L.cfg})));
     if (shown.length) h += foldTools('roster');
     h += '<p class="empty-note" data-find-none hidden>No player on your rosters matches that.</p>';
-    h += shown.map(L => {
+    h += '<div class="league-grid">' + shown.map(L => {
       // Sleeper's order: the starters spot by spot, then the bench by position
       // (QB, RB, WR, TE, K, DEF, then IDP), best rank first, then IR and taxi.
       const byPos = (a, b) => posOrder(a.pos) - posOrder(b.pos) || SCC.rankKey(a) - SCC.rankKey(b) || a.name.localeCompare(b.name);
@@ -806,7 +811,7 @@
         <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></summary>
         <ul class="roster">${starters}${bench.length ? '<li class="rdiv">Bench</li>' + bench.map(p => row(p, 'BN')).join('') : ''}${
           held.length ? '<li class="rdiv">Reserve</li>' + held.map(p => row(p, p.heldAs || 'IR', 'held')).join('') : ''}</ul></details>`;
-    }).join('');
+    }).join('') + '</div>';
     return h;
   }
 

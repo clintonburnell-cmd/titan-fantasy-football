@@ -63,6 +63,11 @@ website (such as alerts) to pass review.
 
 ## Screens
 
+On computers and tablets, the app in a browser takes the website's look: its sections become a
+menu across the header, pages go up to 1200px wide with leagues two across on Lineups, Matchup and
+Rosters, Settings sits in two columns, and the footer is a row of links. Phones, the Android app and
+home-screen copies keep the app look.
+
 | Screen | What it shows |
 |---|---|
 | Website | titanfantasyfootball.com: a banner of a Titan lifting a football (`titan.svg`, also on the Play feature graphic), what Titan is, how importing rankings works, a sample lineup, features, privacy and FAQ, with Open Titan and Try a demo buttons, plus three guides under `/guides/` (importing rankings, Sleeper start/sit, adding a private ESPN league). The app itself is at `/app/`. In a browser the address always shows the website; only the Android app and home-screen copies go straight to the app. For search: a title and description with the platforms (Yahoo marked coming soon on the page), `robots.txt`, `sitemap.xml`, structured data (JSON-LD, FAQ included), a 1200 x 630 share image (`og-image.jpg`), and `/app/` marked noindex |

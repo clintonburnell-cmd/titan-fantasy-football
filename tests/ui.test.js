@@ -276,6 +276,19 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`[...document.querySelectorAll('.card.league h3')].some(h => /Titan Test League/.test(h.innerText))`, 60000) &&
     await ev(`[...document.scripts].some(s => /sync\\.js/.test(s.src))`), 'back in the app, the real leagues are untouched and sign-in loads');
 
+  T.section('on a computer');
+  await send('Emulation.setDeviceMetricsOverride', {width: 1280, height: 900, deviceScaleFactor: 1, mobile: false});
+  await sleep(400);
+  const desk = await ev(`({cols: getComputedStyle(document.querySelector('.league-grid')).gridTemplateColumns.split(' ').length,
+    menu: getComputedStyle(document.querySelector('#tabs [aria-current="page"]')).borderBottomStyle,
+    foot: getComputedStyle(document.querySelector('.foot-in')).display, wide: document.documentElement.scrollWidth <= innerWidth,
+    width: Math.round(document.getElementById('view').getBoundingClientRect().width)})`);
+  check(desk.cols === 2 && desk.menu === 'solid' && desk.foot === 'flex' && desk.wide,
+    `a computer gets the website look: a menu with the section underlined, leagues in ${desk.cols} columns (${desk.width}px wide), a footer row`);
+  await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 2, mobile: true});
+  await sleep(400);
+  check(await ev(`getComputedStyle(document.querySelector('.league-grid')).gridTemplateColumns.split(' ').length === 1`), 'a phone keeps one column');
+
   T.section('who the website sends to the app');
   const go = async url => { await send('Page.navigate', {url: ORIGIN + url}); await sleep(1500); return ev('location.pathname + location.search'); };
   check(await go('/') === '/' && await ev('!!document.querySelector(".hero h1")'), 'someone already using Titan who opens / still sees the website');

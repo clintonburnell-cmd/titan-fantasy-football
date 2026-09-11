@@ -107,8 +107,43 @@ main#view { min-height: 100vh; }
 }
 @keyframes pulse { 50% { opacity: .25; } }
 
-main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; }
+/* Rows stack at the top, even though the screen holds a full window's height. */
+main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: start; }
 .foot { padding-block: 8px 40px; color: var(--faint); font-size: .76rem; text-align: center; }
+.foot-in { display: grid; gap: 6px; justify-items: center; }
+.foot-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; }
+.foot-nav a { color: var(--muted); }
+.league-grid { display: grid; gap: 12px; align-items: start; min-width: 0; }
+
+/* ----------------------------------------------------- the website look
+   Wide browser windows (computers and tablets) get the website's look: a
+   header whose sections read as a menu, wider pages with leagues side by
+   side, and the website's footer. Phones, the Android app and home-screen
+   copies (html.in-app, set in app.js) keep the app look. */
+@media (min-width: 900px) {
+  html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .progress { max-width: 1200px; padding-inline: 24px; }
+  html:not(.in-app) .top-in { padding-block: 16px 4px; }
+  html:not(.in-app) .brand h1 { font-size: 1.14rem; }
+  html:not(.in-app) .tabs-in { gap: 28px; padding-block: 0; }
+  html:not(.in-app) .tabs button { padding: 12px 0 13px; border-radius: 0; font-size: .93rem; border-bottom: 2px solid transparent; }
+  html:not(.in-app) .tabs button:hover { background: none; }
+  html:not(.in-app) .tabs button[aria-current="page"] { background: none; color: var(--text); border-bottom-color: var(--accent-2); }
+  html:not(.in-app) main.wrap { gap: 16px; padding-block: 24px 48px; }
+  html:not(.in-app) .lede { max-width: 72ch; }
+  /* Reading pages keep a comfortable width; Settings sits in two columns. */
+  html:not(.in-app) main#view[data-tab="ranks"], html:not(.in-app) main#view[data-tab="news"],
+  html:not(.in-app) main#view[data-tab="exposure"] { max-width: 920px; }
+  html:not(.in-app) main#view[data-tab="settings"] { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  html:not(.in-app) main#view[data-tab="settings"] > :not(.card) { grid-column: 1 / -1; }
+  html:not(.in-app) .foot { border-top: 1px solid var(--line); padding-block: 26px 44px; text-align: left; font-size: .82rem; }
+  html:not(.in-app) .foot-in { display: flex; justify-content: space-between; align-items: center; gap: 12px 28px; flex-wrap: wrap; }
+  html:not(.in-app) .foot-nav { gap: 18px; }
+  html:not(.in-app) .foot-nav a { text-decoration: none; }
+  html:not(.in-app) .foot-nav a:hover { color: var(--text); }
+}
+@media (min-width: 1000px) {
+  html:not(.in-app) .league-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* -------------------------------------------------------------- welcome */
 
