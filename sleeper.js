@@ -442,7 +442,7 @@
      league's teamId (ESPN) marks the person's own team. */
   async function leagueTeams(lg, rosterId, season) {
     var players = await loadPlayers();
-    var slim = function (p) { return {id: p.id, espnId: p.espnId, name: p.name, pos: p.pos, team: p.team}; };
+    var slim = function (p) { return {id: p.id, espnId: p.espnId, name: p.name, pos: p.pos, team: p.team, held: !!p.held}; };
     if (lg.platform === 'espn') {
       var r = await ESPN.fetchLeague(lg.espnId, season);
       if (!r.json) throw new Error(r.error === 'private' ? 'it\'s private, so it needs your ESPN login (Settings)' : (r.error || 'could not read ESPN'));
@@ -454,20 +454,38 @@
           roster: (d.roster || []).map(slim)};
       });
     }
-    var got = await Promise.all(['/rosters', '/users'].map(function (p) { return getJson(API + '/league/' + lg.id + p); }));
+    // A dynasty league also brings its traded draft picks (a failure there just means no picks).
+    var dynasty = lg.kind === 'Dynasty';
+    var got = await Promise.all(['/rosters', '/users'].concat(dynasty ? ['/traded_picks'] : []).map(function (p) {
+      var job = getJson(API + '/league/' + lg.id + p);
+      return p === '/traded_picks' ? job.catch(function () { return []; }) : job;
+    }));
     var rosters = got[0] || [], who = {};
     var missing = missingIds(rosters.map(function (x) { return x.players; }), players);
     if (missing.length) await resolveMissing(missing, players);
     (got[1] || []).forEach(function (u) { who[u.user_id] = u; });
-    return rosters.map(function (x) {
-      var u = who[x.owner_id] || {};
+    var teams = rosters.map(function (x) {
+      var u = who[x.owner_id] || {}, held = {};
+      (x.reserve || []).concat(x.taxi || []).forEach(function (id) { held[String(id)] = 1; });
       return {id: String(x.roster_id), name: (u.metadata && u.metadata.team_name) || u.display_name || ('Team ' + x.roster_id),
         manager: u.display_name || '', mine: x.roster_id === rosterId,
         roster: (x.players || []).map(function (id) {
           var info = SCC.playerInfo(players, id);
-          return slim({id: String(id), name: info.name, pos: info.pos, team: info.team});
+          return slim({id: String(id), name: info.name, pos: info.pos, team: info.team, held: !!held[String(id)]});
         })};
     });
+    if (dynasty) {
+      // The next three drafts, which are the ones FantasyCalc prices.
+      var seasons = [1, 2, 3].map(function (n) { return String(Number(season) + n); }), name = {};
+      var picks = SCC.draftPicks(rosters.map(function (x) { return x.roster_id; }), got[2], seasons, lg.rounds);
+      teams.forEach(function (t) { name[t.id] = t.name; });
+      teams.forEach(function (t) {
+        t.picks = picks[Number(t.id)].map(function (p) {
+          return Object.assign(p, {via: String(p.from) === t.id ? '' : (name[String(p.from)] || 'Team ' + p.from)});
+        });
+      });
+    }
+    return teams;
   }
 
   /* One Sleeper league's matchup from its matchups, rosters and members. Each

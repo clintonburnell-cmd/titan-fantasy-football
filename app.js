@@ -1788,16 +1788,31 @@
     if (!me) return h + `<div class="empty-note">Titan couldn't find your team in ${esc(d.cfg.key)}.</div>`;
 
     const val = p => SCC.playerValue(V.idx, p), worth = p => (val(p) || {}).v || 0;
-    const give = P.give.map(id => me.roster.find(p => p.id === id)).filter(Boolean);
-    const get = partner ? P.get.map(id => partner.roster.find(p => p.id === id)).filter(Boolean) : [];
-    if (partner) h += tradeSummary(me, partner, give, get, worth);
-    return h + `<div class="trade-teams">${tradeRoster(me, 'give', val)}${partner ? tradeRoster(partner, 'get', val)
+    // Players and, in dynasty leagues, draft picks.
+    const assets = t => t.roster.concat(t.picks || []);
+    const give = P.give.map(id => assets(me).find(p => p.id === id)).filter(Boolean);
+    const get = partner ? P.get.map(id => assets(partner).find(p => p.id === id)).filter(Boolean) : [];
+    if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth);
+    return h + `<div class="trade-teams">${tradeRoster(d.cfg, me, 'give', val)}${partner ? tradeRoster(d.cfg, partner, 'get', val)
       : '<div class="card pad"><p class="lede">Pick a trade partner to see their roster.</p></div>'}</div>`;
   }
 
-  // One team's players, most valuable first. Tapping one puts it in the trade, or takes it out.
-  function tradeRoster(team, which, val) {
-    const picked = S.trade.pick[which];
+  // A team's draft picks in a dynasty league: Sleeper says who owns which, ESPN doesn't.
+  function tradePicks(cfg, team, which, val, picked) {
+    if (cfg.kind !== 'Dynasty') return '';
+    if (!team.picks) return '<p class="fine tnote">ESPN doesn\'t share who owns which draft picks, so picks can\'t be added here.</p>';
+    if (!team.picks.length) return '';
+    return '<div class="rdiv">Draft picks</div>' + team.picks.map(p => {
+      const x = val(p);
+      return `<button type="button" class="trow" data-trade="${which}" data-pid="${esc(p.id)}" aria-pressed="${picked.includes(p.id)}">
+        <span class="pphoto sm"><span class="hs tpick">R${p.round}</span></span><span class="who"><b>${esc(p.name)}</b><small>${
+          p.via ? 'from ' + esc(p.via) : 'own pick'}</small></span><span class="tval">${x ? thousands(x.v) : '–'}</span></button>`;
+    }).join('');
+  }
+
+  // One team's players, most valuable first, then its draft picks. Tapping one puts it in the trade, or takes it out.
+  function tradeRoster(cfg, team, which, val) {
+    const picked = S.trade.pick[which], picks = tradePicks(cfg, team, which, val, picked);
     const rows = team.roster.map(p => ({p, x: val(p)}))
       .sort((a, b) => ((b.x || {}).v || 0) - ((a.x || {}).v || 0) || a.p.name.localeCompare(b.p.name));
     return `<section class="card tteam"><header class="card-h"><div><h3>${esc(which === 'give' ? 'Your team' : team.name)}</h3>
@@ -1806,11 +1821,28 @@
         ${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}${
           x && x.pr ? ' · ' + esc(p.pos + x.pr) : ''}</small></span>
         <span class="tval">${x ? thousands(x.v) : '–'}${x && x.tr ? `<small class="${x.tr > 0 ? 'good' : 'amber'}" title="Change over the last 30 days">${
-          x.tr > 0 ? '▲' : '▼'} ${thousands(Math.abs(x.tr))}</small>` : ''}</span></button>`).join('')}</div></section>`;
+          x.tr > 0 ? '▲' : '▼'} ${thousands(Math.abs(x.tr))}</small>` : ''}</span></button>`).join('')}${picks}</div></section>`;
   }
 
-  // The trade so far: both sides, the verdict, a balance bar, and what would even it out.
-  function tradeSummary(me, partner, give, get, worth) {
+  /* Each team's best starting lineup by this week's projections (Sleeper's, in the
+     league's scoring), before and after the trade. Draft picks don't play. */
+  function lineupImpact(cfg, me, partner, give, get) {
+    if (!Object.keys(S.proj).length || !give.length || !get.length) return '';
+    const pts = p => SCC.projFor(S.proj, p.id, cfg.ppr) || 0;
+    const line = (team, out, inn) => {
+      const gone = new Set(out.map(p => p.id));
+      const before = SCC.lineupPoints(team.roster, cfg.lineup, pts);
+      const after = SCC.lineupPoints(team.roster.filter(p => !gone.has(p.id)).concat(inn), cfg.lineup, pts);
+      const d = Math.round((after - before) * 10) / 10;
+      return `<b>${fmt(before)}</b> → <b>${fmt(after)}</b> <span class="${d > 0 ? 'good' : d < 0 ? 'amber' : 'fine'}">(${d ? signed(d) : 'no change'})</span>`;
+    };
+    return `<div class="tlineup"><p><span class="tl-who">Your starters</span> ${line(me, give, get)}</p>
+      <p><span class="tl-who">${esc(partner.name)}'s starters</span> ${line(partner, get, give)}</p>
+      <p class="fine">Projected points for each team's best lineup this week, before and after the trade.</p></div>`;
+  }
+
+  // The trade so far: both sides, the verdict, a balance bar, what would even it out, and the lineups.
+  function tradeSummary(cfg, me, partner, give, get, worth) {
     const R = SCC.tradeVerdict(give.map(worth), get.map(worth)), any = give.length || get.length;
     const chips = (list, which) => list.length ? list.map(p => `<button type="button" class="chip tchip" data-trade="${which}" data-pid="${esc(p.id)}" title="Take out of the trade">${
       esc(p.name)} <small>${worth(p) ? thousands(worth(p)) : '–'}</small> ✕</button>`).join('') : '<span class="fine">Nobody yet</span>';
@@ -1839,7 +1871,7 @@
       </div>
       ${any ? `<div class="winbar" title="Each side's share of the trade, stars weighted"><span class="wp me${pg <= 50 ? ' up' : ''}">${100 - pg}%</span>
         <span class="wbar"><i class="wopp" style="width:${100 - pg}%"></i><i class="wme" style="width:${pg}%"></i></span><span class="wp opp${pg >= 50 ? ' up' : ''}">${pg}%</span></div>` : ''}
-      <p class="tverdict">${verdict}</p>${even}
+      <p class="tverdict">${verdict}</p>${even}${lineupImpact(cfg, me, partner, give, get)}
       <p class="fine">Stars count for more than their total, as in real trades: two players worth 5,000 weigh about 8,700 against one worth 10,000.${
         any ? ' <button class="link" data-action="trade-clear">Clear the trade</button>' : ''}</p>
     </section>`;

@@ -554,6 +554,13 @@ details.match > summary::-webkit-details-marker { display: none; }
 .ttot small { display: block; font-size: .72rem; font-weight: 600; color: var(--muted); }
 .trade-sum .chip small { color: var(--muted); font-weight: 600; }
 .tverdict { font-size: .95rem; }
+.tlineup { display: grid; gap: 4px; padding-top: 10px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.tlineup .tl-who { display: inline-block; min-width: 12rem; color: var(--muted); }
+.trows .rdiv { padding: 8px 14px 6px; border-top: 1px solid var(--line); font-size: .7rem; font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted); }
+.tnote { padding: 8px 14px 12px; border-top: 1px solid var(--line); }
+.pphoto .hs.tpick { display: flex; align-items: center; justify-content: center; font-size: .66rem; font-weight: 800; color: var(--accent-2);
+  box-shadow: inset 0 0 0 1px var(--line); }
 .bproj { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .board, .mrow { display: grid; grid-template-columns: minmax(0, 1fr) 3rem 2.4rem 3rem minmax(0, 1fr); align-items: center; column-gap: 6px; }
 .board { padding: 14px 12px; border-top: 1px solid var(--line); }

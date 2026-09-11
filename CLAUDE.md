@@ -61,7 +61,10 @@ live site, so site changes reach it without a new upload. What's done and what's
   Titan's server (the `tradeValues` function keeps each format in Firestore `tradeValues/{format}` for a
   day; the app reads `/api/trade-values`, never FantasyCalc), and credit FantasyCalc with a visible link
   to fantasycalc.com wherever the values show. Keep the credit line on the tab. The owner judged the tip
-  jar not commercial use; selling Titan would need FantasyCalc's written permission.
+  jar not commercial use; selling Titan would need FantasyCalc's written permission. The trade summary
+  also shows each team's best lineup by this week's projections before and after (`SCC.lineupPoints`),
+  and dynasty Sleeper leagues list each team's next three drafts' picks (`SCC.draftPicks` from
+  `/traded_picks`, rounds 1 to 4) at FantasyCalc's plain pick values; ESPN doesn't share pick trades.
 - Every league name shows `leagueIcon(cfg)`: the league's picture (`cfg.pic`: Sleeper's league avatar,
   or your team's logo in an ESPN league, kept through `slimLeague`) with a lettered site badge in the
   corner (not the sites' logos), or a plain football when there's no picture. Give Yahoo a `pic` too.

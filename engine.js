@@ -187,6 +187,7 @@
         ppr: l.scoring_settings ? Number(l.scoring_settings.rec || 0) : 0,
         kind: s.type === 2 ? 'Dynasty' : s.type === 1 ? 'Keeper' : 'Redraft',
         bestBall: bestBall,
+        rounds: Number(s.draft_rounds) || 0, // draft rounds, for a dynasty league's picks (Trade tab)
         status: l.status || '',
         active: pref.active !== undefined ? !!pref.active : !bestBall,
         exposure: true
@@ -223,9 +224,11 @@
     return {bySleeper: bySleeper, byEspn: byEspn};
   }
 
-  // A player's value entry: ESPN players by their ESPN id first, everyone by Sleeper id. Null: no value.
+  // A player's value entry: a draft pick by its FantasyCalc id (vid), ESPN players by their
+  // ESPN id first, everyone else by Sleeper id. Null: no value.
   function playerValue(idx, p) {
     if (!idx || !p) return null;
+    if (p.vid) return idx.bySleeper[p.vid] || null;
     var e = p.espnId !== undefined && p.espnId !== null ? idx.byEspn[String(p.espnId)] : null;
     return e || idx.bySleeper[String(p.id)] || null;
   }
@@ -252,6 +255,43 @@
     var fair = big === 0 || Math.abs(diff) <= FAIR * big;
     return {give: a, get: b, diff: diff, fair: fair, winner: fair ? 'even' : diff > 0 ? 'you' : 'them',
       even: fair ? 0 : Math.pow(Math.pow(big, STAR) - Math.pow(small, STAR), 1 / STAR)};
+  }
+
+  /* A roster's best starting lineup by projected points, for the Trade tab's before and
+     after. Players on IR or the taxi squad can't start, and draft picks don't play.
+     `proj(p)` gives a player's points. */
+  function lineupPoints(roster, slots, proj) {
+    var pool = (roster || []).filter(function (p) { return !p.held && p.pos !== 'PICK'; })
+      .map(function (p) { return {id: p.id, pos: p.pos, pts: Number(proj(p)) || 0}; });
+    return sumPts(bestByPoints(pool, slots || []));
+  }
+
+  var ROUND_NAME = ['', '1st', '2nd', '3rd', '4th'];
+  /* Who owns which future draft picks in a Sleeper league: every team its own, moved by
+     Sleeper's traded picks ({season, round, roster_id: the team it started with, owner_id:
+     the team holding it now}). Seasons and rounds are the ones FantasyCalc prices (rounds
+     1 to 4). Where a future pick will fall isn't known, so it takes FantasyCalc's plain
+     value for its season and round (vid FP_2027_1). */
+  function draftPicks(rosterIds, traded, seasons, rounds) {
+    var owner = {}, out = {};
+    rounds = Math.min(Number(rounds) || 4, 4);
+    rosterIds.forEach(function (r) {
+      out[r] = [];
+      seasons.forEach(function (y) { for (var n = 1; n <= rounds; n++) owner[y + '|' + n + '|' + r] = r; });
+    });
+    (traded || []).forEach(function (t) {
+      var k = t.season + '|' + t.round + '|' + t.roster_id;
+      if (owner[k] !== undefined && out[t.owner_id]) owner[k] = t.owner_id;
+    });
+    Object.keys(owner).forEach(function (k) {
+      var bits = k.split('|'), y = bits[0], n = Number(bits[1]), from = Number(bits[2]);
+      out[owner[k]].push({id: 'pick:' + y + ':' + n + ':' + from, vid: 'FP_' + y + '_' + n, name: y + ' ' + ROUND_NAME[n],
+        pos: 'PICK', season: y, round: n, from: from});
+    });
+    rosterIds.forEach(function (r) {
+      out[r].sort(function (a, b) { return a.season - b.season || a.round - b.round || a.from - b.from; });
+    });
+    return out;
   }
 
   function slotLabel(slot) { return SLOT_LABEL[slot] || slot; }
@@ -1436,6 +1476,7 @@
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, tradeSide: tradeSide, tradeVerdict: tradeVerdict,
+    lineupPoints: lineupPoints, draftPicks: draftPicks,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor,

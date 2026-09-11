@@ -266,6 +266,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'a player from each side gets totals and a verdict: ' + await text('.trade-sum .tverdict'));
   check(await ev(`[...document.querySelectorAll('.trade-sum *')].every(el => el.getBoundingClientRect().right <= document.querySelector('.trade-sum').getBoundingClientRect().right + 1)`),
     'on a phone the trade fits inside its card (nothing cut off on the right)');
+  check(await ev(`document.querySelectorAll('.trade-sum .tlineup p').length === 3`),
+    'each team\'s projected starters, before and after: ' + (await text('.trade-sum .tlineup')).replace(/\s+/g, ' ').slice(0, 90));
 
   if (T.sleeperUser) {
     T.section('linking Sleeper as well');
