@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Titan Fantasy Football Manager",
   "short_name": "Titan",
-  "description": "Start/sit calls, waiver upgrades, exposure and bye weeks across every Sleeper league you play in, ordered by your own rankings.",
+  "description": "One place to manage every Sleeper and ESPN league you play. Import your own rankings and get start/sit calls, swaps and waiver upgrades based on them.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -1,12 +1,14 @@
 # Titan Fantasy Football Manager
 
-Start/sit calls, waiver upgrades, exposure and bye weeks across every Sleeper
-and ESPN league you play in, ordered by your own rankings, or by Sleeper's weekly
-projections until you import some.
+One place to manage every fantasy football league you play, across Sleeper and ESPN,
+with start/sit calls built on rankings you import yourself.
 
-Link a Sleeper username (no password needed) and add ESPN leagues by ID. Titan
-finds your leagues and their lineup formats, then compares the lineups you have
-set with the ones your rankings would start.
+Titan is built for two things. First, one stop for all your leagues: link a Sleeper
+username (no password needed) and add ESPN leagues by ID, and every league's lineup,
+matchup, roster, injuries, byes and live scores sit together. Second, your own rankings:
+import them as a CSV (your own spreadsheet, Late-Round, FantasyPros, The Hall) and Titan
+compares every lineup with the one your rankings would start, then lists the swaps and
+waiver pickups to make. Until you import, it uses Sleeper's weekly projections.
 
 It grew out of a personal tool, the Sleeper Command Center, and uses the same
 start/sit rules, made to work for any Sleeper account.

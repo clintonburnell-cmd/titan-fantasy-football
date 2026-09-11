@@ -276,7 +276,7 @@
 
   function paintHeader() {
     const s = S.snap, a = S.account;
-    $('meta').textContent = !a ? 'Start/sit for every Sleeper and ESPN league'
+    $('meta').textContent = !a ? 'Every Sleeper and ESPN league, your rankings'
       : s ? `${a.displayName} · Week ${s.week} · updated ${when(s.at)}`
       : `${a.displayName} · not pulled yet`;
     const b = $('refresh');
@@ -331,7 +331,7 @@
     return `<section class="welcome">
       <img src="icon.svg" alt="" width="76" height="76">
       <h2>Titan Fantasy Football Manager</h2>
-      <p class="lede">Start/sit calls, waiver upgrades, exposure and bye weeks across every league you play on Sleeper and ESPN, ordered by your own rankings.</p>
+      <p class="lede">One place to manage every league you play on Sleeper and ESPN. Import your own rankings, and Titan tells you who to start, who to sit and who to pick up, based on them.</p>
       <form class="card pad" data-form="link" novalidate>
         <label class="field block"><span>Your Sleeper username</span>
           <input name="username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"
@@ -343,9 +343,9 @@
       <p class="fine">Play on ESPN? <button class="link" data-action="espn-start">Add an ESPN league instead</button>, and link Sleeper later if you like.</p>
       <div class="sync-welcome" data-sync-slot="welcome">${syncWelcome()}</div>
       <ol class="how">
-        <li><b>Link</b> your Sleeper username, and your leagues and lineup formats load automatically.</li>
-        <li><b>Import</b> your weekly rankings as a CSV, or start with Titan's defaults from Sleeper's projections.</li>
-        <li><b>Follow</b> the calls: who to start, who to swap, who's on the wire.</li>
+        <li><b>Link</b> your Sleeper username and add your ESPN leagues. Every league loads with its own lineup format and scoring.</li>
+        <li><b>Import</b> your own weekly rankings as a CSV. Until you do, Titan uses Sleeper's projections.</li>
+        <li><b>Follow</b> the calls your rankings make: who to start, who to swap, who's on the wire.</li>
       </ol>
     </section>`;
   }
@@ -947,8 +947,8 @@
     const cur = S.snap ? S.snap.week : 1;
     if (!S.draft.week) S.draft.week = cur;
     const weeks = Object.keys(S.ranks.weeks).map(Number).sort((a, b) => b - a);
-    return `<p class="lede">Until you import rankings for a week, Titan uses its default rankings: Sleeper's weekly projections, in each league's own scoring.
-      Once you import, yours take over, and the defaults only fill positions your file leaves out. ${S.sync.user
+    return `<p class="lede">Import your own rankings and Titan makes every call from them.
+      Until you import for a week, it uses default rankings (Sleeper's weekly projections, in each league's own scoring), and those also fill any position your file leaves out. ${S.sync.user
         ? 'Imported rankings sync to your devices through your Google sign-in, and only you can see them.'
         : 'Imported rankings are kept on this device and never shared. Sign in on Settings to sync them to your other devices.'}</p>
       <section class="card pad"><h3>Saved rankings</h3>${weeks.length ? `<ul class="saved">${weeks.map(w => {
