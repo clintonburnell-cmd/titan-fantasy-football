@@ -518,14 +518,14 @@
     if (side()) { sideItems = items; return ''; }
     if (!chips || items.length < 2) return '';
     return `<nav class="jump" aria-label="Jump to a league">${items.map(x => `<button type="button" class="jump-chip" data-jump="${anchor(x.cfg)}">${
-      x.flag ? '<i class="dot" title="Needs action"></i>' : ''}${esc(x.cfg.key)}</button>`).join('')}</nav>`;
+      x.flag ? '<i class="dot" title="Needs action"></i>' : ''}${leagueIcon(x.cfg, 'xs')}${esc(x.cfg.key)}</button>`).join('')}</nav>`;
   }
   function sideNav(items) {
     // When some leagues have a needs-action dot, the others keep an empty slot so the names line up.
     const dots = items.some(x => x.flag);
     return `<nav class="side" aria-label="Your leagues"><p class="side-h">${plural(items.length, 'league')}</p>${items.map(x =>
       `<button type="button" class="side-link" data-jump="${anchor(x.cfg)}">${x.flag ? '<i class="dot" title="Needs action"></i>'
-        : dots ? '<i class="dot off" aria-hidden="true"></i>' : ''}<span>${
+        : dots ? '<i class="dot off" aria-hidden="true"></i>' : ''}${leagueIcon(x.cfg)}<span class="sl-name">${
         esc(x.cfg.key)}<small>${siteName(x.cfg)}</small></span></button>`).join('')}</nav>`;
   }
   // The sidebar marks the league at the top of the window as the page scrolls.
@@ -620,7 +620,20 @@
   }
 
   // Where a league's lineup is set: the team's page on Sleeper or ESPN.
-  const siteName = cfg => cfg.platform === 'espn' ? 'ESPN' : 'Sleeper';
+  const siteName = cfg => cfg.platform === 'espn' ? 'ESPN' : cfg.platform === 'yahoo' ? 'Yahoo' : 'Sleeper';
+  /* A league's own picture (its Sleeper avatar, or your team's logo in an ESPN league) with a
+     small badge for its site in the corner, like the team logo on a player's headshot. With no
+     picture, or one that fails to load, a plain football shows (as Sleeper shows its default).
+     size 'xs' is smaller, without the badge. */
+  const SITE_LETTER = {sleeper: 'S', espn: 'E', yahoo: 'Y'};
+  const BALL = '<svg viewBox="0 0 24 24" width="62%" height="62%"><g transform="rotate(-40 12 12)"><ellipse cx="12" cy="12" rx="10.5" ry="6.2" fill="currentColor"/>' +
+    '<path d="M8.5 12h7M10 10.4v3.2M12 10.4v3.2M14 10.4v3.2" stroke="var(--surface-2)" stroke-width="1.3" stroke-linecap="round"/></g></svg>';
+  function leagueIcon(cfg, size = '') {
+    const site = SITE_LETTER[cfg.platform] ? cfg.platform : 'sleeper';
+    return `<span class="licon${size ? ' ' + size : ''}" aria-hidden="true"><span class="lini">${BALL}</span>${
+      cfg.pic ? `<img src="${esc(cfg.pic)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}${
+      size === 'xs' ? '' : `<i class="lsite s-${site}" title="${siteName(cfg)}">${SITE_LETTER[site]}</i>`}</span>`;
+  }
   function lineupUrl(cfg) {
     if (cfg.platform !== 'espn') return `https://sleeper.com/leagues/${encodeURIComponent(cfg.id)}/team`;
     const team = cfg.teamId !== null && cfg.teamId !== undefined ? `&teamId=${encodeURIComponent(cfg.teamId)}` : '';
@@ -635,7 +648,7 @@
       : L.moves.length ? ['swap', plural(L.moves.length, 'change')]
       : ['ok', 'Set'];
     let h = `<details class="card league fold" ${foldAttrs('lineup', L.cfg)}>
-      <summary class="card-h"><div><h3>${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg)) + projLine(L)}</p></div><span class="pill p-${st[0]}">${st[1]}</span></summary>`;
+      <summary class="card-h"><div><h3>${leagueIcon(L.cfg)}${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg)) + projLine(L)}</p></div><span class="pill p-${st[0]}">${st[1]}</span></summary>`;
     if (L.moves.length) {
       // A starter changing spots shows where he goes or comes from, and when he plays.
       h += `<div class="moves"><div class="moves-h"><h4>Make these changes in ${siteName(L.cfg)}</h4>${openSite(L.cfg)}</div>${L.moves.map(m => `
@@ -793,7 +806,7 @@
   }
 
   function matchCard(m) {
-    const head = `<header class="card-h"><div><h3>${esc(m.cfg.key)}</h3><p>${esc(SCC.describeLeague(m.cfg))}</p></div></header>`;
+    const head = `<header class="card-h"><div><h3>${leagueIcon(m.cfg)}${esc(m.cfg.key)}</h3><p>${esc(SCC.describeLeague(m.cfg))}</p></div></header>`;
     if (m.error) return `<article class="card league">${head}<p class="note">Couldn't load this matchup: ${esc(m.error)}</p></article>`;
     if (m.none) return `<article class="card league">${head}<p class="note">No matchup this week.</p></article>`;
     const a = sideTotals(m.me, m.cfg), b = sideTotals(m.opp, m.cfg);
@@ -812,7 +825,7 @@
         <span class="wp me${pa >= pb ? ' up' : ''}">${pa}%</span><span class="wbar"><i class="wme" style="width:${pa}%"></i><i class="wopp" style="width:${pb}%"></i></span>
         <span class="wp opp${pb > pa ? ' up' : ''}">${pb}%</span></div>` : '';
     return `<details class="card match" ${foldAttrs('match', m.cfg)}>
-      <summary class="mhead"><div class="mh-top"><span class="sname">${esc(m.cfg.key)}</span>${status}</div>
+      <summary class="mhead"><div class="mh-top"><span class="sname">${leagueIcon(m.cfg)}${esc(m.cfg.key)}</span>${status}</div>
         <div class="mh-score"><span class="mh-name">${esc(m.me.name)}</span><b class="mh-pts${lead(a, b)}">${fmt(a.pts)}</b>
           <b class="mh-pts${lead(b, a)}">${fmt(b.pts)}</b><span class="mh-name opp">${esc(m.opp.name)}</span></div>${bar}</summary>
       <div class="board">${team(m.me, 'me')}${projected(a, 'me')}<span class="vs">VS</span>${projected(b, 'opp')}${team(m.opp, 'opp')}</div>
@@ -875,7 +888,7 @@
       const starters = L.rows.map(r => (r.p ? row(r.p, slotName(r.slot))
         : `<li class="row r-stop" data-find=" "><span class="slot">${esc(slotName(r.slot))}</span><span class="pphoto"><span class="hs"></span></span>
           <span class="who"><b>Empty</b></span><span class="right"></span></li>`)).join('');
-      return `<details class="card roster-card fold" ${foldAttrs('roster', L.cfg)}><summary class="card-h"><div><h3>${esc(L.cfg.key)}</h3>
+      return `<details class="card roster-card fold" ${foldAttrs('roster', L.cfg)}><summary class="card-h"><div><h3>${leagueIcon(L.cfg)}${esc(L.cfg.key)}</h3>
         <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></summary>
         <ul class="roster">${starters}${bench.length ? '<li class="rdiv">Bench</li>' + bench.map(p => row(p, 'BN')).join('') : ''}${
           held.length ? '<li class="rdiv">Reserve</li>' + held.map(p => row(p, p.heldAs || 'IR', 'held')).join('') : ''}</ul></details>`;
@@ -901,7 +914,7 @@
     const divider = label => `<tr class="rdiv"><td colspan="${cols}">${label}</td></tr>`;
     const starters = L.rows.map(r => (r.p ? cell(r.p, slotName(r.slot))
       : `<tr class="r-stop" data-find=" "><td><span class="slot">${esc(slotName(r.slot))}</span></td><td colspan="${cols - 1}"><b>Empty</b></td></tr>`)).join('');
-    return `<details class="card roster-card fold" ${foldAttrs('roster', L.cfg)}><summary class="card-h"><div><h3>${esc(L.cfg.key)}</h3>
+    return `<details class="card roster-card fold" ${foldAttrs('roster', L.cfg)}><summary class="card-h"><div><h3>${leagueIcon(L.cfg)}${esc(L.cfg.key)}</h3>
       <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></summary>
       <div class="table-wrap"><table class="rtable"><thead><tr><th>Spot</th><th>Player</th><th>Team</th>${hasOpp ? '<th>Opp</th>' : ''}<th>Kickoff</th>
         <th class="tnum">Rank</th><th class="tnum">Proj</th><th class="tnum">Pts</th></tr></thead>
@@ -989,7 +1002,7 @@
         : '<div class="banner ok">Every lineup is covered through the byes.</div>'}
       <div class="card table-wrap"><table class="byes">
       <thead><tr><th>Week</th>${B.weeks.map(w => `<th>${w}</th>`).join('')}<th>Total</th></tr></thead><tbody>
-      ${B.rows.map((r, i) => `<tr${N[i].needs.length ? ' class="has-needs"' : ''}><th title="${esc(r.name)}">${esc(r.key)}</th>${
+      ${B.rows.map((r, i) => `<tr${N[i].needs.length ? ' class="has-needs"' : ''}><th title="${esc(r.name)}">${leagueIcon(cfgByKey(r.key), 'xs')}${esc(r.key)}</th>${
         B.weeks.map(w => cell(r.counts[w] || 0)).join('')}<td class="tot">${r.total}</td></tr>${needRow(N[i], B.weeks.length + 2)}`).join('')}
       <tr class="all"><th>All teams</th>${B.weeks.map(w => cell(B.totals[w] || 0)).join('')}<td class="tot"></td></tr>
       </tbody></table></div>`;
@@ -1048,7 +1061,7 @@
     if (D.skipped.length) h += `<p class="fine">Skipped: ${esc(D.skipped.join('; '))}</p>`;
     if (D.rows.length) h += foldTools('score');
     h += D.rows.map(r => `<details class="card score" ${foldAttrs('score', cfgByKey(r.key))}><summary>
-        <span class="sname">${esc(r.key)}</span>
+        <span class="sname">${leagueIcon(cfgByKey(r.key))}${esc(r.key)}</span>
         <span class="n"><small>Actual</small>${fmt(r.actual)}</span>
         <span class="n"><small>Projected</small>${r.projActual ? fmt(r.projActual) : 'None'}</span>
         <span class="n${r.projActual && !D.provisional ? (r.vsProj >= 0 ? ' good' : ' amber') : ''}"><small>vs proj</small>${
@@ -1429,7 +1442,7 @@
         <p class="fine">Your Sleeper leagues are found automatically and your ESPN leagues are the ones you added, each with its own lineup format. Switch off any you don't want Titan to manage.</p>
         ${all.length ? `<ul class="lg-list">${all.map(l => `<li><label class="check">
           <input type="checkbox" data-league="${esc(l.id)}" ${l.active ? 'checked' : ''}>
-          <span><b>${esc(l.key)}</b><small>${esc(SCC.describeLeague(l))} · ${esc(l.lineup.map(slotName).join(' '))}</small></span></label></li>`).join('')}</ul>
+          <span><b>${leagueIcon(l)}${esc(l.key)}</b><small>${esc(SCC.describeLeague(l))} · ${esc(l.lineup.map(slotName).join(' '))}</small></span></label></li>`).join('')}</ul>
           <div class="bar"><button class="btn" data-action="leagues-save">Save and refresh</button></div>`
         : `<p class="muted">${S.busy ? 'Loading…' : 'No leagues yet. Tap Refresh.'}</p>`}
       </section>

@@ -107,9 +107,12 @@
     var pref = (prefs || {})[id] || {};
     var name = cleanName(s.name) || ('ESPN league ' + json.id);
     var teamId = link && link.teamId !== undefined && link.teamId !== null ? Number(link.teamId) : null;
+    // ESPN leagues have no picture of their own; Titan shows your team's logo, as ESPN does.
+    var mine = teamId === null ? null : (json.teams || []).filter(function (t) { return Number(t.id) === teamId; })[0];
+    var logo = mine && /^https?:\/\//.test(mine.logo || '') ? String(mine.logo).replace(/^http:/, 'https:') : '';
     return {
       id: id, platform: 'espn', espnId: String(json.id), teamId: teamId,
-      key: name, name: name, lineup: lineupOf(s),
+      key: name, name: name, pic: logo, lineup: lineupOf(s),
       teams: Number(s.size) || (json.teams || []).length, ppr: pprOf(s),
       kind: s.draftSettings && Number(s.draftSettings.keeperCount) > 0 ? 'Keeper' : 'Redraft',
       bestBall: false, status: '',
@@ -349,7 +352,7 @@
         return {id: m.id, displayName: m.displayName || '', firstName: m.firstName || '', lastName: m.lastName || ''};
       }),
       teams: (json.teams || []).map(function (t) {
-        return {id: t.id, name: t.name || '', location: t.location || '', nickname: t.nickname || '', owners: t.owners || [],
+        return {id: t.id, name: t.name || '', location: t.location || '', nickname: t.nickname || '', owners: t.owners || [], logo: t.logo || '',
           roster: {entries: entries(t).map(function (e) {
             var pe = e.playerPoolEntry || {}, pl = pe.player || {};
             return {playerId: e.playerId, lineupSlotId: e.lineupSlotId, playerPoolEntry: {appliedStatTotal: pe.appliedStatTotal, player: {

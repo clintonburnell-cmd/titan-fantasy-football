@@ -27,6 +27,12 @@ const {check, section} = T;
   const sfc = ESPN.leagueCfg(SF, {id: SF.id, teamId: 2}, {'espn:99999902': {active: false}});
   check(sfc.lineup.join(' ') === 'QB RB RB WR WR TE FLEX SUPER_FLEX K DEF' && sfc.active === false && sfc.ppr === 1,
     'superflex lineup, full PPR, switched off by the person\'s choice');
+  const withLogo = Object.assign({}, L1, {teams: L1.teams.map(t => Object.assign({}, t, {logo: 'http://example.com/logo-' + t.id + '.png'}))});
+  check(ESPN.leagueCfg(withLogo, {id: L1.id, teamId: 3}, {}).pic === 'https://example.com/logo-3.png' && cfg.pic === '' &&
+    ESPN.leagueCfg(withLogo, {id: L1.id}, {}).pic === '', 'the league picture is your team\'s logo (made https); none without a logo or a team');
+  check(ESPN.slimLeague(withLogo).teams[2].logo === 'http://example.com/logo-3.png', 'the server keeps team logos for private leagues');
+  check(SCC.leaguesFromSleeper([{league_id: '1', name: 'A', avatar: 'abc'}, {league_id: '2', name: 'B'}]).map(l => l.pic).join('|') ===
+    'https://sleepercdn.com/avatars/thumbs/abc|', 'a Sleeper league keeps its own picture');
 
   section('roster');
   const d = ESPN.buildLeague(cfg, L1, players);

@@ -222,7 +222,8 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .side-link { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; cursor: pointer;
   font: inherit; font-size: .86rem; font-weight: 600; line-height: 1.3; color: var(--muted);
   background: none; border: 0; border-left: 2px solid transparent; border-radius: 0 8px 8px 0; padding: 8px 12px; }
-.side-link span { display: grid; gap: 1px; min-width: 0; }
+.side-link .sl-name { display: grid; gap: 1px; min-width: 0; }
+.side-link .licon { margin-right: 0; }
 .side-link small { font-size: .7rem; font-weight: 500; color: var(--faint); }
 .side-link:hover { color: var(--text); background: var(--surface); }
 .side-link.on { color: var(--text); background: var(--surface); border-left-color: var(--accent-2); }
@@ -563,6 +564,22 @@ details.match > summary::-webkit-details-marker { display: none; }
 .pphoto .tl { position: absolute; right: -4px; bottom: -3px; width: 42%; height: 42%; border-radius: 50%; object-fit: contain;
   background: var(--surface); padding: 1px; box-shadow: 0 0 0 1px var(--line); }
 .pphoto.sm { width: 30px; }
+/* A league's picture with its site's badge in the corner (leagueIcon in app.js); its
+   initials sit underneath and show when there's no picture. The badges are plain letters in
+   a colour per site, not the sites' logos. */
+/* The margins make room for the badge inside names that crop what spills out (ellipsis). */
+.licon { position: relative; display: inline-block; flex: none; width: 26px; height: 26px; margin: 3px 8px 4px 0; vertical-align: middle; }
+.licon img, .licon .lini { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.licon .lini { display: flex; align-items: center; justify-content: center; background: var(--surface-2); color: var(--muted);
+  font-size: .58rem; font-weight: 800; letter-spacing: .02em; line-height: 1; box-shadow: inset 0 0 0 1px var(--line); }
+.licon .lsite { position: absolute; right: -4px; bottom: -3px; width: 13px; height: 13px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; font-style: normal; font-size: 8px; font-weight: 900; line-height: 1; color: #fff;
+  box-shadow: 0 0 0 2px var(--surface); }
+.lsite.s-sleeper { background: #12a594; }
+.lsite.s-espn { background: #cc0000; }
+.lsite.s-yahoo { background: #6001d2; }
+.licon.xs { width: 18px; height: 18px; margin-right: 6px; }
+.licon.xs .lini { font-size: .48rem; }
 .slot[data-pos="QB"] { color: #fc2b6d; }
 .slot[data-pos="RB"] { color: #20ceb8; }
 .slot[data-pos="WR"] { color: #59a7ff; }

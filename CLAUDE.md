@@ -57,6 +57,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   to `html:not(.in-app)`, so phones, the Android app and home-screen copies keep the app look.
   Check new screens at 390px and at 1280px. On computers Rosters draws tables (`rosterTable`,
   when `wide()`); keep `data-find` on every row so the player search still works.
+- Every league name shows `leagueIcon(cfg)`: the league's picture (`cfg.pic`: Sleeper's league avatar,
+  or your team's logo in an ESPN league, kept through `slimLeague`) with a lettered site badge in the
+  corner (not the sites' logos), or a plain football when there's no picture. Give Yahoo a `pic` too.
 - Screens have addresses under `/app/` (`SLUG` in `app.js`; `firebase.json` rewrites `/app/**` to
   the app page, and the UI test's server does the same). A new screen needs a slug.
 - The demo (`DEMO` in `app.js`) uses its own storage names and never loads `sync.js`, so it can't

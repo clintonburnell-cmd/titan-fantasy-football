@@ -181,6 +181,7 @@
       var pref = prefs[l.league_id] || {};
       return {
         id: String(l.league_id), key: key, name: name,
+        pic: l.avatar ? 'https://sleepercdn.com/avatars/thumbs/' + l.avatar : '', // the league's own picture
         lineup: (l.roster_positions || []).filter(function (p) { return !NOT_STARTERS[p]; }),
         teams: l.total_rosters || s.num_teams || 0,
         ppr: l.scoring_settings ? Number(l.scoring_settings.rec || 0) : 0,

@@ -309,6 +309,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     return s.querySelectorAll('[data-jump]').length === cards.length && !document.querySelector('.jump') &&
       s.getBoundingClientRect().right < cards[0].getBoundingClientRect().left && getComputedStyle(s).position === 'sticky'; })()`;
   check(await waitFor(sideOk, 5000), 'Lineups list the leagues down the left side, beside the cards, with the filters still on top');
+  check(await ev(`(() => { const cards = document.querySelectorAll('.card.league'); return cards.length > 0 &&
+    [...cards].every(c => c.querySelector('h3 .licon .lsite') && c.querySelector('h3 .licon .lini svg')) &&
+    [...document.querySelectorAll('.side [data-jump]')].every(b => b.querySelector('.licon')); })()`),
+    'each league shows its picture (or a football) with a badge for its site, on the cards and in the sidebar');
   if (await ev(`document.querySelectorAll('.side [data-jump]').length > 1`)) {
     await ev(`document.querySelectorAll('.side [data-jump]')[1].click(); true`);
     check(await waitFor(`document.querySelectorAll('.side [data-jump]')[1].classList.contains('on')`, 4000),
