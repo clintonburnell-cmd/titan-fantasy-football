@@ -43,6 +43,8 @@ live site, so site changes reach it without a new upload. What's done and what's
 - Adding a file the app loads: add it to `SHELL` in `sw.js` and bump `CACHE`.
 - The Android app opens `/?source=play`. The website's forward to `/app/` (with the query) must
   keep working, or the Play app shows the website instead of the app.
+- Titan's owner is the one sign-in account with the `titanOwner` custom claim. `ownerStats`
+  refuses everyone else and returns totals only: never add per-person details to it.
 - The demo (`DEMO` in `app.js`) uses its own storage names and never loads `sync.js`, so it can't
   overwrite a real account or reach Firestore. Keep new storage, sync and server calls behind it.
 - When a refresh's saved data gains a field the screens rely on, bump the snapshot version

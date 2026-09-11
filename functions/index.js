@@ -13,6 +13,7 @@ const logger = require('firebase-functions/logger');
 const zlib = require('zlib');
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore} = require('firebase-admin/firestore');
+const {getAuth} = require('firebase-admin/auth');
 const SCC = require('./shared/engine.js');
 const API = require('./shared/sleeper.js');
 const ESPN = require('./shared/espn.js');
@@ -155,5 +156,42 @@ exports.espnLeague = onCall({region: 'us-central1', memory: '256MiB', maxInstanc
   return ESPN.slimLeague(r.json);
 });
 
+/* Totals for Titan's owner (the one account with the titanOwner custom
+   claim): sign-ins, what people linked, who imported rankings or turned on
+   alerts. Only counts leave the database, never anyone's details. */
+function countStats(now, authUsers, accounts, withRankings, alertsOn) {
+  const WEEK = 7 * 24 * 3600 * 1000;
+  const s = {accounts: authUsers.length, newThisWeek: 0, activeThisWeek: 0, sleeper: 0, espnPeople: 0, espnLeagues: 0,
+    withRankings, alertsOn, at: now};
+  authUsers.forEach(u => {
+    const m = u.metadata || {};
+    if (now - Date.parse(m.creationTime) < WEEK) s.newThisWeek++;
+    if (now - Date.parse(m.lastRefreshTime || m.lastSignInTime || 0) < WEEK) s.activeThisWeek++;
+  });
+  accounts.forEach(a => {
+    if (a.userId) s.sleeper++;
+    const n = ((a.espn && a.espn.leagues) || []).length;
+    if (n) { s.espnPeople++; s.espnLeagues += n; }
+  });
+  return s;
+}
+
+exports.ownerStats = onCall({region: 'us-central1', memory: '256MiB', maxInstances: 2, timeoutSeconds: 60}, async req => {
+  if (!req.auth || req.auth.token.titanOwner !== true) throw new HttpsError('permission-denied', 'Only Titan\'s owner can see these totals.');
+  const authUsers = [];
+  let page = null;
+  do {
+    page = await getAuth().listUsers(1000, page ? page.pageToken : undefined);
+    authUsers.push(...page.users);
+  } while (page.pageToken);
+  const users = await db.collection('users').get();
+  const accounts = users.docs.map(d => d.get('account') || {});
+  const withRankings = new Set((await db.collectionGroup('ranks').select().get()).docs.map(d => d.ref.parent.parent.id)).size;
+  const alertRefs = users.docs.map(d => d.ref.collection('private').doc('alerts'));
+  const alertDocs = alertRefs.length ? await db.getAll(...alertRefs) : [];
+  const alertsOn = alertDocs.filter(d => d.exists && Object.keys(d.get('tokens') || {}).length).length;
+  return countStats(Date.now(), authUsers, accounts, withRankings, alertsOn);
+});
+
 // For local testing without Cloud Scheduler.
-exports._test = {run, freezeForUser, ranksFor, playerMap, pack, unpack};
+exports._test = {run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats};

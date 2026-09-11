@@ -48,6 +48,8 @@ const weekDoc = (uid, w) => doc(db, 'users', uid, 'ranks', String(w));
 const espnDoc = uid => doc(db, 'users', uid, 'private', 'espn');
 // Private ESPN leagues are read by Titan's server with that login (functions/index.js).
 const readEspnLeague = httpsCallable(getFunctions(app, 'us-central1'), 'espnLeague');
+// Totals for Titan's owner only; the server refuses everyone else.
+const readOwnerStats = httpsCallable(getFunctions(app, 'us-central1'), 'ownerStats');
 const ESPN = window.EspnAPI;
 const why = e => (e && (e.code || e.message)) || String(e);
 let listeners = [];
@@ -138,6 +140,10 @@ const api = {
     return (entry ? setDoc(weekDoc(u.uid, week), entry) : deleteDoc(weekDoc(u.uid, week))).catch(saveFailed);
   },
 
+  ownerStats() {
+    return readOwnerStats().then(r => r.data);
+  },
+
   /* A week's frozen record of Titan's calls, saved by the server job at each
      kickoff, or null if there isn't one. */
   async getHistory(week) {
@@ -189,6 +195,7 @@ onAuthStateChanged(auth, user => {
     if (ESPN) ESPN.setTransport(null);
     App.setEspnLogin(null);
     App.setSync({user: null, state: 'off', at: 0});
+    App.setOwner(false);
     return;
   }
   if (ESPN) ESPN.setTransport(args => readEspnLeague(args).then(r => r.data));
@@ -196,6 +203,8 @@ onAuthStateChanged(auth, user => {
   getDoc(espnDoc(user.uid)).then(s => App.setEspnLogin(s.exists() ? {saved: true, swid: s.data().swid, savedAt: s.data().savedAt} : null))
     .catch(() => App.setEspnLogin(null));
   App.setSync({user: {name: user.displayName || '', email: user.email || '', photo: user.photoURL || ''}});
+  // Titan's owner (a custom claim on that one account) gets the stats card in Settings.
+  user.getIdTokenResult(true).then(t => App.setOwner(t.claims.titanOwner === true)).catch(() => App.setOwner(false));
   reconcile(user.uid).catch(e => App.setSync({state: 'error', error: 'Sync failed: ' + why(e)}));
 });
 

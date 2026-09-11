@@ -41,6 +41,14 @@ function fakeUser(db) {
   section('helpers');
   check(job.ranksFor({1: rows}, 1) === rows && job.ranksFor({1: rows}, 3) === rows && job.ranksFor({2: ['x']}, 1)[0] === 'x' && job.ranksFor({}, 1).length === 0,
     'ranksFor: that week, else the latest earlier week, else the only week, else none');
+  const now = Date.parse('2026-09-11T12:00:00Z'), day = 24 * 3600 * 1000;
+  const iso = ms => new Date(ms).toUTCString();
+  const st = job.countStats(now,
+    [{metadata: {creationTime: iso(now - 2 * day), lastRefreshTime: iso(now - day)}},
+      {metadata: {creationTime: iso(now - 30 * day), lastSignInTime: iso(now - 20 * day)}}],
+    [{userId: '1'}, {espn: {leagues: [{id: 'a'}, {id: 'b'}]}}, {}], 2, 1);
+  check(st.accounts === 2 && st.newThisWeek === 1 && st.activeThisWeek === 1 && st.sleeper === 1 && st.espnPeople === 1 &&
+    st.espnLeagues === 2 && st.withRankings === 2 && st.alertsOn === 1, 'owner stats: accounts, new and active this week, and what people linked');
   const gz = job.pack(players);
   check(JSON.stringify(job.unpack(new Uint8Array(gz))) === JSON.stringify(players) && gz.length < 900000,
     `the cached player list round-trips gzipped (${Math.round(gz.length / 1024)} KB, Firestore allows 1 MB)`);

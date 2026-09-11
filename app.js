@@ -76,6 +76,7 @@
     espn: {busy: false, error: '', pick: null, login: null, openLogin: false}, // adding ESPN leagues
     match: {busy: false, data: null, error: '', at: 0, week: 0}, // this week's matchups, loaded on the Matchup tab
     rosterQuery: '', // the Rosters page's player search
+    owner: {is: false, busy: false, data: null, error: ''}, // Titan's owner: the stats card in Settings
     proj: {}, // Sleeper's projections for the snapshot's week
     projAt: 0, // when they were last fetched (0: not yet this visit)
     view: {week: 0, pos: 'QB'} // the saved rankings open on the Rankings tab
@@ -1311,7 +1312,7 @@
             autocorrect="off" spellcheck="false" value="${esc(S.link.name || '')}" ${S.link.busy ? 'disabled' : ''}></label>
           <button class="btn" type="submit" ${S.link.busy ? 'disabled' : ''}>${S.link.busy ? 'Finding you…' : 'Link Sleeper'}</button></form>
         ${S.link.error ? `<div class="banner stop">${esc(S.link.error)}</div>` : ''}`;
-    let h = `<section class="card pad" data-sync-slot="settings">${syncSettings()}</section>
+    let h = `<section class="card pad" data-sync-slot="settings">${syncSettings()}</section>${S.owner.is ? ownerCard() : ''}
       <section class="card pad" id="link-leagues">${linkLeagues(sleeper)}</section>
       <section class="card pad"><h3>Leagues</h3>
         <p class="fine">Your Sleeper leagues are found automatically and your ESPN leagues are the ones you added, each with its own lineup format. Switch off any you don't want Titan to manage.</p>
@@ -1375,6 +1376,34 @@
     if (S.sync.api && S.sync.user) S.sync.api.pushWeek(w, S.ranks.weeks[w] || null);
   }
 
+  /* Titan's owner only: totals from the server (ownerStats), never anyone's details. */
+  function ownerCard() {
+    const o = S.owner, d = o.data;
+    const rows = d ? [['Signed-in accounts', d.accounts], ['New in the last 7 days', d.newThisWeek], ['Active in the last 7 days', d.activeThisWeek],
+      ['Sleeper linked', d.sleeper], ['ESPN leagues added', `${d.espnLeagues} (by ${d.espnPeople})`], ['Rankings imported', d.withRankings],
+      ['Alerts turned on', d.alertsOn]] : [];
+    return `<section class="card pad"><h3>Titan stats</h3>
+      <p class="fine">Only you see this. Totals for people who signed in with Google (anyone using Titan without signing in isn't counted), and nothing about anyone in particular.</p>
+      ${o.error ? `<div class="banner stop">${esc(o.error)}</div>` : ''}
+      ${rows.length ? `<ul class="stats">${rows.map(r => `<li><span>${esc(r[0])}</span><b>${esc(r[1])}</b></li>`).join('')}</ul>` : ''}
+      <button class="btn ghost small" data-action="owner-stats" ${o.busy ? 'disabled' : ''}>${o.busy ? 'Counting…' : d ? 'Count again' : 'Show the numbers'}</button></section>`;
+  }
+
+  async function loadOwnerStats() {
+    if (!S.sync.api || S.owner.busy) return;
+    S.owner.busy = true;
+    S.owner.error = '';
+    render();
+    try {
+      S.owner.data = await S.sync.api.ownerStats();
+    } catch (e) {
+      S.owner.error = 'Could not count: ' + ((e && (e.code || e.message)) || e);
+    } finally {
+      S.owner.busy = false;
+      render();
+    }
+  }
+
   function syncSettings() {
     const s = S.sync;
     const head = '<h3>Sync across your devices</h3>';
@@ -1420,6 +1449,11 @@
   // The bridge sync.js talks to. The app never depends on it being there.
   window.TitanApp = {
     local: () => ({account: S.account, ranks: S.ranks}),
+    setOwner(is) {
+      if (S.owner.is === !!is) return;
+      S.owner = {is: !!is, busy: false, data: null, error: ''};
+      if (S.ui.tab === 'settings') render();
+    },
     applyAccount(account) {
       const newUser = !S.account || S.account.userId !== account.userId;
       const newPrefs = !newUser && (JSON.stringify(S.account.prefs || {}) !== JSON.stringify(account.prefs || {}) ||
@@ -1515,6 +1549,7 @@
     else if (a === 'leagues-save') saveLeagues();
     else if (a === 'unlink') unlink();
     else if (a === 'players-reload') { API.clearPlayers(); refresh(); }
+    else if (a === 'owner-stats') loadOwnerStats();
     else if (a === 'ios-hint-close') { store.set(IOS_HINT_KEY, 1); render(); }
     else if (a === 'sync-in' && S.sync.api) {
       S.sync.api.signIn().catch(e => window.TitanApp.setSync({state: 'error', error: 'Sign-in failed: ' + (e.code || e.message)}));
