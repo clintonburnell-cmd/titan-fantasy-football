@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Titan Fantasy Football Manager</title>
   <script>
-    // The website is for new visitors. Anyone already using Titan goes straight
-    // to the app at /app/: a saved account on this device, a copy installed on
-    // the home screen, or the Android app (it opens /?source=play). /?home always
-    // shows the website. The old GitHub Pages address forwards here.
+    // In a browser, titanfantasyfootball.com always shows the website; Open Titan
+    // leads to the app at /app/. Only the Android app (it opens /?source=play)
+    // and copies installed on a home screen go straight to the app, and /?home
+    // shows the website even there. The old GitHub Pages address forwards here.
     (function () {
       var q = location.search;
       if (location.hostname === 'clintonburnell-cmd.github.io') {
@@ -19,9 +19,7 @@
       var play = /[?&]source=play\b/.test(q) || document.referrer.indexOf('android-app://') === 0;
       var installed = navigator.standalone === true ||
         (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-      var linked = false;
-      try { linked = !!JSON.parse(localStorage.getItem('titan.account.v1') || 'null'); } catch (e) {}
-      if (play || installed || linked) location.replace('/app/' + q + location.hash);
+      if (play || installed) location.replace('/app/' + q + location.hash);
     })();
   </script>
   <meta name="description" content="One place to manage every Sleeper and ESPN league you play. Import your own rankings and get start/sit calls, swaps and waiver upgrades based on them.">

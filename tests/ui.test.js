@@ -247,7 +247,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   T.section('who the website sends to the app');
   const go = async url => { await send('Page.navigate', {url: ORIGIN + url}); await sleep(1500); return ev('location.pathname + location.search'); };
-  check(await go('/') === '/app/', 'someone already using Titan who opens / lands in the app');
+  check(await go('/') === '/' && await ev('!!document.querySelector(".hero h1")'), 'someone already using Titan who opens / still sees the website');
   check(await go('/?home') === '/?home' && await ev('!!document.querySelector(".hero h1")'), '/?home shows the website even so');
   check(await go('/?source=play') === '/app/?source=play', 'the Android app\'s address (/?source=play) goes straight to the app');
   await waitFor('!!document.querySelector("#tabs")', 20000);
