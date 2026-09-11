@@ -488,6 +488,39 @@
     return teams;
   }
 
+  /* A league's regular season for the Standings tab: {teams: [{id, name}], games:
+     [{week, a, b, aPts, bPts, done}], playoffTeams}. A week before `week` counts as
+     played. Sleeper: the rosters, members and each week's matchups up to the playoffs
+     (roster ids are the team ids, as in leagueTeams). ESPN: the league's schedule. */
+  async function leagueSchedule(lg, season, week) {
+    if (lg.platform === 'espn') return ESPN.fetchSchedule(lg.espnId, season, week);
+    var last = (Number(lg.playoffStart) || 15) - 1, paths = ['/rosters', '/users'];
+    for (var w = 1; w <= last; w++) paths.push('/matchups/' + w);
+    var got = await Promise.all(paths.map(function (p, i) {
+      var job = getJson(API + '/league/' + lg.id + p);
+      return i < 2 ? job : job.catch(function () { return []; });
+    }));
+    var who = {}, games = [];
+    (got[1] || []).forEach(function (u) { who[u.user_id] = u; });
+    got.slice(2).forEach(function (list, i) {
+      var pairs = {};
+      (list || []).forEach(function (m) {
+        if (m.matchup_id !== null && m.matchup_id !== undefined) (pairs[m.matchup_id] = pairs[m.matchup_id] || []).push(m);
+      });
+      Object.keys(pairs).forEach(function (k) {
+        var p = pairs[k];
+        if (p.length === 2) {
+          games.push({week: i + 1, a: String(p[0].roster_id), b: String(p[1].roster_id),
+            aPts: Number(p[0].points) || 0, bPts: Number(p[1].points) || 0, done: i + 1 < Number(week)});
+        }
+      });
+    });
+    return {teams: (got[0] || []).map(function (x) {
+      var u = who[x.owner_id] || {};
+      return {id: String(x.roster_id), name: (u.metadata && u.metadata.team_name) || u.display_name || ('Team ' + x.roster_id)};
+    }), games: games, playoffTeams: Number(lg.playoffTeams) || 6};
+  }
+
   /* One Sleeper league's matchup from its matchups, rosters and members. Each
      side's starters come in lineup order (Sleeper's `starters` follows it). */
   function sleeperMatchup(lg, rosterId, matchups, rosters, users, players) {
@@ -638,7 +671,7 @@
   var api = {
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
     collect: collect, collectScores: collectScores, livePoints: livePoints,
-    collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams,
+    collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
     fetchProjections: fetchProjections, PLAYERS_KEY: PLAYERS_KEY
   };

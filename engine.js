@@ -188,6 +188,9 @@
         kind: s.type === 2 ? 'Dynasty' : s.type === 1 ? 'Keeper' : 'Redraft',
         bestBall: bestBall,
         rounds: Number(s.draft_rounds) || 0, // draft rounds, for a dynasty league's picks (Trade tab)
+        // The playoffs (Standings) and the waiver budget, when the league bids for players (Waivers).
+        playoffStart: Number(s.playoff_week_start) || 0, playoffTeams: Number(s.playoff_teams) || 0,
+        faab: Number(s.waiver_type) === 2 ? Number(s.waiver_budget) || 0 : 0,
         status: l.status || '',
         active: pref.active !== undefined ? !!pref.active : !bestBall,
         exposure: true
@@ -312,6 +315,110 @@
       out[r].sort(function (a, b) { return a.season - b.season || a.round - b.round || a.from - b.from; });
     });
     return out;
+  }
+
+  /* ------------------------------------------------------------ standings */
+
+  // A seeded random number source (mulberry32), so the same league gives the same odds every time.
+  function seeded(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = Math.imul(a ^ (a >>> 15), a | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function normal(rand) { return Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand()); }
+
+  /* A league's standings, all-play records, luck, power rankings and playoff odds.
+     teams: [{id, name}]; games: the regular season's [{week, a, b, aPts, bPts, done}]
+     (a and b are team ids); proj: {teamId: this week's projected points for the team's
+     best lineup} (optional); opts: {playoffTeams, sims, seed}.
+     - Records and points come from the games played (a tie is half a win). Seeds go by
+       wins, then points for, as Sleeper and ESPN break ties by default.
+     - All-play: each week, a team's score against every other team's that week. Luck is
+       actual wins minus the wins that all-play rate would have given.
+     - The games left are simulated `sims` times: each team scores around its expected
+       points (its average so far, with this week's projection counting like four games),
+       give or take the league's usual swing (18% of an average score). Division winners
+       aren't modeled.
+     - Power ranks all-play rate, points per game and expected points, each against the
+       league (before any games, expected points alone). */
+  function standings(teams, games, proj, opts) {
+    opts = opts || {};
+    proj = proj || {};
+    var ids = teams.map(function (t) { return String(t.id); }), T = {}, byWeek = {};
+    teams.forEach(function (t) {
+      T[String(t.id)] = {id: String(t.id), name: t.name, w: 0, l: 0, t: 0, pf: 0, pa: 0, g: 0, apW: 0, apL: 0, apT: 0};
+    });
+    (games || []).forEach(function (m) {
+      var a = T[String(m.a)], b = T[String(m.b)];
+      if (!a || !b || !m.done) return;
+      var ap = Number(m.aPts) || 0, bp = Number(m.bPts) || 0;
+      a.g++; b.g++; a.pf += ap; b.pf += bp; a.pa += bp; b.pa += ap;
+      if (ap > bp) { a.w++; b.l++; } else if (bp > ap) { b.w++; a.l++; } else { a.t++; b.t++; }
+      var wk = byWeek[m.week] = byWeek[m.week] || {};
+      wk[a.id] = ap; wk[b.id] = bp;
+    });
+    Object.keys(byWeek).forEach(function (week) {
+      var s = byWeek[week], who = Object.keys(s);
+      who.forEach(function (x) {
+        who.forEach(function (y) {
+          if (x === y) return;
+          if (s[x] > s[y]) T[x].apW++; else if (s[x] < s[y]) T[x].apL++; else T[x].apT++;
+        });
+      });
+    });
+
+    var played = ids.filter(function (i) { return T[i].g; });
+    var avgOf = function (list) { return list.length ? list.reduce(function (a, b) { return a + b; }, 0) / list.length : 0; };
+    var leagueAvg = avgOf(played.map(function (i) { return T[i].pf / T[i].g; })) ||
+      avgOf(ids.map(function (i) { return Number(proj[i]) || 0; }).filter(function (v) { return v > 0; })) || 100;
+    ids.forEach(function (i) {
+      var t = T[i], p = Number(proj[i]) || 0, wP = p ? 4 : 0;
+      t.mean = wP + t.g ? (p * wP + t.pf) / (wP + t.g) : leagueAvg;
+    });
+    var sd = Math.min(35, Math.max(12, 0.18 * leagueAvg));
+
+    var left = (games || []).filter(function (m) { return !m.done && T[String(m.a)] && T[String(m.b)]; });
+    var n = Math.max(1, opts.sims || 5000), spots = Math.min(opts.playoffTeams || 6, ids.length), rand = seeded(opts.seed || 7);
+    ids.forEach(function (i) { T[i].inN = 0; T[i].topN = 0; T[i].winSum = 0; });
+    for (var k = 0; k < n; k++) {
+      var w = {}, pf = {};
+      ids.forEach(function (i) { w[i] = T[i].w + T[i].t / 2; pf[i] = T[i].pf; });
+      left.forEach(function (m) {
+        var a = String(m.a), b = String(m.b);
+        var ap = T[a].mean + sd * normal(rand), bp = T[b].mean + sd * normal(rand);
+        pf[a] += ap; pf[b] += bp;
+        w[ap > bp ? a : b]++;
+      });
+      ids.slice().sort(function (x, y) { return w[y] - w[x] || pf[y] - pf[x]; }).forEach(function (i, at) {
+        if (at < spots) T[i].inN++;
+        if (at === 0) T[i].topN++;
+        T[i].winSum += w[i];
+      });
+    }
+
+    var z = function (vals) {
+      var m = avgOf(vals), s = Math.sqrt(avgOf(vals.map(function (v) { return (v - m) * (v - m); }))) || 1;
+      return vals.map(function (v) { return (v - m) / s; });
+    };
+    var zA = z(ids.map(function (i) { var t = T[i], g = t.apW + t.apL + t.apT; return g ? (t.apW + t.apT / 2) / g : 0.5; }));
+    var zP = z(ids.map(function (i) { return T[i].g ? T[i].pf / T[i].g : T[i].mean; }));
+    var zE = z(ids.map(function (i) { return T[i].mean; }));
+    var out = ids.map(function (i, j) {
+      var t = T[i], apG = t.apW + t.apL + t.apT;
+      return {id: i, name: t.name, wins: t.w, losses: t.l, ties: t.t, games: t.g, pf: round2(t.pf), pa: round2(t.pa),
+        allPlay: {w: t.apW, l: t.apL, t: t.apT}, luck: apG ? round2(t.w + t.t / 2 - (t.apW + t.apT / 2) / apG * t.g) : 0,
+        expected: round2(t.mean), power: played.length ? 0.5 * zA[j] + 0.3 * zP[j] + 0.2 * zE[j] : zE[j],
+        playoffs: t.inN / n, top: t.topN / n, projWins: round2(t.winSum / n)};
+    });
+    out.slice().sort(function (a, b) { return b.power - a.power; }).forEach(function (r, x) { r.powerRank = x + 1; });
+    // Standings order: wins, then points; before any games (all even), projected strength.
+    out.sort(function (a, b) { return (b.wins + b.ties / 2) - (a.wins + a.ties / 2) || b.pf - a.pf || b.power - a.power; })
+      .forEach(function (r, x) { r.seed = x + 1; });
+    return {teams: out, spots: spots, sims: n, left: left.length};
   }
 
   function slotLabel(slot) { return SLOT_LABEL[slot] || slot; }
@@ -1091,7 +1198,8 @@
 
     // Only starters who can still be benched are worth a warning.
     var hurt = d.roster.filter(function (p) { return p.start && p.inj && !p.locked; });
-    return {cfg: d.cfg, roster: d.roster, rows: rows, moves: moves, wire: wire, hurt: hurt, stops: stops, opt: opt};
+    return {cfg: d.cfg, roster: d.roster, rows: rows, moves: moves, wire: wire, hurt: hurt, stops: stops, opt: opt,
+      takenNorm: d.takenNorm, takenAbbr: d.takenAbbr}; // who's rostered in the league (Waivers)
   }
 
   /* `weekly` is one rankings map for every league, or a function of a league's
@@ -1536,7 +1644,7 @@
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict,
-    lineupPoints: lineupPoints, draftPicks: draftPicks,
+    lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,

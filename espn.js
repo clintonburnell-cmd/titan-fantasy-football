@@ -116,6 +116,8 @@
       teams: Number(s.size) || (json.teams || []).length, ppr: pprOf(s),
       kind: s.draftSettings && Number(s.draftSettings.keeperCount) > 0 ? 'Keeper' : 'Redraft',
       bestBall: false, status: '',
+      playoffTeams: Number((s.scheduleSettings || {}).playoffTeamCount) || 0,
+      faab: s.acquisitionSettings && s.acquisitionSettings.isUsingAcquisitionBudget ? Number(s.acquisitionSettings.acquisitionBudget) || 0 : 0,
       active: pref.active !== undefined ? !!pref.active : true, exposure: true
     };
   }
@@ -299,6 +301,59 @@
 
   /* Kickoff times for every NFL game of the season, from ESPN's public NFL
      schedule: {team: {week: [kickoff time in ms, time still to be set]}}. */
+  /* A league's regular-season schedule and scores, for the Standings tab. readSchedule
+     gets ESPN's JSON (with a saved login on the server); fetchSchedule (the app) reads it,
+     or asks Titan's server for a private league (kind 'schedule', which answers with
+     slimSchedule), and gives it the shape of sleeper.js leagueSchedule. */
+  var SCHEDULE_VIEWS = 'view=mMatchupScore&view=mTeam&view=mSettings';
+  async function readSchedule(id, season, opts) {
+    opts = opts || {};
+    var browser = typeof window !== 'undefined';
+    var res = await fetch(BASE + season + '/segments/0/leagues/' + id + '?' + SCHEDULE_VIEWS,
+      browser ? {cache: 'no-store', credentials: 'omit'} : {headers: opts.creds && opts.creds.s2 ? {Cookie: cookieHeader(opts.creds)} : {}});
+    if (res.ok) return res.json();
+    throw new Error(res.status === 401 || res.status === 403 ? 'private' : 'ESPN answered ' + res.status);
+  }
+
+  async function fetchSchedule(id, season, week) {
+    var json;
+    try { json = await readSchedule(id, season); }
+    catch (e) {
+      if (typeof window === 'undefined' || !transport) throw e;
+      json = await transport({leagueId: String(id), season: String(season), kind: 'schedule'});
+    }
+    return scheduleFrom(json, week);
+  }
+
+  // Byes (no away side) and playoff weeks are left out. A game counts as played once ESPN names a winner.
+  function scheduleFrom(json, week) {
+    var sched = ((json && json.settings) || {}).scheduleSettings || {};
+    var last = Number(sched.matchupPeriodCount) || 14, games = [];
+    ((json && json.schedule) || []).forEach(function (m) {
+      if (!m.home || !m.away || Number(m.matchupPeriodId) > last) return;
+      games.push({week: Number(m.matchupPeriodId), a: String(m.home.teamId), b: String(m.away.teamId),
+        aPts: Number(m.home.totalPoints) || 0, bPts: Number(m.away.totalPoints) || 0,
+        done: m.winner ? m.winner !== 'UNDECIDED' : Number(m.matchupPeriodId) < Number(week)});
+    });
+    return {teams: teamsOf(json || {}).map(function (t) { return {id: String(t.id), name: t.name}; }), games: games,
+      playoffTeams: Number(sched.playoffTeamCount) || 6};
+  }
+
+  function slimSchedule(json) {
+    var sched = ((json && json.settings) || {}).scheduleSettings || {};
+    var side = function (x) { return x ? {teamId: x.teamId, totalPoints: x.totalPoints} : null; };
+    return {
+      settings: {scheduleSettings: {matchupPeriodCount: sched.matchupPeriodCount, playoffTeamCount: sched.playoffTeamCount}},
+      schedule: ((json && json.schedule) || []).map(function (m) {
+        return {matchupPeriodId: m.matchupPeriodId, winner: m.winner || '', home: side(m.home), away: side(m.away)};
+      }),
+      teams: ((json && json.teams) || []).map(function (t) {
+        return {id: t.id, name: t.name || '', location: t.location || '', nickname: t.nickname || '', owners: t.owners || []};
+      }),
+      members: []
+    };
+  }
+
   /* ESPN's latest NFL news (the public feed behind espn.com/nfl), newest first, trimmed
      to what Titan shows: headline, summary, link, picture, when, whether it's a video or
      ESPN+, and the players and teams the story tags. */
@@ -374,7 +429,10 @@
         scoringSettings: {scoringItems: ((s.scoringSettings && s.scoringSettings.scoringItems) || []).map(function (i) {
           return {statId: i.statId, points: i.points};
         })},
-        draftSettings: {keeperCount: (s.draftSettings && s.draftSettings.keeperCount) || 0}
+        draftSettings: {keeperCount: (s.draftSettings && s.draftSettings.keeperCount) || 0},
+        scheduleSettings: {playoffTeamCount: (s.scheduleSettings || {}).playoffTeamCount, matchupPeriodCount: (s.scheduleSettings || {}).matchupPeriodCount},
+        acquisitionSettings: {isUsingAcquisitionBudget: !!(s.acquisitionSettings || {}).isUsingAcquisitionBudget,
+          acquisitionBudget: (s.acquisitionSettings || {}).acquisitionBudget}
       },
       members: (json.members || []).map(function (m) {
         return {id: m.id, displayName: m.displayName || '', firstName: m.firstName || '', lastName: m.lastName || ''};
@@ -395,6 +453,7 @@
     leagueCfg: leagueCfg, teamsOf: teamsOf, ownedTeam: ownedTeam, buildLeague: buildLeague, slimLeague: slimLeague,
     fetchPoints: fetchPoints, pointsFromBoxscore: pointsFromBoxscore, fetchKickoffs: fetchKickoffs, kickoffsFrom: kickoffsFrom,
     fetchMatchup: fetchMatchup, matchupFrom: matchupFrom, toSleeper: toSleeper, fetchNews: fetchNews, newsFrom: newsFrom,
+    readSchedule: readSchedule, fetchSchedule: fetchSchedule, scheduleFrom: scheduleFrom, slimSchedule: slimSchedule,
     SLOT: SLOT, POS: POS, TEAM: TEAM
   };
 

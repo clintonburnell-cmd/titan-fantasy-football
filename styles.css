@@ -592,6 +592,25 @@ details.match > summary::-webkit-details-marker { display: none; }
 .wbar .wme { background: var(--ok); }
 .wbar .wopp { background: var(--bar-opp); }
 
+/* The Standings tab: the table, your team marked, the playoff line and each team's odds. */
+.stand { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.stand th, .stand td { padding: 9px 12px; text-align: left; border-top: 1px solid var(--line); white-space: nowrap; }
+.stand thead th { border-top: 0; font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.stand .st-team { white-space: normal; font-weight: 700; min-width: 8rem; }
+.stand tr.mine td { background: rgb(58 103 234 / .10); }
+.stand tr.mine .st-team::after { content: " (you)"; color: var(--muted); font-weight: 600; }
+.stand tr.cut td { border-bottom: 2px dashed var(--accent-2); }
+.st-odds { display: flex; align-items: center; gap: 8px; min-width: 8.5rem; }
+.st-odds b { min-width: 2.8rem; text-align: right; }
+.odds-bar { flex: 1; height: 7px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.odds-bar i { display: block; height: 100%; background: var(--ok); }
+@media (max-width: 560px) {
+  .stand .st-opt { display: none; }
+  .stand .st-team { min-width: 0; }
+  .stand th, .stand td { padding: 8px; }
+  .st-odds { min-width: 6.5rem; }
+}
+
 /* The News tab: ESPN's latest stories, the ones about your players marked. */
 .news-list { list-style: none; margin: 0; padding: 0; }
 .news-item { border-top: 1px solid var(--line); }

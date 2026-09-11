@@ -19,12 +19,12 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'matchup', 'rosters', 'exposure', 'byes', 'score', 'news', 'trade', 'ranks', 'settings'];
+  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'exposure', 'byes', 'score', 'news', 'trade', 'ranks', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
-  const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', rosters: 'Rosters', exposure: 'Exposure', byes: 'Byes',
+  const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', exposure: 'Exposure', byes: 'Byes',
     score: 'Results', news: 'News', ranks: 'Rankings', trade: 'Trade', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
-  const SLUG = {lineups: 'lineups', matchup: 'matchup', rosters: 'rosters', exposure: 'exposure', byes: 'byes',
+  const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', exposure: 'exposure', byes: 'byes',
     score: 'results', news: 'news', ranks: 'rankings', trade: 'trade', settings: 'settings'};
   const tabFromPath = () => {
     const m = location.pathname.match(/^\/app\/([a-z]+)\/?$/);
@@ -105,7 +105,8 @@
     view: {week: 0, pos: 'QB'}, // the saved rankings open on the Rankings tab
     // The Trade tab: each league's teams, FantasyCalc's values by league format, and the trade being built.
     trade: {teams: {}, values: {}, pick: {league: '', partner: '', give: [], get: []}},
-    news: {busy: false, at: 0, list: null, error: ''} // ESPN's latest stories, on the News tab
+    news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
+    stand: {} // the Standings tab: each league's schedule ({busy, error, sched, result})
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
   // An address like /app/matchup opens that screen.
@@ -224,6 +225,7 @@
       S.projAt = Date.now();
       if (S.score.week === snap.week) S.score.data = null; // live points have moved
       S.trade.teams = {}; // rosters may have changed too
+      S.stand = {}; // and scores
     } catch (e) {
       S.error = 'Refresh failed: ' + (e && e.message ? e.message : e);
     } finally {
@@ -1792,6 +1794,74 @@
     setEspnLogin(login) { S.espn.login = login; paintSync(); }
   };
 
+  /* ---- Standings */
+
+  /* Each league's standings, all-play records, luck, power rankings and playoff odds
+     (SCC.standings). The schedule and scores load per league (API.leagueSchedule); every
+     team's roster (loadTradeTeams, shared with the Trade tab) gives its projected points
+     this week. Loaders never draw synchronously, so screenStandings can start them. */
+  async function loadStandings(d) {
+    const id = d.cfg.id;
+    S.stand[id] = {busy: true};
+    try {
+      S.stand[id] = {sched: await API.leagueSchedule(d.cfg, S.snap.season, S.snap.week)};
+    } catch (e) {
+      const why = e && /private|permission/i.test(e.message || e.code || '') ? 'it\'s private, so it needs your ESPN login (Settings)' : (e && e.message) || e;
+      S.stand[id] = {error: `Could not load the schedule for ${d.cfg.key}: ${why}.`};
+    }
+    if (S.ui.tab === 'standings') render();
+  }
+
+  const pct = x => x >= 0.995 && x < 1 ? '>99%' : x > 0 && x < 0.005 ? '<1%' : Math.round(x * 100) + '%';
+  const nth = n => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+  const recordOf = t => `${t.wins}-${t.losses}${t.ties ? '-' + t.ties : ''}`;
+
+  function screenStandings() {
+    if (DEMO) return demoOnly('Standings', 'Standings show your real leagues: records, power rankings, luck and each team\'s playoff odds.');
+    if (!S.snap) return emptyState();
+    const leagues = S.snap.leagues || [];
+    if (!leagues.length) return '<div class="empty-note">No leagues yet.</div>';
+    const d = leagues.find(x => x.cfg.id === S.ui.standLeague) || leagues[0], cfg = d.cfg;
+    if (!S.stand[cfg.id]) loadStandings(d);
+    if (!S.trade.teams[cfg.id]) loadTradeTeams(d);
+    const St = S.stand[cfg.id], Tm = S.trade.teams[cfg.id];
+    let h = `<div class="bar"><label class="field"><span>League</span><select data-ui="standLeague">${leagues.map(x =>
+      `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('')}</select></label></div>`;
+    const err = (St && St.error) || (Tm && Tm.error);
+    if (err) return h + `<div class="banner stop">${esc(err)} <button class="link" data-action="stand-retry">Try again</button></div>`;
+    if (!St || St.busy || !Tm || Tm.busy) return h + '<div class="empty-note">Loading the schedule and every team\'s roster…</div>';
+    const sched = St.sched;
+    if (!sched.teams.length || !sched.games.length) return h + '<div class="empty-note">This league has no regular-season schedule yet.</div>';
+    // This week's projected points for each team's best lineup.
+    const proj = {};
+    (Tm.list || []).forEach(t => { proj[t.id] = SCC.lineupPoints(t.roster, cfg.lineup, p => SCC.projFor(S.proj, p.id, cfg.ppr) || 0); });
+    const key = [sched.games.filter(g => g.done).length, Object.keys(S.proj).length, S.snap.week].join('|');
+    if (!St.result || St.key !== key) {
+      Object.assign(St, {key, result: SCC.standings(sched.teams, sched.games, proj, {playoffTeams: cfg.playoffTeams || sched.playoffTeams, sims: 5000, seed: 7})});
+    }
+    const R = St.result, mineId = String(cfg.platform === 'espn' ? cfg.teamId : d.rosterId), me = R.teams.find(t => t.id === mineId);
+    if (me) {
+      h += `<div class="banner ok"><b>Your playoff chances in ${esc(cfg.key)}: ${pct(me.playoffs)}.</b> ${me.games
+        ? `You're ${nth(me.seed)} at ${recordOf(me)}, power-ranked ${nth(me.powerRank)} of ${R.teams.length},`
+        : `No games played yet, so this comes from this week's projected lineups. You're power-ranked ${nth(me.powerRank)} of ${R.teams.length},`}
+        with about ${fmt(me.projWins)} wins expected by the end of the regular season.</div>`;
+    }
+    const cell = t => `<tr class="${t.id === mineId ? 'mine' : ''}${t.seed === R.spots ? ' cut' : ''}"><td class="tnum">${t.seed}</td>
+      <td class="st-team">${esc(t.name)}</td><td>${recordOf(t)}</td><td class="st-opt tnum">${fmt(t.pf)}</td>
+      <td class="st-opt">${t.allPlay.w}-${t.allPlay.l}${t.allPlay.t ? '-' + t.allPlay.t : ''}</td>
+      <td class="tnum st-opt${t.luck > 0.5 ? ' good' : t.luck < -0.5 ? ' amber' : ''}">${t.games ? signed(t.luck) : '–'}</td>
+      <td class="tnum st-opt">${t.powerRank}</td>
+      <td><span class="st-odds"><span class="odds-bar"><i style="width:${Math.round(t.playoffs * 100)}%"></i></span><b>${pct(t.playoffs)}</b></span></td></tr>`;
+    return h + `<div class="card table-wrap"><table class="stand"><thead><tr><th>#</th><th class="st-team">Team</th><th>Record</th>
+        <th class="st-opt">Points</th><th class="st-opt">All-play</th><th class="st-opt">Luck</th><th class="st-opt">Power</th><th>Playoffs</th></tr></thead>
+        <tbody>${R.teams.map(cell).join('')}</tbody></table></div>
+      <p class="fine">${R.spots} teams make the playoffs; the dashed line is the cut. The odds come from ${thousands(R.sims)} simulations of the
+        ${R.left} games left: each team scores around its average so far, blended with this week's projected lineup, give or take the
+        league's usual swings. Division winners aren't modeled. All-play is a team's record if it had played every team every week, and
+        luck is how many more (or fewer) wins it has than that record would give. Power ranks all-play, points per game and projected
+        strength together.</p>`;
+  }
+
   /* ---- Trade */
 
   /* Trade values are FantasyCalc's (fantasycalc.com), read through Titan's server
@@ -1826,7 +1896,7 @@
     } catch (e) {
       S.trade.teams[id] = {error: `Could not load the teams in ${d.cfg.key}: ${e && e.message ? e.message : e}.`};
     }
-    if (S.ui.tab === 'trade') render();
+    if (S.ui.tab === 'trade' || S.ui.tab === 'standings') render();
   }
 
   function screenTrade() {
@@ -1956,7 +2026,7 @@
   }
 
   const SCREENS = {
-    lineups: screenLineups, matchup: screenMatchup, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
+    lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
     score: screenScore, ranks: screenRanks, trade: screenTrade, settings: screenSettings
   };
 
@@ -2022,6 +2092,10 @@
     else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
     else if (a === 'matchups') loadMatchups();
     else if (a === 'news-retry') { S.news.error = ''; loadNews(); }
+    else if (a === 'stand-retry') {
+      [S.stand, S.trade.teams].forEach(m => Object.keys(m).forEach(k => { if (m[k].error) delete m[k]; }));
+      render();
+    }
     else if (a === 'trade-clear') { S.trade.pick.give = []; S.trade.pick.get = []; render(); }
     else if (a === 'trade-retry') {
       [S.trade.teams, S.trade.values].forEach(m => Object.keys(m).forEach(k => { if (m[k].error) delete m[k]; }));
@@ -2057,6 +2131,7 @@
   view.addEventListener('change', e => {
     const t = e.target;
     if (t.dataset.ui === 'league') { S.ui.league = t.value; saveUi(); render(); }
+    else if (t.dataset.ui === 'standLeague') { S.ui.standLeague = t.value; saveUi(); render(); }
     else if (t.dataset.ui === 'tradeLeague') { S.ui.tradeLeague = t.value; S.ui.tradePartner = ''; saveUi(); render(); }
     else if (t.dataset.ui === 'tradePartner') { S.ui.tradePartner = t.value; saveUi(); render(); }
     else if (t.dataset.alert) {

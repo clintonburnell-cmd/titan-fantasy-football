@@ -27,6 +27,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const inLeague = [].concat(...L1.teams.map(t => ESPNJS.buildLeague(ESPNJS.leagueCfg(L1, {id: L1.id, teamId: t.id}, {}), L1, tradePlayers).roster));
   const VALUES = JSON.stringify({at: Date.now(), values: inLeague.filter(p => p.pos !== 'DEF' && p.pos !== 'K').map((p, i) => ({
     s: /^\d+$/.test(p.id) ? p.id : '', e: String(p.espnId), n: p.name, p: p.pos, t: p.team, v: 9000 - i * 40, r: i + 1, pr: 1, tr: i % 3 ? 120 : -80}))});
+  // A stand-in schedule for the test league: 14 weeks of round robin, nothing played yet, four playoff spots.
+  const rr = [], ten = L1.teams.map(t => t.id);
+  for (let w = 1; w <= 14; w++) {
+    const rest = ten.slice(1);
+    for (let k = 0; k < (w - 1) % 9; k++) rest.push(rest.shift());
+    const order = [ten[0], ...rest];
+    for (let i = 0; i < 5; i++) rr.push({matchupPeriodId: w, winner: 'UNDECIDED', home: {teamId: order[i], totalPoints: 0}, away: {teamId: order[9 - i], totalPoints: 0}});
+  }
+  const SCHED = JSON.stringify({id: L1.id, settings: {scheduleSettings: {matchupPeriodCount: 14, playoffTeamCount: 4}}, schedule: rr,
+    members: L1.members, teams: L1.teams.map(t => ({id: t.id, location: t.location, nickname: t.nickname, owners: t.owners}))});
   // A stand-in for ESPN's news feed: a story about the test team's QB, and one about nobody on it.
   const newsQb = inLeague.find(p => p.pos === 'QB').name, newsAt = new Date(Date.now() - 10 * 60000).toISOString();
   const NEWS = JSON.stringify({articles: [
@@ -87,7 +97,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         return;
       }
       const ok = url.includes('/leagues/' + L1.id);
-      const body = !ok ? '{}' : /mBoxscore/.test(url) ? BOX : JSON.stringify(L1);
+      const body = !ok ? '{}' : /mBoxscore/.test(url) ? BOX : /mMatchupScore/.test(url) ? SCHED : JSON.stringify(L1);
       send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: ok ? 200 : 401, responseHeaders: headers,
         body: Buffer.from(body).toString('base64')});
     }
@@ -242,7 +252,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     opp: [...document.querySelectorAll('.match .minfo.opp b')].map(b => b.innerText).filter(Boolean).length,
     tabs: [...document.querySelectorAll('#tabs [data-tab]')].map(b => b.innerText).slice(0, 3).join(' | ')})`);
   check(/Team 1/.test(mu.board) && /Team 2/.test(mu.board) && mu.rows === 9 && mu.opp === 9, `scoreboard (${mu.board}) and both lineups, 9 spots each`);
-  check(mu.tabs === 'Lineups | Matchup | Rosters', 'the Matchup tab sits between Lineups and Rosters');
+  check(mu.tabs === 'Lineups | Matchup | Standings', 'the Matchup tab sits between Lineups and Standings');
   const addr = await ev(`({path: location.pathname, title: document.title})`);
   check(addr.path === '/app/matchup' && /^Matchup · Titan/.test(addr.title), `each screen has its own address and title (${addr.path}, "${addr.title}")`);
   await ev('history.back(), true');
@@ -280,6 +290,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'on a phone the trade fits inside its card (nothing cut off on the right)');
   check(await ev(`document.querySelectorAll('.trade-sum .tlineup p').length === 3`),
     'each team\'s projected starters, before and after: ' + (await text('.trade-sum .tlineup')).replace(/\s+/g, ' ').slice(0, 90));
+
+  T.section('the Standings tab');
+  await tab('standings');
+  check(await waitFor(`document.querySelectorAll('table.stand tbody tr').length === 10`, 30000), 'every team in the league is listed');
+  check(await ev(`(() => { const rows = [...document.querySelectorAll('table.stand tbody tr')];
+    return rows.filter(r => r.classList.contains('mine')).length === 1 && rows.every(r => /%$/.test(r.querySelector('.st-odds b').textContent)) &&
+      rows.findIndex(r => r.classList.contains('cut')) === 3; })()`), 'your team is marked, every team has playoff odds, and the line falls after the 4th');
+  check(/Your playoff chances/.test(await text('#view .banner.ok')), 'your own chances lead the page: ' + (await text('#view .banner.ok')).slice(0, 80));
 
   T.section('the News tab');
   await tab('news');
