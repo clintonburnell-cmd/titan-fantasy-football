@@ -703,6 +703,28 @@
     render();
   }
 
+  /* ---- Link more leagues: one tab per platform */
+
+  const LINK_TABS = [{id: 'sleeper', name: 'Sleeper'}, {id: 'espn', name: 'ESPN'}, {id: 'yahoo', name: 'Yahoo'}];
+
+  function linkLeagues(sleeperHtml) {
+    const n = espnLinks().length;
+    const status = {sleeper: S.account.userId ? 'Linked' : '', espn: n ? plural(n, 'league') : '', yahoo: 'Soon'};
+    const tab = LINK_TABS.some(t => t.id === S.ui.linkTab) ? S.ui.linkTab : S.account.userId ? 'espn' : 'sleeper';
+    return `<h3>Link more leagues?</h3>
+      <p class="fine">Every league you link is managed together: one set of rankings, one lineup check.</p>
+      <div class="chips" role="tablist" aria-label="Fantasy sites">${LINK_TABS.map(t =>
+        `<button class="chip" role="tab" data-link-tab="${t.id}" aria-selected="${t.id === tab}" aria-pressed="${t.id === tab}">${t.name}${
+          status[t.id] ? ` <small>${esc(status[t.id])}</small>` : ''}</button>`).join('')}</div>
+      <div class="link-pane" role="tabpanel">${tab === 'sleeper' ? sleeperHtml : tab === 'espn' ? espnSettings() : yahooLink()}</div>`;
+  }
+
+  function yahooLink() {
+    return `<p>Yahoo leagues are next. Yahoo reviews every app before it can read fantasy leagues, and Titan's request is with Yahoo now.
+        Once it's approved, you'll sign in with Yahoo here and your leagues will load on their own.</p>
+      <div class="bar"><button class="btn" type="button" disabled>Sign in with Yahoo</button></div>`;
+  }
+
   /* ---- ESPN leagues */
 
   const espnLinks = () => (S.account && S.account.espn && S.account.espn.leagues) || [];
@@ -711,7 +733,7 @@
   function espnSettings() {
     const E = S.espn, links = espnLinks();
     const cfgOf = id => ((S.snap && S.snap.available) || []).filter(l => l.id === 'espn:' + id)[0];
-    let h = '<h3>ESPN leagues</h3>';
+    let h = '';
     h += links.length ? `<ul class="saved">${links.map(l => {
       const c = cfgOf(l.id);
       const note = !c ? 'Added. It loads on the next refresh.'
@@ -762,6 +784,7 @@
     S.snap = null;
     store.del(KEY.snap);
     S.ui.tab = 'settings';
+    S.ui.linkTab = 'espn';
     saveUi();
     render();
     const input = view.querySelector('[data-form="espn-add"] input');
@@ -861,10 +884,9 @@
           <button class="btn" type="submit" ${S.link.busy ? 'disabled' : ''}>${S.link.busy ? 'Finding you…' : 'Link Sleeper'}</button></form>
         ${S.link.error ? `<div class="banner stop">${esc(S.link.error)}</div>` : ''}`;
     let h = `<section class="card pad" data-sync-slot="settings">${syncSettings()}</section>
-      <section class="card pad"><h3>Sleeper account</h3>${sleeper}</section>
-      <section class="card pad">${espnSettings()}</section>
+      <section class="card pad" id="link-leagues">${linkLeagues(sleeper)}</section>
       <section class="card pad"><h3>Leagues</h3>
-        <p class="fine">Your Sleeper leagues are found automatically and your ESPN leagues are the ones added above, each with its own lineup format. Switch off any you don't want Titan to manage.</p>
+        <p class="fine">Your Sleeper leagues are found automatically and your ESPN leagues are the ones you added, each with its own lineup format. Switch off any you don't want Titan to manage.</p>
         ${all.length ? `<ul class="lg-list">${all.map(l => `<li><label class="check">
           <input type="checkbox" data-league="${esc(l.id)}" ${l.active ? 'checked' : ''}>
           <span><b>${esc(l.key)}</b><small>${esc(SCC.describeLeague(l))} · ${esc(l.lineup.map(slotName).join(' '))}</small></span></label></li>`).join('')}</ul>
@@ -933,7 +955,7 @@
         ? 'Sync works in the online app.' : 'Sync is loading. It needs an internet connection.'}</p>`;
     }
     if (!s.user) {
-      return head + `<p class="fine">Sign in with Google to keep your Sleeper link, league switches and rankings the same on your phone and computer. Only you can see them.</p>
+      return head + `<p class="fine">Sign in with Google to keep your linked leagues, league switches and rankings the same on your phone and computer. Only you can see them.</p>
         ${s.error ? `<div class="banner stop">${esc(s.error)}</div>` : ''}
         <div class="bar"><button class="btn" data-action="sync-in">Sign in with Google</button></div>`;
     }
@@ -1034,9 +1056,10 @@
   });
 
   view.addEventListener('click', e => {
-    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
+    if (t.dataset.linkTab) { S.ui.linkTab = t.dataset.linkTab; saveUi(); return render(); }
     if (t.dataset.filter) { S.ui.filter = t.dataset.filter; saveUi(); return render(); }
     if (t.dataset.viewPos) { S.view.pos = t.dataset.viewPos; return render(); }
     const a = t.dataset.action;
