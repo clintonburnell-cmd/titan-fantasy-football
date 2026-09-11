@@ -22,7 +22,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const BOX = JSON.stringify(T.espnBoxscore(L1));
   const server = http.createServer((req, res) => {
     const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    const f = path.join(T.ROOT, u.endsWith('/') ? u + 'index.html' : u);
+    let f = path.join(T.ROOT, u.endsWith('/') ? u + 'index.html' : u);
+    // Like Firebase Hosting's rewrite: any /app/ address is the app page.
+    if (u.startsWith('/app/') && !fs.existsSync(f)) f = path.join(T.ROOT, 'app', 'index.html');
     if (!f.startsWith(path.normalize(T.ROOT)) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
     res.writeHead(200, {'content-type': TYPES[path.extname(f)] || 'application/octet-stream', 'cache-control': 'no-cache'});
     fs.createReadStream(f).pipe(res);
@@ -217,6 +219,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     tabs: [...document.querySelectorAll('#tabs [data-tab]')].map(b => b.innerText).slice(0, 3).join(' | ')})`);
   check(/Team 1/.test(mu.board) && /Team 2/.test(mu.board) && mu.rows === 9 && mu.opp === 9, `scoreboard (${mu.board}) and both lineups, 9 spots each`);
   check(mu.tabs === 'Lineups | Matchup | Rosters', 'the Matchup tab sits between Lineups and Rosters');
+  const addr = await ev(`({path: location.pathname, title: document.title})`);
+  check(addr.path === '/app/matchup' && /^Matchup · Titan/.test(addr.title), `each screen has its own address and title (${addr.path}, "${addr.title}")`);
+  await ev('history.back(), true');
+  await sleep(700);
+  check(await ev(`location.pathname === '/app/lineups' && document.querySelector('#tabs [aria-current="page"]').dataset.tab === 'lineups'`),
+    'Back goes to the screen before');
+  await send('Page.navigate', {url: ORIGIN + '/app/byes'});
+  check(await waitFor(`!!document.querySelector('table.byes')`, 30000), 'an address opens its screen directly (/app/byes)');
   await tab('byes');
   check(await ev(`!!document.querySelector('table.byes')`), 'the Byes table renders');
   await tab('score');
@@ -281,11 +291,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await sleep(400);
   const desk = await ev(`({cols: getComputedStyle(document.querySelector('.league-grid')).gridTemplateColumns.split(' ').length,
     menu: getComputedStyle(document.querySelector('#tabs [aria-current="page"]')).borderBottomStyle,
-    foot: getComputedStyle(document.querySelector('.foot-in')).display, wide: document.documentElement.scrollWidth <= innerWidth,
+    foot: getComputedStyle(document.querySelector('.foot-cols')).gridTemplateColumns.split(' ').length, wide: document.documentElement.scrollWidth <= innerWidth,
     width: Math.round(document.getElementById('view').getBoundingClientRect().width),
-    art: getComputedStyle(document.body, '::before').backgroundImage})`);
-  check(desk.cols === 1 && desk.menu === 'solid' && desk.foot === 'flex' && desk.wide && /titan\.svg/.test(desk.art),
-    `a computer gets the website look: a menu with the section underlined, one league per row (${desk.width}px), a footer row, the Titan beside the page`);
+    art: getComputedStyle(document.body, '::before').backgroundImage, tip: getComputedStyle(document.querySelector('.top .tip')).display})`);
+  check(desk.cols === 1 && desk.menu === 'solid' && desk.foot === 3 && desk.wide && /titan\.svg/.test(desk.art) && desk.tip === 'none',
+    `a computer gets the website look: a menu with the section underlined, one league per row (${desk.width}px), a three-column footer, the Titan beside the page, the tip jar in the footer`);
+  check(await waitFor(`!document.getElementById('acct').hidden && getComputedStyle(document.getElementById('acct')).display === 'block' &&
+    /Sign in/.test(document.getElementById('acct').innerText)`, 20000), 'the header offers Sign in at the top right');
+  await tab('rosters');
+  check(await waitFor(`document.querySelectorAll('.rtable').length > 0 && document.querySelector('.rtable thead tr').children.length >= 7`, 5000),
+    'Rosters show as tables on a computer');
+  await tab('lineups');
   await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 2, mobile: true});
   await sleep(400);
   check(await ev(`getComputedStyle(document.querySelector('.league-grid')).gridTemplateColumns.split(' ').length === 1 &&
@@ -295,7 +311,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const go = async url => { await send('Page.navigate', {url: ORIGIN + url}); await sleep(1500); return ev('location.pathname + location.search'); };
   check(await go('/') === '/' && await ev('!!document.querySelector(".hero h1")'), 'someone already using Titan who opens / still sees the website');
   check(await go('/?home') === '/?home' && await ev('!!document.querySelector(".hero h1")'), '/?home shows the website even so');
-  check(await go('/?source=play') === '/app/?source=play', 'the Android app\'s address (/?source=play) goes straight to the app');
+  const playAt = await go('/?source=play');
+  check(/^\/app\/[a-z]*\?source=play$/.test(playAt), `the Android app's address (/?source=play) goes straight to the app (${playAt})`);
   await waitFor('!!document.querySelector("#tabs")', 20000);
 
   check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'nothing is wider than a 390px phone');

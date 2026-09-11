@@ -53,7 +53,10 @@ live site, so site changes reach it without a new upload. What's done and what's
   `styles.css`: a menu-style header, a 960px page with one league per row (the owner prefers that
   to two across), a footer row, and from 1200px the faded Titan art fixed to the right. It's scoped
   to `html:not(.in-app)`, so phones, the Android app and home-screen copies keep the app look.
-  Check new screens at 390px and at 1280px.
+  Check new screens at 390px and at 1280px. On computers Rosters draws tables (`rosterTable`,
+  when `wide()`); keep `data-find` on every row so the player search still works.
+- Screens have addresses under `/app/` (`SLUG` in `app.js`; `firebase.json` rewrites `/app/**` to
+  the app page, and the UI test's server does the same). A new screen needs a slug.
 - The demo (`DEMO` in `app.js`) uses its own storage names and never loads `sync.js`, so it can't
   overwrite a real account or reach Firestore. Keep new storage, sync and server calls behind it.
 - When a refresh's saved data gains a field the screens rely on, bump the snapshot version

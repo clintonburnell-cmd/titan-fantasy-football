@@ -65,8 +65,14 @@ website (such as alerts) to pass review.
 
 On computers and tablets, the app in a browser takes the website's look: its sections become a
 menu across the header, the page is a 960px column (one league per row, as on a phone), Settings sits
-in two columns, the footer is a row of links, and on wide windows the Titan art sits faded to the
-right. Phones, the Android app and home-screen copies keep the app look.
+in two columns, Rosters show as tables, the footer has three columns of links (the tip jar moves
+there), the Google account sits at the top right with Settings and Sign out, rows light up under the
+pointer, and on wide windows the Titan art sits faded to the right. Phones, the Android app and
+home-screen copies keep the app look.
+
+Everywhere, each screen has its own address (`/app/lineups`, `/app/matchup`, `/app/results`, …) and
+title, so Back, Forward, bookmarks and shared links work; `firebase.json` rewrites `/app/**` to the
+app page. Screens show placeholder cards while they load.
 
 | Screen | What it shows |
 |---|---|

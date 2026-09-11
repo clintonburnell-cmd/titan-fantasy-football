@@ -39,6 +39,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Refresh</span>
       </button>
+      <div class="acct" id="acct" hidden></div>
       </div>
     </div>
     <nav class="tabs" id="tabs" aria-label="Sections" hidden>
@@ -60,14 +61,22 @@
   <main id="view" class="wrap"></main>
   <footer class="foot">
     <div class="wrap foot-in">
-      <span>Titan Fantasy Football Manager isn't affiliated with or endorsed by the NFL or any NFL team, Sleeper or ESPN.</span>
-      <nav class="foot-nav" aria-label="More">
-        <a href="/?home">About Titan</a>
-        <a href="/guides/">Guides</a>
-        <a href="/privacy.html">Privacy</a>
-        <a href="/terms.html">Terms</a>
-        <a id="feedback" href="mailto:gainalphatrading@gmail.com?subject=Titan%20feedback">Feedback</a>
+      <nav class="foot-cols" aria-label="More">
+        <div><p class="foot-h">Titan</p>
+          <a href="/?home">About Titan</a>
+          <a class="wide-only" href="/app/?demo">Try a demo</a>
+          <a href="/guides/">Guides</a></div>
+        <div class="wide-only"><p class="foot-h">Guides</p>
+          <a href="/guides/import-fantasy-rankings.html">Import your rankings</a>
+          <a href="/guides/sleeper-start-sit.html">Sleeper start/sit</a>
+          <a href="/guides/espn-private-league.html">Add an ESPN league</a></div>
+        <div><p class="foot-h">About</p>
+          <a href="/privacy.html">Privacy</a>
+          <a href="/terms.html">Terms</a>
+          <a id="feedback" href="mailto:gainalphatrading@gmail.com?subject=Titan%20feedback">Feedback</a>
+          <a data-tip href="https://ko-fi.com/titandev" target="_blank" rel="noopener">Tip jar</a></div>
       </nav>
+      <span class="foot-note">© 2026 Titan Fantasy Football Manager. Not affiliated with or endorsed by the NFL or any NFL team, Sleeper or ESPN.</span>
     </div>
   </footer>
   <div id="toast" class="toast" role="status" hidden></div>

@@ -23,6 +23,13 @@
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', rosters: 'Rosters', exposure: 'Exposure', byes: 'Byes',
     score: 'Results', news: 'News', ranks: 'Rankings', settings: 'Settings'};
+  // Each screen's address under /app/ (the Results tab's id is still 'score').
+  const SLUG = {lineups: 'lineups', matchup: 'matchup', rosters: 'rosters', exposure: 'exposure', byes: 'byes',
+    score: 'results', news: 'news', ranks: 'rankings', settings: 'settings'};
+  const tabFromPath = () => {
+    const m = location.pathname.match(/^\/app\/([a-z]+)\/?$/);
+    return (m && Object.keys(SLUG).find(t => SLUG[t] === m[1])) || '';
+  };
   const AVATAR = 'https://sleepercdn.com/avatars/thumbs/';
   // News-only accounts on the News tab. X doesn't let apps read posts without a
   // paid plan, so each one opens on X.
@@ -55,6 +62,9 @@
   // The Android app and home-screen copies keep the app look even on a wide
   // screen; only a browser window gets the website look (styles.css).
   document.documentElement.classList.toggle('in-app', IN_PLAY_APP || STANDALONE);
+  // A wide browser window (the website look); Rosters draws tables there.
+  const WIDE = window.matchMedia ? window.matchMedia('(min-width: 900px)') : null;
+  const wide = () => !!(WIDE && WIDE.matches) && !(IN_PLAY_APP || STANDALONE);
   const IOS_HINT_KEY = 'titan.iosHint.v1';
   const SHARE_ICON = '<svg class="share-ico" viewBox="0 0 24 24" aria-label="Share"><path d="M12 3v12M8 7l4-4 4 4" fill="none" ' +
     'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 10H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12' +
@@ -91,6 +101,8 @@
     view: {week: 0, pos: 'QB'} // the saved rankings open on the Rankings tab
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
+  // An address like /app/matchup opens that screen.
+  if (tabFromPath()) S.ui.tab = tabFromPath();
   if (S.snap && S.account && S.snap.userId !== S.account.userId) S.snap = null;
   if (DEMO && !S.account) {
     S.account = {demo: true, userId: '', username: '', displayName: 'Demo leagues', avatar: '', prefs: {}, espn: {leagues: []}, updatedAt: Date.now()};
@@ -309,20 +321,34 @@
     $('tabs').hidden = !a;
     document.querySelectorAll('#tabs [data-tab]').forEach(t =>
       t.setAttribute('aria-current', t.dataset.tab === S.ui.tab ? 'page' : 'false'));
+    paintAccount();
   }
 
   function render() {
     paintHeader();
     view.dataset.tab = S.account ? S.ui.tab : 'welcome'; // lets wide screens lay out each screen
-    if (!S.account) { view.innerHTML = iosHint() + screenWelcome(); return; }
+    if (!S.account) { document.title = 'Titan Fantasy Football Manager'; view.innerHTML = iosHint() + screenWelcome(); return; }
     const err = S.error ? `<div class="banner stop">${esc(S.error)}</div>` : '';
     view.innerHTML = `<h2 class="sr-only">${TAB_NAMES[S.ui.tab]}</h2>` + iosHint() + demoBanner() + err + SCREENS[S.ui.tab]();
     if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
+    syncUrl(false);
+  }
+
+  /* Each screen has its own address (/app/lineups, /app/results…) and title,
+     so Back, Forward, bookmarks and shared links work as on any website. The
+     query (?demo, ?source=play) is kept. */
+  function syncUrl(push) {
+    document.title = TAB_NAMES[S.ui.tab] + ' · Titan Fantasy Football Manager';
+    if (location.protocol === 'file:') return;
+    const want = '/app/' + SLUG[S.ui.tab];
+    if (location.pathname !== want) history[push ? 'pushState' : 'replaceState']({tab: S.ui.tab}, '', want + location.search);
   }
 
   function emptyState() {
     return S.busy
-      ? `<div class="empty"><h2>Pulling your leagues…</h2><p>The first load also grabs Sleeper's player list, which takes about 10 seconds.</p></div>`
+      // Placeholder cards in the shape of what's coming, rather than a blank page.
+      ? `<div class="skeleton" aria-hidden="true">${'<div class="card sk-card"><i></i><i></i><i></i><i></i></div>'.repeat(3)}</div>
+        <p class="fine" role="status">Pulling your leagues… The first load takes a few seconds.</p>`
       : `<div class="empty"><h2>Nothing pulled yet</h2><p>Tap Refresh to load your leagues from Sleeper.</p></div>`;
   }
 
@@ -796,6 +822,7 @@
       const byPos = (a, b) => posOrder(a.pos) - posOrder(b.pos) || SCC.rankKey(a) - SCC.rankKey(b) || a.name.localeCompare(b.name);
       const bench = L.roster.filter(p => !p.start && !p.held).sort(byPos);
       const held = L.roster.filter(p => !p.start && p.held).sort(byPos);
+      if (wide()) return rosterTable(L, bench, held);
       const row = (p, label, cls) => {
         const sub = [p.pos, p.team, p.opp && 'vs ' + p.opp, has(p.implied) && 'implied ' + p.implied, p.bye && 'bye ' + p.bye].filter(Boolean).join(' · ');
         const find = [SCC.norm(p.name), String(p.team || '').toLowerCase(), String(p.pos || '').toLowerCase()].join(' ');
@@ -815,6 +842,32 @@
     return h;
   }
 
+  /* Computers: a league's roster as a table (spot, player, team, opponent,
+     kickoff, rank, projection, points), in the same order as the phone list.
+     Rows keep data-find, so the player search works the same way. */
+  function rosterTable(L, bench, held) {
+    // Opponents come from imported rankings; with none, the column stays out.
+    const hasOpp = L.roster.some(p => p.opp), cols = hasOpp ? 8 : 7;
+    const cell = (p, label, cls) => {
+      const find = [SCC.norm(p.name), String(p.team || '').toLowerCase(), String(p.pos || '').toLowerCase()].join(' ');
+      const proj = projOf(p, L.cfg);
+      return `<tr class="${p.start ? 'is-start' : ''}" data-find=" ${esc(find)} "><td><span class="slot${cls ? ' ' + cls : ''}"${
+        p.start ? ` data-pos="${esc(p.pos)}"` : ''}>${esc(label)}</span></td>
+        <td class="tplayer"><span class="tp">${headshot(p, true)}<span><b>${esc(p.name)}</b><small>${esc(p.pos)}${statusText(p)}</small></span></span></td>
+        <td>${esc(p.team || '')}</td>${hasOpp ? `<td>${esc(p.opp || '')}</td>` : ''}<td class="tkick">${esc(kickText(p))}</td>
+        <td class="tnum">${rankCell(p)}</td><td class="tnum">${proj !== null ? fmt(proj) : ''}</td><td class="tnum">${scored(p) ? scoreChip(p) : ''}</td></tr>`;
+    };
+    const divider = label => `<tr class="rdiv"><td colspan="${cols}">${label}</td></tr>`;
+    const starters = L.rows.map(r => (r.p ? cell(r.p, slotName(r.slot))
+      : `<tr class="r-stop" data-find=" "><td><span class="slot">${esc(slotName(r.slot))}</span></td><td colspan="${cols - 1}"><b>Empty</b></td></tr>`)).join('');
+    return `<details class="card roster-card fold" ${foldAttrs('roster', L.cfg)}><summary class="card-h"><div><h3>${esc(L.cfg.key)}</h3>
+      <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></summary>
+      <div class="table-wrap"><table class="rtable"><thead><tr><th>Spot</th><th>Player</th><th>Team</th>${hasOpp ? '<th>Opp</th>' : ''}<th>Kickoff</th>
+        <th class="tnum">Rank</th><th class="tnum">Proj</th><th class="tnum">Pts</th></tr></thead>
+      <tbody>${starters}${bench.length ? divider('Bench') + bench.map(p => cell(p, 'BN')).join('') : ''}${
+        held.length ? divider('Reserve') + held.map(p => cell(p, p.heldAs || 'IR', 'held')).join('') : ''}</tbody></table></div></details>`;
+  }
+
   // Sleeper's position order, for benches: QB, RB, WR, TE, K, DEF, then IDP.
   const POS_ORDER = {QB: 0, RB: 1, WR: 2, TE: 3, K: 4, DEF: 5, DL: 6, DE: 6, DT: 6, LB: 7, DB: 8, CB: 8, S: 8};
   const posOrder = pos => (POS_ORDER[pos] !== undefined ? POS_ORDER[pos] : 9);
@@ -828,7 +881,7 @@
     let rows = 0;
     view.querySelectorAll('.roster-card').forEach(card => {
       let n = 0;
-      card.querySelectorAll('.roster .row').forEach(row => {
+      card.querySelectorAll('[data-find]').forEach(row => {
         const show = !q || row.dataset.find.includes(' ' + q) || row.dataset.find.includes(q);
         row.hidden = !show;
         if (show) n++;
@@ -1518,7 +1571,48 @@
     });
     const login = view.querySelector('[data-espn-login]');
     if (login) login.innerHTML = espnLoginHtml();
+    paintAccount();
   }
+
+  /* Computers: the signed-in person at the top right with a small menu
+     (Settings, Sign out), or a Sign in button. Phones use Settings. */
+  function paintAccount() {
+    const el = $('acct');
+    if (!el) return;
+    const u = S.sync.user;
+    el.hidden = DEMO || !S.account || !S.sync.ready;
+    if (el.hidden) return;
+    el.innerHTML = u
+      ? `<button type="button" class="acct-btn" data-acct="menu" aria-haspopup="menu" aria-expanded="false">${u.photo
+          ? `<img src="${esc(u.photo)}" alt="" width="28" height="28" referrerpolicy="no-referrer">` : avatar('', 28)}<span>${esc(u.name || 'Account')}</span></button>
+        <div class="acct-menu" role="menu" hidden><p>${esc(u.email || '')}</p>
+          <button type="button" role="menuitem" data-acct="settings">Settings</button>
+          <button type="button" role="menuitem" data-acct="signout">Sign out</button></div>`
+      : '<button type="button" class="btn ghost small" data-acct="signin">Sign in</button>';
+  }
+
+  function acctMenu(open) {
+    const btn = document.querySelector('#acct [data-acct="menu"]'), menu = document.querySelector('#acct .acct-menu');
+    if (!btn || !menu) return;
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+  }
+
+  $('acct').addEventListener('click', e => {
+    const t = e.target.closest('[data-acct]');
+    if (!t) return;
+    const a = t.dataset.acct;
+    if (a === 'menu') return acctMenu(document.querySelector('#acct .acct-menu').hidden);
+    acctMenu(false);
+    if (a === 'settings') go('settings');
+    else if (a === 'signin' && S.sync.api) {
+      S.sync.api.signIn().catch(err => window.TitanApp.setSync({state: 'error', error: 'Sign-in failed: ' + (err.code || err.message)}));
+    } else if (a === 'signout' && S.sync.api && confirm('Sign out of sync on this device? Your data stays here and in your account.')) {
+      S.sync.api.signOut();
+    }
+  });
+  document.addEventListener('click', e => { if (!e.target.closest('#acct')) acctMenu(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') acctMenu(false); });
 
   // The bridge sync.js talks to. The app never depends on it being there.
   window.TitanApp = {
@@ -1571,15 +1665,22 @@
 
   /* ------------------------------------------------------------- events */
 
-  function go(tab) {
+  function go(tab, fromHistory) {
     if (!TABS.includes(tab)) return;
     S.ui.tab = tab;
     saveUi();
+    if (!fromHistory) syncUrl(true);
     render();
     window.scrollTo(0, 0);
     if (tab === 'score' && S.snap && !S.score.data && !S.score.busy && !S.score.error) loadScore(S.score.week || S.snap.week);
     if (tab === 'matchup' && S.snap && (!S.match.data || S.match.week !== S.snap.week)) loadMatchups();
   }
+
+  // Back and Forward move between screens, as on any website.
+  window.addEventListener('popstate', () => {
+    const t = tabFromPath();
+    if (t && t !== S.ui.tab) go(t, true);
+  });
 
   $('tabs').addEventListener('click', e => {
     const b = e.target.closest('[data-tab]');
@@ -1723,6 +1824,8 @@
     s.src = '/sync.js';
     document.body.appendChild(s);
   }
+  // Rosters switch between tables and the phone list as the window crosses the website-look width.
+  if (WIDE && WIDE.addEventListener) WIDE.addEventListener('change', () => { if (S.ui.tab === 'rosters') render(); });
   if (IN_PLAY_APP) document.querySelectorAll('[data-tip]').forEach(el => { el.hidden = true; });
   analyze();
   render();
