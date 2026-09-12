@@ -109,6 +109,11 @@ starting lineup by this week's projections before and after the trade, and in dy
 leagues each team's draft picks for the next three drafts (who owns which comes from Sleeper's
 traded picks) can go in the trade too. Titan's server fetches the values from
 FantasyCalc at most once a day per format, and the tab credits FantasyCalc with a link.
+FantasyCalc asks that its numbers stay out of other sites' trade calculators, so outside Titan's
+owner's account the Trade tab shows who wins as each team's value change in percent, and the number
+beside each player is Titan's own value: his projected points this season above a replacement starter
+at his position, in the league's scoring (from Sleeper's season projections). The app page's footer
+links FantasyCalc without needing JavaScript, as FantasyCalc asks.
 
 On computers and tablets, the app in a browser takes the website's look: its sections become a
 menu across the header, the page is a centred 1100px column (one league per row, as on a phone), the

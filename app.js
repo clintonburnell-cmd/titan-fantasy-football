@@ -2351,6 +2351,35 @@
   const formatName = f => [f.dynasty ? 'dynasty' : 'redraft', f.qbs === 2 ? 'superflex' : '1 QB', f.teams + ' teams',
     f.ppr === 1 ? 'PPR' : f.ppr === 0.5 ? 'half PPR' : 'standard scoring'].join(', ');
 
+  /* FantasyCalc's own numbers show only on Titan's owner's account. FantasyCalc's terms for
+     Titan (email, 2026-09-12): its values stay out of other sites' trade calculators, but who
+     wins a trade, each team's value change in percent, and lines like "Your starters +988 ·
+     theirs +518" are fine. So everyone else sees Titan's own value beside each player
+     (SCC.titanValues, from Sleeper's season projections, never FantasyCalc's), while who wins,
+     fairness and the trade ideas still come from FantasyCalc's values. */
+  const fcShown = () => S.owner.is;
+  async function loadSeasonProj() {
+    S.trade.season = {busy: true};
+    try { S.trade.season = {map: await API.fetchSeasonProjections(S.snap.season)}; }
+    catch (e) { S.trade.season = {map: {}}; }
+    S.trade.tv = {};
+    if (S.ui.tab === 'trade') render();
+  }
+  function titanValueFor(cfg) {
+    const sp = S.trade.season && S.trade.season.map;
+    if (!sp || !Object.keys(sp).length) return () => null;
+    S.trade.tv = S.trade.tv || {};
+    if (!S.trade.tv[cfg.id]) S.trade.tv[cfg.id] = SCC.titanValues(sp, playerList(), cfg);
+    const m = S.trade.tv[cfg.id];
+    return p => (p && p.pos !== 'PICK' && m[p.id] !== undefined ? m[p.id] : null);
+  }
+  // The number beside a player on the Trade tab: FantasyCalc's for the owner, Titan's for everyone else ('' for none).
+  function tradeDisplay(cfg, V) {
+    const fc = fcShown(), tv = titanValueFor(cfg);
+    const fcv = p => (V && V.idx ? (SCC.playerValue(V.idx, p) || {}).v : 0) || 0;
+    return {fc, tv, num: p => { const n = fc ? fcv(p) : tv(p); return n === null || (fc && !n) ? '' : thousands(n); }};
+  }
+
   async function loadTradeValues(f) {
     const k = tradeKey(f);
     S.trade.values[k] = {busy: true};
@@ -2387,13 +2416,14 @@
     const f = SCC.tradeFormat(d.cfg), k = tradeKey(f);
     if (!S.trade.values[k]) loadTradeValues(f);
     if (!S.trade.teams[d.cfg.id]) loadTradeTeams(d);
+    if (!fcShown() && !S.trade.season) loadSeasonProj();
     const V = S.trade.values[k], T = S.trade.teams[d.cfg.id];
     const teams = (T && T.list) || [], me = teams.find(t => t.mine);
     const partner = teams.find(t => !t.mine && t.id === S.ui.tradePartner) || null;
     const P = S.trade.pick;
     if (P.league !== d.cfg.id || P.partner !== (partner ? partner.id : '')) Object.assign(P, {league: d.cfg.id, partner: partner ? partner.id : '', give: [], get: []});
 
-    let h = `<p class="credit">Trade values by <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>${
+    let h = `<p class="credit">${fcShown() ? 'Trade values' : 'Who wins is weighed with trade values'} by <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>${
       V && V.at ? `, updated ${esc(when(V.at))}` : ''}. Titan isn't affiliated with FantasyCalc.</p>
       <div class="bar">
         ${pickedLeague() !== 'all' ? '' : `<label class="field"><span>League</span><select data-ui="tradeLeague">${leagues.map(x =>
@@ -2402,14 +2432,16 @@
           <option value="">Pick a team</option>${teams.filter(t => !t.mine).map(t => `<option value="${esc(t.id)}"${t === partner ? ' selected' : ''}>${
             esc(t.name)}</option>`).join('')}</select></label>
       </div>
-      <p class="fine">Values for ${esc(formatName(f))}: what players like these go for in real trades.</p>`;
+      <p class="fine">${fcShown() ? `Values for ${esc(formatName(f))}: what players like these go for in real trades.`
+        : `Weighed for ${esc(formatName(f))}. The number beside each player is Titan's own value: his projected points this season above a
+          replacement starter at his position, in this league's scoring. It covers this season only, so it doesn't weigh age.`}</p>`;
     const retry = '<button class="link" data-action="trade-retry">Try again</button>';
     if (T && T.error) return h + `<div class="banner stop">${esc(T.error)} ${retry}</div>`;
     if (V && V.error) return h + `<div class="banner stop">${esc(V.error)} ${retry}</div>`;
     if (!T || T.busy || !V || V.busy) return h + '<div class="empty-note">Loading the teams and their trade values…</div>';
     if (!me) return h + `<div class="empty-note">Titan couldn't find your team in ${esc(d.cfg.key)}.</div>`;
 
-    const val = p => SCC.playerValue(V.idx, p), worth = p => (val(p) || {}).v || 0;
+    const val = p => SCC.playerValue(V.idx, p), worth = p => (val(p) || {}).v || 0, disp = tradeDisplay(d.cfg, V);
     // Players and, in dynasty leagues, draft picks.
     const assets = t => t.roster.concat(t.picks || []);
     const give = P.give.map(id => assets(me).find(p => p.id === id)).filter(Boolean);
@@ -2417,9 +2449,9 @@
     h += `<section class="card pad tsearch"><label class="field"><span>Who has him? Search for a player in ${esc(d.cfg.key)}</span>
         <input type="search" data-trade-search placeholder="At least three letters" value="${esc(S.trade.q || '')}" autocomplete="off"
           autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="tsearch">${tradeSearchResults()}</div></section>`;
-    h += tradeIdeasCard(d.cfg, worth);
-    if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth, V.waiver);
-    return h + `<div class="trade-teams">${tradeRoster(d.cfg, me, 'give', val)}${partner ? tradeRoster(d.cfg, partner, 'get', val)
+    h += tradeIdeasCard(d.cfg, disp);
+    if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth, V.waiver, disp);
+    return h + `<div class="trade-teams">${tradeRoster(d.cfg, me, 'give', val, disp)}${partner ? tradeRoster(d.cfg, partner, 'get', val, disp)
       : '<div class="card pad"><p class="lede">Pick a trade partner to see their roster.</p></div>'}</div>`;
   }
 
@@ -2436,7 +2468,7 @@
   }
 
   // Until asked (or after Clear), just a line with Find trades, so your own trade has the room.
-  function tradeIdeasCard(cfg, worth) {
+  function tradeIdeasCard(cfg, disp) {
     const I = S.trade.ideas[cfg.id];
     if (!I) {
       return `<section class="card pad tideas min"><div class="tideas-h"><h3>Trade ideas</h3>
@@ -2448,7 +2480,7 @@
       <p class="fine">Fair trades (FantasyCalc's values within 5%) of one or two players each way that make your starting lineup
         stronger, and theirs too where possible. Strength is the value of each team's best starters.</p>`;
     if (!I.list.length) return `<section class="card pad tideas">${head}<p class="empty-note">No fair trade in this league makes your starting lineup stronger right now.</p></section>`;
-    const names = list => list.map(p => `${esc(p.name)} <small>${thousands(worth(p))}</small>`).join(' + ');
+    const names = list => list.map(p => `${esc(p.name)}${disp.num(p) ? ` <small>${disp.num(p)}</small>` : ''}`).join(' + ');
     const change = n => `<span class="${n > 0 ? 'good' : n < 0 ? 'amber' : ''}">${(n > 0 ? '+' : n < 0 ? '−' : '') + thousands(Math.abs(n))}</span>`;
     return `<section class="card pad tideas">${head}<ol class="idea-list">${I.list.map((x, i) => `<li class="idea">
         <div class="idea-t"><b>With ${esc(x.partner.name)}</b><span>You give ${names(x.give)} · you get ${names(x.get)}</span>
@@ -2465,7 +2497,7 @@
     const Tm = d && S.trade.teams[d.cfg.id];
     if (q.length < 3 || !Tm || !Tm.list) return '';
     const V = S.trade.values[tradeKey(SCC.tradeFormat(d.cfg))];
-    const worth = p => (V && V.idx ? (SCC.playerValue(V.idx, p) || {}).v : 0) || 0;
+    const worth = p => (V && V.idx ? (SCC.playerValue(V.idx, p) || {}).v : 0) || 0, disp = tradeDisplay(d.cfg, V);
     const found = [], seen = new Set(), players = playerList();
     Tm.list.forEach(t => t.roster.forEach(p => {
       const n = SCC.norm(p.name);
@@ -2479,13 +2511,13 @@
     if (!found.length) return '<p class="fine">Nobody by that name in this league or on an NFL team.</p>';
     found.sort((a, b) => (!!b.team - !!a.team) || worth(b.p) - worth(a.p) || a.p.name.localeCompare(b.p.name));
     return `<ul class="wlist">${found.slice(0, 8).map(({p, team}) => `<li class="wrow">${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b>
-      <small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}${worth(p) ? ' · value ' + thousands(worth(p)) : ''}</small>
+      <small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}${disp.num(p) ? ' · value ' + disp.num(p) : ''}</small>
       <span class="wchips">${!team ? '<span class="wst free">free agent</span>' : team.mine ? '<span class="wst mine">on your team</span>'
         : `<span class="wst">on ${esc(team.name)}</span><button type="button" class="btn small ghost" data-tsearch="${esc(team.id)}|${esc(p.id)}">Trade for him</button>`}</span></span></li>`).join('')}</ul>`;
   }
 
   // A team's draft picks in a dynasty league: Sleeper says who owns which, ESPN doesn't.
-  function tradePicks(cfg, team, which, val, picked) {
+  function tradePicks(cfg, team, which, val, picked, disp) {
     if (cfg.kind !== 'Dynasty') return '';
     if (!team.picks) return '<p class="fine tnote">ESPN doesn\'t share who owns which draft picks, so picks can\'t be added here.</p>';
     if (!team.picks.length) return '';
@@ -2493,21 +2525,23 @@
       const x = val(p);
       return `<button type="button" class="trow" data-trade="${which}" data-pid="${esc(p.id)}" aria-pressed="${picked.includes(p.id)}">
         <span class="pphoto sm"><span class="hs tpick">R${p.round}</span></span><span class="who"><b>${esc(p.name)}</b><small>${
-          p.via ? 'from ' + esc(p.via) : 'own pick'}</small></span><span class="tval">${x ? thousands(x.v) : '–'}</span></button>`;
+          p.via ? 'from ' + esc(p.via) : 'own pick'}</small></span><span class="tval">${disp.fc ? (x ? thousands(x.v) : '–') : ''}</span></button>`;
     }).join('');
   }
 
   // One team's players, most valuable first, then its draft picks. Tapping one puts it in the trade, or takes it out.
-  function tradeRoster(cfg, team, which, val) {
-    const picked = S.trade.pick[which], picks = tradePicks(cfg, team, which, val, picked);
-    const rows = team.roster.map(p => ({p, x: val(p)}))
-      .sort((a, b) => ((b.x || {}).v || 0) - ((a.x || {}).v || 0) || a.p.name.localeCompare(b.p.name));
+  function tradeRoster(cfg, team, which, val, disp) {
+    const picked = S.trade.pick[which], picks = tradePicks(cfg, team, which, val, picked, disp);
+    // Most valuable first, by whichever value shows: FantasyCalc's for the owner, Titan's for everyone else.
+    const order = r => disp.fc ? (r.x || {}).v || 0 : r.t || 0;
+    const rows = team.roster.map(p => ({p, x: val(p), t: disp.tv(p)}))
+      .sort((a, b) => order(b) - order(a) || a.p.name.localeCompare(b.p.name));
     return `<section class="card tteam"><header class="card-h"><div><h3>${esc(which === 'give' ? 'Your team' : team.name)}</h3>
       <p>${which === 'give' ? esc(team.name) + ' · tap the players you\'d give' : 'Tap the players you\'d get'}</p></div></header>
       <div class="trows">${rows.map(({p, x}) => `<button type="button" class="trow" data-trade="${which}" data-pid="${esc(p.id)}" aria-pressed="${picked.includes(p.id)}">
         ${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}${
-          x && x.pr ? ' · ' + esc(p.pos + x.pr) : ''}</small></span>
-        <span class="tval">${x ? thousands(x.v) : '–'}${x && x.tr ? `<small class="${x.tr > 0 ? 'good' : 'amber'}" title="Change over the last 30 days">${
+          disp.fc && x && x.pr ? ' · ' + esc(p.pos + x.pr) : ''}</small></span>
+        <span class="tval">${disp.num(p) || '–'}${disp.fc && x && x.tr ? `<small class="${x.tr > 0 ? 'good' : 'amber'}" title="Change over the last 30 days">${
           x.tr > 0 ? '▲' : '▼'} ${thousands(Math.abs(x.tr))}</small>` : ''}</span></button>`).join('')}${picks}</div></section>`;
   }
 
@@ -2529,32 +2563,37 @@
   }
 
   // The trade so far: both sides, the verdict, a balance bar, what would even it out, and the lineups.
-  function tradeSummary(cfg, me, partner, give, get, worth, waiver) {
+  function tradeSummary(cfg, me, partner, give, get, worth, waiver, disp) {
     const items = list => list.map(p => ({v: worth(p), pick: p.pos === 'PICK'}));
     const R = SCC.tradeVerdict(items(give), items(get), waiver), any = give.length || get.length;
     const chips = (list, which) => list.length ? list.map(p => `<button type="button" class="chip tchip" data-trade="${which}" data-pid="${esc(p.id)}" title="Take out of the trade">${
-      esc(p.name)} <small>${worth(p) ? thousands(worth(p)) : '–'}</small> ✕</button>`).join('') : '<span class="fine">Nobody yet</span>';
+      esc(p.name)} <small>${disp.num(p) || '–'}</small> ✕</button>`).join('') : '<span class="fine">Nobody yet</span>';
     const total = (R.give.adj + R.get.adj) || 1, pg = Math.round(R.get.adj / total * 100);
-    // A side's total, with the roster-spot value in it spelled out.
+    // A side's total, with the roster-spot value in it spelled out: FantasyCalc's numbers, so the owner's only.
     const tot = (s, whose) => {
+      if (!disp.fc) return '';
       const n = waiver ? Math.round(s.spot / waiver) : 0;
       return `<p class="ttot">${thousands(s.adj)}${n ? `<small>includes ${thousands(s.spot)} for ${whose} open roster spot${n > 1 ? 's' : ''}</small>` : ''}</p>`;
     };
+    // Each team's value change as a percent of everything it has (FantasyCalc's values, roster spots counted).
+    const teamValue = t => t.roster.concat(t.picks || []).reduce((s, p) => s + worth(p), 0);
+    const pct = (n, t) => { const v = teamValue(t), x = v ? n / v * 100 : 0; return `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x).toFixed(1)}%`; };
+    const change = `Your team's value ${pct(R.diff, me)}, ${esc(partner.name)}'s ${pct(-R.diff, partner)}.`;
     let verdict;
     if (!any) verdict = 'Tap players below to build a trade: yours to give, theirs to get.';
     else if (!give.length || !get.length) verdict = `Add players from ${!give.length ? 'your team' : esc(partner.name)} too.`;
-    else if (R.fair) verdict = '<b class="good">Fair trade.</b> The two sides are within 5% of each other.';
-    else if (R.winner === 'you') verdict = `<b class="good">You win this trade</b> by ${thousands(R.diff)}.`;
-    else verdict = `<b class="amber">${esc(partner.name)} wins this trade</b> by ${thousands(-R.diff)}.`;
+    else if (R.fair) verdict = `<b class="good">Fair trade.</b> The two sides are within 5% of each other.${disp.fc ? '' : ' ' + change}`;
+    else if (R.winner === 'you') verdict = `<b class="good">You win this trade</b>${disp.fc ? ` by ${thousands(R.diff)}.` : '. ' + change}`;
+    else verdict = `<b class="amber">${esc(partner.name)} wins this trade</b>${disp.fc ? ` by ${thousands(-R.diff)}.` : '. ' + change}`;
     let even = '';
     if (give.length && get.length && !R.fair) {
       // One more player from the side giving less, worth about R.even, would even it out.
       const from = R.winner === 'you' ? me : partner, which = R.winner === 'you' ? 'give' : 'get', taken = S.trade.pick[which];
       const near = from.roster.filter(p => !taken.includes(p.id) && worth(p) > 0)
         .sort((a, b) => Math.abs(worth(a) - R.even) - Math.abs(worth(b) - R.even)).slice(0, 3);
-      even = `<p class="fine">To even it out, ${R.winner === 'you' ? 'you\'d add' : 'they\'d add'} a player worth about ${thousands(R.even)}${near.length ? ', like:' : '.'}</p>${
+      even = `<p class="fine">To even it out, ${R.winner === 'you' ? 'you\'d add' : 'they\'d add'} a player${disp.fc ? ` worth about ${thousands(R.even)}` : ''}${near.length ? ', like:' : '.'}</p>${
         near.length ? `<div class="chips">${near.map(p => `<button type="button" class="chip" data-trade="${which}" data-pid="${esc(p.id)}">+ ${
-          esc(p.name)} <small>${thousands(worth(p))}</small></button>`).join('')}</div>` : ''}`;
+          esc(p.name)}${disp.num(p) ? ` <small>${disp.num(p)}</small>` : ''}</button>`).join('')}</div>` : ''}`;
     }
     /* Neither Sleeper nor ESPN lets another app fill in a trade offer (Sleeper's API is
        read-only), so Titan copies the trade as text and opens your team on the site. */
@@ -2571,7 +2610,8 @@
       ${any ? `<div class="winbar" title="Each side's share of the trade"><span class="wp me${pg <= 50 ? ' up' : ''}">${100 - pg}%</span>
         <span class="wbar"><i class="wopp" style="width:${100 - pg}%"></i><i class="wme" style="width:${pg}%"></i></span><span class="wp opp${pg >= 50 ? ' up' : ''}">${pg}%</span></div>` : ''}
       <p class="tverdict">${verdict}</p>${even}${send}${lineupImpact(cfg, me, partner, give, get)}
-      <p class="fine">Values add up as they are, since FantasyCalc's values already count stars for more. In an uneven trade, the side getting fewer players also gets a waiver pickup's value (about the 300th-best player) for each roster spot it frees, as FantasyCalc's own calculator does.${
+      <p class="fine">${disp.fc ? `Values add up as they are, since FantasyCalc's values already count stars for more. In an uneven trade, the side getting fewer players also gets a waiver pickup's value (about the 300th-best player) for each roster spot it frees, as FantasyCalc's own calculator does.`
+        : `Who wins, and each team's value change, come from FantasyCalc's trade values, counting a waiver pickup's value for each roster spot an uneven trade frees. The numbers beside players are Titan's own values.`}${
         any ? ' <button class="link" data-action="trade-clear">Clear the trade</button>' : ''}</p>
     </section>`;
   }

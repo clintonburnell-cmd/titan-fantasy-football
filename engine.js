@@ -281,6 +281,38 @@
     return {give: a, get: b, diff: diff, fair: fair, winner: fair ? 'even' : diff > 0 ? 'you' : 'them', even: even};
   }
 
+  /* Titan's own trade value, for the Trade tab on every account but Titan's owner's:
+     FantasyCalc asks that its numbers stay out of other sites' trade calculators. A
+     player's projected points this season above a replacement-level player at his
+     position, in the league's scoring: replacement is the best player just outside what
+     the league's teams start there (flex spots shared out). Built only from Sleeper's
+     season projections, never from FantasyCalc's values. {playerId: whole points, 0 at or
+     below replacement}. */
+  var FLEX_SHARE = {FLEX: {RB: 0.45, WR: 0.45, TE: 0.1}, WRRB_FLEX: {RB: 0.5, WR: 0.5}, REC_FLEX: {WR: 0.8, TE: 0.2},
+    SUPER_FLEX: {QB: 0.9, RB: 0.05, WR: 0.05}};
+  function titanValues(seasonProj, players, cfg) {
+    var teams = Number(cfg.teams) || 12, starts = {}, byPos = {}, out = {};
+    (cfg.lineup || []).forEach(function (slot) {
+      var share = FLEX_SHARE[slot];
+      if (!share) {
+        if (!PLAYER_POS[slot]) return;
+        share = {};
+        share[slot] = 1;
+      }
+      for (var pos in share) starts[pos] = (starts[pos] || 0) + share[pos];
+    });
+    for (var id in seasonProj || {}) {
+      var pos = playerInfo(players, id).pos;
+      if (starts[pos]) (byPos[pos] = byPos[pos] || []).push({id: id, pts: projFor(seasonProj, id, cfg.ppr) || 0});
+    }
+    Object.keys(byPos).forEach(function (pos) {
+      var list = byPos[pos].sort(function (a, b) { return b.pts - a.pts; });
+      var repl = list[Math.min(Math.round(teams * starts[pos]), list.length - 1)].pts;
+      list.forEach(function (x) { out[x.id] = Math.max(0, Math.round(x.pts - repl)); });
+    });
+    return out;
+  }
+
   /* Trade ideas for one team in a league: trades of one or two players each way (not two
      for two) that FantasyCalc's calculator calls fair (tradeVerdict, roster spots counted)
      and that make the team's starting lineup stronger. A lineup's strength here is the value
@@ -1885,7 +1917,7 @@
     norm: norm, teamAbbr: teamAbbr, byeOf: byeOf, byesFromSchedule: byesFromSchedule, setByes: setByes,
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
-    tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict,
+    tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues,
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas,
     impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags, transactionsFrom: transactionsFrom,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,

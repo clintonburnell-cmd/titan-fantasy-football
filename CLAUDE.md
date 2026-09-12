@@ -89,6 +89,17 @@ live site, so site changes reach it without a new upload. What's done and what's
   their place. It reads every 30 seconds while a game is live or kicks off within 10 minutes, every 10
   minutes otherwise, only while the page is in view, and never in the demo. Each game links to its
   ESPN page, "Scores: ESPN" credits the source, and a badge counts the person's starters in the game.
+- FantasyCalc's arrangement with Titan (email from FantasyCalc, 2026-09-12): its values stay out of
+  Titan's trade calculator for the public. Showing who wins, each team's value change in percent, and
+  lines like "Your starters +988 · theirs +518" is fine. Free while Titan stays under about 10k
+  sessions and $2k revenue a month (then revisit), with a credit on every page that uses its data and at
+  least one link that doesn't depend on JavaScript (the app page's footer), and cached calls to the
+  current-values endpoint only. Never suggest FantasyCalc approves of or partners with Titan. So only
+  Titan's owner (`fcShown`, the `titanOwner` claim) sees FantasyCalc's numbers, position ranks and
+  trends; everyone else sees Titan's own value (`SCC.titanValues`: projected season points above a
+  replacement starter at the position, from Sleeper's season projections via
+  `API.fetchSeasonProjections`, never derived from FantasyCalc), draft picks without a number, and
+  the verdict as percent changes (`tradeDisplay`, `tradeSummary`).
 - The Trade tab uses FantasyCalc's trade values. Their terms: call only `/values/current`, cache on
   Titan's server (the `tradeValues` function keeps each format in Firestore `tradeValues/{format}` for a
   day; the app reads `/api/trade-values`, never FantasyCalc), and credit FantasyCalc with a visible link

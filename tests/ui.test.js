@@ -310,13 +310,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(tradeAsked.some(q => /dynasty=0/.test(q) && /qbs=1/.test(q) && /teams=10/.test(q) && /ppr=0\.5/.test(q)),
     'values come from Titan\'s server, for the league\'s format: ' + (tradeAsked[0] || 'not asked'));
   check(await ev(`!!document.querySelector('.credit a[href="https://fantasycalc.com"]')`), 'FantasyCalc is credited, with a link');
+  check(fs.readFileSync(path.join(T.ROOT, 'app', 'index.html'), 'utf8').includes('href="https://fantasycalc.com"'),
+    'the app page links FantasyCalc in its own HTML, not only through JavaScript (FantasyCalc asks for that)');
   await ev(`(() => { const s = document.querySelector('[data-ui="tradePartner"]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
   check(await waitFor(`document.querySelectorAll('.tteam').length === 2 && document.querySelectorAll('.tteam .trow').length > 20`, 5000),
     'picking a partner shows both rosters');
   await ev(`document.querySelector('.tteam [data-trade="give"]').click(); true`);
   await ev(`document.querySelector('.tteam [data-trade="get"]').click(); true`);
   check(await waitFor(`/win|Fair/.test((document.querySelector('.trade-sum .tverdict') || {}).textContent || '') && document.querySelectorAll('.trade-sum .tchip').length === 2`, 3000),
-    'a player from each side gets totals and a verdict: ' + await text('.trade-sum .tverdict'));
+    'a player from each side gets a verdict: ' + await text('.trade-sum .tverdict'));
+  check(await waitFor(`!document.querySelector('.trade-sum .ttot') && /%/.test(document.querySelector('.trade-sum .tverdict').textContent) &&
+    [...document.querySelectorAll('.tteam .tval')].some(v => /\\d/.test(v.textContent))`, 20000),
+    'without the owner flag: no FantasyCalc totals, the verdict in percent, and Titan\'s own values beside players');
   check(await ev(`[...document.querySelectorAll('.trade-sum *')].every(el => el.getBoundingClientRect().right <= document.querySelector('.trade-sum').getBoundingClientRect().right + 1)`),
     'on a phone the trade fits inside its card (nothing cut off on the right)');
   check(await ev(`document.querySelectorAll('.trade-sum .tlineup p').length === 3`),

@@ -5,6 +5,21 @@ const T = require('./lib');
 const SCC = T.app('engine.js');
 const {check, section} = T;
 
+section('Titan\'s own value (the Trade tab for everyone but Titan\'s owner)');
+{
+  // Two teams starting QB, RB, WR and FLEX: RB starters come to 2 x (1 + 0.45 of the flex) = 2.9, so the 4th-best RB is replacement.
+  const pl = {1: ['Q One', 'QB', 'KC'], 2: ['Q Two', 'QB', 'BUF'], 3: ['Q Three', 'QB', 'SF'], 4: ['Q Four', 'QB', 'NYJ'],
+    11: ['R One', 'RB', 'KC'], 12: ['R Two', 'RB', 'BUF'], 13: ['R Three', 'RB', 'SF'], 14: ['R Four', 'RB', 'NYJ'], 15: ['R Five', 'RB', 'MIA'],
+    21: ['K One', 'K', 'KC']};
+  const sp = {1: [300, 0], 2: [250, 0], 3: [200, 0], 4: [150, 0], 11: [200, 10], 12: [180, 0], 13: [160, 0], 14: [140, 0], 15: [120, 0], 21: [150, 0]};
+  const cfgTv = {teams: 2, ppr: 0, lineup: ['QB', 'RB', 'WR', 'FLEX']};
+  const tv = SCC.titanValues(sp, pl, cfgTv);
+  check(tv[1] === 100 && tv[2] === 50 && tv[3] === 0 && tv[4] === 0, 'QBs: projected points above the 3rd-best QB (two teams start one each)');
+  check(tv[11] === 60 && tv[12] === 40 && tv[13] === 20 && tv[14] === 0 && tv[15] === 0, 'RBs: above the 4th-best, the flex shared out; nobody goes below zero');
+  check(tv[21] === undefined, 'a position the league doesn\'t start gets no value');
+  check(SCC.titanValues(sp, pl, Object.assign({}, cfgTv, {ppr: 1}))[11] === 70, 'in the league\'s scoring: PPR adds the catches');
+}
+
 section('league format');
 const std = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF'];
 const f = SCC.tradeFormat({lineup: std, teams: 12, ppr: 1, kind: 'Redraft'});

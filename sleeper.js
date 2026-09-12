@@ -752,7 +752,22 @@
     }
   }
 
+  /* Sleeper's season-long projections, trimmed and kept for 12 hours: Titan's own trade
+     values (SCC.titanValues) on the Trade tab. Never throws: no projections, no values. */
+  async function fetchSeasonProjections(season) {
+    var key = 'titan.sproj.v1.' + season, cached = store.get(key);
+    if (cached && Date.now() - cached.ts < 12 * 3600 * 1000) return cached.map;
+    try {
+      var map = SCC.trimProjections((await getJson('https://api.sleeper.app/projections/nfl/' + season + '?season_type=regular' + PROJ_POS)) || []);
+      store.set(key, {ts: Date.now(), map: map});
+      return map;
+    } catch (e) {
+      return cached ? cached.map : {};
+    }
+  }
+
   var api = {
+    fetchSeasonProjections: fetchSeasonProjections,
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
     collect: collect, collectScores: collectScores, livePoints: livePoints,
     collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule,
