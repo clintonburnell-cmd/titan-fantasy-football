@@ -17,6 +17,7 @@ live site, so site changes reach it without a new upload. What's done and what's
 | `index.html`, `site.css` | The website at the root: what Titan is, features, FAQ. In a browser it always shows the website (the owner's call: never forward browser visitors, even with a saved account). Only the Android app's `/?source=play` and home-screen copies go to the app, keeping the query; `/?home` shows the website even there |
 | `titan.svg` | The Titan banner art (hand-drawn vector). The Play feature graphic (`titan-android/store/feature-graphic.html`) and the share image `og-image.jpg` (`titan-android/store/og-image.html`) use it too: re-render both after changing it |
 | `robots.txt`, `sitemap.xml` | For search engines. `/app/` stays out of results through its noindex tag, not robots.txt (a block would hide the tag). Add new website pages to the sitemap, and keep the home page's structured data (JSON-LD) FAQ identical to the visible FAQ |
+| `stats.js` | Visit counts (Cloudflare Web Analytics) for the website's pages only; see Rules |
 | `demo.js` | "Try a demo" (`/app/?demo`): two sample leagues built from Sleeper's player list and this week's projections |
 | `app/index.html` | The app's page, at `/app/`. It loads every file by absolute path (`/app.js`, `/styles.css`) |
 | `engine.js` | All the rules, pure (runs in the browser, in Node tests and in the server job): rankings parsing, start/sit, waiver ideas, exposure, byes, projections, kickoff freezing, weekly scoring |
@@ -138,6 +139,11 @@ live site, so site changes reach it without a new upload. What's done and what's
   promised features in a listing as misleading). The website says Yahoo is coming soon, at the
   owner's request (2026-09-11): its title, a Yahoo card and the FAQ. Keep that wording honest until
   Yahoo leagues work.
+- Visit counts: Cloudflare Web Analytics, loaded by `stats.js` on the website's pages only (home,
+  guides, privacy, terms; a new website page gets the tag too, and `tests/stats.test.js` checks).
+  `counts` keeps it off `/app/`, the Play app (`?source=play`, the android-app referrer, `titan.play`),
+  home-screen copies and any host but titanfantasyfootball.com. Never load it in the app: the Play
+  Data safety form declares no analytics, and the privacy policy says the app has none. `TOKEN` is public.
 
 ## Writing (app text, README, store listing)
 

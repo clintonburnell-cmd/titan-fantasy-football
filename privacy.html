@@ -12,6 +12,7 @@
     try { if (localStorage.getItem('titan.theme') === 'dark') { document.documentElement.dataset.theme = 'dark'; document.querySelector('meta[name="theme-color"]').content = '#0a0f1a'; } } catch (e) {}
   </script>
   <script src="/theme.js" defer></script>
+  <script src="/stats.js" defer></script>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
   <style>
@@ -78,6 +79,10 @@
         Titan's server with the ESPN login you saved. Titan can't change your ESPN lineups either.</li>
       <li><b>Google</b>: Firebase, for sign-in and sync if you choose to sign in, for delivering alerts if you turn them on,
         and for hosting the app.</li>
+      <li><b>Cloudflare</b> (<code>cloudflareinsights.com</code>): the website's pages count visits with Cloudflare Web
+        Analytics, which sees the page opened, the site that linked to it, and your browser, device type and country. It
+        uses no cookies, doesn't know who you are and doesn't follow you to other sites. The app, the Android app and copies
+        on your home screen never load it.</li>
       <li><b>Ko-fi</b>: only if you tap the tip jar on the website. Tips are handled entirely by Ko-fi, and Titan never sees
         your payment details.</li>
       <li><b>X</b>: only if you tap an account on the News tab, which opens it in the X app or on x.com.</li>
@@ -85,7 +90,8 @@
 
     <h2>What Titan doesn't do</h2>
     <ul>
-      <li>No analytics, advertising or tracking.</li>
+      <li>No advertising, and no analytics in the app. The website's visit counts (above) use no cookies and can't tell who
+        you are.</li>
       <li>No selling or sharing of anything.</li>
     </ul>
 

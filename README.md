@@ -180,6 +180,8 @@ app page. Screens show placeholder cards while they load.
   their own data.
 - **Sleeper** is read directly from the device (`api.sleeper.app`); player headshots,
   team logos and avatars load from Sleeper's image server (`sleepercdn.com`).
+- **Cloudflare Web Analytics** counts visits to the website's pages (home, guides, privacy,
+  terms) without cookies (`stats.js`). The app, the Android app and home-screen copies never load it.
 - **ESPN's public NFL schedule** (`proTeamSchedules_wl`) gives every kickoff time. The
   device reads it for everyone, Sleeper-only users included, and keeps it 12 hours.
 - **ESPN** (`lm-api-reads.fantasy.espn.com`, the JSON ESPN's own site reads; not a
@@ -256,6 +258,7 @@ sleeper.js             Sleeper API calls, league discovery, refresh and browser 
 espn.js                ESPN leagues: reading them and matching their players to Sleeper's
 app.js                 Screens and interactions
 sw.js                  Service worker: offline shell, installable app
+stats.js               Website visit counts (Cloudflare Web Analytics; never in the app)
 manifest.webmanifest   App name and icons for installing
 icon*.svg / icon*.png  App icons (the PNGs are rendered from the SVGs)
 privacy.html           Privacy policy
