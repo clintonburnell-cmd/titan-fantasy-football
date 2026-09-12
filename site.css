@@ -172,3 +172,4 @@ html { scroll-behavior: smooth; }
 .foot-links { display: flex; flex-wrap: wrap; gap: 18px; }
 .site-foot a { color: var(--muted); text-decoration: none; }
 .site-foot a:hover { color: var(--text); }
+.site-foot .tip { color: var(--text); }

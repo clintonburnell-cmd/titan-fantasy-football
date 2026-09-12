@@ -38,10 +38,14 @@
   paint();
   window.TitanTheme = {current: current, set: set};
 
-  // Every page loads this file, so it also hides the tip jar from anyone who links Yahoo
-  // (the app sets titan.noTip; the owner's call, given Yahoo's terms on earning from its data).
+  // Every page loads this file, so it also hides the tip jar at the bottom of the page: inside the
+  // Google Play app, where tips must go through Play billing (the app remembers a Play session as
+  // titan.play, and a page opened straight from it carries ?source=play or the android-app referrer),
+  // and from anyone who links Yahoo (the app sets titan.noTip; the owner's call, given Yahoo's terms).
   try {
-    if (localStorage.getItem('titan.noTip') === '1') {
+    var play = sessionStorage.getItem('titan.play') === '1' || /[?&]source=play\b/.test(location.search) ||
+      document.referrer.indexOf('android-app://') === 0;
+    if (play || localStorage.getItem('titan.noTip') === '1') {
       document.querySelectorAll('a[href^="https://ko-fi.com/"]').forEach(function (a) { a.hidden = true; });
     }
   } catch (e) { /* storage blocked: the tip jar shows */ }

@@ -184,6 +184,11 @@ live site, so site changes reach it without a new upload. What's done and what's
   from `SCC.teamLabel` (Sleeper's `team_name` and `display_name`; ESPN's team name and member name),
   or the account name alone when there's no nickname. Build new team names with it, and don't add
   the manager again where one is shown. `slimSchedule` keeps the members so private ESPN leagues get them.
+- The Ko-fi tip jar sits at the bottom of every page, never the header: the app's footer (`data-tip`),
+  the website's footers (home and guides), and the end of privacy and terms. It hides inside the Play
+  app (the app's `IN_PLAY_APP` in `tipJar`; `theme.js` on the website's pages, from `titan.play`,
+  `?source=play` or the android-app referrer) and for anyone who links Yahoo (`titan.noTip`). A new
+  website page ends with it too.
 - Visit counts: Cloudflare Web Analytics, loaded by `stats.js` on the website's pages only (home,
   guides, privacy, terms; a new website page gets the tag too, and `tests/stats.test.js` checks).
   `counts` keeps it off `/app/`, the Play app (`?source=play`, the android-app referrer, `titan.play`),

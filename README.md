@@ -50,9 +50,10 @@ kickoff times and injury tags, with a bench back who should start, a weak FLEX, 
 both teams and a few good free agents. The demo keeps its own storage and never loads sign-in, so it
 can't touch a real account. Matchup and Results say they need real leagues.
 
-The header has a Ko-fi tip jar ("Like my work? Consider a tip!"). It shows only on
-the website. The Google Play app opens `/?source=play`, and Titan hides the tip jar
-for that session, because tips inside a Play app must use Google Play billing.
+A Ko-fi tip jar ("Like my work? Consider a tip!") sits at the bottom of every page: the app's
+footer, and the end of each website page. The Google Play app opens `/?source=play`, and Titan
+hides the tip jar for that session, on the website's pages too, because tips inside a Play app
+must use Google Play billing. It's hidden for anyone who links Yahoo as well.
 
 On iPhone and iPad, Titan runs as a home-screen web app (Safari: Share, then Add to
 Home Screen). Visitors in the browser see a one-time tip explaining that. From the
@@ -114,8 +115,8 @@ menu across the header, the page is a centred 1100px column (one league per row,
 league chips wrap instead of scrolling (on wider windows the page grows to 1280px and Lineups,
 Matchup, Rosters and Results list the leagues down the left side, like Sleeper's website, with the filters
 still on top), Settings sits
-in two columns, Rosters show as tables, the footer has three columns of links (the tip jar moves
-there), the Google account sits at the top right with Settings and Sign out, rows light up under the
+in two columns, Rosters show as tables, the footer has three columns of links above the tip
+jar, the Google account sits at the top right with Settings and Sign out, rows light up under the
 pointer, and on wide windows the Titan art sits faded to the right. Phones, the Android app and
 home-screen copies keep the app look.
 

@@ -115,11 +115,10 @@ main#view { min-height: 100vh; }
 .tip:hover { background: rgb(245 185 66 / .18); }
 .tip b { color: var(--swap); font-weight: 700; }
 .tip-cup { font-size: 1rem; }
-/* On a phone the tip splits over two short lines, and the full name wraps
-   under the logo rather than being cut short. */
+/* The tip jar sits at the bottom of every page: the app's footer, and each website page's end. */
+.foot .tip { justify-self: center; }
+/* On a phone the full name wraps under the logo rather than being cut short. */
 @media (max-width: 560px) {
-  .tip { padding: 5px 10px; font-size: .72rem; }
-  .tip-text b, .tip-text span { display: block; }
   .brand h1 { white-space: normal; font-size: .9rem; line-height: 1.15; }
 }
 
@@ -341,8 +340,8 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   html:not(.in-app) .foot-h { display: block; }
   html:not(.in-app) .foot-cols a { text-decoration: none; }
   html:not(.in-app) .foot-cols a:hover { color: var(--text); }
-  /* The header: the tip jar moves to the footer, Refresh gets smaller, and the account shows. */
-  html:not(.in-app) .top .tip { display: none; }
+  /* The header: Refresh gets smaller, and the account shows. The footer's tip jar lines up on the left. */
+  html:not(.in-app) .foot .tip { justify-self: start; }
   html:not(.in-app) .refresh { padding: 7px 13px; font-size: .82rem; }
   html:not(.in-app) .acct { display: block; }
   /* Expand all and Collapse all, quieter. */

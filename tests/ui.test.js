@@ -133,8 +133,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await send('Page.navigate', {url: ORIGIN + '/'});
   check(await waitFor('!!document.querySelector(".hero h1")', 20000), 'a first visit to / shows the website');
   const web = await ev(`({h1: document.querySelector('.hero h1').innerText.replace(/\\n/g, ' '), open: document.querySelectorAll('a[href="/app/"]').length,
-    wide: document.documentElement.scrollWidth <= innerWidth})`);
-  check(/one place/i.test(web.h1) && web.open >= 3 && web.wide, `"${web.h1}", ${web.open} Open Titan links, fits a 390px phone`);
+    wide: document.documentElement.scrollWidth <= innerWidth, tip: !!document.querySelector('.site-foot .tip') && !document.querySelector('.site-top .tip')})`);
+  check(/one place/i.test(web.h1) && web.open >= 3 && web.wide && web.tip, `"${web.h1}", ${web.open} Open Titan links, fits a 390px phone, the tip jar at the bottom`);
   const seo = await ev(`(() => { let ld = null; try { ld = JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent); } catch (e) {}
     const faq = ld ? ld['@graph'].find(x => x['@type'] === 'FAQPage').mainEntity : [];
     // textContent: a closed <details> isn't rendered, so its innerText can come back empty.
@@ -448,9 +448,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     menu: getComputedStyle(document.querySelector('#tabs [aria-current="page"]')).borderBottomStyle,
     foot: getComputedStyle(document.querySelector('.foot-cols')).gridTemplateColumns.split(' ').length, wide: document.documentElement.scrollWidth <= innerWidth,
     width: Math.round(document.getElementById('view').getBoundingClientRect().width),
-    art: getComputedStyle(document.body, '::before').backgroundImage, tip: getComputedStyle(document.querySelector('.top .tip')).display})`);
-  check(desk.cols === 1 && desk.menu === 'solid' && desk.foot === 3 && desk.wide && /titan\.svg/.test(desk.art) && desk.tip === 'none',
-    `a computer gets the website look: a menu with the section underlined, one league per row (${desk.width}px), a three-column footer, the Titan beside the page, the tip jar in the footer`);
+    art: getComputedStyle(document.body, '::before').backgroundImage,
+    tip: !document.querySelector('.top .tip') && getComputedStyle(document.querySelector('.foot .tip')).display !== 'none'})`);
+  check(desk.cols === 1 && desk.menu === 'solid' && desk.foot === 3 && desk.wide && /titan\.svg/.test(desk.art) && desk.tip === true,
+    `a computer gets the website look: a menu with the section underlined, one league per row (${desk.width}px), a three-column footer, the Titan beside the page, the tip jar at the bottom`);
   check(await waitFor(`!document.getElementById('acct').hidden && getComputedStyle(document.getElementById('acct')).display === 'block' &&
     /Sign in/.test(document.getElementById('acct').innerText)`, 20000), 'the header offers Sign in at the top right');
   // Themes: white and blue by default; the header switch turns on dark mode, remembered on the device.
