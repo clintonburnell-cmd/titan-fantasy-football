@@ -63,6 +63,10 @@ website (such as alerts) to pass review.
 
 ## Screens
 
+The Transactions tab lists every trade, waiver claim, free-agent move and commissioner move in your
+Sleeper leagues over the last three weeks, newest first, with filters for trades, adds and drops,
+and your own moves (ESPN leagues aren't read yet).
+
 Each starter on Lineups carries his game's context: his team's expected points (from the betting
 line on ESPN's scoreboard), whether his matchup is soft or tough (the fantasy points his opponent
 gives up to his position, from nflverse's weekly stats), and weather worth knowing at kickoff (from

@@ -314,6 +314,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await ev(`/nflverse/.test(document.getElementById('view').textContent) && !!document.querySelector('a[href="https://github.com/nflverse"]')`),
     'ESPN, the National Weather Service and nflverse are credited');
 
+  T.section('the Transactions tab');
+  await tab('moves');
+  check(await waitFor(`/ESPN leagues aren't in this list yet/.test(document.getElementById('view').textContent) && document.querySelectorAll('[data-moves]').length === 4`, 5000),
+    'the Transactions tab has its filters, and says ESPN leagues aren\'t read yet');
+  check(await ev(`location.pathname === '/app/transactions' && document.title.startsWith('Transactions')`), 'it has its own address: /app/transactions');
+
   T.section('the Waivers tab');
   await tab('waivers');
   check(await waitFor(`!!document.querySelector('[data-waiver-search]') && /Trending pickups/.test(document.getElementById('view').textContent)`, 5000),

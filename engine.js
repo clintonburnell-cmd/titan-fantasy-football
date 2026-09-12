@@ -368,6 +368,42 @@
     return out;
   }
 
+  /* ------------------------------------------------------------ transactions */
+
+  /* A Sleeper league's completed transactions, newest first, for the Transactions tab:
+     {id, kind ('trade', 'waiver', 'free_agent' or 'commissioner'), at, week, bid, mine, sides},
+     where each side is a team involved, with the players it added and dropped, the draft
+     picks it received (another team's pick is labelled with whose it was) and the waiver
+     budget it got or sent. names: {rosterId: team name}; myRoster marks the person's moves. */
+  var ROUND_LABEL = ['', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th'];
+  function transactionsFrom(list, names, players, myRoster) {
+    names = names || {};
+    var team = function (r) { return names[r] || ('Team ' + r); };
+    return (list || []).filter(function (t) { return t && t.status === 'complete'; }).map(function (t) {
+      var sides = {}, order = [];
+      var side = function (r) {
+        r = String(r);
+        if (!sides[r]) { sides[r] = {roster: r, name: team(r), adds: [], drops: [], picks: [], budgetIn: 0, budgetOut: 0}; order.push(r); }
+        return sides[r];
+      };
+      var who = function (id) { var info = playerInfo(players, id); return {id: String(id), name: info.name, pos: info.pos, team: info.team}; };
+      (t.roster_ids || []).forEach(side);
+      Object.keys(t.adds || {}).forEach(function (id) { side(t.adds[id]).adds.push(who(id)); });
+      Object.keys(t.drops || {}).forEach(function (id) { side(t.drops[id]).drops.push(who(id)); });
+      (t.draft_picks || []).forEach(function (p) {
+        var whose = String(p.roster_id) !== String(p.owner_id) ? ' (' + team(p.roster_id) + '\'s)' : '';
+        side(p.owner_id).picks.push(p.season + ' ' + (ROUND_LABEL[p.round] || 'round ' + p.round) + whose);
+      });
+      (t.waiver_budget || []).forEach(function (b) {
+        side(b.receiver).budgetIn += Number(b.amount) || 0;
+        side(b.sender).budgetOut += Number(b.amount) || 0;
+      });
+      return {id: String(t.transaction_id || ''), kind: t.type || '', at: Number(t.status_updated || t.created) || 0, week: Number(t.leg) || 0,
+        bid: t.settings && t.settings.waiver_bid !== undefined ? Number(t.settings.waiver_bid) : null,
+        mine: order.indexOf(String(myRoster)) >= 0, sides: order.map(function (r) { return sides[r]; })};
+    }).sort(function (a, b) { return b.at - a.at; });
+  }
+
   /* ------------------------------------------------------------ game context */
 
   var round1 = function (x) { return Math.round(x * 10) / 10; };
@@ -1816,7 +1852,7 @@
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict,
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas,
-    impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags,
+    impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags, transactionsFrom: transactionsFrom,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,

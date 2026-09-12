@@ -238,6 +238,8 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   html:not(.in-app) .brand h1 { font-size: 1.28rem; }
   html:not(.in-app) .brand p { font-size: .84rem; }
   html:not(.in-app) .tabs-in { gap: 28px; padding-block: 0; }
+  /* Thirteen sections: a little closer together until the window is wide. */
+  @media (max-width: 1339px) { html:not(.in-app) .tabs-in { gap: 18px; } }
   html:not(.in-app) .tabs button { padding: 15px 0 16px; border-radius: 0; font-size: .97rem; border-bottom: 2px solid transparent; }
   html:not(.in-app) .tabs button:hover { background: none; }
   html:not(.in-app) .tabs button[aria-current="page"] { background: none; color: var(--text); border-bottom-color: var(--accent-2); }
@@ -593,6 +595,20 @@ details.match > summary::-webkit-details-marker { display: none; }
 .wbar i { display: block; height: 100%; }
 .wbar .wme { background: var(--ok); }
 .wbar .wopp { background: var(--bar-opp); }
+
+/* The Transactions tab: each move with its league, kind and when; yours marked. */
+.txlist { list-style: none; margin: 0; padding: 0; }
+.tx { display: grid; gap: 4px; padding: 11px 14px; border-top: 1px solid var(--line); }
+.tx:first-child { border-top: 0; }
+.tx.mine { box-shadow: inset 3px 0 0 var(--accent-2); }
+.tx-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.txkind { font-size: .68rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; border-radius: 999px; padding: 2px 8px;
+  background: var(--surface-2); color: var(--muted); }
+.txkind.k-trade { background: rgb(58 103 234 / .14); color: var(--accent-2); }
+.txkind.k-waiver { background: var(--swap-soft); color: var(--swap); }
+.txkind.k-free_agent { background: var(--ok-soft); color: var(--ok); }
+.txside { font-size: .88rem; }
+.txside small { color: var(--muted); font-weight: 600; }
 
 /* The Waivers tab: lists of pickups, bid suggestions, and where a player stands in each league. */
 .wsec { display: grid; gap: 10px; }

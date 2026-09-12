@@ -496,6 +496,29 @@
     return (list || []).map(function (x) { return {id: String(x.player_id), count: Number(x.count) || 0}; });
   }
 
+  /* A Sleeper league's completed transactions over the last `weeks` weeks (trades, waiver
+     claims, free-agent moves, commissioner moves), with team names, for the Transactions
+     tab (SCC.transactionsFrom). Players Titan hasn't met yet are looked up by id. */
+  async function leagueTransactions(lg, rosterId, week, weeks) {
+    var paths = ['/rosters', '/users'];
+    for (var w = Math.max(1, Number(week) - (weeks || 3) + 1); w <= Number(week); w++) paths.push('/transactions/' + w);
+    var got = await Promise.all(paths.map(function (p, i) {
+      var job = getJson(API + '/league/' + lg.id + p);
+      return i < 2 ? job : job.catch(function () { return []; });
+    }));
+    var who = {}, names = {}, all = [], ids = [];
+    (got[1] || []).forEach(function (u) { who[u.user_id] = u; });
+    (got[0] || []).forEach(function (r) {
+      var u = who[r.owner_id] || {};
+      names[r.roster_id] = (u.metadata && u.metadata.team_name) || u.display_name || ('Team ' + r.roster_id);
+    });
+    got.slice(2).forEach(function (list) { all = all.concat(list || []); });
+    all.forEach(function (t) { ids = ids.concat(Object.keys(t.adds || {}), Object.keys(t.drops || {})); });
+    var players = await loadPlayers(), missing = missingIds([ids], players);
+    if (missing.length) await resolveMissing(missing, players);
+    return SCC.transactionsFrom(all, names, players, rosterId);
+  }
+
   /* A Sleeper league's waiver budget (FAAB), for bid suggestions on the Waivers tab: the
      budget, what's left on the person's roster, and the league's winning bids over the last
      six weeks (completed waiver claims). */
@@ -700,7 +723,7 @@
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
     collect: collect, collectScores: collectScores, livePoints: livePoints,
     collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule,
-    trendingAdds: trendingAdds, leagueWaivers: leagueWaivers,
+    trendingAdds: trendingAdds, leagueWaivers: leagueWaivers, leagueTransactions: leagueTransactions,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
     fetchProjections: fetchProjections, PLAYERS_KEY: PLAYERS_KEY
   };

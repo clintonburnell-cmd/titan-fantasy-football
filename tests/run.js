@@ -4,7 +4,7 @@
 const {spawnSync} = require('child_process');
 const path = require('path');
 
-const FILES = ['syncplan', 'engine', 'espn', 'demo', 'matchup', 'standings', 'trade', 'waivers', 'context', 'news', 'functions', 'live', 'ui'];
+const FILES = ['syncplan', 'engine', 'espn', 'demo', 'matchup', 'standings', 'trade', 'waivers', 'transactions', 'context', 'news', 'functions', 'live', 'ui'];
 const pick = process.argv.slice(2);
 const failed = [];
 for (const name of FILES) {

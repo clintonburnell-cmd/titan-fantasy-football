@@ -85,6 +85,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   stadium's spot; NWS needs a User-Agent), and points allowed by position (`SCC.dvpFrom` over
   nflverse's `stats_player_week_<season>.csv.gz`, CC BY 4.0, credited on Lineups; last season's
   until three weeks are played; Firestore `meta/dvp`, 12 hours).
+- The Transactions tab (tab id `moves`, address `/app/transactions`): each Sleeper league's last three
+  weeks of completed transactions (`API.leagueTransactions` → `SCC.transactionsFrom`), reloaded after
+  five minutes. ESPN transactions aren't read yet (their format hasn't been checked on a real league).
 - The Waivers tab: rankings' wire targets (`L.wire`), free backups (`SCC.backupOf`), Sleeper's
   trending adds (`API.trendingAdds`) with where each is free (`L.takenNorm`), a search, and bids
   (`SCC.faabBid` from `API.leagueWaivers`: a Sleeper league's last six weeks of winning bids).

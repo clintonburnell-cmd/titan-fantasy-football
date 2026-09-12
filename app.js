@@ -19,13 +19,13 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'ranks', 'settings'];
+  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
-    score: 'Results', news: 'News', ranks: 'Rankings', trade: 'Trade', settings: 'Settings'};
+    score: 'Results', news: 'News', ranks: 'Rankings', trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
   const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes',
-    score: 'results', news: 'news', ranks: 'rankings', trade: 'trade', settings: 'settings'};
+    score: 'results', news: 'news', ranks: 'rankings', trade: 'trade', moves: 'transactions', settings: 'settings'};
   const tabFromPath = () => {
     const m = location.pathname.match(/^\/app\/([a-z]+)\/?$/);
     return (m && Object.keys(SLUG).find(t => SLUG[t] === m[1])) || '';
@@ -109,7 +109,8 @@
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
     waiv: {trend: null, busy: false, error: '', faab: {}, q: ''},
-    ctx: {busy: false, at: 0, data: null} // game context on Lineups rows (/api/game-context)
+    ctx: {busy: false, at: 0, data: null}, // game context on Lineups rows (/api/game-context)
+    moves: {} // the Transactions tab: each Sleeper league's recent moves ({busy, error, list, at})
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
   // An address like /app/matchup opens that screen.
@@ -231,6 +232,7 @@
       S.trade.ideas = {};
       S.stand = {}; // and scores
       S.waiv.faab = {}; // and waiver budgets
+      S.moves = {}; // and each league's transactions
     } catch (e) {
       S.error = 'Refresh failed: ' + (e && e.message ? e.message : e);
     } finally {
@@ -1824,6 +1826,71 @@
     setEspnLogin(login) { S.espn.login = login; paintSync(); }
   };
 
+  /* ---- Transactions */
+
+  /* Every trade, waiver claim, free-agent move and commissioner move in the person's Sleeper
+     leagues over the last three weeks, newest first (API.leagueTransactions), with filters.
+     Each league loads on its own, again after five minutes. ESPN leagues aren't read yet.
+     Loaders never draw synchronously, so screenMoves can start them. */
+  const MOVES_EVERY = 5 * 60000;
+  async function loadMoves(d) {
+    const id = d.cfg.id, had = S.moves[id];
+    S.moves[id] = Object.assign({}, had, {busy: true});
+    try { S.moves[id] = {list: await API.leagueTransactions(d.cfg, d.rosterId, S.snap.week, 3), at: Date.now()}; }
+    catch (e) { S.moves[id] = Object.assign({}, had, {busy: false, error: (e && e.message) || String(e), at: Date.now()}); }
+    if (S.ui.tab === 'moves') render();
+  }
+
+  const MOVE_KIND = {trade: 'Trade', waiver: 'Waiver claim', free_agent: 'Free agent', commissioner: 'Commissioner'};
+  function moveRow(x) {
+    const pl = p => `${esc(p.name)} <small>${esc([p.pos, p.team].filter(Boolean).join(' '))}</small>`;
+    const line = s => {
+      if (x.kind === 'trade') {
+        const got = s.adds.map(pl).concat(s.picks.map(esc), s.budgetIn ? [`$${s.budgetIn} of waiver budget`] : []);
+        return `<div class="txside"><b>${esc(s.name)}</b> gets ${got.length ? got.join(', ') : 'nothing'}</div>`;
+      }
+      const parts = [];
+      if (s.adds.length) parts.push(`added ${s.adds.map(pl).join(', ')}${x.bid ? ` <span class="wbid">$${x.bid}</span>` : ''}`);
+      if (s.drops.length) parts.push(`dropped ${s.drops.map(pl).join(', ')}`);
+      return parts.length ? `<div class="txside"><b>${esc(s.name)}</b> ${parts.join(' and ')}</div>` : '';
+    };
+    return `<li class="tx${x.mine ? ' mine' : ''}"><div class="tx-h"><b>${leagueIcon(x.cfg, 'xs')}${esc(x.cfg.key)}</b>
+      <span class="txkind k-${esc(x.kind)}">${esc(MOVE_KIND[x.kind] || x.kind)}</span><span class="wmeta">${esc(ago(x.at))}</span></div>${x.sides.map(line).join('')}</li>`;
+  }
+
+  function screenMoves() {
+    if (DEMO) return demoOnly('Transactions', 'The Transactions tab lists every trade, pickup and drop in your real leagues.');
+    if (!S.snap) return emptyState();
+    const leagues = S.snap.leagues || [], sleeper = leagues.filter(d => d.cfg.platform !== 'espn');
+    sleeper.forEach(d => {
+      const M = S.moves[d.cfg.id];
+      if (!M || (!M.busy && Date.now() - (M.at || 0) > MOVES_EVERY)) loadMoves(d);
+    });
+    const all = [];
+    sleeper.forEach(d => ((S.moves[d.cfg.id] || {}).list || []).forEach(x => all.push(Object.assign({cfg: d.cfg}, x))));
+    all.sort((a, b) => b.at - a.at);
+    const tests = {all: () => true, trade: x => x.kind === 'trade', adds: x => x.kind !== 'trade', mine: x => x.mine};
+    const f = tests[S.ui.movesFilter] ? S.ui.movesFilter : 'all', shown = all.filter(tests[f]).slice(0, 150);
+    const loading = sleeper.some(d => { const M = S.moves[d.cfg.id]; return !M || (M.busy && !M.list); });
+    const failed = sleeper.filter(d => (S.moves[d.cfg.id] || {}).error && !(S.moves[d.cfg.id] || {}).list);
+    let h = `<p class="lede">Every trade, waiver claim and free-agent move in your leagues over the last three weeks, newest first.
+      Moves involving your team are marked.</p>
+      <div class="chips" role="group" aria-label="Filter transactions">${[['all', 'All'], ['trade', 'Trades'], ['adds', 'Adds & drops'], ['mine', 'Yours']].map(([k, label]) =>
+        `<button class="chip" data-moves="${k}" aria-pressed="${f === k}">${label} ${all.filter(tests[k]).length}</button>`).join('')}</div>`;
+    if (leagues.length > sleeper.length) h += '<p class="fine">ESPN leagues aren\'t in this list yet: it reads Sleeper\'s transaction history.</p>';
+    if (failed.length) h += `<div class="banner stop">Couldn't load the moves in ${esc(failed.map(d => d.cfg.key).join(', '))}. Tap Refresh to try again.</div>`;
+    if (!shown.length) {
+      h += loading ? '<div class="empty-note">Loading your leagues\' transactions…</div>'
+        : `<div class="empty-note">${sleeper.length ? (f === 'all' ? 'No moves in your leagues over the last three weeks.' : 'Nothing like that over the last three weeks.') : 'Link a Sleeper account to see your leagues\' moves.'}</div>`;
+    } else {
+      h += `<ul class="card txlist">${shown.map(moveRow).join('')}</ul>`;
+      const total = all.filter(tests[f]).length;
+      if (total > shown.length) h += `<p class="fine">Showing the newest ${shown.length} of ${total}. Filter to Trades or Yours to see further back.</p>`;
+      if (loading) h += '<p class="fine">Still loading some leagues…</p>';
+    }
+    return h;
+  }
+
   /* ---- Waivers */
 
   /* Pickups for every league: the rankings' waiver targets, free backups for hurt starters,
@@ -2206,7 +2273,7 @@
 
   const SCREENS = {
     lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
-    score: screenScore, ranks: screenRanks, trade: screenTrade, settings: screenSettings
+    score: screenScore, ranks: screenRanks, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
 
   /* ------------------------------------------------------------- events */
@@ -2247,9 +2314,10 @@
     // A tap on a league's header folds or unfolds it; the toggle listener remembers it.
     const head = e.target.closest('details[data-fold] > summary');
     if (head) { tapped = head.parentElement; return; }
-    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-moves],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
+    if (t.dataset.moves) { S.ui.movesFilter = t.dataset.moves; saveUi(); return render(); }
     if (t.dataset.news) { S.ui.newsMine = t.dataset.news === 'mine'; saveUi(); return render(); }
     if (t.dataset.idea) {
       // A trade idea goes into the builder: its partner, and both sides.
