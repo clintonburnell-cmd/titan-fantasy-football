@@ -583,6 +583,36 @@ exports.espnNews = onRequest({region: 'us-central1', memory: '256MiB', maxInstan
   }
 });
 
+/* Live NFL scores for the app's ticker: ESPN's public scoreboard (unofficial, so the ticker
+   links each game to ESPN and credits it), read by Titan's server and shared by everyone:
+   kept 20 seconds in memory and by Firebase Hosting's CDN. If ESPN can't be reached, the
+   last copy serves. */
+const SCORES_KEEP = 20 * 1000;
+let scoresCache = null;
+async function latestScores(now = Date.now(), read = () => ESPN.fetchScoreboard()) {
+  if (scoresCache && now - scoresCache.at < SCORES_KEEP) return scoresCache;
+  try {
+    const b = await read();
+    scoresCache = {at: now, season: b.season, week: b.week, games: b.games.map(g => ({id: g.id, kickoff: g.kickoff, home: g.home, away: g.away,
+      state: g.state, hs: g.hs, as: g.as, detail: g.detail}))};
+  } catch (e) {
+    if (scoresCache) return scoresCache;
+    throw e;
+  }
+  return scoresCache;
+}
+
+exports.nflScores = onRequest({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 20, invoker: 'public'}, async (req, res) => {
+  try {
+    const out = await latestScores();
+    res.set('Cache-Control', 'public, max-age=15, s-maxage=20');
+    res.json(out);
+  } catch (e) {
+    logger.warn('NFL scores unavailable: ' + e.message);
+    res.status(502).json({error: 'Scores are unavailable right now.'});
+  }
+});
+
 /* Game context for start/sit calls (the app's Lineups rows), one copy for everyone kept 30
    minutes: each team's game this week from ESPN's scoreboard (opponent, kickoff, the betting
    line and each side's expected points), the forecast at kickoff for outdoor games in the US
@@ -680,5 +710,5 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
 });
 
 exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
-  yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll,
+  yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll, latestScores,
   setSend: fn => { sendPush = fn; }};

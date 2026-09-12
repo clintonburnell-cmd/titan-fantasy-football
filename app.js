@@ -111,7 +111,8 @@
     waiv: {trend: null, busy: false, error: '', faab: {}, q: ''},
     ctx: {busy: false, at: 0, data: null}, // game context on Lineups rows (/api/game-context)
     moves: {}, // the Transactions tab: each Sleeper league's recent moves ({busy, error, list, at})
-    yahoo: {busy: false, error: '', data: null, note: ''} // linking Yahoo (Titan's owner only while it's being built)
+    yahoo: {busy: false, error: '', data: null, note: ''}, // linking Yahoo (Titan's owner only while it's being built)
+    scores: null // the scores ticker: this week's NFL games from /api/scores, once loaded
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
   // An address like /app/matchup opens that screen.
@@ -259,6 +260,7 @@
       render();
       scheduleLive();
       if (S.ui.tab === 'matchup' && S.snap) loadMatchups(true);
+      paintTicker(); // the person's starters in each game may have changed
       if (S.again) { S.again = false; refresh(); }
     }
   }
@@ -794,6 +796,72 @@
   /* ESPN's latest NFL news, read through Titan's server (/api/news: ESPN turns some
      browsers away), refreshed every couple of minutes while the tab is open. Stories that tag someone on your rosters are marked, with a filter for them.
      The loader never draws synchronously, so screenNews can start it. */
+  /* ---- NFL scores: a ticker under the header with this week's games from ESPN's scoreboard,
+     read by Titan's server for everyone (/api/scores). While a game is live or about to kick
+     off it updates every 30 seconds, otherwise every 10 minutes, and only while the page is in
+     view. Each game shows how many of the person's starters play in it, and opens on ESPN. */
+  const SCORES_LIVE = 30000, SCORES_IDLE = 10 * 60000;
+  let scoresTimer = null;
+  async function loadScores() {
+    clearTimeout(scoresTimer);
+    if (document.visibilityState === 'visible') {
+      try {
+        const res = await fetch('/api/scores');
+        if (!res.ok) throw new Error('answered ' + res.status);
+        S.scores = await res.json();
+      } catch (e) { /* the ticker keeps its last scores, or stays hidden */ }
+      paintTicker();
+    }
+    const games = (S.scores && S.scores.games) || [];
+    const busy = games.some(g => g.state === 'in' || (g.state === 'pre' && g.kickoff - Date.now() < SCORES_IDLE));
+    scoresTimer = setTimeout(loadScores, busy ? SCORES_LIVE : SCORES_IDLE);
+  }
+
+  // How many of the person's starters play for each NFL team (a player started in two leagues counts once).
+  function startersByTeam() {
+    const seen = {}, n = {};
+    ((S.snap && S.snap.leagues) || []).forEach(d => d.roster.forEach(p => {
+      if (!p.start || !p.team || seen[p.id]) return;
+      seen[p.id] = 1;
+      const t = SCC.teamAbbr(p.team);
+      n[t] = (n[t] || 0) + 1;
+    }));
+    return n;
+  }
+
+  const tickTime = ms => {
+    const d = new Date(ms);
+    return d.toLocaleDateString([], {weekday: 'short'}) + ' ' + d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+  };
+
+  function paintTicker() {
+    const el = $('ticker'), games = (S.scores && S.scores.games) || [];
+    el.hidden = DEMO || !S.account || !games.length;
+    if (el.hidden) return;
+    const old = el.querySelector('.tk-list'), x = old ? old.scrollLeft : null;
+    const mine = startersByTeam();
+    const logo = t => `<img src="https://sleepercdn.com/images/team_logos/nfl/${esc(t.toLowerCase())}.png" alt="" width="16" height="16" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`;
+    const item = g => {
+      const pre = g.state === 'pre', n = (mine[g.home] || 0) + (mine[g.away] || 0);
+      const status = pre ? tickTime(g.kickoff) : g.detail || (g.state === 'post' ? 'Final' : 'Live');
+      const side = (t, pts, other) => `<span class="tk-side${g.state === 'post' && pts < other ? ' tk-lost' : ''}">${logo(t)}<b>${esc(t)}</b>${
+        pre || pts === null ? '' : `<span class="tk-pts">${pts}</span>`}</span>`;
+      const label = `${g.away}${pre ? '' : ' ' + g.as} at ${g.home}${pre ? '' : ' ' + g.hs}, ${status}${n ? `, ${n} of your starter${n === 1 ? '' : 's'}` : ''}`;
+      return `<li><a class="tk-game tk-${esc(g.state || 'pre')}" href="https://www.espn.com/nfl/game/_/gameId/${encodeURIComponent(g.id)}" target="_blank" rel="noopener"
+        aria-label="${esc(label)}">${side(g.away, g.as, g.hs)}${side(g.home, g.hs, g.as)}<span class="tk-foot"><span class="tk-when">${esc(status)}</span>${
+        n ? `<span class="tk-mine" title="Your starters in this game">${n}</span>` : ''}</span></a></li>`;
+    };
+    el.innerHTML = `<div class="ticker-in"><ol class="tk-list">${games.map(item).join('')}</ol>
+      <a class="tk-credit" href="https://www.espn.com/nfl/scoreboard" target="_blank" rel="noopener">Scores: ESPN</a></div>`;
+    const list = el.querySelector('.tk-list');
+    // The first time, it starts at the first game still to finish, as ESPN's ticker does.
+    if (x !== null) list.scrollLeft = x;
+    else {
+      const first = list.querySelector('.tk-in, .tk-pre');
+      if (first) list.scrollLeft = first.parentElement.offsetLeft;
+    }
+  }
+
   const NEWS_EVERY = 2 * 60000;
   async function loadNews() {
     if (S.news.busy) return;
@@ -2665,7 +2733,9 @@
   // Coming back to the app on game day should never show stale lineups.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && S.account && S.snap && Date.now() - S.snap.at > STALE_MS) refresh();
+    if (document.visibilityState === 'visible' && !DEMO && Date.now() - ((S.scores && S.scores.at) || 0) > SCORES_LIVE) loadScores();
   });
+  if (!DEMO) loadScores();
 
   // Offline shell + installable app. Needs https (or localhost).
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {

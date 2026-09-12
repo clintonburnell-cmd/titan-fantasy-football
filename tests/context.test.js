@@ -19,6 +19,10 @@ const board = ESPN.scoreboardFrom({season: {year: 2026}, week: {number: 1}, even
 check(board.season === 2026 && board.week === 1 && board.games.length === 2 && board.games[0].home === 'CIN' && board.games[0].spread === -3.5 &&
   board.games[0].total === 50.5 && board.games[0].country === 'USA' && board.games[1].home === 'WAS' && board.games[1].away === 'LAR' &&
   board.games[1].spread === null && board.games[1].indoor, 'each game with its line, venue and Titan\'s team abbreviations (WSH is WAS, LA is LAR)');
+const liveGame = ESPN.scoreboardFrom({events: [{id: '9', date: '2026-09-13T17:00Z', competitions: [{status: {type: {state: 'in', shortDetail: '2nd - 5:12'}},
+  competitors: [{homeAway: 'home', score: '14', team: {abbreviation: 'KC'}}, {homeAway: 'away', score: '7', team: {abbreviation: 'LAC'}}]}]}]}).games[0];
+check(liveGame.state === 'in' && liveGame.hs === 14 && liveGame.as === 7 && liveGame.detail === '2nd - 5:12' && board.games[1].hs === null && board.games[1].detail === '',
+  'the scores ticker\'s part: each side\'s points and the game clock; no score yet reads as none');
 
 section('points allowed by position');
 const rows = [['player_id', 'position', 'season_type', 'week', 'opponent_team', 'fantasy_points_ppr'],

@@ -172,6 +172,12 @@ function fakeUser(db) {
   const l4 = await job.latestNews(t0n + 300000, async () => { throw new Error('down'); });
   check(nReads === 2 && l1.stories.length === 1 && l2.at === t0n && l3.at === t0n + 100000 && l4.at === l3.at,
     'the News tab\'s feed: one read of ESPN is shared for 90 seconds, and the last copy serves if ESPN is down');
+  let scReads = 0;
+  const scRead = async () => { scReads++; return {season: 2026, week: 1, games: [{id: '9', kickoff: 1, home: 'KC', away: 'LAC', state: 'in', hs: 14, as: 7, detail: '2nd - 5:12', spread: -3, indoor: false}]}; };
+  const t0s = 3e12, sc1 = await job.latestScores(t0s, scRead), sc2 = await job.latestScores(t0s + 10000, scRead), sc3 = await job.latestScores(t0s + 30000, scRead);
+  const sc4 = await job.latestScores(t0s + 60000, async () => { throw new Error('down'); });
+  check(scReads === 2 && sc1.games[0].hs === 14 && sc1.games[0].detail === '2nd - 5:12' && sc1.games[0].spread === undefined && sc2.at === t0s &&
+    sc3.at === t0s + 30000 && sc4.at === sc3.at, 'the scores ticker: one read of ESPN shared for 20 seconds, trimmed to what it shows; the last copy serves if ESPN is down');
 
   section('game context');
   const nwsGet = async url => /\/points\//.test(url) ? {properties: {forecastHourly: 'https://api.weather.gov/gridpoints/BUF/1,1/forecast/hourly'}}

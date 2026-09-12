@@ -58,6 +58,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       res.writeHead(200, {'content-type': 'application/json'});
       return res.end(JSON.stringify({at: Date.now(), stories: ESPNJS.newsFrom(JSON.parse(NEWS))}));
     }
+    // Titan's /api/scores: one game on, one to come.
+    if (u === '/api/scores') {
+      res.writeHead(200, {'content-type': 'application/json'});
+      return res.end(JSON.stringify({at: Date.now(), season: 2026, week: 1, games: [
+        {id: '401', kickoff: Date.now() - 3600e3, home: 'KC', away: 'LAC', state: 'in', hs: 14, as: 7, detail: '2nd - 5:12'},
+        {id: '402', kickoff: Date.now() + 3600e3, home: 'BUF', away: 'MIA', state: 'pre', hs: 0, as: 0, detail: ''}]}));
+    }
     if (u === '/api/trade-values') {
       tradeAsked.push(req.url);
       res.writeHead(200, {'content-type': 'application/json'});
@@ -161,6 +168,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`document.querySelectorAll('.pick .chip').length === 10`, 10000), 'the team picker lists all 10 teams');
   await ev(`document.querySelector('.pick [data-team="1"]').click(); true`);
   check(await waitFor(`/ESPN · 10 teams/.test((document.querySelector('.link-pane') || {}).innerText || '')`, 60000), 'the league is saved and loaded');
+  check(await waitFor(`!document.getElementById('ticker').hidden && document.querySelectorAll('#ticker .tk-game').length === 2`, 10000),
+    'the scores ticker shows this week\'s games under the header');
+  check(await ev(`(() => { const g = document.querySelector('#ticker .tk-in'); return !!g && /14/.test(g.innerText) && /2nd/.test(g.innerText) &&
+    /espn\\.com\\/nfl\\/game\\/_\\/gameId\\/401/.test(g.href) && !!document.querySelector('#ticker .tk-credit'); })()`),
+    'a live game shows its score and clock, opens on ESPN, and ESPN is credited');
   check(/ESPN 1 league\*/.test(await linkTabs()), 'the ESPN tab shows its count');
   await ev(`document.querySelector('[data-link-tab="yahoo"]').click(); true`);
   await sleep(300);

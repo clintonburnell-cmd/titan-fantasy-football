@@ -300,7 +300,9 @@
       if (!h || !a || !h.team || !a.team) return null;
       return {id: String(e.id || ''), kickoff: Date.parse(e.date) || 0, home: SCC.teamAbbr(h.team.abbreviation), away: SCC.teamAbbr(a.team.abbreviation),
         indoor: !!v.indoor, country: (v.address || {}).country || '', neutral: !!c.neutralSite, state: ((c.status || {}).type || {}).state || '',
-        spread: o ? num(o.spread) : null, total: o ? num(o.overUnder) : null};
+        spread: o ? num(o.spread) : null, total: o ? num(o.overUnder) : null,
+        // The scores ticker: each side's points and ESPN's short status ("2nd - 5:12", "Final").
+        hs: num(h.score), as: num(a.score), detail: String(((c.status || {}).type || {}).shortDetail || '')};
     }).filter(Boolean);
     return {season: Number(json && json.season && json.season.year) || 0, week: Number(json && json.week && json.week.number) || 0, games: games};
   }

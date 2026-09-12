@@ -69,6 +69,13 @@ live site, so site changes reach it without a new upload. What's done and what's
   `watch` in their alerts doc; `newsAlerts` runs on every 15-minute run all week, reads the feed once
   and only looks at people when a new story tags a player (`SCC.newsAlertsFor`, at most 3 at a time,
   key `news|week|story|player`). A news alert's tap opens the story (sw.js).
+- The scores ticker (`loadScores`, `paintTicker` in `app.js`): this week's NFL games from ESPN's
+  public scoreboard through Titan's server (`nflScores` at `/api/scores`, one shared read kept 20
+  seconds, CDN 20; `ESPN.scoreboardFrom` gives each side's points and the short status). It sits under
+  the header, not in it, so the sticky header (and the wide screens' sticky league list below it) keep
+  their place. It reads every 30 seconds while a game is live or kicks off within 10 minutes, every 10
+  minutes otherwise, only while the page is in view, and never in the demo. Each game links to its
+  ESPN page, "Scores: ESPN" credits the source, and a badge counts the person's starters in the game.
 - The Trade tab uses FantasyCalc's trade values. Their terms: call only `/values/current`, cache on
   Titan's server (the `tradeValues` function keeps each format in Firestore `tradeValues/{format}` for a
   day; the app reads `/api/trade-values`, never FantasyCalc), and credit FantasyCalc with a visible link

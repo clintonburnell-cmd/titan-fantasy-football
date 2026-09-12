@@ -83,7 +83,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 h1, h2, h3, h4, p { margin: 0; }
 a { color: var(--accent-2); }
 code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .9em; }
-.wrap, .top-in, .tabs-in, .progress { max-width: 880px; margin-inline: auto; padding-inline: var(--gutter); }
+.wrap, .top-in, .tabs-in, .ticker-in, .progress { max-width: 880px; margin-inline: auto; padding-inline: var(--gutter); }
 /* The screen holds its space while it loads, so the footer doesn't jump. */
 main#view { min-height: 100vh; }
 /* For screen readers only. */
@@ -153,6 +153,31 @@ main#view { min-height: 100vh; }
 }
 .tabs button:hover { color: var(--text); }
 .tabs button[aria-current="page"] { background: var(--surface-2); color: var(--text); }
+
+/* ------------------------------------------------------------ NFL scores ticker */
+/* This week's games under the header (paintTicker in app.js): small cards in a row that
+   scrolls sideways, a live game outlined in red like LIVE points, and a count of the
+   person's starters in each game. Not sticky, so the sticky header keeps its height. */
+.ticker { background: var(--surface); border-bottom: 1px solid var(--line); }
+.ticker-in { display: flex; align-items: center; gap: 10px; }
+.tk-list { position: relative; list-style: none; margin: 0; padding: 8px 0; display: flex; gap: 8px; flex: 1; min-width: 0;
+  overflow-x: auto; scrollbar-width: none; }
+.tk-list::-webkit-scrollbar { display: none; }
+.tk-game { display: grid; gap: 2px; min-width: 112px; padding: 6px 10px 5px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg); color: var(--text); text-decoration: none; font-size: .8rem; line-height: 1.25; }
+.tk-game:hover { border-color: var(--accent-2); }
+.tk-side { display: flex; align-items: center; gap: 6px; }
+.tk-side img { width: 16px; height: 16px; flex: none; }
+.tk-pts { margin-left: auto; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tk-lost { color: var(--muted); }
+.tk-lost b, .tk-lost .tk-pts { font-weight: 600; }
+.tk-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 1px; }
+.tk-when { color: var(--muted); font-size: .7rem; font-weight: 600; white-space: nowrap; }
+.tk-in { border-color: rgb(226 87 76 / .55); }
+.tk-in .tk-when { color: var(--stop); }
+.tk-mine { min-width: 17px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: var(--accent-ink);
+  font-size: .66rem; font-weight: 800; line-height: 16px; text-align: center; }
+.tk-credit { flex: none; color: var(--muted); font-size: .72rem; white-space: nowrap; }
 
 .progress { margin-top: 12px; color: var(--accent-2); font-size: .85rem; font-weight: 600; }
 .progress::before {
@@ -228,7 +253,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
    copies (html.in-app, set in app.js) keep the app look. */
 @media (min-width: 900px) {
   /* A centred 1100px page (the owner tried it set left of centre and prefers the middle). */
-  html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .progress {
+  html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .ticker-in, html:not(.in-app) .progress {
     max-width: 1100px; padding-inline: 24px; margin-inline: auto;
   }
   /* A taller header: more room, a bigger logo and title, taller menu links. */
@@ -275,7 +300,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
    their leagues down the left side, like Sleeper's website (sideNav in app.js).
    The list stays in view below the sticky header; filters stay above the cards. */
 @media (min-width: 1100px) {
-  html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .progress { max-width: 1280px; }
+  html:not(.in-app) .wrap, html:not(.in-app) .top-in, html:not(.in-app) .tabs-in, html:not(.in-app) .ticker-in, html:not(.in-app) .progress { max-width: 1280px; }
   html:not(.in-app) .with-side { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; align-items: start; }
   html:not(.in-app) .side-main { display: grid; gap: 16px; align-content: start; min-width: 0; }
   html:not(.in-app) .side { position: sticky; top: 158px; max-height: calc(100vh - 178px); overflow-y: auto; display: grid; gap: 2px; scrollbar-width: thin; }
