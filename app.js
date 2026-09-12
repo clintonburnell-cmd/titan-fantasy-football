@@ -1869,14 +1869,19 @@
     const all = [];
     sleeper.forEach(d => ((S.moves[d.cfg.id] || {}).list || []).forEach(x => all.push(Object.assign({cfg: d.cfg}, x))));
     all.sort((a, b) => b.at - a.at);
+    // One league, or all of them; then the kind of move. Both filters are remembered.
+    const lg = sleeper.some(d => d.cfg.id === S.ui.movesLeague) ? S.ui.movesLeague : 'all';
+    const pool = lg === 'all' ? all : all.filter(x => x.cfg.id === lg);
     const tests = {all: () => true, trade: x => x.kind === 'trade', adds: x => x.kind !== 'trade', mine: x => x.mine};
-    const f = tests[S.ui.movesFilter] ? S.ui.movesFilter : 'all', shown = all.filter(tests[f]).slice(0, 150);
+    const f = tests[S.ui.movesFilter] ? S.ui.movesFilter : 'all', shown = pool.filter(tests[f]).slice(0, 150);
     const loading = sleeper.some(d => { const M = S.moves[d.cfg.id]; return !M || (M.busy && !M.list); });
     const failed = sleeper.filter(d => (S.moves[d.cfg.id] || {}).error && !(S.moves[d.cfg.id] || {}).list);
     let h = `<p class="lede">Every trade, waiver claim and free-agent move in your leagues over the last three weeks, newest first.
       Moves involving your team are marked.</p>
+      <div class="bar"><label class="field"><span>League</span><select data-ui="movesLeague"><option value="all">All leagues</option>${
+        sleeper.map(d => `<option value="${esc(d.cfg.id)}"${d.cfg.id === lg ? ' selected' : ''}>${esc(d.cfg.key)}</option>`).join('')}</select></label></div>
       <div class="chips" role="group" aria-label="Filter transactions">${[['all', 'All'], ['trade', 'Trades'], ['adds', 'Adds & drops'], ['mine', 'Yours']].map(([k, label]) =>
-        `<button class="chip" data-moves="${k}" aria-pressed="${f === k}">${label} ${all.filter(tests[k]).length}</button>`).join('')}</div>`;
+        `<button class="chip" data-moves="${k}" aria-pressed="${f === k}">${label} ${pool.filter(tests[k]).length}</button>`).join('')}</div>`;
     if (leagues.length > sleeper.length) h += '<p class="fine">ESPN leagues aren\'t in this list yet: it reads Sleeper\'s transaction history.</p>';
     if (failed.length) h += `<div class="banner stop">Couldn't load the moves in ${esc(failed.map(d => d.cfg.key).join(', '))}. Tap Refresh to try again.</div>`;
     if (!shown.length) {
@@ -1884,7 +1889,7 @@
         : `<div class="empty-note">${sleeper.length ? (f === 'all' ? 'No moves in your leagues over the last three weeks.' : 'Nothing like that over the last three weeks.') : 'Link a Sleeper account to see your leagues\' moves.'}</div>`;
     } else {
       h += `<ul class="card txlist">${shown.map(moveRow).join('')}</ul>`;
-      const total = all.filter(tests[f]).length;
+      const total = pool.filter(tests[f]).length;
       if (total > shown.length) h += `<p class="fine">Showing the newest ${shown.length} of ${total}. Filter to Trades or Yours to see further back.</p>`;
       if (loading) h += '<p class="fine">Still loading some leagues…</p>';
     }
@@ -2152,6 +2157,9 @@
     const assets = t => t.roster.concat(t.picks || []);
     const give = P.give.map(id => assets(me).find(p => p.id === id)).filter(Boolean);
     const get = partner ? P.get.map(id => assets(partner).find(p => p.id === id)).filter(Boolean) : [];
+    h += `<section class="card pad tsearch"><label class="field"><span>Who has him? Search for a player in ${esc(d.cfg.key)}</span>
+        <input type="search" data-trade-search placeholder="At least three letters" value="${esc(S.trade.q || '')}" autocomplete="off"
+          autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="tsearch">${tradeSearchResults()}</div></section>`;
     h += tradeIdeasCard(d.cfg, worth);
     if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth, V.waiver);
     return h + `<div class="trade-teams">${tradeRoster(d.cfg, me, 'give', val)}${partner ? tradeRoster(d.cfg, partner, 'get', val)
@@ -2170,13 +2178,18 @@
     render();
   }
 
+  // Until asked (or after Clear), just a line with Find trades, so your own trade has the room.
   function tradeIdeasCard(cfg, worth) {
     const I = S.trade.ideas[cfg.id];
-    const head = `<div class="tideas-h"><h3>Trade ideas</h3><button type="button" class="btn small${I ? ' ghost' : ''}" data-action="trade-find">${
-      I ? 'Look again' : 'Find trades'}</button></div>
+    if (!I) {
+      return `<section class="card pad tideas min"><div class="tideas-h"><h3>Trade ideas</h3>
+        <button type="button" class="btn small" data-action="trade-find">Find trades</button></div></section>`;
+    }
+    const head = `<div class="tideas-h"><h3>Trade ideas</h3><div class="tideas-b">
+        <button type="button" class="btn small ghost" data-action="trade-ideas-clear">Clear</button>
+        <button type="button" class="btn small ghost" data-action="trade-find">Look again</button></div></div>
       <p class="fine">Fair trades (FantasyCalc's values within 5%) of one or two players each way that make your starting lineup
         stronger, and theirs too where possible. Strength is the value of each team's best starters.</p>`;
-    if (!I) return `<section class="card pad tideas">${head}</section>`;
     if (!I.list.length) return `<section class="card pad tideas">${head}<p class="empty-note">No fair trade in this league makes your starting lineup stronger right now.</p></section>`;
     const names = list => list.map(p => `${esc(p.name)} <small>${thousands(worth(p))}</small>`).join(' + ');
     const change = n => `<span class="${n > 0 ? 'good' : n < 0 ? 'amber' : ''}">${(n > 0 ? '+' : n < 0 ? '−' : '') + thousands(Math.abs(n))}</span>`;
@@ -2184,6 +2197,34 @@
         <div class="idea-t"><b>With ${esc(x.partner.name)}</b><span>You give ${names(x.give)} · you get ${names(x.get)}</span>
           <small>Your starters ${change(x.myGain)} · theirs ${change(x.theirGain)}</small></div>
         <button type="button" class="btn small ghost" data-idea="${i}">Open</button></li>`).join('')}</ol></section>`;
+  }
+
+  /* Who has him? Players in the league on screen whose name matches the search (at least
+     three letters): rostered players first, most valuable first, then free agents from the
+     player list. Another team's player can go straight into a trade. */
+  function tradeSearchResults() {
+    const q = SCC.norm(S.trade.q || '').trim();
+    const d = ((S.snap && S.snap.leagues) || []).find(x => x.cfg.id === S.trade.pick.league);
+    const Tm = d && S.trade.teams[d.cfg.id];
+    if (q.length < 3 || !Tm || !Tm.list) return '';
+    const V = S.trade.values[tradeKey(SCC.tradeFormat(d.cfg))];
+    const worth = p => (V && V.idx ? (SCC.playerValue(V.idx, p) || {}).v : 0) || 0;
+    const found = [], seen = new Set(), players = playerList();
+    Tm.list.forEach(t => t.roster.forEach(p => {
+      const n = SCC.norm(p.name);
+      if (n.includes(q)) { found.push({p, team: t}); seen.add(n); }
+    }));
+    for (const id in players) {
+      if (found.length >= 16) break;
+      const e = players[id], n = SCC.norm(e[0]);
+      if (e[2] && n.includes(q) && !seen.has(n)) { found.push({p: {id, name: e[0], pos: e[1], team: e[2]}, team: null}); seen.add(n); }
+    }
+    if (!found.length) return '<p class="fine">Nobody by that name in this league or on an NFL team.</p>';
+    found.sort((a, b) => (!!b.team - !!a.team) || worth(b.p) - worth(a.p) || a.p.name.localeCompare(b.p.name));
+    return `<ul class="wlist">${found.slice(0, 8).map(({p, team}) => `<li class="wrow">${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b>
+      <small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}${worth(p) ? ' · value ' + thousands(worth(p)) : ''}</small>
+      <span class="wchips">${!team ? '<span class="wst free">free agent</span>' : team.mine ? '<span class="wst mine">on your team</span>'
+        : `<span class="wst">on ${esc(team.name)}</span><button type="button" class="btn small ghost" data-tsearch="${esc(team.id)}|${esc(p.id)}">Trade for him</button>`}</span></span></li>`).join('')}</ul>`;
   }
 
   // A team's draft picks in a dynasty league: Sleeper says who owns which, ESPN doesn't.
@@ -2314,9 +2355,21 @@
     // A tap on a league's header folds or unfolds it; the toggle listener remembers it.
     const head = e.target.closest('details[data-fold] > summary');
     if (head) { tapped = head.parentElement; return; }
-    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-moves],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-moves],[data-tsearch],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
+    if (t.dataset.tsearch) {
+      // A searched-for player goes into the trade: his team becomes the partner, he goes on the get side.
+      const [team, pid] = t.dataset.tsearch.split('|'), P = S.trade.pick;
+      if (P.partner !== team) Object.assign(P, {partner: team, give: [], get: []});
+      if (!P.get.includes(pid)) P.get.push(pid);
+      S.ui.tradePartner = team;
+      saveUi();
+      render();
+      const sum = view.querySelector('.trade-sum');
+      if (sum) sum.scrollIntoView({behavior: 'smooth', block: 'start'});
+      return;
+    }
     if (t.dataset.moves) { S.ui.movesFilter = t.dataset.moves; saveUi(); return render(); }
     if (t.dataset.news) { S.ui.newsMine = t.dataset.news === 'mine'; saveUi(); return render(); }
     if (t.dataset.idea) {
@@ -2356,6 +2409,7 @@
       render();
     }
     else if (a === 'trade-find') findTrades();
+    else if (a === 'trade-ideas-clear') { delete S.trade.ideas[S.trade.pick.league]; render(); }
     else if (a === 'trade-clear') { S.trade.pick.give = []; S.trade.pick.get = []; render(); }
     else if (a === 'trade-retry') {
       [S.trade.teams, S.trade.values].forEach(m => Object.keys(m).forEach(k => { if (m[k].error) delete m[k]; }));
@@ -2392,6 +2446,7 @@
     const t = e.target;
     if (t.dataset.ui === 'league') { S.ui.league = t.value; saveUi(); render(); }
     else if (t.dataset.ui === 'standLeague') { S.ui.standLeague = t.value; saveUi(); render(); }
+    else if (t.dataset.ui === 'movesLeague') { S.ui.movesLeague = t.value; saveUi(); render(); }
     else if (t.dataset.ui === 'tradeLeague') { S.ui.tradeLeague = t.value; S.ui.tradePartner = ''; saveUi(); render(); }
     else if (t.dataset.ui === 'tradePartner') { S.ui.tradePartner = t.value; saveUi(); render(); }
     else if (t.dataset.alert) {
@@ -2427,7 +2482,12 @@
 
   view.addEventListener('input', e => {
     const t = e.target;
-    if ('waiverSearch' in t.dataset) {
+    if ('tradeSearch' in t.dataset) {
+      // Only the results redraw, so the box keeps its cursor.
+      S.trade.q = t.value;
+      const box = view.querySelector('#tsearch');
+      if (box) box.innerHTML = tradeSearchResults();
+    } else if ('waiverSearch' in t.dataset) {
       // Only the results redraw, so the box keeps its cursor.
       S.waiv.q = t.value;
       const box = view.querySelector('#wsearch');

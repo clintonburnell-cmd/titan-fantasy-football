@@ -306,6 +306,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check(await waitFor(`document.querySelectorAll('.trade-sum .tchip').length >= 2 && /Fair/.test((document.querySelector('.trade-sum .tverdict') || {}).textContent || '')`, 3000),
       'opening an idea fills in the trade, and it checks out as fair: ' + await text('.trade-sum .tverdict'));
   }
+  await ev(`document.querySelector('[data-action="trade-ideas-clear"]').click(); true`);
+  check(await waitFor(`document.querySelector('.tideas').classList.contains('min') && !document.querySelector('.tideas .fine') &&
+    document.querySelector('.tideas [data-action="trade-find"]').textContent.trim() === 'Find trades'`, 3000), 'Clear folds the trade ideas back to one line');
+  const team3Player = ESPNJS.buildLeague(ESPNJS.leagueCfg(L1, {id: L1.id, teamId: 3}, {}), L1, tradePlayers).roster[0].name;
+  await ev(`(() => { const i = document.querySelector('[data-trade-search]'); i.value = ${JSON.stringify(team3Player)}; i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
+  check(await waitFor(`[...document.querySelectorAll('#tsearch .wrow')].some(r => r.querySelector('b').textContent === ${JSON.stringify(team3Player)} && /on Team 3/.test(r.textContent))`, 3000),
+    'searching a player in the league shows who has him: ' + team3Player + ', on Team 3 (' + (await text('#tsearch')).replace(/\s+/g, ' ').slice(0, 80) + ')');
+  await ev(`(([...document.querySelectorAll('#tsearch .wrow')].find(r => r.querySelector('b').textContent === ${JSON.stringify(team3Player)}) || document).querySelector('[data-tsearch]') || {click() {}}).click(); true`);
+  check(await waitFor(`document.querySelector('[data-ui="tradePartner"]').value === '3' && [...document.querySelectorAll('.trade-sum .tchip')].some(c => c.textContent.includes(${JSON.stringify(team3Player)}))`, 3000),
+    'Trade for him makes his team the partner and puts him on the get side');
 
   T.section('game context on Lineups');
   await tab('lineups');
@@ -316,8 +326,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   T.section('the Transactions tab');
   await tab('moves');
-  check(await waitFor(`/ESPN leagues aren't in this list yet/.test(document.getElementById('view').textContent) && document.querySelectorAll('[data-moves]').length === 4`, 5000),
-    'the Transactions tab has its filters, and says ESPN leagues aren\'t read yet');
+  check(await waitFor(`/ESPN leagues aren't in this list yet/.test(document.getElementById('view').textContent) && document.querySelectorAll('[data-moves]').length === 4 &&
+    document.querySelector('[data-ui="movesLeague"] option[value="all"]') !== null`, 5000),
+    'the Transactions tab has its league and kind filters, and says ESPN leagues aren\'t read yet');
   check(await ev(`location.pathname === '/app/transactions' && document.title.startsWith('Transactions')`), 'it has its own address: /app/transactions');
 
   T.section('the Waivers tab');

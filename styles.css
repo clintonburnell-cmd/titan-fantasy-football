@@ -695,6 +695,10 @@ details.match > summary::-webkit-details-marker { display: none; }
 .tverdict { font-size: .95rem; }
 .tideas { display: grid; gap: 8px; }
 .tideas-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tideas-b { display: flex; gap: 8px; }
+.tideas.min { padding-block: 10px; }
+.tsearch { display: grid; gap: 8px; }
+.tsearch .wchips { align-items: center; }
 .idea-list { list-style: none; margin: 0; padding: 0; display: grid; }
 .idea { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .idea-t { display: grid; gap: 2px; min-width: 0; }

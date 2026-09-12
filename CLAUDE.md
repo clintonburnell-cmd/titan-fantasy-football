@@ -78,7 +78,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   values already count stars for more, so don't add a star bonus) plus FantasyCalc's roster-spot
   adjustment: a waiver pickup (`SCC.waiverValue`, about the 300th-best player) per spot freed. Trade
   ideas (`SCC.tradeIdeas`): fair 1-2 player trades that raise the value of your best starters
-  (`lineupPoints` with values, not one week's projections), at most two per partner.
+  (`lineupPoints` with values, not one week's projections), at most two per partner. The ideas card
+  is one line until Find trades, and Clear folds it back. "Who has him?" (`tradeSearchResults`)
+  searches the league's rosters, then free agents; Trade for him sets the partner and the get side.
 - Game context on Lineups rows (`SCC.gameTags`) comes from the `gameContext` function at
   `/api/game-context` (kept 30 minutes): ESPN's scoreboard lines (`ESPN.scoreboardFrom`,
   `SCC.impliedTotals`), NWS forecasts at kickoff for outdoor US games (`STADIUMS` holds each home
@@ -87,7 +89,8 @@ live site, so site changes reach it without a new upload. What's done and what's
   until three weeks are played; Firestore `meta/dvp`, 12 hours).
 - The Transactions tab (tab id `moves`, address `/app/transactions`): each Sleeper league's last three
   weeks of completed transactions (`API.leagueTransactions` → `SCC.transactionsFrom`), reloaded after
-  five minutes. ESPN transactions aren't read yet (their format hasn't been checked on a real league).
+  five minutes. A league picker (`S.ui.movesLeague`, remembered) narrows the list; the kind chips'
+  counts follow it. ESPN transactions aren't read yet (their format hasn't been checked on a real league).
 - The Waivers tab: rankings' wire targets (`L.wire`), free backups (`SCC.backupOf`), Sleeper's
   trending adds (`API.trendingAdds`) with where each is free (`L.takenNorm`), a search, and bids
   (`SCC.faabBid` from `API.leagueWaivers`: a Sleeper league's last six weeks of winning bids).

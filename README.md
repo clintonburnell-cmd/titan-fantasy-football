@@ -64,8 +64,8 @@ website (such as alerts) to pass review.
 ## Screens
 
 The Transactions tab lists every trade, waiver claim, free-agent move and commissioner move in your
-Sleeper leagues over the last three weeks, newest first, with filters for trades, adds and drops,
-and your own moves (ESPN leagues aren't read yet).
+Sleeper leagues over the last three weeks, newest first, with a league picker (all leagues or one)
+and filters for trades, adds and drops, and your own moves (ESPN leagues aren't read yet).
 
 Each starter on Lineups carries his game's context: his team's expected points (from the betting
 line on ESPN's scoreboard), whether his matchup is soft or tough (the fantasy points his opponent
@@ -90,7 +90,8 @@ The Trade tab weighs a trade with any team in a league: pick the league and a tr
 players on both rosters, and Titan totals each side with FantasyCalc's trade values for the league's
 format (redraft or dynasty, 1 QB or superflex, team count, PPR), plus a waiver pickup's value for each roster spot an
 uneven trade frees (as FantasyCalc's own calculator does), finds trade ideas (fair trades of one or
-two players each way that make your starting lineup stronger, and theirs where possible), says who wins and suggests players that would even it out. It also shows each team's best
+two players each way that make your starting lineup stronger, and theirs where possible; Clear folds
+them away), searches the league for who has a player (Trade for him starts that trade), says who wins and suggests players that would even it out. It also shows each team's best
 starting lineup by this week's projections before and after the trade, and in dynasty Sleeper
 leagues each team's draft picks for the next three drafts (who owns which comes from Sleeper's
 traded picks) can go in the trade too. Titan's server fetches the values from
