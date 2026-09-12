@@ -1610,9 +1610,7 @@
     // when nobody in the league has him.
     var depth = opts.players ? depthCharts(opts.players) : null;
     var freeBackup = function (L, p) {
-      if (!depth || !HANDCUFF[p.pos]) return null;
-      var mine = playerInfo(opts.players, p.id).depth || 0;
-      var b = (depth[teamAbbr(p.team) + '|' + p.pos] || []).filter(function (x) { return x.id !== String(p.id) && x.depth > mine; })[0];
+      var b = depth ? backupOf(opts.players, p, depth) : null;
       return b && !(L.takenNorm || {})[norm(b.name)] ? b : null;
     };
     if (want.out) {
@@ -1673,6 +1671,30 @@
     return out;
   }
 
+  // A QB, RB or TE's backup: the next man on his team's depth chart ({id, name, depth}), or null.
+  function backupOf(players, p, charts) {
+    if (!p || !HANDCUFF[p.pos]) return null;
+    charts = charts || depthCharts(players);
+    var mine = playerInfo(players, p.id).depth || 0;
+    return (charts[teamAbbr(p.team) + '|' + p.pos] || []).filter(function (x) { return x.id !== String(p.id) && x.depth > mine; })[0] || null;
+  }
+
+  /* A waiver bid to suggest where a league bids for players (FAAB). With at least five of
+     the league's own winning bids to go on: a hot pickup (among the most added) gets the
+     75th percentile, a warm one the median, anyone else a quarter of the median. With
+     fewer: 12%, 5% or 1% of the budget. Whole dollars, at least $1, never more than what's
+     left. o: {budget, left, bids, heat: 'hot'|'warm'|'cold'}. */
+  function faabBid(o) {
+    var budget = Number(o.budget) || 0, left = o.left === undefined ? budget : Math.max(0, Number(o.left) || 0);
+    if (!budget || !left) return {bid: 0, basis: 'none'};
+    var bids = (o.bids || []).map(Number).filter(function (b) { return b > 0; }).sort(function (a, b) { return a - b; });
+    var q = function (p) { var i = (bids.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return bids[lo] + (bids[hi] - bids[lo]) * (i - lo); };
+    var heat = o.heat || 'cold', league = bids.length >= 5;
+    var bid = league ? (heat === 'hot' ? q(0.75) : heat === 'warm' ? q(0.5) : q(0.5) / 4)
+      : budget * (heat === 'hot' ? 0.12 : heat === 'warm' ? 0.05 : 0.01);
+    return {bid: Math.max(1, Math.min(left, Math.round(bid))), basis: league ? 'league' : 'budget'};
+  }
+
   /* The players whose news people want to hear about: everyone in their lineups, each
      with the leagues he starts in (n is the name as norm() reads it). The server keeps
      this with each person's alert settings between checks. */
@@ -1730,6 +1752,7 @@
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,
+    depthCharts: depthCharts, backupOf: backupOf, faabBid: faabBid,
     gameStates: gameStates, weekProgress: weekProgress,
     rankKey: rankKey, rankLabel: rankLabel, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,

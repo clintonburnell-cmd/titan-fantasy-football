@@ -63,6 +63,12 @@ website (such as alerts) to pass review.
 
 ## Screens
 
+The Standings tab shows each league's records, all-play records, luck, power rankings and every
+team's playoff odds (5,000 simulations of the games left). The Waivers tab gathers pickups for every
+league: your rankings' waiver targets, free backups for hurt starters, Sleeper's most-added players
+and where each is free in your leagues, a search for where anyone is available, and a suggested bid
+where a Sleeper league bids for players (from its recent winning bids).
+
 Titan is white and blue by default. A moon and sun button in the header (and Appearance in
 Settings) switches the app and the website to a dark theme, remembered on that device.
 

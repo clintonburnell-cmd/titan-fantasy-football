@@ -490,6 +490,32 @@
     return teams;
   }
 
+  // Sleeper's most-added players over the last day, most first: [{id, count}] (the Waivers tab).
+  async function trendingAdds(limit) {
+    var list = await getJson(API + '/players/nfl/trending/add?lookback_hours=24&limit=' + (limit || 40));
+    return (list || []).map(function (x) { return {id: String(x.player_id), count: Number(x.count) || 0}; });
+  }
+
+  /* A Sleeper league's waiver budget (FAAB), for bid suggestions on the Waivers tab: the
+     budget, what's left on the person's roster, and the league's winning bids over the last
+     six weeks (completed waiver claims). */
+  async function leagueWaivers(lg, rosterId, week) {
+    var paths = ['/rosters'];
+    for (var w = Math.max(1, Number(week) - 5); w <= Number(week); w++) paths.push('/transactions/' + w);
+    var got = await Promise.all(paths.map(function (p, i) {
+      var job = getJson(API + '/league/' + lg.id + p);
+      return i ? job.catch(function () { return []; }) : job;
+    }));
+    var mine = (got[0] || []).filter(function (r) { return r.roster_id === rosterId; })[0] || {};
+    var used = Number((mine.settings || {}).waiver_budget_used) || 0, bids = [];
+    got.slice(1).forEach(function (list) {
+      (list || []).forEach(function (t) {
+        if (t.type === 'waiver' && t.status === 'complete' && t.settings && t.settings.waiver_bid !== undefined) bids.push(Number(t.settings.waiver_bid) || 0);
+      });
+    });
+    return {budget: Number(lg.faab) || 0, left: Math.max(0, (Number(lg.faab) || 0) - used), bids: bids};
+  }
+
   /* A league's regular season for the Standings tab: {teams: [{id, name}], games:
      [{week, a, b, aPts, bPts, done}], playoffTeams}. A week before `week` counts as
      played. Sleeper: the rosters, members and each week's matchups up to the playoffs
@@ -674,6 +700,7 @@
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
     collect: collect, collectScores: collectScores, livePoints: livePoints,
     collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule,
+    trendingAdds: trendingAdds, leagueWaivers: leagueWaivers,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
     fetchProjections: fetchProjections, PLAYERS_KEY: PLAYERS_KEY
   };

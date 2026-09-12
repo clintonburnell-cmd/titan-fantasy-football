@@ -592,6 +592,25 @@ details.match > summary::-webkit-details-marker { display: none; }
 .wbar .wme { background: var(--ok); }
 .wbar .wopp { background: var(--bar-opp); }
 
+/* The Waivers tab: lists of pickups, bid suggestions, and where a player stands in each league. */
+.wsec { display: grid; gap: 10px; }
+.wlist { list-style: none; margin: 0; padding: 0; display: grid; }
+.wlist > li { border-top: 1px solid var(--line); padding: 9px 0; }
+.wlist > li:first-child { border-top: 0; padding-top: 2px; }
+.wrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; }
+.wlg { display: grid; gap: 4px; }
+.wlg-h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wline { font-size: .88rem; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.wline small { color: var(--muted); font-weight: 600; }
+.wmeta { color: var(--muted); font-size: .78rem; font-weight: 500; }
+.wbid { font-size: .76rem; font-weight: 700; color: var(--accent-2); white-space: nowrap; }
+.wchips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.wst { display: inline-flex; align-items: center; gap: 4px; font-size: .74rem; font-weight: 700; border-radius: 999px; padding: 2px 9px;
+  background: var(--surface-2); color: var(--muted); }
+.wst.free { background: var(--ok-soft); color: var(--ok); }
+.wst.mine { background: rgb(58 103 234 / .14); color: var(--accent-2); }
+.wfree summary { cursor: pointer; font-size: .8rem; color: var(--accent-2); font-weight: 700; margin-top: 2px; }
+
 /* The Standings tab: the table, your team marked, the playoff line and each team's odds. */
 .stand { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .stand th, .stand td { padding: 9px 12px; text-align: left; border-top: 1px solid var(--line); white-space: nowrap; }

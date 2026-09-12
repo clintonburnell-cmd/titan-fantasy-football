@@ -79,6 +79,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   adjustment: a waiver pickup (`SCC.waiverValue`, about the 300th-best player) per spot freed. Trade
   ideas (`SCC.tradeIdeas`): fair 1-2 player trades that raise the value of your best starters
   (`lineupPoints` with values, not one week's projections), at most two per partner.
+- The Waivers tab: rankings' wire targets (`L.wire`), free backups (`SCC.backupOf`), Sleeper's
+  trending adds (`API.trendingAdds`) with where each is free (`L.takenNorm`), a search, and bids
+  (`SCC.faabBid` from `API.leagueWaivers`: a Sleeper league's last six weeks of winning bids).
 - The Standings tab (`SCC.standings`): records, all-play, luck, power and playoff odds from 5,000
   seeded simulations; schedules from `API.leagueSchedule` (Sleeper matchups, or ESPN via
   `ESPN.fetchSchedule`; private ESPN leagues through `espnLeague` kind `schedule`).

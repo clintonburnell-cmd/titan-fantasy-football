@@ -19,12 +19,12 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'exposure', 'byes', 'score', 'news', 'trade', 'ranks', 'settings'];
+  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'ranks', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
-  const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', exposure: 'Exposure', byes: 'Byes',
+  const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
     score: 'Results', news: 'News', ranks: 'Rankings', trade: 'Trade', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
-  const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', exposure: 'exposure', byes: 'byes',
+  const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes',
     score: 'results', news: 'news', ranks: 'rankings', trade: 'trade', settings: 'settings'};
   const tabFromPath = () => {
     const m = location.pathname.match(/^\/app\/([a-z]+)\/?$/);
@@ -106,7 +106,9 @@
     // The Trade tab: each league's teams, FantasyCalc's values by league format, and the trade being built.
     trade: {teams: {}, values: {}, pick: {league: '', partner: '', give: [], get: []}, ideas: {}},
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
-    stand: {} // the Standings tab: each league's schedule ({busy, error, sched, result})
+    stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
+    // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
+    waiv: {trend: null, busy: false, error: '', faab: {}, q: ''}
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
   // An address like /app/matchup opens that screen.
@@ -227,6 +229,7 @@
       S.trade.teams = {}; // rosters may have changed too, and with them the trade ideas
       S.trade.ideas = {};
       S.stand = {}; // and scores
+      S.waiv.faab = {}; // and waiver budgets
     } catch (e) {
       S.error = 'Refresh failed: ' + (e && e.message ? e.message : e);
     } finally {
@@ -1795,6 +1798,126 @@
     setEspnLogin(login) { S.espn.login = login; paintSync(); }
   };
 
+  /* ---- Waivers */
+
+  /* Pickups for every league: the rankings' waiver targets, free backups for hurt starters,
+     Sleeper's most-added players (where each is free in your leagues), a search for where
+     anyone is available, and bids to suggest where a league bids for players (SCC.faabBid,
+     from each Sleeper league's recent winning bids; ESPN's aren't read). Loaders never draw
+     synchronously, so screenWaivers can start them. */
+  async function loadTrending() {
+    S.waiv.busy = true;
+    try { Object.assign(S.waiv, {trend: await API.trendingAdds(40), error: ''}); }
+    catch (e) { S.waiv.error = 'Could not load Sleeper\'s trending players.'; }
+    S.waiv.busy = false;
+    if (S.ui.tab === 'waivers') render();
+  }
+
+  async function loadFaab(cfg, rosterId) {
+    S.waiv.faab[cfg.id] = {busy: true};
+    try { S.waiv.faab[cfg.id] = {data: await API.leagueWaivers(cfg, rosterId, S.snap.week)}; }
+    catch (e) { S.waiv.faab[cfg.id] = {error: true}; }
+    if (S.ui.tab === 'waivers') render();
+  }
+
+  // Where a player stands in a league: on your team, rostered by someone else, or free.
+  function wStatus(L, p) {
+    const n = SCC.norm(p.name);
+    if (L.roster.some(r => String(r.id) === String(p.id) || SCC.norm(r.name) === n)) return 'mine';
+    const taken = p.pos === 'DEF' ? (L.takenAbbr || {})[SCC.teamAbbr(p.team)] : (L.takenNorm || {})[n];
+    return taken ? 'taken' : 'free';
+  }
+
+  // Sleeper ids by name, for headshots of players the rankings name (built once per player list).
+  let nameIdx = {for: null, map: {}};
+  function idByName(players, name) {
+    if (nameIdx.for !== players) {
+      const map = {};
+      for (const id in players) { const n = SCC.norm(players[id][0]); if (!(n in map)) map[n] = id; }
+      nameIdx = {for: players, map};
+    }
+    return nameIdx.map[SCC.norm(name)] || '';
+  }
+
+  // Up to six players matching the search, and where each stands in every league.
+  function waiverSearchResults() {
+    const q = SCC.norm(S.waiv.q || '').trim();
+    if (q.length < 3 || !S.A) return '';
+    const players = playerList(), leagues = S.A.leagues, found = [];
+    for (const id in players) {
+      const e = players[id];
+      if (!e || !e[2] || SCC.norm(e[0]).indexOf(q) < 0) continue;
+      found.push({id, name: e[0], pos: e[1], team: e[2]});
+      if (found.length >= 40) break;
+    }
+    if (!found.length) return '<p class="fine">No player on an NFL team by that name.</p>';
+    const proj = p => SCC.projFor(S.proj, p.id, 1) || 0;
+    found.sort((a, b) => proj(b) - proj(a) || a.name.localeCompare(b.name));
+    return `<ul class="wlist">${found.slice(0, 6).map(p => {
+      const st = leagues.map(L => ({L, s: wStatus(L, p)})), free = st.filter(x => x.s === 'free').length;
+      return `<li class="wrow">${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${esc(p.pos + ' · ' + p.team)} · free in ${free} of ${leagues.length}</small>
+        <span class="wchips">${st.map(x => `<span class="wst ${x.s}">${esc(x.L.cfg.key)}${x.s === 'mine' ? ' · yours' : x.s === 'taken' ? ' · taken' : ''}</span>`).join('')}</span></span></li>`;
+    }).join('')}</ul>`;
+  }
+
+  function screenWaivers() {
+    if (!S.snap || !S.A) return emptyState();
+    const W = S.waiv, players = playerList(), leagues = S.A.leagues;
+    if (!W.trend && !W.busy && !W.error) loadTrending();
+    leagues.forEach(L => {
+      if (!L.cfg.faab || L.cfg.platform === 'espn' || W.faab[L.cfg.id]) return;
+      const d = (S.snap.leagues || []).find(x => x.cfg.id === L.cfg.id);
+      if (d) loadFaab(L.cfg, d.rosterId);
+    });
+    // How hot a pickup is: among Sleeper's 10 most added, the next 15, or neither.
+    const trendAt = {};
+    (W.trend || []).forEach((t, i) => { trendAt[SCC.norm(SCC.playerInfo(players, t.id).name)] = i; });
+    const heat = name => { const r = trendAt[SCC.norm(name)]; return r === undefined ? 'cold' : r < 10 ? 'hot' : r < 25 ? 'warm' : 'cold'; };
+    const bid = (L, name) => {
+      const F = W.faab[L.cfg.id];
+      if (!L.cfg.faab || !F || !F.data) return '';
+      const b = SCC.faabBid({budget: F.data.budget, left: F.data.left, bids: F.data.bids, heat: heat(name)});
+      return b.bid ? ` <span class="wbid" title="${b.basis === 'league' ? 'From this league\'s recent winning bids' : 'A share of the budget, until this league has more bids to go on'}">bid about $${b.bid}</span>` : '';
+    };
+    const budget = L => { const F = W.faab[L.cfg.id]; return F && F.data ? ` <span class="wmeta">$${F.data.left} of $${F.data.budget} left</span>` : ''; };
+
+    const targets = leagues.filter(L => L.wire && L.wire.length).map(L => `<li class="wlg"><div class="wlg-h">${leagueIcon(L.cfg, 'xs')}<b>${esc(L.cfg.key)}</b>${budget(L)}</div>
+      ${L.wire.map(w => `<div class="wline"><b>${esc(w.pos)}:</b> ${w.list.map(x => `${esc(x.name)} <small>${esc(rl(x))}</small>`).join(', ')}${
+        w.cur ? ` <small class="wmeta">for ${esc(w.cur.name)}</small>` : ''}${bid(L, w.list[0].name)}</div>`).join('')}</li>`);
+
+    const charts = SCC.depthCharts(players), cuffs = [];
+    leagues.forEach(L => L.roster.filter(p => p.start && p.inj).forEach(p => {
+      const b = SCC.backupOf(players, p, charts);
+      if (b && wStatus(L, {id: b.id, name: b.name, pos: p.pos, team: p.team}) === 'free') cuffs.push({L, p, b});
+    }));
+
+    const trend = (W.trend || []).slice(0, 25).map(t => {
+      const info = SCC.playerInfo(players, t.id), p = {id: t.id, name: info.name, pos: info.pos, team: info.team};
+      const st = leagues.map(L => ({L, s: wStatus(L, p)})), free = st.filter(x => x.s === 'free'), mine = st.filter(x => x.s === 'mine').length;
+      return `<li class="wrow">${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))} · ${thousands(t.count)} adds in the last day</small>
+        ${free.length ? `<details class="wfree"><summary>Free in ${free.length} of ${leagues.length}</summary><span class="wchips">${
+          free.map(x => `<span class="wst free">${esc(x.L.cfg.key)}${bid(x.L, p.name)}</span>`).join('')}</span></details>`
+          : `<small class="wmeta">Not free in any of your leagues${mine ? ` (yours in ${mine})` : ''}.</small>`}</span></li>`;
+    });
+
+    const anyFaab = leagues.some(L => L.cfg.faab && L.cfg.platform !== 'espn');
+    let h = `<p class="lede">Pickups for every league: your rankings' waiver targets, backups for hurt starters, what Sleeper players are
+      adding, and where anyone is available.${anyFaab ? ' Where a league bids for players, Titan suggests a bid from its recent winning bids.' : ''}</p>
+      <section class="card pad wsec"><h3>Where is he available?</h3>
+        <label class="field"><span>A player's name</span><input type="search" data-waiver-search placeholder="At least three letters" value="${esc(W.q)}"
+          autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="wsearch">${waiverSearchResults()}</div></section>
+      <section class="card pad wsec"><h3>Your waiver targets</h3>${targets.length ? `<ul class="wlist">${targets.join('')}</ul>`
+        : '<p class="fine">No free agent your rankings rate above one of your starters right now.</p>'}</section>`;
+    if (cuffs.length) {
+      h += `<section class="card pad wsec"><h3>Backups for your hurt starters</h3><ul class="wlist">${cuffs.map(c => `<li class="wline">
+        ${leagueIcon(c.L.cfg, 'xs')}<span><b>${esc(c.p.name)}</b> <span class="bad-text">(${esc(c.p.inj)})</span>: his backup <b>${esc(c.b.name)}</b> is free in
+        ${esc(c.L.cfg.key)}.${bid(c.L, c.b.name)}</span></li>`).join('')}</ul></section>`;
+    }
+    h += `<section class="card pad wsec"><h3>Trending pickups</h3><p class="fine">Sleeper's most-added players in the last day, and where each is free in your leagues.</p>${
+      W.error ? `<div class="banner stop">${esc(W.error)}</div>` : !W.trend ? '<p class="fine">Loading…</p>' : `<ul class="wlist">${trend.join('')}</ul>`}</section>`;
+    return h;
+  }
+
   /* ---- Standings */
 
   /* Each league's standings, all-play records, luck, power rankings and playoff odds
@@ -2056,7 +2179,7 @@
   }
 
   const SCREENS = {
-    lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
+    lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
     score: screenScore, ranks: screenRanks, trade: screenTrade, settings: screenSettings
   };
 
@@ -2210,7 +2333,12 @@
 
   view.addEventListener('input', e => {
     const t = e.target;
-    if ('rosterSearch' in t.dataset) {
+    if ('waiverSearch' in t.dataset) {
+      // Only the results redraw, so the box keeps its cursor.
+      S.waiv.q = t.value;
+      const box = view.querySelector('#wsearch');
+      if (box) box.innerHTML = waiverSearchResults();
+    } else if ('rosterSearch' in t.dataset) {
       S.rosterQuery = t.value;
       applyRosterSearch();
     } else if (t.dataset.draft === 'text') {

@@ -300,6 +300,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       'opening an idea fills in the trade, and it checks out as fair: ' + await text('.trade-sum .tverdict'));
   }
 
+  T.section('the Waivers tab');
+  await tab('waivers');
+  check(await waitFor(`!!document.querySelector('[data-waiver-search]') && /Trending pickups/.test(document.getElementById('view').textContent)`, 5000),
+    'the Waivers tab opens, with the search and trending pickups');
+  await ev(`(() => { const i = document.querySelector('[data-waiver-search]'); i.value = ${JSON.stringify(newsQb)}; i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
+  check(await waitFor(`document.querySelectorAll('#wsearch .wst.mine').length === 1 && document.activeElement === document.querySelector('[data-waiver-search]')`, 3000) ||
+    await waitFor(`document.querySelectorAll('#wsearch .wst.mine').length === 1`, 1000),
+    'searching for your QB shows him as yours in the test league: ' + (await text('#wsearch')).replace(/\s+/g, ' ').slice(0, 90));
+
   T.section('the Standings tab');
   await tab('standings');
   check(await waitFor(`document.querySelectorAll('table.stand tbody tr').length === 10`, 30000), 'every team in the league is listed');
