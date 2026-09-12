@@ -239,6 +239,22 @@ function fakeUser(db) {
     'an expired token is refreshed, and Yahoo\'s new refresh token is saved at once');
   check(await job.yahooAccess(yStore.doc('yahooTokens/nobody'), 'test-secret', ynow) === null, 'nobody linked: no token');
 
+  section('Yahoo refresh read (every league, trimmed on the server)');
+  const YL = T.yahooLeague(players);
+  const yAsked = [];
+  const yGet = failSettings => async url => {
+    yAsked.push(url);
+    const body = /\/teams\/roster;week=/.test(url) ? YL.roster : /\/settings\?/.test(url) ? (failSettings ? null : YL.settings)
+      : /use_login=1.*\/teams\?/.test(url) ? YL.teams : /use_login=1.*\/leagues\?/.test(url) ? YL.leagues : null;
+    return body ? new Response(JSON.stringify(body), {status: 200}) : new Response('nope', {status: 500});
+  };
+  const yAll = await job.yahooAll('acc', '2026', 3, yGet(false));
+  check(yAll.linked && yAll.leagues.length === 1 && yAll.leagues[0].teamKey === YL.key + '.t.1' && yAll.leagues[0].rosters.length === 4 &&
+    yAsked.some(u => /\/league\/472\.l\.1001\/teams\/roster;week=3\?format=json$/.test(u)), 'each league\'s settings and every team\'s roster for the week, trimmed');
+  const yBad = await job.yahooAll('acc', '2026', 3, yGet(true));
+  check(yBad.leagues[0].error && yBad.leagues[0].name === 'Titan Yahoo Test', 'a league Yahoo won\'t read comes back with a reason');
+  check((await job.yahooAll('acc', '2026', 3, async () => new Response('{"error":{}}', {status: 401}))).noaccess === true, 'Yahoo refusing Titan reads as no access yet');
+
   undo();
   T.done();
 })().catch(T.crash);

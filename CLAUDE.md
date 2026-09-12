@@ -147,9 +147,17 @@ live site, so site changes reach it without a new upload. What's done and what's
   `yahooTokens/{uid}`, outside `users/{uid}`, so no browser can read them. Every Yahoo read goes
   through the server; `yahooAccess` refreshes and saves Yahoo's rotated refresh token at once. The
   secret is `YAHOO_CLIENT_SECRET` in Secret Manager: never in the repo. `yahoo.js` reads Yahoo's
-  nested JSON (`flat`, `list`, `details`, `subs`). Yahoo's terms: keep Yahoo user data at most 24 hours
-  (re-read, don't store rosters or scores), credit "Fantasy data provided by Yahoo Fantasy" wherever it
-  shows, and hide the tip jar for anyone who links Yahoo (the owner's call). Titan's access request is
+  nested JSON (`flat`, `list`, `details`, `subs`) and builds leagues (`leagueCfg`, `buildLeague`,
+  players matched by `SCC.playerIndex`/`matchPlayer`, shared with ESPN). Each refresh reads every
+  Yahoo league through the server (`yahooLeague` kind `all` → `yahooAll`; `YAHOO.fetchAll` in
+  `collect`) when `account.yahoo.linked` is set and sync.js has set the transport. Yahoo leagues show
+  on Lineups, Rosters, Exposure, Byes and Waivers; Matchup, Standings, Trade and Results say they're
+  coming next, and live points wait too. Sleeper's own leagues carry no `platform`: test with
+  `isSleeper` (sleeper.js) or `onSleeper` (app.js), never `!== 'espn'`. Yahoo's terms: keep Yahoo user
+  data at most 24 hours (re-read it; the app drops Yahoo leagues from a saved refresh over a day old,
+  and the server job never reads Yahoo), credit "Fantasy data provided by Yahoo Fantasy" wherever it
+  shows (`yahooCredit`), and hide the tip jar for anyone who links Yahoo (`tipJar`, and `titan.noTip`
+  for the website's pages in theme.js; the owner's call). Titan's access request is
   with Yahoo (received 2026-09-11). Before opening it to everyone: Yahoo's approval, the privacy and
   terms pages, the Play listing, and the website's coming-soon wording.
 - Team names: every fantasy team, on every tab and both platforms, reads "Nickname (account name)"

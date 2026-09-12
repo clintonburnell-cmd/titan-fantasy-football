@@ -10,6 +10,7 @@
 
   var SCC = root.SCC || (typeof require === 'function' ? require('./engine.js') : null);
   var ESPN = root.EspnAPI || (typeof require === 'function' ? require('./espn.js') : null);
+  var YAHOO = root.YahooAPI || (typeof require === 'function' ? require('./yahoo.js') : null);
 
   var API = 'https://api.sleeper.app/v1';
   var SCHEDULE = 'https://api.sleeper.app/schedule/nfl/regular/';
@@ -192,6 +193,9 @@
     });
   }
 
+  // Sleeper's own leagues carry no platform; ESPN's and Yahoo's do.
+  function isSleeper(l) { return !l.platform || l.platform === 'sleeper'; }
+
   // A saved ESPN league that couldn't be read this time: listed with the reason.
   function unreadEspn(link, known, error) {
     var id = 'espn:' + link.id;
@@ -212,6 +216,8 @@
     opts = opts || {};
     var prefs = account.prefs || {};
     var espnLinks = ESPN && account.espn ? account.espn.leagues || [] : [];
+    // Yahoo is read through Titan's server, where the person's Yahoo link lives (sync.js sets the way in).
+    var yahooOn = !!(YAHOO && account.yahoo && account.yahoo.linked && YAHOO.canRead());
     var log = [];
     var say = function (m) { log.push(m); };
     say('Refresh started ' + stamp(new Date()));
@@ -239,12 +245,14 @@
     if (sched && sched.length) week = SCC.effectiveWeek(week, sched, Date.now());
     say('NFL ' + season + ', week ' + week + '.' +
       (week !== sleeperWeek ? ' Week ' + sleeperWeek + '\'s games are over, so Titan shows week ' + week + '.' : ''));
+    var yahooJob = yahooOn ? YAHOO.fetchAll(leagueSeason, week).catch(function (e) { return {error: (e && e.message) || String(e)}; }) : null;
     var espnRes = await Promise.all(espnLinks.map(function (l) {
       return ESPN.fetchLeague(l.id, leagueSeason, {creds: opts.espnCreds, week: week})
         .catch(function (e) { return {error: e.message || String(e)}; });
     }));
+    var yahooRes = yahooJob ? await yahooJob : null;
     if (!all) {
-      all = (known || []).filter(function (l) { return l.platform !== 'espn'; }).map(function (l) {
+      all = (known || []).filter(isSleeper).map(function (l) {
         var p = prefs[l.id];
         return Object.assign({}, l, p && p.active !== undefined ? {active: !!p.active} : {});
       });
@@ -270,15 +278,26 @@
       espnJson[cfg.id] = r.json;
       all.push(cfg);
     });
+    var yahooData = {};
+    if (yahooRes && yahooRes.noaccess) say('Yahoo: Titan\'s access to Yahoo leagues is still in review with Yahoo, so they can\'t load yet.');
+    else if (yahooRes && yahooRes.error) say('Yahoo: ' + yahooRes.error + '.');
+    ((yahooRes && yahooRes.leagues) || []).forEach(function (l) {
+      if (l.error) { say('Yahoo league ' + l.name + ': ' + l.error + '.'); return; }
+      var cfg = YAHOO.leagueCfg(l, prefs);
+      yahooData[cfg.id] = l;
+      all.push(cfg);
+    });
     uniqueKeys(all);
 
     var leagues = all.filter(function (l) { return l.active; });
-    var fromSleeper = leagues.filter(function (l) { return l.platform !== 'espn'; });
+    var fromSleeper = leagues.filter(isSleeper);
     var fromEspn = leagues.filter(function (l) { return l.platform === 'espn'; });
+    var fromYahoo = leagues.filter(function (l) { return l.platform === 'yahoo'; });
     if (account.userId) {
-      say(all.length - espnLinks.length + ' league(s) on ' + account.displayName + '\'s Sleeper account, ' + fromSleeper.length + ' switched on.');
+      say(all.filter(isSleeper).length + ' league(s) on ' + account.displayName + '\'s Sleeper account, ' + fromSleeper.length + ' switched on.');
     }
     if (espnLinks.length) say(espnLinks.length + ' ESPN league(s) saved, ' + fromEspn.length + ' switched on.');
+    if (Object.keys(yahooData).length) say(Object.keys(yahooData).length + ' Yahoo league(s), ' + fromYahoo.length + ' switched on.');
 
     progress('Pulling ' + leagues.length + ' leagues…');
     var sets = await Promise.all(fromSleeper.map(function (l) {
@@ -305,6 +324,13 @@
       if (d.error) { say(lg.key + ' (ESPN): ' + d.error + ', skipped.'); return; }
       live.push(d);
       say(lg.key + ' (ESPN): ' + d.roster.length + ' players, ' + d.startCount + ' starting' +
+        (d.unmatched ? ', ' + d.unmatched + ' not found in Sleeper\'s player list' : '') + '.');
+    });
+    fromYahoo.forEach(function (lg) {
+      var d = YAHOO.buildLeague(lg, yahooData[lg.id], players);
+      if (d.error) { say(lg.key + ' (Yahoo): ' + d.error + ', skipped.'); return; }
+      live.push(d);
+      say(lg.key + ' (Yahoo): ' + d.roster.length + ' players, ' + d.startCount + ' starting' +
         (d.unmatched ? ', ' + d.unmatched + ' not found in Sleeper\'s player list' : '') + '.');
     });
 
@@ -396,6 +422,8 @@
     var sets = await Promise.all(live.map(function (d) {
       // Demo leagues have no matchups to read points from.
       if (d.cfg.demo || !d.roster.some(function (p) { return p.locked; })) return null;
+      // Yahoo's live points come in the next step; until then a Yahoo league shows none.
+      if (d.cfg.platform === 'yahoo') return null;
       if (d.cfg.platform === 'espn') {
         if (!fresh) return d.espnPoints || null;
         return ESPN.fetchPoints(d.cfg.espnId, season, week, d.cfg.teamId, {creds: creds}).catch(function () { return null; });
@@ -421,6 +449,7 @@
     var players = await loadPlayers();
     return Promise.all(snap.leagues.map(function (d) {
       var lg = d.cfg;
+      if (lg.platform === 'yahoo') return Promise.resolve({cfg: lg, error: 'Yahoo matchups are coming next'});
       var job = lg.platform === 'espn'
         ? ESPN.fetchMatchup(lg.espnId, snap.season, snap.week, lg.teamId).then(function (m) {
             return m ? {cfg: lg, me: espnSide(lg, m.me, players), opp: espnSide(lg, m.opp, players)} : {cfg: lg, none: true};
@@ -443,6 +472,7 @@
      the person's own is (Sleeper ids where matched). `rosterId` (Sleeper) or the
      league's teamId (ESPN) marks the person's own team. */
   async function leagueTeams(lg, rosterId, season) {
+    if (lg.platform === 'yahoo') throw new Error('Yahoo trades are coming next');
     var players = await loadPlayers();
     var slim = function (p) { return {id: p.id, espnId: p.espnId, name: p.name, pos: p.pos, team: p.team, held: !!p.held}; };
     if (lg.platform === 'espn') {
@@ -544,6 +574,7 @@
      played. Sleeper: the rosters, members and each week's matchups up to the playoffs
      (roster ids are the team ids, as in leagueTeams). ESPN: the league's schedule. */
   async function leagueSchedule(lg, season, week) {
+    if (lg.platform === 'yahoo') throw new Error('Yahoo standings are coming next');
     if (lg.platform === 'espn') return ESPN.fetchSchedule(lg.espnId, season, week);
     var last = (Number(lg.playoffStart) || 15) - 1, paths = ['/rosters', '/users'];
     for (var w = 1; w <= last; w++) paths.push('/matchups/' + w);
@@ -637,9 +668,11 @@
     var prog = SCC.weekProgress(sched, week);
     var userId = String(account.userId || '');
     var espn = leagues.filter(function (l) { return l.platform === 'espn'; });
-    leagues = leagues.filter(function (l) { return l.platform !== 'espn'; });
+    var yahoo = leagues.filter(function (l) { return l.platform === 'yahoo'; });
+    leagues = leagues.filter(isSleeper);
     var out = {week: week, userId: userId, started: prog.started, done: prog.done,
       total: prog.total, leagues: [], players: {}, skipped: []};
+    yahoo.forEach(function (l) { out.skipped.push(l.key + ': Yahoo leagues come to Results in a later step'); });
     if (!prog.started) return out;
 
     var players = await loadPlayers();

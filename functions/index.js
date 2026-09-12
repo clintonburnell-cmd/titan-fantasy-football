@@ -437,24 +437,55 @@ exports.yahooCallback = onRequest(Object.assign({invoker: 'public'}, YAHOO_FN), 
   res.redirect(302, '/app/settings?yahoo=' + result);
 });
 
-// The person's Yahoo football leagues for a season, each with their team in it.
-exports.yahooLeagues = onCall(YAHOO_FN, async req => {
+// A signed-in person's Yahoo access token (null if they haven't linked Yahoo), for the callables below.
+async function yahooAccessFor(req) {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
   if (!yahooAllowed(req.auth)) throw new HttpsError('permission-denied', 'Yahoo leagues aren\'t open yet.');
-  const ref = db.doc('yahooTokens/' + req.auth.uid);
-  let access;
-  try { access = await yahooAccess(ref, YAHOO_SECRET.value()); }
+  try { return await yahooAccess(db.doc('yahooTokens/' + req.auth.uid), YAHOO_SECRET.value()); }
   catch (e) { logger.warn('Yahoo refresh failed: ' + e.message); throw new HttpsError('failed-precondition', 'Your Yahoo link stopped working. Sign in with Yahoo again.'); }
+}
+const yahooSeason = data => /^\d{4}$/.test(String((data || {}).season)) ? String(data.season) : String(new Date().getFullYear());
+const yahooRefused = r => r.status === 401 || r.status === 403;
+
+// Settings: the person's Yahoo football leagues for a season, each with their team in it.
+exports.yahooLeagues = onCall(YAHOO_FN, async req => {
+  const access = await yahooAccessFor(req);
   if (!access) return {linked: false};
-  const season = /^\d{4}$/.test(String((req.data || {}).season)) ? String(req.data.season) : String(new Date().getFullYear());
-  const base = '/users;use_login=1/games;game_codes=nfl;seasons=' + season;
+  const base = '/users;use_login=1/games;game_codes=nfl;seasons=' + yahooSeason(req.data);
   const [lg, tm] = await Promise.all([yahooRead(access, base + '/leagues'), yahooRead(access, base + '/teams')]);
-  const since = ((await ref.get()).data() || {}).linkedAt || 0;
+  const since = ((await db.doc('yahooTokens/' + req.auth.uid).get()).data() || {}).linkedAt || 0;
   if (!lg.ok) {
-    if (lg.status === 401 || lg.status === 403) return {linked: true, since, noaccess: true};
+    if (yahooRefused(lg)) return {linked: true, since, noaccess: true};
     throw new HttpsError('unavailable', 'Yahoo couldn\'t list your leagues right now.');
   }
   return {linked: true, since, leagues: YAHOO.yourLeagues(lg.json, tm.ok ? tm.json : null)};
+});
+
+/* What a refresh needs from Yahoo, for every football league the person is in: each
+   league's settings and every team's roster for the week (theirs, and who's rostered
+   where), trimmed by yahoo.js. Nothing is kept: Yahoo's terms allow keeping its data
+   a day at most, so every refresh reads it again. The address shapes follow Yahoo's
+   docs and open-source clients; they're checked for real once Yahoo opens access. */
+async function yahooAll(access, season, week, get = fetch) {
+  const base = '/users;use_login=1/games;game_codes=nfl;seasons=' + season;
+  const [lg, tm] = await Promise.all([yahooRead(access, base + '/leagues', get), yahooRead(access, base + '/teams', get)]);
+  if (!lg.ok) return yahooRefused(lg) ? {linked: true, noaccess: true} : {linked: true, error: 'Yahoo couldn\'t list your leagues right now'};
+  const leagues = await Promise.all(YAHOO.yourLeagues(lg.json, tm.ok ? tm.json : null).map(async l => {
+    const [st, ro] = await Promise.all([yahooRead(access, '/league/' + l.key + '/settings', get),
+      yahooRead(access, '/league/' + l.key + '/teams/roster;week=' + week, get)]);
+    if (!st.ok || !ro.ok) return {key: l.key, name: l.name, error: 'Yahoo couldn\'t read it this time'};
+    return YAHOO.leagueFrom(st.json, ro.json, l.team ? l.team.key : '');
+  }));
+  return {linked: true, leagues};
+}
+
+// Each refresh's read of Yahoo (yahoo.js fetchAll, through sync.js).
+exports.yahooLeague = onCall(Object.assign({}, YAHOO_FN, {timeoutSeconds: 60}), async req => {
+  const {kind, week} = req.data || {};
+  if (kind !== 'all' || !/^\d{1,2}$/.test(String(week))) throw new HttpsError('invalid-argument', 'Not a Yahoo request.');
+  const access = await yahooAccessFor(req);
+  if (!access) return {linked: false};
+  return yahooAll(access, yahooSeason(req.data), Number(week));
 });
 
 // "Unlink Yahoo", and part of deleting a Titan account: the tokens are forgotten.
@@ -649,5 +680,5 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
 });
 
 exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
-  yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess,
+  yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll,
   setSend: fn => { sendPush = fn; }};

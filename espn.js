@@ -143,29 +143,8 @@
     return t ? t.id : null;
   }
 
-  /* Sleeper's player list by name and position (and by name alone), to find
-     each ESPN player in it. */
-  function indexPlayers(players) {
-    var idx = {byKey: {}, byName: {}};
-    for (var id in players) {
-      var e = players[id], n = SCC.norm(e[0]);
-      (idx.byKey[n + '|' + e[1]] = idx.byKey[n + '|' + e[1]] || []).push(id);
-      (idx.byName[n] = idx.byName[n] || []).push(id);
-    }
-    return idx;
-  }
-
-  function matchSleeper(idx, players, name, pos, team) {
-    if (pos === 'DEF') return team || '';
-    var n = SCC.norm(name);
-    // IDP positions are named differently on the two sites, so a unique name is enough there.
-    var list = idx.byKey[n + '|' + pos] || (idx.byName[n] && idx.byName[n].length === 1 ? idx.byName[n] : []);
-    if (list.length > 1) {
-      var same = list.filter(function (id) { return SCC.teamAbbr(players[id][2]) === team; });
-      if (same.length) list = same;
-    }
-    return list[0] || '';
-  }
+  // Each ESPN player is found in Sleeper's list by name, position and team (engine.js, shared with Yahoo).
+  var indexPlayers = SCC.playerIndex, matchSleeper = SCC.matchPlayer;
 
   function entries(team) { return (team && team.roster && team.roster.entries) || []; }
 

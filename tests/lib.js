@@ -134,8 +134,58 @@ function stubEspn(leagues) {
   return () => { global.fetch = real; };
 }
 
+/* A made-up Yahoo league in Yahoo's own nesting (league 472.l.1001, four teams), built
+   from Sleeper's player list with names that appear only once, so each should match
+   back to its Sleeper id: the answers Titan's server gets for the person's leagues and
+   teams, the league's settings, and every team's roster for week 1. Team 1 is the
+   person's: a set lineup (one starter Out, a W/R/T flex, Philadelphia's defense), five
+   on the bench and one on IR. Nobody's real league. */
+function yahooLeague(players) {
+  const SCC = app('engine.js');
+  const KEY = '472.l.1001', seen = {};
+  const nk = id => SCC.norm(players[id][0]) + '|' + players[id][1];
+  Object.keys(players).forEach(id => { seen[nk(id)] = (seen[nk(id)] || 0) + 1; });
+  const pick = (pos, n) => Object.keys(players).filter(id => players[id][1] === pos && players[id][2] && seen[nk(id)] === 1).slice(0, n);
+  const [q, r, w, t, k] = [pick('QB', 5), pick('RB', 8), pick('WR', 7), pick('TE', 2), pick('K', 2)];
+  const title = s => s.charAt(0) + s.slice(1).toLowerCase();
+  const coll = items => Object.assign({count: items.length}, ...items.map((x, i) => ({[i]: x})));
+  let yid = 30000;
+  const sel = slot => ({selected_position: [{coverage_type: 'week', week: '1'}, {position: slot}, {is_flex: 0}]});
+  const yp = (id, slot, status) => ({player: [[{player_key: '472.p.' + (++yid)}, {player_id: String(yid)}, {name: {full: players[id][0]}},
+    {editorial_team_abbr: title(players[id][2])}, {bye_weeks: {week: '9'}}, {display_position: players[id][1]}, [],
+    {primary_position: players[id][1]}, status ? {status} : []], sel(slot)]});
+  const ydef = (abbr, city, slot) => ({player: [[{player_key: '472.p.' + (++yid)}, {player_id: String(yid)}, {name: {full: city}},
+    {editorial_team_abbr: title(abbr)}, {display_position: 'DEF'}, {primary_position: 'DEF'}], sel(slot)]});
+  const team = (n, name, list) => ({team: [[{team_key: KEY + '.t.' + n}, {team_id: String(n)}, {name}, [],
+    {url: 'https://football.fantasysports.yahoo.com/f1/1001/' + n}, {team_logos: [{team_logo: {size: 'large', url: 'https://s.yimg.com/team' + n + '.png'}}]},
+    n === 1 ? {is_owned_by_current_login: 1} : [], {managers: [{manager: {manager_id: String(n), nickname: 'Manager ' + n}}]}],
+    {roster: {coverage_type: 'week', week: '1', '0': {players: coll(list)}}}]});
+  const meta = {league_key: KEY, league_id: '1001', name: 'Titan Yahoo Test', num_teams: '4', url: 'https://football.fantasysports.yahoo.com/f1/1001',
+    logo_url: false, season: '2026', current_week: '1'};
+  const spot = (position, count) => ({roster_position: {position, count}});
+  const user = (what, items) => ({fantasy_content: {users: {'0': {user: [{guid: 'TESTGUID'}, {games: {'0': {game: [
+    {game_key: '472', code: 'nfl', season: '2026'}, {[what]: items}]}, count: 1}}]}, count: 1}}});
+  return {
+    key: KEY,
+    ids: {starters: [q[0], r[0], r[1], w[0], w[1], t[0], w[2], k[0], 'PHI'], flex: w[2], out: r[1], ir: r[4],
+      bench: [q[1], r[2], r[3], w[3], t[1]], elsewhere: w[4]},
+    leagues: user('leagues', coll([{league: [meta]}])),
+    teams: user('teams', coll([{team: [[{team_key: KEY + '.t.1'}, {team_id: '1'}, {name: 'My Yahoo Team'}]]}])),
+    settings: {fantasy_content: {league: [meta, {settings: [{uses_faab: '1', playoff_start_week: '15', num_playoff_teams: '4',
+      roster_positions: [spot('QB', 1), spot('WR', 2), spot('RB', 2), spot('TE', 1), spot('W/R/T', 1), spot('K', 1), spot('DEF', 1), spot('BN', 5), spot('IR', 1)],
+      stat_modifiers: {stats: [{stat: {stat_id: 4, value: '0.04'}}, {stat: {stat_id: 11, value: '0.5'}}]}}]}]}},
+    roster: {fantasy_content: {league: [meta, {teams: coll([
+      team(1, 'My Yahoo Team', [yp(q[0], 'QB'), yp(r[0], 'RB'), yp(r[1], 'RB', 'O'), yp(w[0], 'WR'), yp(w[1], 'WR'), yp(t[0], 'TE'),
+        yp(w[2], 'W/R/T'), yp(k[0], 'K'), ydef('PHI', 'Philadelphia', 'DEF'), yp(q[1], 'BN'), yp(r[2], 'BN'), yp(r[3], 'BN'),
+        yp(w[3], 'BN'), yp(t[1], 'BN'), yp(r[4], 'IR', 'IR')]),
+      team(2, 'Second Team', [yp(q[2], 'QB'), yp(r[5], 'RB'), yp(w[4], 'WR'), ydef('DAL', 'Dallas', 'DEF')]),
+      team(3, 'Third Team', [yp(q[3], 'QB'), yp(r[6], 'RB'), yp(w[5], 'WR')]),
+      team(4, 'Fourth Team', [yp(q[4], 'QB'), yp(r[7], 'RB'), yp(w[6], 'WR'), yp(k[1], 'K')])])}]}}
+  };
+}
+
 module.exports = {
   ROOT, FIXTURES, check, section, skip, done, crash, app, cached, nflState,
-  sleeperPlayers, sampleRanks, espnLeagues, espnBoxscore, stubEspn,
+  sleeperPlayers, sampleRanks, espnLeagues, espnBoxscore, stubEspn, yahooLeague,
   sleeperUser: process.env.TITAN_SLEEPER_USER || ''
 };

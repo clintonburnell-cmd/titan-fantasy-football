@@ -37,4 +37,12 @@
   });
   paint();
   window.TitanTheme = {current: current, set: set};
+
+  // Every page loads this file, so it also hides the tip jar from anyone who links Yahoo
+  // (the app sets titan.noTip; the owner's call, given Yahoo's terms on earning from its data).
+  try {
+    if (localStorage.getItem('titan.noTip') === '1') {
+      document.querySelectorAll('a[href^="https://ko-fi.com/"]').forEach(function (a) { a.hidden = true; });
+    }
+  } catch (e) { /* storage blocked: the tip jar shows */ }
 })();

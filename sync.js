@@ -58,6 +58,8 @@ const sendTestAlert = httpsCallable(getFunctions(app, 'us-central1'), 'testAlert
 const startYahoo = httpsCallable(getFunctions(app, 'us-central1'), 'yahooStart');
 const readYahooLeagues = httpsCallable(getFunctions(app, 'us-central1'), 'yahooLeagues');
 const unlinkYahoo = httpsCallable(getFunctions(app, 'us-central1'), 'yahooUnlink');
+// Each refresh's read of the person's Yahoo leagues (yahoo.js fetchAll).
+const readYahooLeague = httpsCallable(getFunctions(app, 'us-central1'), 'yahooLeague');
 
 // Game-day alerts: each device's push address (Firebase Cloud Messaging) and
 // the alerts wanted, in users/{uid}/private/alerts. Titan's server job sends
@@ -77,6 +79,7 @@ async function alertsState(uid) {
     on: !!(t && data.tokens && data.tokens[t]), prefs: Object.assign({out: true, check: true, news: true}, data.prefs || {})};
 }
 const ESPN = window.EspnAPI;
+const YAHOO = window.YahooAPI;
 const why = e => (e && (e.code || e.message)) || String(e);
 let listeners = [];
 
@@ -273,6 +276,7 @@ onAuthStateChanged(auth, user => {
   if (!user) {
     stopListening();
     if (ESPN) ESPN.setTransport(null);
+    if (YAHOO) YAHOO.setTransport(null);
     App.setEspnLogin(null);
     App.setSync({user: null, state: 'off', at: 0});
     App.setOwner(false);
@@ -280,6 +284,7 @@ onAuthStateChanged(auth, user => {
     return;
   }
   if (ESPN) ESPN.setTransport(args => readEspnLeague(args).then(r => r.data));
+  if (YAHOO) YAHOO.setTransport(args => readYahooLeague(args).then(r => r.data));
   // The app only learns whether a login is saved, and the SWID (to find the person's team).
   getDoc(espnDoc(user.uid)).then(s => App.setEspnLogin(s.exists() ? {saved: true, swid: s.data().swid, savedAt: s.data().savedAt} : null))
     .catch(() => App.setEspnLogin(null));

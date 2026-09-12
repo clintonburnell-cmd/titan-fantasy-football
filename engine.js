@@ -201,7 +201,7 @@
 
   function describeLeague(l) {
     var scoring = l.ppr >= 1 ? 'PPR' : l.ppr >= 0.5 ? 'Half PPR' : l.ppr > 0 ? l.ppr + ' PPR' : 'Standard';
-    return [l.platform === 'espn' ? 'ESPN' : '', l.teams ? l.teams + ' teams' : '', scoring, l.kind, l.bestBall ? 'Best ball' : '']
+    return [l.platform === 'espn' ? 'ESPN' : l.platform === 'yahoo' ? 'Yahoo' : '', l.teams ? l.teams + ' teams' : '', scoring, l.kind, l.bestBall ? 'Best ball' : '']
       .filter(Boolean).join(' · ');
   }
 
@@ -1259,7 +1259,7 @@
       d.roster.forEach(function (p) {
         var x = details[p.id];
         if (x && x.team && x.team !== p.team) { p.team = x.team; p.bye = byeOf(x.team); }
-        // A player Sleeper can't look up (an unmatched ESPN player) keeps the tag his league gave him.
+        // A player Sleeper can't look up (an unmatched ESPN or Yahoo player) keeps the tag his league gave him.
         if (x) p.inj = x.inj;
         p.outish = !!(p.inj && INJ_OUT[p.inj.split(' ')[0]]);
         if (p.inj) tagged[p.id] = 1;
@@ -1855,8 +1855,33 @@
     return n || a || fallback || '';
   }
 
+  /* Sleeper's player list by name and position (and by name alone), so a player from
+     another site (ESPN, Yahoo) can be found in it. matchPlayer gives his Sleeper id (a
+     team defense's is its team), or '' when he isn't there. */
+  function playerIndex(players) {
+    var idx = {byKey: {}, byName: {}};
+    for (var id in players) {
+      var e = players[id], n = norm(e[0]);
+      (idx.byKey[n + '|' + e[1]] = idx.byKey[n + '|' + e[1]] || []).push(id);
+      (idx.byName[n] = idx.byName[n] || []).push(id);
+    }
+    return idx;
+  }
+
+  function matchPlayer(idx, players, name, pos, team) {
+    if (pos === 'DEF') return team || '';
+    var n = norm(name);
+    // IDP positions are named differently from site to site, so a unique name is enough there.
+    var list = idx.byKey[n + '|' + pos] || (idx.byName[n] && idx.byName[n].length === 1 ? idx.byName[n] : []);
+    if (list.length > 1) {
+      var same = list.filter(function (id) { return teamAbbr(players[id][2]) === team; });
+      if (same.length) list = same;
+    }
+    return list[0] || '';
+  }
+
   var api = {
-    INJ_OUT: INJ_OUT, WIRE_GROUPS: WIRE_GROUPS, SLOT_POS: SLOT_POS, teamLabel: teamLabel,
+    INJ_OUT: INJ_OUT, WIRE_GROUPS: WIRE_GROUPS, SLOT_POS: SLOT_POS, teamLabel: teamLabel, playerIndex: playerIndex, matchPlayer: matchPlayer,
     norm: norm, teamAbbr: teamAbbr, byeOf: byeOf, byesFromSchedule: byesFromSchedule, setByes: setByes,
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,

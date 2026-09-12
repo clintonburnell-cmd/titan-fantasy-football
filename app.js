@@ -126,6 +126,13 @@
     if (location.protocol !== 'file:') history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
   }
   if (S.snap && S.account && S.snap.userId !== S.account.userId) S.snap = null;
+  // Yahoo's terms: its data is kept a day at most, so an older saved refresh loses its Yahoo
+  // leagues (the next refresh brings them back).
+  if (S.snap && Date.now() - (S.snap.at || 0) > 24 * 3600 * 1000 && (S.snap.available || []).some(l => l.platform === 'yahoo')) {
+    S.snap.leagues = (S.snap.leagues || []).filter(d => d.cfg.platform !== 'yahoo');
+    S.snap.available = S.snap.available.filter(l => l.platform !== 'yahoo');
+    store.set(KEY.snap, S.snap);
+  }
   if (DEMO && !S.account) {
     S.account = {demo: true, userId: '', username: '', displayName: 'Demo leagues', avatar: '', prefs: {}, espn: {leagues: []}, updatedAt: Date.now()};
     store.set(KEY.account, S.account);
@@ -252,6 +259,7 @@
       render();
       scheduleLive();
       if (S.ui.tab === 'matchup' && S.snap) loadMatchups(true);
+      if (S.again) { S.again = false; refresh(); }
     }
   }
 
@@ -359,7 +367,7 @@
     sideItems = null;
     const body = `<h2 class="sr-only">${TAB_NAMES[S.ui.tab]}</h2>` + iosHint() + demoBanner() + err + SCREENS[S.ui.tab]();
     // On a wide computer window Lineups, Matchup, Rosters and Results put their leagues down the left side.
-    view.innerHTML = sideItems ? `<div class="with-side">${sideNav(sideItems)}<div class="side-main">${body}</div></div>` : body;
+    view.innerHTML = sideItems ? `<div class="with-side">${sideNav(sideItems)}<div class="side-main">${body + yahooCredit()}</div></div>` : body + yahooCredit();
     if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
     spySide();
     syncUrl(false);
@@ -465,7 +473,7 @@
       }
       // Linking Sleeper to an account that already has ESPN leagues keeps them.
       const prev = S.account || {};
-      S.account = Object.assign(u, {prefs: prev.prefs || {}, updatedAt: Date.now()}, prev.espn ? {espn: prev.espn} : {});
+      S.account = Object.assign(u, {prefs: prev.prefs || {}, updatedAt: Date.now()}, prev.espn ? {espn: prev.espn} : {}, prev.yahoo ? {yahoo: prev.yahoo} : {});
       store.set(KEY.account, S.account);
       pushAccount();
       S.snap = null;
@@ -648,6 +656,12 @@
 
   // Where a league's lineup is set: the team's page on Sleeper or ESPN.
   const siteName = cfg => cfg.platform === 'espn' ? 'ESPN' : cfg.platform === 'yahoo' ? 'Yahoo' : 'Sleeper';
+  // Sleeper's own leagues carry no platform; ESPN's and Yahoo's do.
+  const onSleeper = cfg => !cfg.platform || cfg.platform === 'sleeper';
+  // Yahoo's terms: credit Yahoo wherever its data shows.
+  const YAHOO_TABS = {lineups: 1, rosters: 1, exposure: 1, byes: 1, waivers: 1};
+  const yahooCredit = () => YAHOO_TABS[S.ui.tab] && S.snap && (S.snap.leagues || []).some(d => d.cfg.platform === 'yahoo')
+    ? '<p class="fine yahoo-credit">Fantasy data provided by <a href="https://sports.yahoo.com/fantasy/" target="_blank" rel="noopener">Yahoo Fantasy</a>.</p>' : '';
   /* A league's own picture (its Sleeper avatar, or your team's logo in an ESPN league) with a
      small badge for its site in the corner, like the team logo on a player's headshot. With no
      picture, or one that fails to load, a plain football shows (as Sleeper shows its default).
@@ -662,6 +676,7 @@
       size === 'xs' ? '' : `<i class="lsite s-${site}" title="${siteName(cfg)}">${SITE_LETTER[site]}</i>`}</span>`;
   }
   function lineupUrl(cfg) {
+    if (cfg.platform === 'yahoo') return cfg.url || 'https://football.fantasysports.yahoo.com/';
     if (cfg.platform !== 'espn') return `https://sleeper.com/leagues/${encodeURIComponent(cfg.id)}/team`;
     const team = cfg.teamId !== null && cfg.teamId !== undefined ? `&teamId=${encodeURIComponent(cfg.teamId)}` : '';
     return `https://fantasy.espn.com/football/team?leagueId=${encodeURIComponent(cfg.espnId)}${team}&seasonId=${encodeURIComponent(S.snap ? S.snap.season : '')}`;
@@ -1419,7 +1434,7 @@
     else if (d.leagues && d.leagues.length) {
       h += `<p>Titan can see your Yahoo leagues:</p><ul class="saved">${d.leagues.map(l => `<li><span><b>${esc(l.name)}</b><small>${
         esc([l.teams ? plural(l.teams, 'team') : '', l.team ? 'your team: ' + l.team.name : ''].filter(Boolean).join(' · '))}</small></span></li>`).join('')}</ul>
-        <p class="fine">Next, they'll show on every tab alongside your other leagues.</p>`;
+        <p class="fine">They load with every refresh: on Lineups, Rosters, Exposure, Byes and Waivers now, and on Matchup, Standings, Trade and Results next.</p>`;
     } else h += `<p>Yahoo is linked, but it lists no football leagues for you this season.</p>`;
     return h + `<div class="bar"><button class="btn ghost small" type="button" data-action="yahoo-refresh"${Y.busy ? ' disabled' : ''}>Check again</button>
         <button class="btn ghost small" type="button" data-action="yahoo-unlink"${Y.busy ? ' disabled' : ''}>Unlink Yahoo</button></div>
@@ -1428,10 +1443,34 @@
 
   async function loadYahoo() {
     Object.assign(S.yahoo, {busy: true, error: ''});
-    try { S.yahoo.data = await S.sync.api.yahooLeagues(espnSeason()); }
-    catch (e) { S.yahoo.error = 'Could not check Yahoo: ' + ((e && (e.message || e.code)) || e); }
+    try {
+      S.yahoo.data = await S.sync.api.yahooLeagues(espnSeason());
+      setYahooLinked(!!S.yahoo.data.linked);
+    } catch (e) { S.yahoo.error = 'Could not check Yahoo: ' + ((e && (e.message || e.code)) || e); }
     S.yahoo.busy = false;
     if (S.ui.tab === 'settings') render();
+  }
+
+  /* Whether this account has Yahoo linked (never the link itself, which stays on Titan's
+     server). Each refresh reads Yahoo leagues only when it's set. */
+  function setYahooLinked(on) {
+    if (!S.account || S.account.demo || !!(S.account.yahoo && S.account.yahoo.linked) === on) return;
+    S.account.yahoo = {linked: on};
+    S.account.updatedAt = Date.now();
+    store.set(KEY.account, S.account);
+    pushAccount();
+    tipJar();
+    refresh();
+  }
+
+  /* The Ko-fi tip jar hides inside the Play app (tips there must go through Google Play
+     billing) and for anyone who links Yahoo (the owner's call, given Yahoo's terms on
+     earning from its data). The website's pages read titan.noTip (theme.js). */
+  function tipJar() {
+    const yahoo = !!(S.account && S.account.yahoo && S.account.yahoo.linked);
+    document.querySelectorAll('[data-tip]').forEach(el => { el.hidden = IN_PLAY_APP || yahoo; });
+    if (DEMO) return;
+    try { if (yahoo) localStorage.setItem('titan.noTip', '1'); else localStorage.removeItem('titan.noTip'); } catch (e) { /* storage blocked */ }
   }
 
   async function yahooSignIn() {
@@ -1449,6 +1488,7 @@
     render();
     try {
       S.yahoo.data = await S.sync.api.yahooUnlink();
+      setYahooLinked(false);
       toast('Yahoo unlinked.');
     } catch (e) { S.yahoo.error = 'Could not unlink Yahoo: ' + ((e && (e.message || e.code)) || e); }
     S.yahoo.busy = false;
@@ -1876,9 +1916,11 @@
     applyAccount(account) {
       const newUser = !S.account || S.account.userId !== account.userId;
       const newPrefs = !newUser && (JSON.stringify(S.account.prefs || {}) !== JSON.stringify(account.prefs || {}) ||
-        JSON.stringify(S.account.espn || {}) !== JSON.stringify(account.espn || {}));
+        JSON.stringify(S.account.espn || {}) !== JSON.stringify(account.espn || {}) ||
+        JSON.stringify(S.account.yahoo || {}) !== JSON.stringify(account.yahoo || {}));
       S.account = Object.assign({}, account);
       store.set(KEY.account, S.account);
+      tipJar();
       if (newUser) { S.snap = null; S.A = null; store.del(KEY.snap); }
       render();
       if (newUser || newPrefs) refresh();
@@ -1899,6 +1941,13 @@
       paintSync();
       // Signing in makes the week's saved record readable: score again with it.
       if (patch.state === 'on' && S.ui.tab === 'score' && S.score.data && !S.score.data.history && !S.score.busy) loadScore(S.score.week);
+      // Signing in opens Yahoo (read through Titan's server), so a refresh brings Yahoo leagues in;
+      // one already running without it goes again when it's done.
+      if (patch.state === 'on' && S.account && S.account.yahoo && S.account.yahoo.linked &&
+          !(S.snap && (S.snap.leagues || []).some(d => d.cfg.platform === 'yahoo'))) {
+        if (S.busy) S.again = true;
+        else refresh();
+      }
     },
     syncReady(api) { S.sync.api = api; S.sync.ready = true; paintSync(); },
     // Whether this person has an ESPN login saved (never the login itself).
@@ -1922,7 +1971,7 @@
   // While the tab is open, each league's list reloads once it's five minutes old.
   setInterval(() => {
     if (DEMO || S.ui.tab !== 'moves' || document.hidden || !S.snap || S.busy) return;
-    (S.snap.leagues || []).filter(d => d.cfg.platform !== 'espn').forEach(d => {
+    (S.snap.leagues || []).filter(d => onSleeper(d.cfg)).forEach(d => {
       const M = S.moves[d.cfg.id];
       if (M && !M.busy && Date.now() - (M.at || 0) > MOVES_EVERY) loadMoves(d);
     });
@@ -1948,7 +1997,7 @@
   function screenMoves() {
     if (DEMO) return demoOnly('Transactions', 'The Transactions tab lists every trade, pickup and drop in your real leagues.');
     if (!S.snap) return emptyState();
-    const leagues = S.snap.leagues || [], sleeper = leagues.filter(d => d.cfg.platform !== 'espn');
+    const leagues = S.snap.leagues || [], sleeper = leagues.filter(d => onSleeper(d.cfg));
     sleeper.forEach(d => {
       const M = S.moves[d.cfg.id];
       if (!M || (!M.busy && Date.now() - (M.at || 0) > MOVES_EVERY)) loadMoves(d);
@@ -2050,7 +2099,7 @@
     const W = S.waiv, players = playerList(), leagues = S.A.leagues;
     if (!W.trend && !W.busy && !W.error) loadTrending();
     leagues.forEach(L => {
-      if (!L.cfg.faab || L.cfg.platform === 'espn' || W.faab[L.cfg.id]) return;
+      if (!L.cfg.faab || !onSleeper(L.cfg) || W.faab[L.cfg.id]) return;
       const d = (S.snap.leagues || []).find(x => x.cfg.id === L.cfg.id);
       if (d) loadFaab(L.cfg, d.rosterId);
     });
@@ -2085,7 +2134,7 @@
           : `<small class="wmeta">Not free in any of your leagues${mine ? ` (yours in ${mine})` : ''}.</small>`}</span></li>`;
     });
 
-    const anyFaab = leagues.some(L => L.cfg.faab && L.cfg.platform !== 'espn');
+    const anyFaab = leagues.some(L => L.cfg.faab && onSleeper(L.cfg));
     let h = `<p class="lede">Pickups for every league: your rankings' waiver targets, backups for hurt starters, what Sleeper players are
       adding, and where anyone is available.${anyFaab ? ' Where a league bids for players, Titan suggests a bid from its recent winning bids.' : ''}</p>
       <section class="card pad wsec"><h3>Where is he available?</h3>
@@ -2650,7 +2699,7 @@
   if (SIDE && SIDE.addEventListener) SIDE.addEventListener('change', relayout);
   // The Appearance card shows which theme is on (theme.js tells us when it changes).
   document.addEventListener('titan-theme', () => { if (S.ui.tab === 'settings') render(); });
-  if (IN_PLAY_APP) document.querySelectorAll('[data-tip]').forEach(el => { el.hidden = true; });
+  tipJar();
   analyze();
   render();
   // A snapshot saved by an older version lacks what live scores and kickoff times need, so it's refreshed.
