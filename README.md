@@ -91,7 +91,8 @@ players on both rosters, and Titan totals each side with FantasyCalc's trade val
 format (redraft or dynasty, 1 QB or superflex, team count, PPR), plus a waiver pickup's value for each roster spot an
 uneven trade frees (as FantasyCalc's own calculator does), finds trade ideas (fair trades of one or
 two players each way that make your starting lineup stronger, and theirs where possible; Clear folds
-them away), searches the league for who has a player (Trade for him starts that trade), says who wins and suggests players that would even it out. It also shows each team's best
+them away), searches the league for who has a player (Trade for him starts that trade), says who wins and suggests players that would even it out. Copy and open
+copies the trade as text and opens your team on Sleeper or ESPN, since neither lets another app fill in an offer. It also shows each team's best
 starting lineup by this week's projections before and after the trade, and in dynasty Sleeper
 leagues each team's draft picks for the next three drafts (who owns which comes from Sleeper's
 traded picks) can go in the trade too. Titan's server fetches the values from

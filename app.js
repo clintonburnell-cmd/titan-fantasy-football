@@ -1840,6 +1840,14 @@
     catch (e) { S.moves[id] = Object.assign({}, had, {busy: false, error: (e && e.message) || String(e), at: Date.now()}); }
     if (S.ui.tab === 'moves') render();
   }
+  // While the tab is open, each league's list reloads once it's five minutes old.
+  setInterval(() => {
+    if (DEMO || S.ui.tab !== 'moves' || document.hidden || !S.snap || S.busy) return;
+    (S.snap.leagues || []).filter(d => d.cfg.platform !== 'espn').forEach(d => {
+      const M = S.moves[d.cfg.id];
+      if (M && !M.busy && Date.now() - (M.at || 0) > MOVES_EVERY) loadMoves(d);
+    });
+  }, 30000);
 
   const MOVE_KIND = {trade: 'Trade', waiver: 'Waiver claim', free_agent: 'Free agent', commissioner: 'Commissioner'};
   function moveRow(x) {
@@ -2299,6 +2307,13 @@
         near.length ? `<div class="chips">${near.map(p => `<button type="button" class="chip" data-trade="${which}" data-pid="${esc(p.id)}">+ ${
           esc(p.name)} <small>${thousands(worth(p))}</small></button>`).join('')}</div>` : ''}`;
     }
+    /* Neither Sleeper nor ESPN lets another app fill in a trade offer (Sleeper's API is
+       read-only), so Titan copies the trade as text and opens your team on the site. */
+    const names = list => list.map(p => p.name).join(' + ');
+    const send = give.length && get.length && !cfg.demo ? `<div class="tsend"><a class="btn small" href="${esc(lineupUrl(cfg))}" target="_blank" rel="noopener"
+        data-trade-copy="${esc(`Trade offer: my ${names(give)} for your ${names(get)}`)}">Copy and open ${siteName(cfg)} ↗</a>
+      <span class="fine">${siteName(cfg)} doesn't let other apps fill in a trade, so Titan copies it for you. On ${siteName(cfg)},
+        start a trade with ${esc(partner.name)}, add these players, and paste it as a note if you like.</span></div>` : '';
     return `<section class="card pad trade-sum">
       <div class="tsides">
         <div><h3>You give</h3><div class="chips">${chips(give, 'give')}</div>${tot(R.give, 'their')}</div>
@@ -2306,7 +2321,7 @@
       </div>
       ${any ? `<div class="winbar" title="Each side's share of the trade"><span class="wp me${pg <= 50 ? ' up' : ''}">${100 - pg}%</span>
         <span class="wbar"><i class="wopp" style="width:${100 - pg}%"></i><i class="wme" style="width:${pg}%"></i></span><span class="wp opp${pg >= 50 ? ' up' : ''}">${pg}%</span></div>` : ''}
-      <p class="tverdict">${verdict}</p>${even}${lineupImpact(cfg, me, partner, give, get)}
+      <p class="tverdict">${verdict}</p>${even}${send}${lineupImpact(cfg, me, partner, give, get)}
       <p class="fine">Values add up as they are, since FantasyCalc's values already count stars for more. In an uneven trade, the side getting fewer players also gets a waiver pickup's value (about the 300th-best player) for each roster spot it frees, as FantasyCalc's own calculator does.${
         any ? ' <button class="link" data-action="trade-clear">Clear the trade</button>' : ''}</p>
     </section>`;
@@ -2349,6 +2364,16 @@
     if (form === 'link') linkAccount(el.username.value);
     else if (form === 'espn-add') addEspn(el.league.value);
     else if (form === 'espn-login') saveEspnLogin(el.s2.value, el.swid.value);
+  });
+
+  // Copy and open: the link opens the site as usual while the trade goes to the clipboard.
+  view.addEventListener('click', e => {
+    const a = e.target.closest('[data-trade-copy]');
+    if (!a) return;
+    const done = ok => toast(ok ? 'Trade copied. Start the trade on ' + a.textContent.replace(/^Copy and open | ↗$/g, '') + ', then paste it as a note if you like.'
+      : 'Opened the site. Titan couldn\'t copy the trade on this device.');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(a.dataset.tradeCopy).then(() => done(true), () => done(false));
+    else done(false);
   });
 
   view.addEventListener('click', e => {

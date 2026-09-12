@@ -697,6 +697,8 @@ details.match > summary::-webkit-details-marker { display: none; }
 .tideas-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .tideas-b { display: flex; gap: 8px; }
 .tideas.min { padding-block: 10px; }
+.tsend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-block: 4px 10px; }
+.tsend .fine { flex: 1 1 260px; margin: 0; }
 .tsearch { display: grid; gap: 8px; }
 .tsearch .wchips { align-items: center; }
 .idea-list { list-style: none; margin: 0; padding: 0; display: grid; }

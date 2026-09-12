@@ -316,6 +316,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`(([...document.querySelectorAll('#tsearch .wrow')].find(r => r.querySelector('b').textContent === ${JSON.stringify(team3Player)}) || document).querySelector('[data-tsearch]') || {click() {}}).click(); true`);
   check(await waitFor(`document.querySelector('[data-ui="tradePartner"]').value === '3' && [...document.querySelectorAll('.trade-sum .tchip')].some(c => c.textContent.includes(${JSON.stringify(team3Player)}))`, 3000),
     'Trade for him makes his team the partner and puts him on the get side');
+  check(await ev(`!document.querySelector('[data-trade-copy]')`), 'with nobody on your side yet, there\'s nothing to send');
+  await ev(`document.querySelector('.tteam [data-trade="give"]').click(); true`);
+  check(await waitFor(`(() => { const a = document.querySelector('.trade-sum [data-trade-copy]');
+    return !!a && /^Copy and open ESPN/.test(a.textContent) && a.href.startsWith('https://fantasy.espn.com/football/team?leagueId=') && a.target === '_blank' &&
+      a.dataset.tradeCopy.startsWith('Trade offer: my ') && a.dataset.tradeCopy.endsWith(' for your ' + ${JSON.stringify(team3Player)}); })()`, 3000),
+    'a two-sided trade can be copied and taken to the league\'s site: ' + await ev(`((document.querySelector('[data-trade-copy]') || {dataset: {}}).dataset.tradeCopy || 'none')`));
 
   T.section('game context on Lineups');
   await tab('lineups');

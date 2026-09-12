@@ -81,6 +81,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   (`lineupPoints` with values, not one week's projections), at most two per partner. The ideas card
   is one line until Find trades, and Clear folds it back. "Who has him?" (`tradeSearchResults`)
   searches the league's rosters, then free agents; Trade for him sets the partner and the get side.
+  Copy and open (`data-trade-copy`): copies "Trade offer: my X for your Y" and opens `lineupUrl`.
+  Sleeper can't be pre-filled: its API is read-only, and its web trade page (`/beta/leagues/:id/trade`,
+  checked 2026-09-11) takes only the league and sits behind flags that are off. Never ask for Sleeper logins.
 - Game context on Lineups rows (`SCC.gameTags`) comes from the `gameContext` function at
   `/api/game-context` (kept 30 minutes): ESPN's scoreboard lines (`ESPN.scoreboardFrom`,
   `SCC.impliedTotals`), NWS forecasts at kickoff for outdoor US games (`STADIUMS` holds each home
@@ -88,8 +91,8 @@ live site, so site changes reach it without a new upload. What's done and what's
   nflverse's `stats_player_week_<season>.csv.gz`, CC BY 4.0, credited on Lineups; last season's
   until three weeks are played; Firestore `meta/dvp`, 12 hours).
 - The Transactions tab (tab id `moves`, address `/app/transactions`): each Sleeper league's last three
-  weeks of completed transactions (`API.leagueTransactions` → `SCC.transactionsFrom`), reloaded after
-  five minutes. A league picker (`S.ui.movesLeague`, remembered) narrows the list; the kind chips'
+  weeks of completed transactions (`API.leagueTransactions` → `SCC.transactionsFrom`), reloaded every
+  five minutes while the tab is open. A league picker (`S.ui.movesLeague`, remembered) narrows the list; the kind chips'
   counts follow it. ESPN transactions aren't read yet (their format hasn't been checked on a real league).
 - The Waivers tab: rankings' wire targets (`L.wire`), free backups (`SCC.backupOf`), Sleeper's
   trending adds (`API.trendingAdds`) with where each is free (`L.takenNorm`), a search, and bids
