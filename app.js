@@ -2316,6 +2316,7 @@
     const d = leagues.find(x => x.cfg.id === one) || leagues[0], cfg = d.cfg;
     if (!S.stand[cfg.id]) loadStandings(d);
     if (!S.trade.teams[cfg.id]) loadTradeTeams(d);
+    if (!S.trade.season) loadSeasonProj(); // for Position strength
     const St = S.stand[cfg.id], Tm = S.trade.teams[cfg.id];
     let h = pickedLeague() !== 'all' ? '' : `<div class="bar"><label class="field"><span>League</span><select data-ui="standLeague">${leagues.map(x =>
       `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('')}</select></label></div>`;
@@ -2351,7 +2352,7 @@
         ${R.left} games left: each team scores around its average so far, blended with this week's projected lineup, give or take the
         league's usual swings. Division winners aren't modeled. All-play is a team's record if it had played every team every week, and
         luck is how many more (or fewer) wins it has than that record would give. Power ranks all-play, points per game and projected
-        strength together.</p>`;
+        strength together.</p>` + strengthTable(strengthOf(cfg, Tm.list), R, mineId, cfg);
   }
 
   /* ---- Trade */
@@ -2379,7 +2380,7 @@
     try { S.trade.season = {map: await API.fetchSeasonProjections(S.snap.season)}; }
     catch (e) { S.trade.season = {map: {}}; }
     S.trade.tv = {};
-    if (S.ui.tab === 'trade') render();
+    if (S.ui.tab === 'trade' || S.ui.tab === 'standings') render();
   }
   function titanValueFor(cfg) {
     const sp = S.trade.season && S.trade.season.map;
@@ -2389,6 +2390,51 @@
     const m = S.trade.tv[cfg.id];
     return p => (p && p.pos !== 'PICK' && m[p.id] !== undefined ? m[p.id] : null);
   }
+  /* Where the teams in a league are deep or thin (SCC.positionStrength), by this season's
+     projections (Sleeper's, never FantasyCalc's): the Standings table and the Trade tab's
+     partner card. Null until the projections are in. */
+  function strengthOf(cfg, teams) {
+    const sp = S.trade.season && S.trade.season.map;
+    if (!sp || !Object.keys(sp).length || !teams || !teams.length) return null;
+    return SCC.positionStrength(teams, cfg.lineup, p => SCC.projFor(sp, p.id, cfg.ppr) || 0);
+  }
+
+  // Standings: every team's rank at each position, in the standings' order.
+  function strengthTable(PS, R, mineId, cfg) {
+    if (!PS) return S.trade.season && S.trade.season.busy ? '<div class="empty-note">Working out where each team is deep or thin…</div>' : '';
+    if (!PS.positions.length) return '';
+    const byId = {};
+    PS.teams.forEach(t => { byId[t.id] = t.byPos; });
+    return `<section class="card table-wrap pstrength"><div class="card-h"><div><h3>Position strength</h3>
+        <p>Where each team is deep or thin: its rank among the ${PS.n} teams at each position</p></div></div>
+      <table class="pstr"><thead><tr><th class="st-team">Team</th>${PS.positions.map(p => `<th>${pos(p)}</th>`).join('')}</tr></thead><tbody>${
+        R.teams.map(t => `<tr class="${t.id === mineId ? 'mine' : ''}"><td class="st-team">${esc(t.name)}</td>${PS.positions.map(p => {
+          const c = (byId[t.id] || {})[p] || {};
+          return c.rank ? `<td class="ps g-${c.grade}">${nth(c.rank)}</td>` : '<td class="ps">–</td>';
+        }).join('')}</tr>`).join('')}</tbody></table>
+      <p class="fine">Each team's best lineup this season by Sleeper's projections, position by position, counting its best bench player a little.
+        Green is the league's top third at that position, red the bottom third.${cfg.kind === 'Dynasty' ? ' This season only: it doesn\'t weigh age.' : ''}</p></section>`;
+  }
+
+  // The Trade tab, once a partner is picked: where they're thin and deep, where you are, and whether that fits.
+  function tradeFit(PS, me, partner) {
+    const cell = (t, p) => ((PS.teams.find(x => x.id === String(t.id)) || {byPos: {}}).byPos[p]) || {};
+    const at = (t, grade) => PS.positions.filter(p => cell(t, p).grade === grade);
+    const list = (t, grade) => andList(at(t, grade).map(p => `${p} (${nth(cell(t, p).rank)})`));
+    const line = (who, t, verb) => {
+      const parts = [at(t, 'thin').length ? 'thin at ' + list(t, 'thin') : '', at(t, 'deep').length ? 'deep at ' + list(t, 'deep') : ''].filter(Boolean);
+      return parts.length ? `${who} ${verb} ${parts.join(', and ')}.` : `${who} ${verb} in the middle of the league at every position.`;
+    };
+    const theyNeed = PS.positions.filter(p => cell(partner, p).grade === 'thin' && cell(me, p).grade === 'deep');
+    const youNeed = PS.positions.filter(p => cell(me, p).grade === 'thin' && cell(partner, p).grade === 'deep');
+    const fit = theyNeed.length || youNeed.length ? `<p class="tfit-good"><b>A good fit:</b> ${[theyNeed.length ? `they're thin at ${andList(theyNeed)}, where you're deep` : '',
+      youNeed.length ? `you're thin at ${andList(youNeed)}, where they're deep` : ''].filter(Boolean).join('; ')}.</p>` : '';
+    return `<section class="card pad tfit"><h3>Where you both stand</h3>
+      <p>${line(`<b>${esc(partner.name)}</b>`, partner, 'is')} ${line('<b>You</b>', me, 'are')}</p>${fit}
+      <p class="fine">Ranked against the ${PS.n} teams in this league by each team's best lineup this season (Sleeper's projections),
+        counting its best bench player a little. <button class="link" data-go="standings">See every team on Standings</button></p></section>`;
+  }
+
   // The number beside a player on the Trade tab: FantasyCalc's for the owner, Titan's for everyone else ('' for none).
   function tradeDisplay(cfg, V) {
     const fc = fcShown(), tv = titanValueFor(cfg);
@@ -2432,7 +2478,7 @@
     const f = SCC.tradeFormat(d.cfg), k = tradeKey(f);
     if (!S.trade.values[k]) loadTradeValues(f);
     if (!S.trade.teams[d.cfg.id]) loadTradeTeams(d);
-    if (!fcShown() && !S.trade.season) loadSeasonProj();
+    if (!S.trade.season) loadSeasonProj(); // Titan's values, and where each team is deep or thin
     const V = S.trade.values[k], T = S.trade.teams[d.cfg.id];
     const teams = (T && T.list) || [], me = teams.find(t => t.mine);
     const partner = teams.find(t => !t.mine && t.id === S.ui.tradePartner) || null;
@@ -2469,6 +2515,8 @@
     const assets = t => t.roster.concat(t.picks || []);
     const give = P.give.map(id => assets(me).find(p => p.id === id)).filter(Boolean);
     const get = partner ? P.get.map(id => assets(partner).find(p => p.id === id)).filter(Boolean) : [];
+    const PS = partner ? strengthOf(d.cfg, teams) : null;
+    if (PS && PS.positions.length) h += tradeFit(PS, me, partner);
     h += `<section class="card pad tsearch"><label class="field"><span>Who has him? Search for a player in ${esc(d.cfg.key)}</span>
         <input type="search" data-trade-search placeholder="At least three letters" value="${esc(S.trade.q || '')}" autocomplete="off"
           autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="tsearch">${tradeSearchResults()}</div></section>`;

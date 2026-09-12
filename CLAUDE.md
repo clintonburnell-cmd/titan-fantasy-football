@@ -136,6 +136,12 @@ live site, so site changes reach it without a new upload. What's done and what's
 - The Waivers tab: rankings' wire targets (`L.wire`), free backups (`SCC.backupOf`), Sleeper's
   trending adds (`API.trendingAdds`) with where each is free (`L.takenNorm`), a search, and bids
   (`SCC.faabBid` from `API.leagueWaivers`: a Sleeper league's last six weeks of winning bids).
+- Position strength (`SCC.positionStrength`, pure and tested): each team's best lineup this season
+  by Sleeper's season projections (never FantasyCalc's, so everyone sees it), starters added up by
+  position plus a quarter of the best bench player there, ranked across the league; top third 'deep',
+  bottom third 'thin'. Standings shows every team's ranks (`strengthTable`, table `.pstr`, not
+  `.stand`, which the UI test counts); the Trade tab shows the partner and you once a partner is
+  picked (`tradeFit`, "Where you both stand", with the good fits). Both load the season projections.
 - The Standings tab (`SCC.standings`): records, all-play, luck, power and playoff odds from 5,000
   seeded simulations; schedules from `API.leagueSchedule` (Sleeper matchups, or ESPN via
   `ESPN.fetchSchedule`; private ESPN leagues through `espnLeague` kind `schedule`).

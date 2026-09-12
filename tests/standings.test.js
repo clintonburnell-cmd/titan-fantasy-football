@@ -7,6 +7,23 @@ const ESPN = T.app('espn.js');
 const API = T.app('sleeper.js');
 const {check, section} = T;
 
+section('position strength: where each team is deep or thin');
+{
+  // Three teams starting QB, RB and WR; each player's season points made up. Team C's 400-point RB is on IR.
+  const pl = (id, pos, pts, held) => ({id, pos, pts, held: !!held});
+  const psTeams = [
+    {id: 'A', roster: [pl('a1', 'QB', 300), pl('a2', 'RB', 200), pl('a3', 'WR', 100), pl('a4', 'RB', 180)]},
+    {id: 'B', roster: [pl('b1', 'QB', 250), pl('b2', 'RB', 220), pl('b3', 'WR', 150)]},
+    {id: 'C', roster: [pl('c1', 'QB', 200), pl('c2', 'RB', 150), pl('c3', 'WR', 120), pl('c4', 'WR', 100), pl('c5', 'RB', 400, true)]}];
+  const PS = SCC.positionStrength(psTeams, ['QB', 'RB', 'WR', 'BN'], p => p.pts);
+  const at = (id, pos) => PS.teams.find(t => t.id === id).byPos[pos];
+  check(PS.positions.join() === 'QB,RB,WR' && PS.n === 3, 'only the positions the league starts: ' + PS.positions.join(', '));
+  check(at('A', 'RB').start === 200 && at('A', 'RB').depth === 180 && at('A', 'RB').rank === 1 && at('A', 'RB').grade === 'deep',
+    'a starter plus a strong bench back ranks first at RB (200, with 180 of depth counted a quarter)');
+  check(at('C', 'RB').start === 150 && at('C', 'RB').rank === 3 && at('C', 'RB').grade === 'thin', 'IR players don\'t count: team C is thin at RB');
+  check(at('B', 'WR').grade === 'deep' && at('C', 'WR').rank === 2 && at('A', 'WR').grade === 'thin', 'WR: C\'s bench receiver (120 + a quarter of 100) puts it 2nd behind B (150); A is thin');
+}
+
 section('records, all-play and luck');
 const teams = ['A', 'B', 'C', 'D'].map(id => ({id, name: 'Team ' + id}));
 const g = (week, a, b, aPts, bPts, done = true) => ({week, a, b, aPts, bPts, done});

@@ -372,6 +372,47 @@
     return sumPts(bestByPoints(pool, slots || []));
   }
 
+  /* Where each team in a league is deep or thin, position by position: its best starting
+     lineup by `pts` (Titan uses Sleeper's season projections, never FantasyCalc's), the
+     starters at each position added up, plus a quarter of its best bench player there
+     (depth), ranked across the league (1 = strongest). The top third are 'deep', the bottom
+     third 'thin'; IR and taxi players don't count. {teams: [{id, byPos: {QB: {start, depth,
+     rank, grade}}}], positions, n}. */
+  var STRENGTH_POS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+  function positionStrength(teams, slots, pts) {
+    var starters = (slots || []).filter(function (s) { return !NOT_STARTERS[s]; });
+    var out = (teams || []).map(function (t) {
+      var pool = (t.roster || []).filter(function (p) { return !p.held && p.pos !== 'PICK'; })
+        .map(function (p) { return {id: p.id, pos: p.pos, pts: Number(pts(p)) || 0}; });
+      var byPos = {}, used = {};
+      bestByPoints(pool, starters).forEach(function (p) {
+        if (!p) return;
+        used[p.id] = 1;
+        (byPos[p.pos] = byPos[p.pos] || {start: 0, depth: 0}).start += p.pts;
+      });
+      pool.forEach(function (p) {
+        if (used[p.id]) return;
+        var c = byPos[p.pos] = byPos[p.pos] || {start: 0, depth: 0};
+        if (p.pts > c.depth) c.depth = p.pts;
+      });
+      return {id: String(t.id), byPos: byPos};
+    });
+    var n = out.length, third = Math.floor(n / 3);
+    var positions = STRENGTH_POS.filter(function (pos) {
+      return starters.some(function (s) { return slotFits(s, pos); }) &&
+        out.some(function (t) { return t.byPos[pos] && t.byPos[pos].start > 0; });
+    });
+    positions.forEach(function (pos) {
+      var score = function (t) { var c = t.byPos[pos] || {start: 0, depth: 0}; return c.start + 0.25 * c.depth; };
+      out.slice().sort(function (a, b) { return score(b) - score(a); }).forEach(function (t, i) {
+        var c = t.byPos[pos] = t.byPos[pos] || {start: 0, depth: 0};
+        c.rank = i + 1;
+        c.grade = i < third ? 'deep' : i >= n - third ? 'thin' : 'mid';
+      });
+    });
+    return {teams: out, positions: positions, n: n};
+  }
+
   var ROUND_NAME = ['', '1st', '2nd', '3rd', '4th'];
   /* Who owns which future draft picks in a Sleeper league: every team its own, moved by
      Sleeper's traded picks ({season, round, roster_id: the team it started with, owner_id:
@@ -1917,7 +1958,7 @@
     norm: norm, teamAbbr: teamAbbr, byeOf: byeOf, byesFromSchedule: byesFromSchedule, setByes: setByes,
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
-    tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues,
+    tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues, positionStrength: positionStrength,
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas,
     impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags, transactionsFrom: transactionsFrom,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,

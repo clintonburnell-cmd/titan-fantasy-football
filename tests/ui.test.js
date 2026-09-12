@@ -315,6 +315,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`(() => { const s = document.querySelector('[data-ui="tradePartner"]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
   check(await waitFor(`document.querySelectorAll('.tteam').length === 2 && document.querySelectorAll('.tteam .trow').length > 20`, 5000),
     'picking a partner shows both rosters');
+  check(await waitFor(`/You are/.test((document.querySelector('.tfit') || {}).textContent || '')`, 20000),
+    'with a partner picked, a card says where each team is thin or deep: ' + (await text('.tfit p')).replace(/\s+/g, ' ').slice(0, 110));
   check(await ev(`document.querySelectorAll('.tteam .trow .pos[data-pos]').length > 20 && !!document.querySelector('.tteam .trow .pos[data-pos="QB"]')`),
     'every player on both rosters carries a colored position tag');
   await ev(`document.querySelector('[data-tsort="posvalue"]').click(); true`);
@@ -406,6 +408,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   T.section('the Standings tab');
   await tab('standings');
   check(await waitFor(`document.querySelectorAll('table.stand tbody tr').length === 10`, 30000), 'every team in the league is listed');
+  check(await waitFor(`document.querySelectorAll('table.pstr tbody tr').length === 10 && document.querySelectorAll('table.pstr tr.mine').length === 1 &&
+    document.querySelectorAll('table.pstr .ps.g-deep').length > 0 && document.querySelectorAll('table.pstr .ps.g-thin').length > 0`, 30000),
+    'Position strength ranks every team at each position, deep in green and thin in red: ' +
+      await ev(`[...document.querySelectorAll('table.pstr thead th')].map(t => t.textContent).join(' ')`));
   check(await ev(`(() => { const rows = [...document.querySelectorAll('table.stand tbody tr')];
     return rows.filter(r => r.classList.contains('mine')).length === 1 && rows.every(r => /%$/.test(r.querySelector('.st-odds b').textContent)) &&
       rows.findIndex(r => r.classList.contains('cut')) === 3; })()`), 'your team is marked, every team has playoff odds, and the line falls after the 4th');

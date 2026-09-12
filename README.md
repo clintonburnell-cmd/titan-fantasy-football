@@ -85,7 +85,11 @@ gives up to his position, from nflverse's weekly stats), and weather worth knowi
 the National Weather Service). Titan's server builds this once for everyone every half hour.
 
 The Standings tab shows each league's records, all-play records, luck, power rankings and every
-team's playoff odds (5,000 simulations of the games left). The Waivers tab gathers pickups for every
+team's playoff odds (5,000 simulations of the games left), then Position strength: every team's rank
+at QB, RB, WR, TE, K and DEF by its best lineup this season (Sleeper's projections, with a little
+credit for bench depth), the league's top third in green and bottom third in red. The Trade tab
+sums that up for you and your trade partner, and points out when one's surplus fills the other's
+hole. The Waivers tab gathers pickups for every
 league: your rankings' waiver targets, free backups for hurt starters, Sleeper's most-added players
 and where each is free in your leagues, a search for where anyone is available, and a suggested bid
 where a Sleeper league bids for players (from its recent winning bids).

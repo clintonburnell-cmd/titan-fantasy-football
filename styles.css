@@ -471,6 +471,22 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 /* The same position colors, compact, inside a line of text (the Trade tab's players, chips and search). */
 .who small .pos, .tchip .pos { width: auto; height: auto; padding: 1px 6px; border-radius: 5px; font-size: .64rem; vertical-align: 1px; }
 .tsort { align-items: center; gap: 8px; }
+/* Position strength (Standings) and the Trade tab's partner card: green deep, red thin. */
+.pstr { width: 100%; border-collapse: collapse; font-size: .86rem; }
+.pstr th, .pstr td { padding: 8px 10px; border-top: 1px solid var(--line); text-align: center; }
+.pstr th { font-size: .7rem; color: var(--muted); }
+.pstr th .pos { width: auto; height: auto; padding: 2px 7px; border-radius: 6px; font-size: .66rem; }
+.pstr .st-team { text-align: left; font-weight: 700; min-width: 8rem; }
+.pstr tr.mine .st-team::after { content: " (you)"; color: var(--muted); font-weight: 600; }
+.pstr tr.mine td { background: var(--hover); }
+.ps { font-weight: 700; font-variant-numeric: tabular-nums; }
+.ps.g-deep { color: var(--ok); background: var(--ok-soft); }
+.ps.g-thin { color: var(--stop); background: var(--stop-soft); }
+.ps.g-mid { color: var(--muted); }
+.tfit { display: grid; gap: 6px; }
+.tfit h3 { font-size: .95rem; }
+.tfit p { font-size: .88rem; }
+.tfit-good { color: var(--ok); }
 /* The trade partner's roster card: its heading is the partner picker, beside "Your team". */
 .tp-pick { display: block; max-width: 100%; }
 .tp-select { appearance: none; max-width: 100%; font: inherit; font-size: 1rem; font-weight: 800; color: var(--text); cursor: pointer;
