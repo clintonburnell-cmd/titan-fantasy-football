@@ -285,8 +285,10 @@ No build step and no dependencies. It runs on any static host.
    - **Done: ESPN Fantasy** (`espn.js`) for lineups, rosters, exposure, byes and the
      kickoff record; public leagues by ID, private ones with the member's saved ESPN
      login. Next: ESPN leagues on the Results tab.
-   - **Next: Yahoo Fantasy**: official Fantasy Sports API, signed in with Yahoo (OAuth),
-     with a registered Yahoo developer app and a server-side token exchange.
+   - **In progress: Yahoo Fantasy**: official Fantasy Sports API, signed in with Yahoo (OAuth),
+     with a server-side token exchange. Titan's Yahoo app is registered and its access request is with
+     Yahoo. Linking a Yahoo account is being built, visible only to Titan's owner until it works; next,
+     Yahoo leagues on every tab.
    - **Later: NFL Fantasy** and **CBS Sports Fantasy**: need research on what each allows.
 
    The engine works on a neutral roster format (`buildLeague` output), so each platform

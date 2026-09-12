@@ -205,6 +205,40 @@ function fakeUser(db) {
   const again = db.history['1'].leagues['espn:99999901'].players[pid];
   check(wasLocked ? again.rank === -7 : again.rank !== -7,
     wasLocked ? 'a player whose game has started keeps his saved entry' : 'a player whose game hasn\'t started is updated');
+  section('Yahoo link (sign-in handshake; tokens kept on the server)');
+  const yst = 'cd'.repeat(24), ynow = 1e12;
+  const yurl = new URL(job.yahooAuthUrl(yst));
+  check(yurl.origin + yurl.pathname === 'https://api.login.yahoo.com/oauth2/request_auth' && yurl.searchParams.get('response_type') === 'code' &&
+    yurl.searchParams.get('redirect_uri') === 'https://titanfantasyfootball.com/api/yahoo/callback' && yurl.searchParams.get('state') === yst &&
+    /^dj0y/.test(yurl.searchParams.get('client_id')), 'the sign-in address: Titan\'s client id, the registered return address and the state');
+  const ydb = {};
+  const yStore = {doc: p => ({get: async () => ({data: () => ydb[p]}), set: async v => { ydb[p] = JSON.parse(JSON.stringify(v)); }, delete: async () => { delete ydb[p]; }})};
+  const posted = [];
+  const tokenReply = (a, r) => async (u, o) => { posted.push({u, o}); return new Response(JSON.stringify({access_token: a, refresh_token: r, expires_in: 3600, token_type: 'bearer'}), {status: 200}); };
+  const yOk = async () => new Response('{"fantasy_content":{}}', {status: 200});
+  const yDeny = async () => new Response('<error>forbidden</error>', {status: 403});
+  const yDeps = extra => Object.assign({db: yStore, secret: 'test-secret', now: ynow, post: tokenReply('acc1', 'ref1'), get: yOk}, extra);
+  ydb['yahooStates/' + yst] = {uid: 'u9', at: ynow - 1000};
+  check(await job.linkYahoo(yst, 'code1', yDeps()) === 'linked' && ydb['yahooTokens/u9'].refresh === 'ref1' && ydb['yahooTokens/u9'].access === 'acc1' &&
+    !ydb['yahooStates/' + yst], 'a fresh state links: the tokens saved at yahooTokens/{uid}, the state used up');
+  const sent = posted[0];
+  check(/get_token$/.test(sent.u) && Buffer.from(sent.o.headers.Authorization.replace('Basic ', ''), 'base64').toString().endsWith(':test-secret') &&
+    /grant_type=authorization_code/.test(sent.o.body) && /code=code1/.test(sent.o.body) && /redirect_uri=https%3A%2F%2Ftitanfantasyfootball\.com/.test(sent.o.body),
+    'the code is traded with the app\'s id and secret as Basic auth, with the return address');
+  check(await job.linkYahoo(yst, 'code1', yDeps()) === 'expired', 'a state works only once');
+  ydb['yahooStates/' + yst] = {uid: 'u9', at: ynow - 11 * 60 * 1000};
+  check(await job.linkYahoo(yst, 'code2', yDeps()) === 'expired' && !ydb['yahooStates/' + yst], 'a state older than ten minutes is refused, and removed');
+  check(await job.linkYahoo('made-up', 'code3', yDeps()) === 'failed' && await job.linkYahoo(yst, '', yDeps()) === 'failed', 'a made-up state or a missing code is refused');
+  ydb['yahooStates/' + yst] = {uid: 'u8', at: ynow};
+  check(await job.linkYahoo(yst, 'code4', yDeps({get: yDeny})) === 'noaccess' && !!ydb['yahooTokens/u8'],
+    'Yahoo turning Titan away when it asks for leagues reads as no access yet, and the link is kept');
+  const yref = yStore.doc('yahooTokens/u9');
+  check(await job.yahooAccess(yref, 'test-secret', ynow + 1000, tokenReply('x', 'y')) === 'acc1', 'a token with time left is used as it is');
+  check(await job.yahooAccess(yref, 'test-secret', ynow + 3600e3, tokenReply('acc2', 'ref2')) === 'acc2' && ydb['yahooTokens/u9'].refresh === 'ref2' &&
+    /grant_type=refresh_token/.test(posted[posted.length - 1].o.body) && /refresh_token=ref1/.test(posted[posted.length - 1].o.body),
+    'an expired token is refreshed, and Yahoo\'s new refresh token is saved at once');
+  check(await job.yahooAccess(yStore.doc('yahooTokens/nobody'), 'test-secret', ynow) === null, 'nobody linked: no token');
+
   undo();
   T.done();
 })().catch(T.crash);

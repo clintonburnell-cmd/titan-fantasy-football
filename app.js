@@ -110,11 +110,21 @@
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
     waiv: {trend: null, busy: false, error: '', faab: {}, q: ''},
     ctx: {busy: false, at: 0, data: null}, // game context on Lineups rows (/api/game-context)
-    moves: {} // the Transactions tab: each Sleeper league's recent moves ({busy, error, list, at})
+    moves: {}, // the Transactions tab: each Sleeper league's recent moves ({busy, error, list, at})
+    yahoo: {busy: false, error: '', data: null, note: ''} // linking Yahoo (Titan's owner only while it's being built)
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
   // An address like /app/matchup opens that screen.
   if (tabFromPath()) S.ui.tab = tabFromPath();
+  // Back from Yahoo's sign-in: Titan's server sends people to /app/settings?yahoo=<result>.
+  const yahooBack = new URLSearchParams(location.search).get('yahoo');
+  if (yahooBack) {
+    Object.assign(S.ui, {tab: 'settings', linkTab: 'yahoo'});
+    S.yahoo.note = yahooBack;
+    const q = new URLSearchParams(location.search);
+    q.delete('yahoo');
+    if (location.protocol !== 'file:') history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+  }
   if (S.snap && S.account && S.snap.userId !== S.account.userId) S.snap = null;
   if (DEMO && !S.account) {
     S.account = {demo: true, userId: '', username: '', displayName: 'Demo leagues', avatar: '', prefs: {}, espn: {leagues: []}, updatedAt: Date.now()};
@@ -1361,7 +1371,8 @@
 
   function linkLeagues(sleeperHtml) {
     const n = espnLinks().length;
-    const status = {sleeper: S.account.userId ? 'Linked' : '', espn: n ? plural(n, 'league') : '', yahoo: 'Soon'};
+    const status = {sleeper: S.account.userId ? 'Linked' : '', espn: n ? plural(n, 'league') : '',
+      yahoo: !S.owner.is ? 'Soon' : S.yahoo.data && S.yahoo.data.linked ? 'Linked' : ''};
     const tab = LINK_TABS.some(t => t.id === S.ui.linkTab) ? S.ui.linkTab : S.account.userId ? 'espn' : 'sleeper';
     return `<h3>Link more leagues?</h3>
       <p class="fine">Every league you link is managed together: one set of rankings, one lineup check.</p>
@@ -1371,10 +1382,77 @@
       <div class="link-pane" role="tabpanel">${tab === 'sleeper' ? sleeperHtml : tab === 'espn' ? espnSettings() : yahooLink()}</div>`;
   }
 
+  /* Yahoo leagues are being built: Titan's owner can link Yahoo to try it (the
+     server refuses everyone else too), and everyone else sees what's coming. */
+  const YAHOO_NOTES = {
+    linked: ['ok', 'Yahoo is linked.'],
+    declined: ['stop', 'Yahoo sign-in was cancelled, so nothing was linked.'],
+    expired: ['stop', 'That Yahoo sign-in took too long. Try again.'],
+    failed: ['stop', 'Yahoo sign-in didn\'t finish. Try again in a minute.'],
+    noaccess: ['stop', 'Yahoo signed you in, but turned Titan away when it asked for your leagues. Yahoo is probably still reviewing Titan\'s access request.']
+  };
+
   function yahooLink() {
+    if (S.owner.is) return yahooOwnerPane();
     return `<p>Yahoo leagues are next. Yahoo reviews every app before it can read fantasy leagues, and Titan's request is with Yahoo now.
         Once it's approved, you'll sign in with Yahoo here and your leagues will load on their own.</p>
       <div class="bar"><button class="btn" type="button" disabled>Sign in with Yahoo</button></div>`;
+  }
+
+  function yahooOwnerPane() {
+    const Y = S.yahoo, d = Y.data, note = YAHOO_NOTES[Y.note];
+    let h = `<p class="fine">Only you see this while Yahoo leagues are being built.</p>`;
+    if (note) h += `<div class="banner ${note[0]}">${esc(note[1])}</div>`;
+    if (!S.sync.user || !S.sync.api) {
+      return h + `<p>Linking Yahoo needs your Titan sign-in. <button class="link" data-action="sync-in">Sign in with Google</button> first.</p>`;
+    }
+    if (!d && !Y.error) {
+      if (!Y.busy) { Y.busy = true; setTimeout(loadYahoo, 0); }
+      return h + '<p class="fine" role="status">Checking Yahoo…</p>';
+    }
+    if (Y.error) h += `<div class="banner stop">${esc(Y.error)}</div>`;
+    if (!d || !d.linked) {
+      return h + `<p>Sign in with Yahoo and Titan's server keeps the link, so your Yahoo leagues can load here. Titan only reads them.</p>
+        <div class="bar"><button class="btn" type="button" data-action="yahoo-link"${Y.busy ? ' disabled' : ''}>Sign in with Yahoo</button></div>`;
+    }
+    if (d.noaccess) { if (Y.note !== 'noaccess') h += `<div class="banner stop">${esc(YAHOO_NOTES.noaccess[1])}</div>`; }
+    else if (d.leagues && d.leagues.length) {
+      h += `<p>Titan can see your Yahoo leagues:</p><ul class="saved">${d.leagues.map(l => `<li><span><b>${esc(l.name)}</b><small>${
+        esc([l.teams ? plural(l.teams, 'team') : '', l.team ? 'your team: ' + l.team.name : ''].filter(Boolean).join(' · '))}</small></span></li>`).join('')}</ul>
+        <p class="fine">Next, they'll show on every tab alongside your other leagues.</p>`;
+    } else h += `<p>Yahoo is linked, but it lists no football leagues for you this season.</p>`;
+    return h + `<div class="bar"><button class="btn ghost small" type="button" data-action="yahoo-refresh"${Y.busy ? ' disabled' : ''}>Check again</button>
+        <button class="btn ghost small" type="button" data-action="yahoo-unlink"${Y.busy ? ' disabled' : ''}>Unlink Yahoo</button></div>
+      <p class="fine">Fantasy data provided by <a href="https://sports.yahoo.com/fantasy/" target="_blank" rel="noopener">Yahoo Fantasy</a>.</p>`;
+  }
+
+  async function loadYahoo() {
+    Object.assign(S.yahoo, {busy: true, error: ''});
+    try { S.yahoo.data = await S.sync.api.yahooLeagues(espnSeason()); }
+    catch (e) { S.yahoo.error = 'Could not check Yahoo: ' + ((e && (e.message || e.code)) || e); }
+    S.yahoo.busy = false;
+    if (S.ui.tab === 'settings') render();
+  }
+
+  async function yahooSignIn() {
+    Object.assign(S.yahoo, {busy: true, error: '', note: ''});
+    render();
+    try { await S.sync.api.yahooLink(); }
+    catch (e) {
+      Object.assign(S.yahoo, {busy: false, error: 'Could not start Yahoo sign-in: ' + ((e && (e.message || e.code)) || e)});
+      render();
+    }
+  }
+
+  async function yahooForget() {
+    Object.assign(S.yahoo, {busy: true, error: '', note: ''});
+    render();
+    try {
+      S.yahoo.data = await S.sync.api.yahooUnlink();
+      toast('Yahoo unlinked.');
+    } catch (e) { S.yahoo.error = 'Could not unlink Yahoo: ' + ((e && (e.message || e.code)) || e); }
+    S.yahoo.busy = false;
+    render();
   }
 
   /* ---- ESPN leagues */
@@ -1788,6 +1866,7 @@
     setOwner(is) {
       if (S.owner.is === !!is) return;
       S.owner = {is: !!is, busy: false, data: null, error: ''};
+      Object.assign(S.yahoo, {busy: false, error: '', data: null});
       if (S.ui.tab === 'settings') render();
     },
     setAlerts(a) {
@@ -2446,6 +2525,9 @@
     else if (a === 'espn-cancel') { S.espn.pick = null; render(); }
     else if (a === 'espn-remove') removeEspn(t.dataset.id);
     else if (a === 'espn-login-del') deleteEspnLogin();
+    else if (a === 'yahoo-link') yahooSignIn();
+    else if (a === 'yahoo-unlink') yahooForget();
+    else if (a === 'yahoo-refresh') { Object.assign(S.yahoo, {data: null, error: '', note: ''}); render(); }
     else if (a === 'ranks-save') saveRanks();
     else if (a === 'ranks-del') deleteRanks(Number(t.dataset.week));
     else if (a === 'leagues-save') saveLeagues();

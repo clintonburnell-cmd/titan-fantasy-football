@@ -9,7 +9,9 @@
  */
 const {onSchedule} = require('firebase-functions/v2/scheduler');
 const {onCall, onRequest, HttpsError} = require('firebase-functions/v2/https');
+const {defineSecret} = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
+const crypto = require('crypto');
 const zlib = require('zlib');
 const {initializeApp} = require('firebase-admin/app');
 const {getFirestore} = require('firebase-admin/firestore');
@@ -18,6 +20,7 @@ const {getMessaging} = require('firebase-admin/messaging');
 const SCC = require('./shared/engine.js');
 const API = require('./shared/sleeper.js');
 const ESPN = require('./shared/espn.js');
+const YAHOO = require('./shared/yahoo.js');
 
 initializeApp();
 const db = getFirestore();
@@ -337,6 +340,130 @@ exports.testAlert = onCall({region: 'us-central1', memory: '256MiB', maxInstance
   return sendTest(db.doc(`users/${req.auth.uid}/private/alerts`), String((req.data || {}).token || ''));
 });
 
+/* Yahoo Fantasy: each person links their own Yahoo account (OAuth 2.0). Yahoo sends
+   them back to /api/yahoo/callback with a one-time code, which Titan's server trades
+   for tokens with the app's secret (Secret Manager: YAHOO_CLIENT_SECRET). The tokens
+   live at yahooTokens/{uid}, outside users/{uid}, so no browser can read them
+   (firestore.rules only opens users/{uid}); every Yahoo read goes through here.
+   While Yahoo leagues are being built, only Titan's owner can link (YAHOO_OPEN). */
+const YAHOO_OPEN = false;
+const YAHOO_ID = 'dj0yJmk9VHJJS01rOElBYVExJmQ9WVdrOVQzaFFURkJOUzBzbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PTUx'; // public: it's in every sign-in address
+const YAHOO_SECRET = defineSecret('YAHOO_CLIENT_SECRET');
+const YAHOO_REDIRECT = 'https://titanfantasyfootball.com/api/yahoo/callback'; // as registered with Yahoo; must match exactly
+const YAHOO_LOGIN = 'https://api.login.yahoo.com/oauth2/';
+const YAHOO_API = 'https://fantasysports.yahooapis.com/fantasy/v2';
+const YAHOO_STATE_TTL = 10 * 60 * 1000;
+const yahooAllowed = auth => !!auth && (YAHOO_OPEN || auth.token.titanOwner === true);
+
+function yahooAuthUrl(state) {
+  return YAHOO_LOGIN + 'request_auth?' + new URLSearchParams({client_id: YAHOO_ID, redirect_uri: YAHOO_REDIRECT, response_type: 'code', state, language: 'en-us'});
+}
+
+// Yahoo's token endpoint: the app's id and secret as Basic auth, the grant as a form.
+async function yahooToken(form, secret, post = fetch) {
+  const res = await post(YAHOO_LOGIN + 'get_token', {method: 'POST', headers: {
+    Authorization: 'Basic ' + Buffer.from(YAHOO_ID + ':' + secret).toString('base64'),
+    'Content-Type': 'application/x-www-form-urlencoded'}, body: new URLSearchParams(Object.assign({redirect_uri: YAHOO_REDIRECT}, form)).toString()});
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.access_token) throw new Error('Yahoo token ' + res.status + ': ' + (body.error_description || body.error || 'no token'));
+  return body;
+}
+// A minute's margin, so a token never runs out mid-read.
+const keepTokens = (t, now) => ({access: t.access_token, refresh: t.refresh_token, expires: now + (Number(t.expires_in) || 3600) * 1000 - 60000});
+
+/* One read from Yahoo's Fantasy API as JSON. Yahoo answers some errors (and
+   throttling) in XML or plain text, so the body is only parsed when it can be. */
+async function yahooRead(access, path, get = fetch) {
+  const res = await get(YAHOO_API + path + (path.includes('?') ? '&' : '?') + 'format=json', {headers: {Authorization: 'Bearer ' + access}});
+  const text = await res.text();
+  let json = null;
+  try { json = JSON.parse(text); } catch (e) { /* not JSON */ }
+  if (!res.ok || !json) logger.warn('Yahoo answered ' + res.status + ' for ' + path.split('?')[0] + ': ' + text.slice(0, 300));
+  return {ok: res.ok && !!json, status: res.status, json};
+}
+
+/* The Yahoo link's last step. The state must be one Titan made in the last ten
+   minutes (it names the person) and works once. Returns what to tell them:
+   linked, noaccess (Yahoo turned Titan away when it asked for their leagues,
+   likely while Titan's access request is in review), expired or failed. */
+async function linkYahoo(state, code, deps) {
+  const {db: store, secret, now = Date.now(), post = fetch, get = fetch} = deps;
+  if (!/^[a-f0-9]{48}$/.test(state) || !code) return 'failed';
+  const ref = store.doc('yahooStates/' + state);
+  const s = (await ref.get()).data();
+  if (!s) return 'expired';
+  await ref.delete();
+  if (now - s.at > YAHOO_STATE_TTL) return 'expired';
+  const tokens = Object.assign(keepTokens(await yahooToken({grant_type: 'authorization_code', code}, secret, post), now), {linkedAt: now});
+  await store.doc('yahooTokens/' + s.uid).set(tokens);
+  const probe = await yahooRead(tokens.access, '/users;use_login=1/games;game_codes=nfl', get);
+  return probe.ok ? 'linked' : probe.status === 401 || probe.status === 403 ? 'noaccess' : 'failed';
+}
+
+/* A usable access token for a person (null if they haven't linked Yahoo), refreshed
+   when it's within a minute of running out. Yahoo may send a new refresh token with
+   it and retire the old one, so the new one is saved at once. */
+async function yahooAccess(ref, secret, now = Date.now(), post = fetch) {
+  const t = (await ref.get()).data();
+  if (!t || !t.refresh) return null;
+  if (t.access && now < t.expires) return t.access;
+  const r = await yahooToken({grant_type: 'refresh_token', refresh_token: t.refresh}, secret, post);
+  const next = Object.assign({}, t, keepTokens(r, now), {refresh: r.refresh_token || t.refresh});
+  await ref.set(next);
+  return next.access;
+}
+
+const YAHOO_FN = {region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 30, secrets: [YAHOO_SECRET]};
+
+// "Sign in with Yahoo": a one-time sign-in address for this person.
+exports.yahooStart = onCall({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 20}, async req => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
+  if (!yahooAllowed(req.auth)) throw new HttpsError('permission-denied', 'Yahoo leagues aren\'t open yet.');
+  const old = await db.collection('yahooStates').where('uid', '==', req.auth.uid).get();
+  await Promise.all(old.docs.map(d => d.ref.delete()));
+  const state = crypto.randomBytes(24).toString('hex');
+  await db.doc('yahooStates/' + state).set({uid: req.auth.uid, at: Date.now()});
+  return {url: yahooAuthUrl(state)};
+});
+
+// Where Yahoo sends people back (/api/yahoo/callback): link, then back to Settings with the result.
+exports.yahooCallback = onRequest(Object.assign({invoker: 'public'}, YAHOO_FN), async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  let result = 'declined';
+  if (!req.query.error) {
+    result = await linkYahoo(String(req.query.state || ''), String(req.query.code || ''), {db, secret: YAHOO_SECRET.value()})
+      .catch(e => { logger.warn('Yahoo link failed: ' + e.message); return 'failed'; });
+  }
+  res.redirect(302, '/app/settings?yahoo=' + result);
+});
+
+// The person's Yahoo football leagues for a season, each with their team in it.
+exports.yahooLeagues = onCall(YAHOO_FN, async req => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
+  if (!yahooAllowed(req.auth)) throw new HttpsError('permission-denied', 'Yahoo leagues aren\'t open yet.');
+  const ref = db.doc('yahooTokens/' + req.auth.uid);
+  let access;
+  try { access = await yahooAccess(ref, YAHOO_SECRET.value()); }
+  catch (e) { logger.warn('Yahoo refresh failed: ' + e.message); throw new HttpsError('failed-precondition', 'Your Yahoo link stopped working. Sign in with Yahoo again.'); }
+  if (!access) return {linked: false};
+  const season = /^\d{4}$/.test(String((req.data || {}).season)) ? String(req.data.season) : String(new Date().getFullYear());
+  const base = '/users;use_login=1/games;game_codes=nfl;seasons=' + season;
+  const [lg, tm] = await Promise.all([yahooRead(access, base + '/leagues'), yahooRead(access, base + '/teams')]);
+  const since = ((await ref.get()).data() || {}).linkedAt || 0;
+  if (!lg.ok) {
+    if (lg.status === 401 || lg.status === 403) return {linked: true, since, noaccess: true};
+    throw new HttpsError('unavailable', 'Yahoo couldn\'t list your leagues right now.');
+  }
+  return {linked: true, since, leagues: YAHOO.yourLeagues(lg.json, tm.ok ? tm.json : null)};
+});
+
+// "Unlink Yahoo", and part of deleting a Titan account: the tokens are forgotten.
+exports.yahooUnlink = onCall({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 20}, async req => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
+  await db.doc('yahooTokens/' + req.auth.uid).delete();
+  return {linked: false};
+});
+
 // For local testing without Cloud Scheduler.
 /* FantasyCalc's trade values (fantasycalc.com) for the Trade tab, one league format
    at a time. FantasyCalc's terms: call only its documented endpoint (/values/current),
@@ -522,4 +649,5 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
 });
 
 exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
+  yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess,
   setSend: fn => { sendPush = fn; }};

@@ -53,6 +53,11 @@ const readEspnLeague = httpsCallable(getFunctions(app, 'us-central1'), 'espnLeag
 const readOwnerStats = httpsCallable(getFunctions(app, 'us-central1'), 'ownerStats');
 // "Send a test alert": the server sends one alert to this device.
 const sendTestAlert = httpsCallable(getFunctions(app, 'us-central1'), 'testAlert');
+// Yahoo: Titan's server keeps each person's Yahoo tokens where no browser can read them,
+// so linking, listing leagues and unlinking all go through it.
+const startYahoo = httpsCallable(getFunctions(app, 'us-central1'), 'yahooStart');
+const readYahooLeagues = httpsCallable(getFunctions(app, 'us-central1'), 'yahooLeagues');
+const unlinkYahoo = httpsCallable(getFunctions(app, 'us-central1'), 'yahooUnlink');
 
 // Game-day alerts: each device's push address (Firebase Cloud Messaging) and
 // the alerts wanted, in users/{uid}/private/alerts. Titan's server job sends
@@ -220,12 +225,29 @@ const api = {
     if (u) await deleteDoc(espnDoc(u.uid));
   },
 
+  /* "Sign in with Yahoo": the server makes a one-time sign-in address, and
+     Yahoo sends the person back to Settings (/app/settings?yahoo=<result>). */
+  async yahooLink() {
+    const r = await startYahoo();
+    location.assign(r.data.url);
+  },
+
+  yahooLeagues(season) {
+    return readYahooLeagues({season}).then(r => r.data);
+  },
+
+  yahooUnlink() {
+    return unlinkYahoo().then(r => r.data);
+  },
+
   /* Removes everything Titan stores for this person, then the sign-in itself.
      Google asks for a fresh sign-in first if the last one was a while ago. */
   async deleteAccount() {
     const u = auth.currentUser;
     if (!u) return;
     stopListening();
+    // Yahoo's tokens live outside users/{uid}, where only the server reaches.
+    await unlinkYahoo().catch(() => {});
     for (const sub of ['ranks', 'history', 'private']) {
       const docs = await getDocs(collection(db, 'users', u.uid, sub));
       await Promise.all(docs.docs.map(d => deleteDoc(d.ref)));

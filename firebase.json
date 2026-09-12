@@ -20,6 +20,7 @@
       {"source": "/api/trade-values", "function": {"functionId": "tradeValues", "region": "us-central1"}},
       {"source": "/api/news", "function": {"functionId": "espnNews", "region": "us-central1"}},
       {"source": "/api/game-context", "function": {"functionId": "gameContext", "region": "us-central1"}},
+      {"source": "/api/yahoo/callback", "function": {"functionId": "yahooCallback", "region": "us-central1"}},
       {"source": "/app/**", "destination": "/app/index.html"}
     ],
     "headers": [

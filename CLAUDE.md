@@ -24,7 +24,8 @@ live site, so site changes reach it without a new upload. What's done and what's
 | `sleeper.js` | Sleeper API, the refresh (`collect`) for Sleeper and ESPN leagues, browser storage |
 | `espn.js` | ESPN adapter: reads leagues, turns them into `buildLeague`'s shape, matches players to Sleeper ids |
 | `app.js` | Screens and interactions |
-| `sync.js` | Google sign-in, Firestore sync, the saved ESPN login, the private-ESPN transport (ES module) |
+| `sync.js` | Google sign-in, Firestore sync, the saved ESPN login, the private-ESPN transport, the Yahoo link (ES module) |
+| `yahoo.js` | Yahoo Fantasy's nested answers read into Titan's shapes (being built; see Rules) |
 | `syncplan.js` | Which copy wins when syncing (pure) |
 | `functions/index.js` | `freezeCalls` (every 15 minutes on game days) and `espnLeague` (reads private ESPN leagues) |
 | `tests/` | `node tests/run.js` |
@@ -139,6 +140,18 @@ live site, so site changes reach it without a new upload. What's done and what's
   promised features in a listing as misleading). The website says Yahoo is coming soon, at the
   owner's request (2026-09-11): its title, a Yahoo card and the FAQ. Keep that wording honest until
   Yahoo leagues work.
+- Yahoo is being built, and only Titan's owner can use it until it works end to end (`YAHOO_OPEN` in
+  `functions/index.js`, and `yahooLink` in `app.js`). People link their own Yahoo account (OAuth 2.0,
+  confidential client, Fantasy Sports read): `yahooStart` makes a one-time state (`yahooStates/{state}`,
+  ten minutes), Yahoo returns to `/api/yahoo/callback` (`yahooCallback`), and the tokens go to
+  `yahooTokens/{uid}`, outside `users/{uid}`, so no browser can read them. Every Yahoo read goes
+  through the server; `yahooAccess` refreshes and saves Yahoo's rotated refresh token at once. The
+  secret is `YAHOO_CLIENT_SECRET` in Secret Manager: never in the repo. `yahoo.js` reads Yahoo's
+  nested JSON (`flat`, `list`, `details`, `subs`). Yahoo's terms: keep Yahoo user data at most 24 hours
+  (re-read, don't store rosters or scores), credit "Fantasy data provided by Yahoo Fantasy" wherever it
+  shows, and hide the tip jar for anyone who links Yahoo (the owner's call). Titan's access request is
+  with Yahoo (received 2026-09-11). Before opening it to everyone: Yahoo's approval, the privacy and
+  terms pages, the Play listing, and the website's coming-soon wording.
 - Team names: every fantasy team, on every tab and both platforms, reads "Nickname (account name)"
   from `SCC.teamLabel` (Sleeper's `team_name` and `display_name`; ESPN's team name and member name),
   or the account name alone when there's no nickname. Build new team names with it, and don't add
