@@ -68,7 +68,7 @@ Titan's screens sit in five sections: Lineups, Matchup, League (Standings, Roste
 Transactions), Players (Waivers, News, Exposure, Byes) and Rankings (Import, Results), with Settings
 behind the gear. On phones they're a bar along the bottom; on computers, a menu whose sections drop
 down their screens. Each section opens on the screen you used there last, badges show lineup changes
-and waiver upgrades, and one league dropdown at the top of the screen narrows every screen that shows
+and new waiver upgrades (the dot on Players clears once you've opened Waivers), and one league dropdown at the top of the screen narrows every screen that shows
 leagues.
 
 Under the header, a scores ticker shows this week's NFL games: live scores and the clock, final

@@ -377,18 +377,32 @@
       t.setAttribute('aria-current', t.dataset.tab === S.ui.tab ? 'page' : 'false'));
     document.querySelectorAll('#tabs [data-section]').forEach(t =>
       t.setAttribute('aria-current', sec && sec.id === t.dataset.section ? 'page' : 'false'));
-    // Badges: the lineup changes to make, and a dot on Players while a waiver pickup would beat a starter.
-    const changes = S.A ? S.A.changes.length : 0, wire = S.A ? S.A.wireLines.length : 0;
+    // Badges: the lineup changes to make, and a dot on Players for waiver pickups not yet seen on Waivers.
+    const changes = S.A ? S.A.changes.length : 0, fresh = newWire();
     const badge = $('badge-lineups'), dot = $('dot-players');
     badge.hidden = !changes;
     badge.textContent = changes ? String(changes) : '';
     badge.title = plural(changes, 'lineup change');
-    dot.hidden = !wire;
-    dot.title = plural(wire, 'wire upgrade');
+    dot.hidden = !fresh;
+    dot.title = plural(fresh, 'new waiver pickup');
     paintAccount();
   }
 
+  /* The Players dot: waiver pickups that would beat a starter which you haven't seen on
+     Waivers yet, each known by league and player. Opening Waivers marks what's there as seen,
+     so the dot comes back only for a new one (or one that went away and came back).
+     Remembered on the device with the other screen settings. */
+  const wireKeys = () => [...new Set(((S.A && S.A.wireLines) || []).flatMap(x =>
+    (x.w.list || []).map(p => x.league.id + '|' + (p.id || SCC.norm(p.name)))))];
+  const newWire = () => { const seen = new Set(S.ui.seenWire || []); return wireKeys().filter(k => !seen.has(k)).length; };
+  function markWireSeen() {
+    const keys = wireKeys();
+    if (keys.join() !== (S.ui.seenWire || []).join()) { S.ui.seenWire = keys; saveUi(); }
+  }
+
   function render() {
+    // On Waivers, what's there counts as seen (only once the leagues are analysed, so nothing is lost before then).
+    if (S.ui.tab === 'waivers' && S.A) markWireSeen();
     paintHeader();
     view.dataset.tab = S.account ? S.ui.tab : 'welcome'; // lets wide screens lay out each screen
     if (!S.account) { document.title = 'Titan Fantasy Football Manager'; view.innerHTML = iosHint() + screenWelcome(); return; }

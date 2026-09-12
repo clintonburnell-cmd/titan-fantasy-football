@@ -62,7 +62,8 @@ live site, so site changes reach it without a new upload. What's done and what's
   league dropdown (`S.ui.league`: a league id or 'all'; `pickedLeague`, `inPick`) on the screens in
   `LEAGUE_SCREENS`; Standings and Trade follow it when it names a league and keep their own picker under
   All leagues. A section opens on the screen used there last (`S.ui.last`). Badges: lineup changes on
-  Lineups, a dot on Players for waiver upgrades. Every screen keeps a `data-tab` button in `#tabs` (the
+  Lineups, a dot on Players for waiver pickups not yet seen on Waivers (`newWire`; opening Waivers
+  saves what's there as `S.ui.seenWire`, keyed by league and player). Every screen keeps a `data-tab` button in `#tabs` (the
   dropdowns) or the gear, which the UI test's `tab()` clicks. Screen ids and addresses didn't change.
 - Wide browser windows (900px and up) get the website look from the "website look" block in
   `styles.css`: a menu-style header, a centred 1100px page with one league per row (the owner prefers

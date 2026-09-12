@@ -375,6 +375,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`document.querySelectorAll('#wsearch .wst.mine').length === 1 && document.activeElement === document.querySelector('[data-waiver-search]')`, 3000) ||
     await waitFor(`document.querySelectorAll('#wsearch .wst.mine').length === 1`, 1000),
     'searching for your QB shows him as yours in the test league: ' + (await text('#wsearch')).replace(/\s+/g, ' ').slice(0, 90));
+  check(await ev(`document.getElementById('dot-players').hidden`), 'opening Waivers marks its pickups as seen: the Players dot goes out');
+  await tab('lineups');
+  check(await ev(`document.getElementById('dot-players').hidden`), 'and it stays out on other screens until a new pickup turns up');
 
   T.section('the Standings tab');
   await tab('standings');
