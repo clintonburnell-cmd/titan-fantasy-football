@@ -30,6 +30,21 @@
     const m = location.pathname.match(/^\/app\/([a-z]+)\/?$/);
     return (m && Object.keys(SLUG).find(t => SLUG[t] === m[1])) || '';
   };
+  /* Titan's five sections: a bar along the bottom on phones and in the apps, a menu with dropdowns
+     on computers (app/index.html). League, Players and Rankings hold several screens, shown as
+     sub-tabs at the top of the screen (screenBar); each opens on the one used there last. Settings
+     is the gear in the header. */
+  const SECTIONS = [
+    {id: 'lineups', name: 'Lineups', tabs: ['lineups']},
+    {id: 'matchup', name: 'Matchup', tabs: ['matchup']},
+    {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
+    {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes']},
+    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'score']}
+  ];
+  const SUB_NAMES = {ranks: 'Import', score: 'Results'};
+  const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
+  // The screens the league dropdown steers (Standings and Trade show one league at a time).
+  const LEAGUE_SCREENS = {lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1};
   const AVATAR = 'https://sleepercdn.com/avatars/thumbs/';
   // News-only accounts on the News tab. X doesn't let apps read posts without a
   // paid plan, so each one opens on X.
@@ -356,8 +371,20 @@
     b.disabled = S.busy;
     b.classList.toggle('spin', S.busy);
     $('tabs').hidden = !a;
-    document.querySelectorAll('#tabs [data-tab]').forEach(t =>
+    $('gear').hidden = !a;
+    const sec = sectionOf(S.ui.tab);
+    document.querySelectorAll('#tabs [data-tab], #gear').forEach(t =>
       t.setAttribute('aria-current', t.dataset.tab === S.ui.tab ? 'page' : 'false'));
+    document.querySelectorAll('#tabs [data-section]').forEach(t =>
+      t.setAttribute('aria-current', sec && sec.id === t.dataset.section ? 'page' : 'false'));
+    // Badges: the lineup changes to make, and a dot on Players while a waiver pickup would beat a starter.
+    const changes = S.A ? S.A.changes.length : 0, wire = S.A ? S.A.wireLines.length : 0;
+    const badge = $('badge-lineups'), dot = $('dot-players');
+    badge.hidden = !changes;
+    badge.textContent = changes ? String(changes) : '';
+    badge.title = plural(changes, 'lineup change');
+    dot.hidden = !wire;
+    dot.title = plural(wire, 'wire upgrade');
     paintAccount();
   }
 
@@ -367,7 +394,7 @@
     if (!S.account) { document.title = 'Titan Fantasy Football Manager'; view.innerHTML = iosHint() + screenWelcome(); return; }
     const err = S.error ? `<div class="banner stop">${esc(S.error)}</div>` : '';
     sideItems = null;
-    const body = `<h2 class="sr-only">${TAB_NAMES[S.ui.tab]}</h2>` + iosHint() + demoBanner() + err + SCREENS[S.ui.tab]();
+    const body = `<h2 class="sr-only">${TAB_NAMES[S.ui.tab]}</h2>` + iosHint() + demoBanner() + err + screenBar() + SCREENS[S.ui.tab]();
     // On a wide computer window Lineups, Matchup, Rosters and Results put their leagues down the left side.
     view.innerHTML = sideItems ? `<div class="with-side">${sideNav(sideItems)}<div class="side-main">${body + yahooCredit()}</div></div>` : body + yahooCredit();
     if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
@@ -383,6 +410,33 @@
     if (location.protocol === 'file:') return;
     const want = '/app/' + SLUG[S.ui.tab];
     if (location.pathname !== want) history[push ? 'pushState' : 'replaceState']({tab: S.ui.tab}, '', want + location.search);
+  }
+
+  // The league chosen in the league dropdown: 'all', or one league's id while that league is loaded.
+  function pickedLeague() {
+    const id = S.ui.league;
+    return id && id !== 'all' && S.snap && (S.snap.leagues || []).some(d => d.cfg.id === id) ? id : 'all';
+  }
+  const inPick = cfg => { const p = pickedLeague(); return p === 'all' || cfg.id === p; };
+
+  /* The top of each screen: its section's screens as sub-tabs, and on the screens that show leagues
+     (LEAGUE_SCREENS) the one league dropdown that steers them all. */
+  function screenBar() {
+    const sec = sectionOf(S.ui.tab), leagues = (S.snap && S.snap.leagues) || [], pick = pickedLeague();
+    const subs = sec && sec.tabs.length > 1 ? `<nav class="subtabs" aria-label="${esc(sec.name)}">${sec.tabs.map(t =>
+      `<button type="button" data-go="${t}"${t === S.ui.tab ? ' aria-current="page"' : ''}>${esc(SUB_NAMES[t] || TAB_NAMES[t])}</button>`).join('')}</nav>` : '';
+    const drop = LEAGUE_SCREENS[S.ui.tab] && leagues.length > 1 ? `<label class="lpick"><span class="sr-only">Which leagues</span><select data-ui="league">
+      <option value="all">All leagues</option>${leagues.map(d => `<option value="${esc(d.cfg.id)}"${d.cfg.id === pick ? ' selected' : ''}>${esc(d.cfg.key)}</option>`).join('')}
+      </select></label>` : '';
+    return subs || drop ? `<div class="screenbar">${subs}${drop}</div>` : '';
+  }
+
+  // A section opens on the screen used there last.
+  function goSection(id) {
+    const sec = SECTIONS.find(s => s.id === id);
+    if (!sec) return;
+    const last = S.ui.last && S.ui.last[id];
+    go(sec.tabs.includes(last) ? last : sec.tabs[0]);
   }
 
   function emptyState() {
@@ -580,9 +634,11 @@
   function screenLineups() {
     if (!S.snap) return emptyState();
     const A = S.A;
-    const filters = LEAGUE_FILTERS.map(f => Object.assign({n: A.leagues.filter(f.test).length}, f));
+    // The league dropdown narrows the leagues first; the filters then count and pick within them.
+    const mine = A.leagues.filter(L => inPick(L.cfg));
+    const filters = LEAGUE_FILTERS.map(f => Object.assign({n: mine.filter(f.test).length}, f));
     const pickF = filters.find(f => f.id === S.ui.filter) || filters[0];
-    const list = A.leagues.filter(pickF.test);
+    const list = mine.filter(pickF.test);
     let h = ranksBanner(A.ranks, S.snap.week);
     if (gamesLive()) {
       h += `<p class="fine live-note">Games are on: scores update about every minute while Lineups is open${
@@ -1038,11 +1094,11 @@
       h += `<p class="fine live-note">Games are on: scores update every couple of minutes while Matchup is open${M.at ? ` (last ${esc(when(M.at))})` : ''}.</p>`;
     }
     // The leagues down the left side on a wide computer window (Matchup has no chips).
-    jumpBar((M.data && M.data.length ? M.data : S.A.leagues).map(x => ({cfg: x.cfg})), false);
+    jumpBar((M.data && M.data.length ? M.data : S.A.leagues).filter(x => inPick(x.cfg)).map(x => ({cfg: x.cfg})), false);
     if (M.error) h += `<div class="banner stop">${esc(M.error)}</div>`;
     if (!M.data) return h + (M.busy ? '<div class="empty-note">Loading this week\'s matchups…</div>' : '');
     if (!M.data.length) return h + '<div class="empty-note">No leagues to show.</div>';
-    return h + foldTools('match') + '<div class="league-grid">' + M.data.map(matchCard).join('') + '</div>' +
+    return h + foldTools('match') + '<div class="league-grid">' + M.data.filter(x => inPick(x.cfg)).map(matchCard).join('') + '</div>' +
       (Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper. Chance to win is Titan\'s estimate from them and the points so far.</p>' : '');
   }
 
@@ -1051,14 +1107,10 @@
   function screenRosters() {
     if (!S.snap) return emptyState();
     const leagues = S.A.leagues;
-    const pick = leagues.some(L => L.cfg.key === S.ui.league) ? S.ui.league : 'all';
-    const shown = pick === 'all' ? leagues : leagues.filter(L => L.cfg.key === pick);
+    // The league dropdown at the top of the screen picks one league or all of them.
+    const shown = leagues.filter(L => inPick(L.cfg));
     let h = `<div class="bar"><label class="field grow"><span>Find a player</span><input type="search" data-roster-search
-        placeholder="Name, team or position" value="${esc(S.rosterQuery)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
-      <label class="field"><span>League</span><select data-ui="league">
-      <option value="all">All leagues</option>
-      ${leagues.map(L => `<option ${L.cfg.key === pick ? 'selected' : ''}>${esc(L.cfg.key)}</option>`).join('')}
-    </select></label></div>
+        placeholder="Name, team or position" value="${esc(S.rosterQuery)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label></div>
     <p class="fine" data-find-count hidden></p>`;
     if (shown.length) h += jumpBar(shown.map(L => ({cfg: L.cfg})));
     if (shown.length) h += foldTools('roster');
@@ -1195,7 +1247,7 @@
         : '<div class="banner ok">Every lineup is covered through the byes.</div>'}
       <div class="card table-wrap"><table class="byes">
       <thead><tr><th>Week</th>${B.weeks.map(w => `<th>${w}</th>`).join('')}<th>Total</th></tr></thead><tbody>
-      ${B.rows.map((r, i) => `<tr${N[i].needs.length ? ' class="has-needs"' : ''}><th title="${esc(r.name)}">${leagueIcon(cfgByKey(r.key), 'xs')}${esc(r.key)}</th>${
+      ${B.rows.map((r, i) => !inPick(cfgByKey(r.key) || {}) ? '' : `<tr${N[i].needs.length ? ' class="has-needs"' : ''}><th title="${esc(r.name)}">${leagueIcon(cfgByKey(r.key), 'xs')}${esc(r.key)}</th>${
         B.weeks.map(w => cell(r.counts[w] || 0)).join('')}<td class="tot">${r.total}</td></tr>${needRow(N[i], B.weeks.length + 2)}`).join('')}
       <tr class="all"><th>All teams</th>${B.weeks.map(w => cell(B.totals[w] || 0)).join('')}<td class="tot"></td></tr>
       </tbody></table></div>`;
@@ -2073,8 +2125,8 @@
     const all = [];
     sleeper.forEach(d => ((S.moves[d.cfg.id] || {}).list || []).forEach(x => all.push(Object.assign({cfg: d.cfg}, x))));
     all.sort((a, b) => b.at - a.at);
-    // One league, or all of them; then the kind of move. Both filters are remembered.
-    const lg = sleeper.some(d => d.cfg.id === S.ui.movesLeague) ? S.ui.movesLeague : 'all';
+    // The league dropdown picks one league or all of them; then the kind of move (remembered).
+    const lg = pickedLeague();
     const pool = lg === 'all' ? all : all.filter(x => x.cfg.id === lg);
     const tests = {all: () => true, trade: x => x.kind === 'trade', adds: x => x.kind !== 'trade', mine: x => x.mine};
     const f = tests[S.ui.movesFilter] ? S.ui.movesFilter : 'all', shown = pool.filter(tests[f]).slice(0, 150);
@@ -2082,8 +2134,6 @@
     const failed = sleeper.filter(d => (S.moves[d.cfg.id] || {}).error && !(S.moves[d.cfg.id] || {}).list);
     let h = `<p class="lede">Every trade, waiver claim and free-agent move in your leagues over the last three weeks, newest first.
       Moves involving your team are marked.</p>
-      <div class="bar"><label class="field"><span>League</span><select data-ui="movesLeague"><option value="all">All leagues</option>${
-        sleeper.map(d => `<option value="${esc(d.cfg.id)}"${d.cfg.id === lg ? ' selected' : ''}>${esc(d.cfg.key)}</option>`).join('')}</select></label></div>
       <div class="chips" role="group" aria-label="Filter transactions">${[['all', 'All'], ['trade', 'Trades'], ['adds', 'Adds & drops'], ['mine', 'Yours']].map(([k, label]) =>
         `<button class="chip" data-moves="${k}" aria-pressed="${f === k}">${label} ${pool.filter(tests[k]).length}</button>`).join('')}</div>`;
     if (leagues.length > sleeper.length) h += '<p class="fine">ESPN leagues aren\'t in this list yet: it reads Sleeper\'s transaction history.</p>';
@@ -2247,11 +2297,13 @@
     if (!S.snap) return emptyState();
     const leagues = S.snap.leagues || [];
     if (!leagues.length) return '<div class="empty-note">No leagues yet.</div>';
-    const d = leagues.find(x => x.cfg.id === S.ui.standLeague) || leagues[0], cfg = d.cfg;
+    // One league at a time: the league dropdown's when it names one, else this screen's own pick.
+    const one = pickedLeague() !== 'all' ? pickedLeague() : S.ui.standLeague;
+    const d = leagues.find(x => x.cfg.id === one) || leagues[0], cfg = d.cfg;
     if (!S.stand[cfg.id]) loadStandings(d);
     if (!S.trade.teams[cfg.id]) loadTradeTeams(d);
     const St = S.stand[cfg.id], Tm = S.trade.teams[cfg.id];
-    let h = `<div class="bar"><label class="field"><span>League</span><select data-ui="standLeague">${leagues.map(x =>
+    let h = pickedLeague() !== 'all' ? '' : `<div class="bar"><label class="field"><span>League</span><select data-ui="standLeague">${leagues.map(x =>
       `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('')}</select></label></div>`;
     const err = (St && St.error) || (Tm && Tm.error);
     if (err) return h + `<div class="banner stop">${esc(err)} <button class="link" data-action="stand-retry">Try again</button></div>`;
@@ -2330,7 +2382,8 @@
     if (!S.snap) return emptyState();
     const leagues = S.snap.leagues || [];
     if (!leagues.length) return '<div class="empty-note">No leagues to trade in yet.</div>';
-    const d = leagues.find(x => x.cfg.id === S.ui.tradeLeague) || leagues[0];
+    // One league at a time: the league dropdown's when it names one, else this screen's own pick.
+    const d = leagues.find(x => x.cfg.id === (pickedLeague() !== 'all' ? pickedLeague() : S.ui.tradeLeague)) || leagues[0];
     const f = SCC.tradeFormat(d.cfg), k = tradeKey(f);
     if (!S.trade.values[k]) loadTradeValues(f);
     if (!S.trade.teams[d.cfg.id]) loadTradeTeams(d);
@@ -2343,8 +2396,8 @@
     let h = `<p class="credit">Trade values by <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>${
       V && V.at ? `, updated ${esc(when(V.at))}` : ''}. Titan isn't affiliated with FantasyCalc.</p>
       <div class="bar">
-        <label class="field"><span>League</span><select data-ui="tradeLeague">${leagues.map(x =>
-          `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('')}</select></label>
+        ${pickedLeague() !== 'all' ? '' : `<label class="field"><span>League</span><select data-ui="tradeLeague">${leagues.map(x =>
+          `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('')}</select></label>`}
         <label class="field"><span>Trade partner</span><select data-ui="tradePartner"${teams.length ? '' : ' disabled'}>
           <option value="">Pick a team</option>${teams.filter(t => !t.mine).map(t => `<option value="${esc(t.id)}"${t === partner ? ' selected' : ''}>${
             esc(t.name)}</option>`).join('')}</select></label>
@@ -2533,6 +2586,8 @@
   function go(tab, fromHistory) {
     if (!TABS.includes(tab)) return;
     S.ui.tab = tab;
+    const sec = sectionOf(tab);
+    if (sec && sec.tabs.length > 1) S.ui.last = Object.assign({}, S.ui.last, {[sec.id]: tab});
     saveUi();
     if (!fromHistory) syncUrl(true);
     render();
@@ -2548,9 +2603,13 @@
   });
 
   $('tabs').addEventListener('click', e => {
-    const b = e.target.closest('[data-tab]');
-    if (b) go(b.dataset.tab);
+    const s = e.target.closest('[data-section]'), b = e.target.closest('[data-tab]');
+    // A mouse click on a dropdown's screen closes the dropdown, which stays open while it holds focus.
+    if (e.detail && document.activeElement && document.activeElement.closest('.sec-menu')) document.activeElement.blur();
+    if (s) goSection(s.dataset.section);
+    else if (b) go(b.dataset.tab);
   });
+  $('gear').addEventListener('click', () => go('settings'));
   $('refresh').addEventListener('click', refresh);
 
   view.addEventListener('submit', e => {

@@ -269,9 +269,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const mu = await ev(`({board: ((document.querySelector('.match .board') || {}).innerText || (document.querySelector('.card.league') || {}).innerText || '').replace(/\\n/g, ' '),
     rows: document.querySelectorAll('.match .mrow').length,
     opp: [...document.querySelectorAll('.match .minfo.opp b')].map(b => b.innerText).filter(Boolean).length,
-    tabs: [...document.querySelectorAll('#tabs [data-tab]')].map(b => b.innerText).slice(0, 3).join(' | ')})`);
+    tabs: [...document.querySelectorAll('#tabs .sec-name')].map(b => b.innerText).join(' | ')})`);
   check(/Team 1/.test(mu.board) && /Team 2/.test(mu.board) && mu.rows === 9 && mu.opp === 9, `scoreboard (${mu.board}) and both lineups, 9 spots each`);
-  check(mu.tabs === 'Lineups | Matchup | Standings', 'the Matchup tab sits between Lineups and Standings');
+  check(mu.tabs === 'Lineups | Matchup | League | Players | Rankings', `five sections (${mu.tabs})`);
   const addr = await ev(`({path: location.pathname, title: document.title})`);
   check(addr.path === '/app/matchup' && /^Matchup · Titan/.test(addr.title), `each screen has its own address and title (${addr.path}, "${addr.title}")`);
   await ev('history.back(), true');
@@ -282,6 +282,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`!!document.querySelector('table.byes')`, 30000), 'an address opens its screen directly (/app/byes)');
   await tab('byes');
   check(await ev(`!!document.querySelector('table.byes')`), 'the Byes table renders');
+  const nav = await ev(`(() => { const t = document.getElementById('tabs'), r = t.getBoundingClientRect();
+    return {fixed: getComputedStyle(t).position, gap: Math.round(innerHeight - r.bottom),
+      subs: [...document.querySelectorAll('.subtabs button')].map(b => b.innerText).join(' | '),
+      on: (document.querySelector('[data-section][aria-current="page"]') || {}).dataset?.section}; })()`);
+  check(nav.fixed === 'fixed' && nav.gap <= 1 && nav.subs === 'Waivers | News | Exposure | Byes' && nav.on === 'players',
+    `on a phone the sections sit along the bottom, and Players shows its screens as sub-tabs (${nav.subs})`);
+  await tab('trade');
+  await tab('byes');
+  await ev(`document.querySelector('[data-section="league"]').click(); true`);
+  await sleep(500);
+  const lastLeague = await ev('location.pathname');
+  check(lastLeague === '/app/trade', `a section opens on the screen used there last (${lastLeague})`);
   await tab('score');
   check(await waitFor(`[...document.querySelectorAll('details.score .sname')].some(s => /Titan Test League/.test(s.innerText))`, 30000),
     'the Results tab scores the ESPN league');
@@ -345,8 +357,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   T.section('the Transactions tab');
   await tab('moves');
   check(await waitFor(`/ESPN leagues aren't in this list yet/.test(document.getElementById('view').textContent) && document.querySelectorAll('[data-moves]').length === 4 &&
-    document.querySelector('[data-ui="movesLeague"] option[value="all"]') !== null`, 5000),
-    'the Transactions tab has its league and kind filters, and says ESPN leagues aren\'t read yet');
+    !document.querySelector('[data-ui="movesLeague"]')`, 5000),
+    'the Transactions tab has its kind filters (the league dropdown at the top picks the league), and says ESPN leagues aren\'t read yet');
   check(await ev(`location.pathname === '/app/transactions' && document.title.startsWith('Transactions')`), 'it has its own address: /app/transactions');
 
   T.section('the Waivers tab');

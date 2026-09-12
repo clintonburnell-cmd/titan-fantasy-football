@@ -93,8 +93,9 @@ main#view { min-height: 100vh; }
 
 .top {
   position: sticky; top: 0; z-index: 10;
-  background: var(--top-bg);
-  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  /* Solid on phones: a see-through header (backdrop-filter) would hold the fixed bottom bar inside it.
+     Wide windows, whose sections sit in the header, get the see-through look back. */
+  background: var(--surface);
   border-bottom: 1px solid var(--line);
   padding-top: env(safe-area-inset-top);
 }
@@ -145,14 +146,49 @@ main#view { min-height: 100vh; }
 :root[data-theme="dark"] .theme-btn .i-sun { display: block; }
 @media (max-width: 480px) { .top .theme-btn { display: none; } }
 
-.tabs-in { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-block: 0 8px; }
-.tabs-in::-webkit-scrollbar { display: none; }
-.tabs button {
-  flex: none; border: 0; background: transparent; color: var(--muted);
-  font-weight: 600; font-size: .88rem; padding: 7px 12px; border-radius: 999px; cursor: pointer;
-}
-.tabs button:hover { color: var(--text); }
-.tabs button[aria-current="page"] { background: var(--surface-2); color: var(--text); }
+/* Titan's five sections (SECTIONS in app.js). On phones, in the Android app and on home-screen copies
+   they sit along the bottom, like the Sleeper and ESPN apps: an icon and a name each, a badge for lineup
+   changes and a dot on Players for a waiver upgrade. League, Players and Rankings hold several screens,
+   shown as sub-tabs at the top of the screen (.subtabs) and, on computers, in a dropdown. */
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--top-bg);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.tabs-in { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: 560px; }
+.sec { position: relative; min-width: 0; }
+.sec-btn { position: relative; width: 100%; display: grid; justify-items: center; gap: 3px; padding: 8px 2px 7px; border: 0; background: none;
+  color: var(--muted); font-weight: 650; font-size: .7rem; line-height: 1.1; cursor: pointer; }
+.sec-btn svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sec-i { width: 22px; height: 22px; }
+.sec-btn:hover { color: var(--text); }
+.sec-btn[aria-current="page"] { color: var(--accent-2); font-weight: 800; }
+.sec-btn .chev, .sec-menu { display: none; }
+.sec-badge { position: absolute; top: 3px; left: calc(50% + 5px); min-width: 17px; padding: 0 5px; border-radius: 9px;
+  background: #c8362c; color: #fff; font-size: .62rem; font-weight: 800; line-height: 17px; text-align: center; }
+.sec-dot { position: absolute; top: 6px; left: calc(50% + 7px); width: 9px; height: 9px; border-radius: 50%; background: #c8362c;
+  box-shadow: 0 0 0 2px var(--surface); }
+/* Room for the bar below the page. */
+.app-page { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+
+/* The top of each screen (screenBar in app.js): its section's screens as sub-tabs, and the league dropdown. */
+.screenbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.subtabs { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.subtabs::-webkit-scrollbar { display: none; }
+.subtabs button { flex: none; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px;
+  padding: 6px 13px; font-size: .85rem; font-weight: 650; cursor: pointer; }
+.subtabs button:hover { color: var(--text); }
+.subtabs button[aria-current="page"] { background: var(--text); border-color: var(--text); color: var(--bg); }
+.lpick { margin-left: auto; }
+.lpick select { appearance: none; max-width: 15rem; border: 1px solid var(--line); border-radius: 999px; padding: 7px 30px 7px 12px;
+  color: var(--text); font-size: .85rem; font-weight: 650; cursor: pointer; background-color: var(--surface);
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
+
+/* Settings: the gear in the header. On a narrow phone Refresh is just its icon, to make room. */
+.gear-btn { display: inline-grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; cursor: pointer;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+.gear-btn:hover { color: var(--text); border-color: var(--accent-2); }
+.gear-btn[aria-current="page"] { color: var(--accent-2); border-color: var(--accent-2); }
+.gear-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+@media (max-width: 480px) { .refresh span { display: none; } .refresh { padding: 9px; } }
 
 /* ------------------------------------------------------------ NFL scores ticker */
 /* This week's games under the header (paintTicker in app.js): small cards in a row that
@@ -262,12 +298,25 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   html:not(.in-app) .brand img { width: 42px; height: 42px; }
   html:not(.in-app) .brand h1 { font-size: 1.28rem; }
   html:not(.in-app) .brand p { font-size: .84rem; }
-  html:not(.in-app) .tabs-in { gap: 28px; padding-block: 0; }
-  /* Thirteen sections: a little closer together until the window is wide. */
-  @media (max-width: 1339px) { html:not(.in-app) .tabs-in { gap: 18px; } }
-  html:not(.in-app) .tabs button { padding: 15px 0 16px; border-radius: 0; font-size: .97rem; border-bottom: 2px solid transparent; }
-  html:not(.in-app) .tabs button:hover { background: none; }
-  html:not(.in-app) .tabs button[aria-current="page"] { background: none; color: var(--text); border-bottom-color: var(--accent-2); }
+  /* The five sections move into the header as a menu; League, Players and Rankings drop down their screens. */
+  html:not(.in-app) .top { background: var(--top-bg); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+  html:not(.in-app) .tabs { position: static; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-top: 0; padding-bottom: 0; }
+  html:not(.in-app) .tabs-in { display: flex; gap: 30px; }
+  html:not(.in-app) .sec-btn { display: inline-flex; align-items: center; gap: 6px; width: auto; padding: 15px 0 16px; font-size: .97rem; font-weight: 600;
+    border-bottom: 2px solid transparent; }
+  html:not(.in-app) .sec-btn[aria-current="page"] { color: var(--text); font-weight: 600; border-bottom-color: var(--accent-2); }
+  html:not(.in-app) .sec-i { display: none; }
+  html:not(.in-app) .sec-btn .chev { display: block; width: 14px; height: 14px; }
+  html:not(.in-app) .sec-badge, html:not(.in-app) .sec-dot { position: static; box-shadow: none; }
+  html:not(.in-app) .sec-menu { position: absolute; top: calc(100% - 6px); left: -12px; z-index: 25; min-width: 200px; padding: 6px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+  html:not(.in-app) .sec:hover .sec-menu, html:not(.in-app) .sec:focus-within .sec-menu { display: grid; gap: 2px; }
+  html:not(.in-app) .sec-menu button { text-align: left; border: 0; background: none; color: var(--text); padding: 8px 10px; border-radius: 8px;
+    font-size: .9rem; cursor: pointer; }
+  html:not(.in-app) .sec-menu button:hover { background: var(--surface-2); }
+  html:not(.in-app) .sec-menu button[aria-current="page"] { color: var(--accent-2); font-weight: 700; }
+  html:not(.in-app) .app-page { padding-bottom: env(safe-area-inset-bottom); }
+  html:not(.in-app) .toast { bottom: calc(18px + env(safe-area-inset-bottom)); }
   html:not(.in-app) main.wrap { gap: 16px; padding-block: 24px 48px; }
   html:not(.in-app) .lede { max-width: 72ch; }
   /* A league jumped to stops below the taller header. */
@@ -842,7 +891,7 @@ details.match > summary::-webkit-details-marker { display: none; }
 }
 
 .toast {
-  position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  position: fixed; left: 50%; bottom: calc(82px + env(safe-area-inset-bottom)); transform: translateX(-50%); /* above the bottom bar */
   max-width: calc(100% - 32px); background: var(--text); color: var(--bg);
   padding: 10px 16px; border-radius: 12px; font-weight: 600; font-size: .88rem;
   box-shadow: var(--shadow); z-index: 20;

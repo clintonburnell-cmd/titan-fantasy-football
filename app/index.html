@@ -45,24 +45,22 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>Refresh</span>
       </button>
+      <button type="button" class="gear-btn" id="gear" data-tab="settings" aria-label="Settings" title="Settings" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg></button>
       <div class="acct" id="acct" hidden></div>
       </div>
     </div>
+    <!-- Titan's five sections (SECTIONS in app.js): a bar along the bottom on phones and in the apps, a menu
+         with dropdowns on computers. Every screen keeps a data-tab button here; Settings is the gear above. -->
     <nav class="tabs" id="tabs" aria-label="Sections" hidden>
       <div class="tabs-in">
-        <button type="button" data-tab="lineups">Lineups</button>
-        <button type="button" data-tab="matchup">Matchup</button>
-        <button type="button" data-tab="standings">Standings</button>
-        <button type="button" data-tab="rosters">Rosters</button>
-        <button type="button" data-tab="waivers">Waivers</button>
-        <button type="button" data-tab="exposure">Exposure</button>
-        <button type="button" data-tab="byes">Byes</button>
-        <button type="button" data-tab="score">Results</button>
-        <button type="button" data-tab="news">News</button>
-        <button type="button" data-tab="trade">Trade</button>
-        <button type="button" data-tab="moves">Transactions</button>
-        <button type="button" data-tab="ranks">Rankings</button>
-        <button type="button" data-tab="settings">Settings</button>
+        <div class="sec"><button type="button" class="sec-btn" data-tab="lineups"><svg class="sec-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v3H9zM9 11h6M9 15h4"/></svg><span class="sec-name">Lineups</span><b class="sec-badge" id="badge-lineups" hidden></b></button></div>
+        <div class="sec"><button type="button" class="sec-btn" data-tab="matchup"><svg class="sec-i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M12 5v14M7 10v4M17 10v4"/></svg><span class="sec-name">Matchup</span></button></div>
+        <div class="sec"><button type="button" class="sec-btn" data-section="league"><svg class="sec-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 20h6"/></svg><span class="sec-name">League</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+          <div class="sec-menu"><button type="button" data-tab="standings">Standings</button><button type="button" data-tab="rosters">Rosters</button><button type="button" data-tab="trade">Trade</button><button type="button" data-tab="moves">Transactions</button></div></div>
+        <div class="sec"><button type="button" class="sec-btn" data-section="players"><svg class="sec-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg><span class="sec-name">Players</span><i class="sec-dot" id="dot-players" hidden></i><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+          <div class="sec-menu"><button type="button" data-tab="waivers">Waivers</button><button type="button" data-tab="news">News</button><button type="button" data-tab="exposure">Exposure</button><button type="button" data-tab="byes">Byes</button></div></div>
+        <div class="sec"><button type="button" class="sec-btn" data-section="rankings"><svg class="sec-i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-8M12 20V5M19 20v-5"/></svg><span class="sec-name">Rankings</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+          <div class="sec-menu"><button type="button" data-tab="ranks">Import</button><button type="button" data-tab="score">Results</button></div></div>
       </div>
     </nav>
   </header>

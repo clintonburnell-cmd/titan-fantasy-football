@@ -53,6 +53,17 @@ live site, so site changes reach it without a new upload. What's done and what's
   `sw.js` shows them. Keep each alert's key stable, or people get repeats: `out|week|league|player|tag`
   (names the starter's backup when he's a free agent there: depth chart order is index 3 of each
   trimmed player), `check|week|kickoff` (one alert covering every league), `news|week|story|player`.
+- Navigation: five sections (`SECTIONS` in `app.js`): Lineups, Matchup, League (Standings, Rosters,
+  Trade, Transactions), Players (Waivers, News, Exposure, Byes) and Rankings (Import, which is the `ranks`
+  screen, and Results), with Settings behind the gear (`#gear`). Phones, the Android app and home-screen
+  copies show them as a bar along the bottom (the header is solid there: a see-through `backdrop-filter`
+  header would hold the fixed bar inside it); wide windows as a header menu whose sections drop down
+  their screens. `screenBar` puts a section's screens as sub-tabs at the top of each screen, and the one
+  league dropdown (`S.ui.league`: a league id or 'all'; `pickedLeague`, `inPick`) on the screens in
+  `LEAGUE_SCREENS`; Standings and Trade follow it when it names a league and keep their own picker under
+  All leagues. A section opens on the screen used there last (`S.ui.last`). Badges: lineup changes on
+  Lineups, a dot on Players for waiver upgrades. Every screen keeps a `data-tab` button in `#tabs` (the
+  dropdowns) or the gear, which the UI test's `tab()` clicks. Screen ids and addresses didn't change.
 - Wide browser windows (900px and up) get the website look from the "website look" block in
   `styles.css`: a menu-style header, a centred 1100px page with one league per row (the owner prefers
   that to two across, and centred to set left), league chips that wrap, a footer row, from 1100px a 1280px page where Lineups,
