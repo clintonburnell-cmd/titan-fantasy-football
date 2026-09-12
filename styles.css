@@ -479,6 +479,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .pstr .st-team { text-align: left; font-weight: 700; min-width: 8rem; }
 .pstr tr.mine .st-team::after { content: " (you)"; color: var(--muted); font-weight: 600; }
 .pstr tr.mine td { background: var(--hover); }
+.pstrength .fine { padding: 10px 14px 12px; margin: 0; }
 .ps { font-weight: 700; font-variant-numeric: tabular-nums; }
 .ps.g-deep { color: var(--ok); background: var(--ok-soft); }
 .ps.g-thin { color: var(--stop); background: var(--stop-soft); }
