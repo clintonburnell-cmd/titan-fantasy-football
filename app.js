@@ -1909,7 +1909,7 @@
       <section class="card pad wsec"><h3>Your waiver targets</h3>${targets.length ? `<ul class="wlist">${targets.join('')}</ul>`
         : '<p class="fine">No free agent your rankings rate above one of your starters right now.</p>'}</section>`;
     if (cuffs.length) {
-      h += `<section class="card pad wsec"><h3>Backups for your hurt starters</h3><ul class="wlist">${cuffs.map(c => `<li class="wline">
+      h += `<section class="card pad wsec"><h3>Backups for your hurt starters</h3><ul class="wlist">${cuffs.map(c => `<li class="wline wcuff">
         ${leagueIcon(c.L.cfg, 'xs')}<span><b>${esc(c.p.name)}</b> <span class="bad-text">(${esc(c.p.inj)})</span>: his backup <b>${esc(c.b.name)}</b> is free in
         ${esc(c.L.cfg.key)}.${bid(c.L, c.b.name)}</span></li>`).join('')}</ul></section>`;
     }
