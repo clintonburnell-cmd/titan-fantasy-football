@@ -139,12 +139,29 @@ async function alertUser(userRef, analysis, ctx) {
    and tags a player are people's saved starters (the watch list from their last alert
    check) looked through. Returns how many alerts went out. */
 const NEWS_OVERLAP = 30 * 60000, NEWS_MAX_AGE = 3 * 3600 * 1000;
+
+/* Where news alerts read ESPN's stories: Titan's own /api/news first (the News tab's shared,
+   cached copy), then ESPN directly. ESPN has turned the game-day job's server away (403)
+   while letting the News tab's in, and the shared copy also spares ESPN a reader. */
+const TITAN_NEWS = 'https://titanfantasyfootball.com/api/news';
+async function newsForAlerts(get = fetch, direct = () => ESPN.fetchNews()) {
+  try {
+    const res = await get(TITAN_NEWS);
+    if (!res.ok) throw new Error('Titan\'s news answered ' + res.status);
+    const j = await res.json();
+    if (!Array.isArray(j.stories)) throw new Error('no stories');
+    return j.stories;
+  } catch (e) {
+    return direct();
+  }
+}
+
 async function newsAlerts(week, deps = {}) {
   const now = deps.now || Date.now();
   const metaRef = deps.metaRef || db.doc('meta/news');
   const meta = (await metaRef.get()).data() || {};
   let stories;
-  try { stories = await (deps.fetchNews || ESPN.fetchNews)(); }
+  try { stories = await (deps.fetchNews || newsForAlerts)(); }
   catch (e) { logger.warn('ESPN news unavailable: ' + e.message); return 0; }
   const since = Math.max((meta.checkedAt || 0) - NEWS_OVERLAP, now - NEWS_MAX_AGE);
   await metaRef.set({checkedAt: now});
@@ -710,5 +727,5 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
 });
 
 exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
-  yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll, latestScores,
+  yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll, latestScores, newsForAlerts,
   setSend: fn => { sendPush = fn; }};

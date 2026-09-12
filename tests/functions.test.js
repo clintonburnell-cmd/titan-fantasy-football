@@ -166,6 +166,13 @@ function fakeUser(db) {
   check(nMeta.checkedAt === nNow && JSON.stringify(ndb.private.alerts.watch) === JSON.stringify(watching) && ndb.private.alerts.sent['news|1|1|' + watching[0].n] === 1,
     'the check time is saved for next time; the watch list is kept and the story remembered');
   check(await job.newsAlerts(1, nDeps([story('4', nNow - 60000, ['Somebody Else'])])) === 0, 'no story about a starter, no alert');
+  const viaTitan = await job.newsForAlerts(async () => new Response(JSON.stringify({at: 1, stories: [story('7', 1, [])]}), {status: 200}),
+    async () => { throw new Error('ESPN should not be asked'); });
+  let nDirect = 0;
+  const viaEspn = await job.newsForAlerts(async () => new Response('{"error":"down"}', {status: 502}), async () => { nDirect++; return [story('8', 1, [])]; });
+  const viaEspn2 = await job.newsForAlerts(async () => { throw new Error('offline'); }, async () => { nDirect++; return [story('8', 1, [])]; });
+  check(viaTitan[0].id === '7' && viaEspn[0].id === '8' && viaEspn2[0].id === '8' && nDirect === 2,
+    'news alerts read Titan\'s shared copy (/api/news) first, and ESPN directly only if that fails');
   let nReads = 0;
   const nRead = async () => { nReads++; return [story('9', 1, [])]; };
   const t0n = 2e12, l1 = await job.latestNews(t0n, nRead), l2 = await job.latestNews(t0n + 60000, nRead), l3 = await job.latestNews(t0n + 100000, nRead);

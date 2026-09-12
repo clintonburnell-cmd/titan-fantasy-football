@@ -66,7 +66,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   kept 90 seconds, CDN two minutes: ESPN's bot protection turns some browsers away, headless Chrome
   included, and refuses CORS preflights) every two minutes while open, marking stories that tag players on
   the person's rosters. News alerts: each alert check saves the person's starters (`SCC.newsWatch`) as
-  `watch` in their alerts doc; `newsAlerts` runs on every 15-minute run all week, reads the feed once
+  `watch` in their alerts doc; `newsAlerts` runs on every 15-minute run all week, reads the feed once (`newsForAlerts`: Titan's own
+  `/api/news` first, ESPN directly only if that fails, since ESPN has turned the game-day job's server
+  away while letting the News tab's in)
   and only looks at people when a new story tags a player (`SCC.newsAlertsFor`, at most 3 at a time,
   key `news|week|story|player`). A news alert's tap opens the story (sw.js).
 - The scores ticker (`loadScores`, `paintTicker` in `app.js`): this week's NFL games from ESPN's
