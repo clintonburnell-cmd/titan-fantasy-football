@@ -112,7 +112,8 @@ FantasyCalc at most once a day per format, and the tab credits FantasyCalc with 
 FantasyCalc asks that its numbers stay out of other sites' trade calculators, so outside Titan's
 owner's account the Trade tab shows who wins as each team's value change in percent, and the number
 beside each player is Titan's own value: his projected points this season above a replacement starter
-at his position, in the league's scoring (from Sleeper's season projections). The app page's footer
+at his position, in the league's scoring (from Sleeper's season projections). In a dynasty league a
+note says so: those numbers are this season only and don't account for age or future seasons. The app page's footer
 links FantasyCalc without needing JavaScript, as FantasyCalc asks.
 
 On computers and tablets, the app in a browser takes the website's look: its sections become a

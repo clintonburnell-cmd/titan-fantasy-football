@@ -99,7 +99,8 @@ live site, so site changes reach it without a new upload. What's done and what's
   trends; everyone else sees Titan's own value (`SCC.titanValues`: projected season points above a
   replacement starter at the position, from Sleeper's season projections via
   `API.fetchSeasonProjections`, never derived from FantasyCalc), draft picks without a number, and
-  the verdict as percent changes (`tradeDisplay`, `tradeSummary`).
+  the verdict as percent changes (`tradeDisplay`, `tradeSummary`). In a dynasty league they also get
+  a note (`.tdyn`) that Titan's values are this season only, without age or future seasons.
 - The Trade tab uses FantasyCalc's trade values. Their terms: call only `/values/current`, cache on
   Titan's server (the `tradeValues` function keeps each format in Firestore `tradeValues/{format}` for a
   day; the app reads `/api/trade-values`, never FantasyCalc), and credit FantasyCalc with a visible link

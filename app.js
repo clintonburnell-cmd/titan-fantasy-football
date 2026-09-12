@@ -2434,7 +2434,11 @@
       </div>
       <p class="fine">${fcShown() ? `Values for ${esc(formatName(f))}: what players like these go for in real trades.`
         : `Weighed for ${esc(formatName(f))}. The number beside each player is Titan's own value: his projected points this season above a
-          replacement starter at his position, in this league's scoring. It covers this season only, so it doesn't weigh age.`}</p>`;
+          replacement starter at his position, in this league's scoring.`}</p>${!fcShown() && d.cfg.kind === 'Dynasty'
+        // Titan's value is one season's projections: in a dynasty league that misses age and the years ahead, so say so.
+        ? `<div class="banner swap tdyn"><b>Dynasty league:</b> the numbers beside players come from this season's projections only.
+          They don't account for age or future seasons, so young players and rookies can look worth less than they are to a dynasty team.
+          Who wins still comes from FantasyCalc's dynasty trade values.</div>` : ''}`;
     const retry = '<button class="link" data-action="trade-retry">Try again</button>';
     if (T && T.error) return h + `<div class="banner stop">${esc(T.error)} ${retry}</div>`;
     if (V && V.error) return h + `<div class="banner stop">${esc(V.error)} ${retry}</div>`;
