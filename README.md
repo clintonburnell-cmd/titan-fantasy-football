@@ -287,8 +287,9 @@ No build step and no dependencies. It runs on any static host.
      login. Next: ESPN leagues on the Results tab.
    - **In progress: Yahoo Fantasy**: official Fantasy Sports API, signed in with Yahoo (OAuth),
      with a server-side token exchange. Titan's Yahoo app is registered and its access request is with
-     Yahoo. Linking a Yahoo account is being built, visible only to Titan's owner until it works; next,
-     Yahoo leagues on every tab.
+     Yahoo. Linking a Yahoo account and Yahoo leagues on Lineups, Rosters, Exposure, Byes and Waivers
+     are built, visible only to Titan's owner until Yahoo approves and a real league works end to end;
+     next, Matchup, live scores, Standings, Trade and Results.
    - **Later: NFL Fantasy** and **CBS Sports Fantasy**: need research on what each allows.
 
    The engine works on a neutral roster format (`buildLeague` output), so each platform
@@ -323,3 +324,4 @@ No build step and no dependencies. It runs on any static host.
 | `v1.15.3` | Website visit counts with Cloudflare Web Analytics (`stats.js`), without cookies, on the home page, guides, privacy and terms only: never in the app, the Android app or home-screen copies; the privacy policy says so |
 | `v1.15.4` | Team names read "Nickname (account name)" on every tab (Matchup, Standings, Trade, Transactions), in Sleeper and ESPN leagues alike, or the account name alone when a team has no nickname (`SCC.teamLabel`); private ESPN leagues get their managers' names on Standings too |
 | `v1.16.0` | Yahoo, step 1: Sign in with Yahoo in Settings (Titan's owner only while it's built), the tokens kept on Titan's server where no browser can read them, and the person's Yahoo leagues listed with their team in each (Titan's access request is with Yahoo); the service worker leaves Titan's server addresses (`/api/...`) to the browser, which fixed an ERR_FAILED coming back from Yahoo's sign-in |
+| `v1.16.1` | Yahoo, step 2a (owner-only, waiting on Yahoo's approval): each refresh reads every Yahoo league through Titan's server and shows it on Lineups, Rosters, Exposure, Byes and Waivers, players matched to Sleeper's list (matching now shared with ESPN in `engine.js`); Matchup, Standings, Trade and Results say Yahoo is coming next; the tip jar hides for anyone who links Yahoo, Yahoo is credited where its data shows, and a saved refresh over a day old drops its Yahoo leagues |
