@@ -189,6 +189,9 @@ main#view { min-height: 100vh; }
 .gear-btn[aria-current="page"] { color: var(--accent-2); border-color: var(--accent-2); }
 .gear-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 @media (max-width: 480px) { .refresh span { display: none; } .refresh { padding: 9px; } }
+/* A narrow phone's header says just "Titan", so the full name doesn't stack four lines high beside the buttons. */
+.brand .b-short { display: none; }
+@media (max-width: 480px) { .brand .b-long { display: none; } .brand .b-short { display: inline; } }
 
 /* ------------------------------------------------------------ NFL scores ticker */
 /* This week's games under the header (paintTicker in app.js): small cards in a row that

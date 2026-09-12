@@ -63,6 +63,13 @@ website (such as alerts) to pass review.
 
 ## Screens
 
+Titan's screens sit in five sections: Lineups, Matchup, League (Standings, Rosters, Trade,
+Transactions), Players (Waivers, News, Exposure, Byes) and Rankings (Import, Results), with Settings
+behind the gear. On phones they're a bar along the bottom; on computers, a menu whose sections drop
+down their screens. Each section opens on the screen you used there last, badges show lineup changes
+and waiver upgrades, and one league dropdown at the top of the screen narrows every screen that shows
+leagues.
+
 Under the header, a scores ticker shows this week's NFL games: live scores and the clock, final
 scores, kickoff times in your time zone, and a count of your starters in each game. Each game opens
 on ESPN, whose scoreboard Titan's server reads for everyone (every 30 seconds while games are on).
@@ -330,3 +337,4 @@ No build step and no dependencies. It runs on any static host.
 | `v1.16.0` | Yahoo, step 1: Sign in with Yahoo in Settings (Titan's owner only while it's built), the tokens kept on Titan's server where no browser can read them, and the person's Yahoo leagues listed with their team in each (Titan's access request is with Yahoo); the service worker leaves Titan's server addresses (`/api/...`) to the browser, which fixed an ERR_FAILED coming back from Yahoo's sign-in |
 | `v1.16.1` | Yahoo, step 2a (owner-only, waiting on Yahoo's approval): each refresh reads every Yahoo league through Titan's server and shows it on Lineups, Rosters, Exposure, Byes and Waivers, players matched to Sleeper's list (matching now shared with ESPN in `engine.js`); Matchup, Standings, Trade and Results say Yahoo is coming next; the tip jar hides for anyone who links Yahoo, Yahoo is credited where its data shows, and a saved refresh over a day old drops its Yahoo leagues |
 | `v1.17.0` | An NFL scores ticker under the app's header: this week's games from ESPN's scoreboard through Titan's server (`/api/scores`, one shared read kept 20 seconds), with live scores and clocks, kickoff times in your time zone, a count of your starters in each game, and each game opening on ESPN; the "Titan server problems" alert now watches all 13 server functions |
+| `v1.18.0` | Five sections instead of thirteen tabs: Lineups, Matchup, League (Standings, Rosters, Trade, Transactions), Players (Waivers, News, Exposure, Byes) and Rankings (Import, Results), with Settings behind a gear. A bar along the bottom on phones and in the apps, a header menu with dropdowns on computers, sub-tabs at the top of each screen, each section reopening on its last screen, badges for lineup changes and waiver upgrades, and one league dropdown steering every screen that shows leagues. Also: news alerts read Titan's own `/api/news` first, since ESPN had started refusing the game-day job |
