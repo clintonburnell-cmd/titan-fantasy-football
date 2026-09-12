@@ -113,7 +113,9 @@ FantasyCalc asks that its numbers stay out of other sites' trade calculators, so
 owner's account the Trade tab shows who wins as each team's value change in percent, and the number
 beside each player is Titan's own value: his projected points this season above a replacement starter
 at his position, in the league's scoring (from Sleeper's season projections). In a dynasty league a
-note says so: those numbers are this season only and don't account for age or future seasons. The app page's footer
+note says so: those numbers are this season only and don't account for age or future seasons.
+Both rosters sort by value, by position, or by position then value, and each player's position shows
+as a colored tag (QB, RB, WR, TE, K, DEF), as on Lineups. The app page's footer
 links FantasyCalc without needing JavaScript, as FantasyCalc asks.
 
 On computers and tablets, the app in a browser takes the website's look: its sections become a

@@ -2372,6 +2372,8 @@
      (SCC.titanValues, from Sleeper's season projections, never FantasyCalc's), while who wins,
      fairness and the trade ideas still come from FantasyCalc's values. */
   const fcShown = () => S.owner.is;
+  // The Trade tab's roster sorts (S.ui.tradeSort).
+  const TRADE_SORTS = [['value', 'Value'], ['pos', 'Position'], ['posvalue', 'Position, then value']];
   async function loadSeasonProj() {
     S.trade.season = {busy: true};
     try { S.trade.season = {map: await API.fetchSeasonProjections(S.snap.season)}; }
@@ -2469,6 +2471,10 @@
           autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="tsearch">${tradeSearchResults()}</div></section>`;
     h += tradeIdeasCard(d.cfg, disp);
     if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth, V.waiver, disp);
+    // How both rosters sort: by value, by position, or by position then value (remembered).
+    const sort = TRADE_SORTS.some(x => x[0] === S.ui.tradeSort) ? S.ui.tradeSort : 'value';
+    h += `<div class="bar tsort"><span class="fine">Sort the rosters by</span><div class="chips" role="group" aria-label="Sort the rosters">${TRADE_SORTS.map(([k, label]) =>
+      `<button type="button" class="chip" data-tsort="${k}" aria-pressed="${sort === k}">${label}</button>`).join('')}</div></div>`;
     return h + `<div class="trade-teams">${tradeRoster(d.cfg, me, 'give', val, disp)}${partner ? tradeRoster(d.cfg, partner, 'get', val, disp)
       : '<div class="card pad"><p class="lede">Pick a trade partner to see their roster.</p></div>'}</div>`;
   }
@@ -2529,7 +2535,7 @@
     if (!found.length) return '<p class="fine">Nobody by that name in this league or on an NFL team.</p>';
     found.sort((a, b) => (!!b.team - !!a.team) || worth(b.p) - worth(a.p) || a.p.name.localeCompare(b.p.name));
     return `<ul class="wlist">${found.slice(0, 8).map(({p, team}) => `<li class="wrow">${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b>
-      <small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}${disp.num(p) ? ' · value ' + disp.num(p) : ''}</small>
+      <small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.team || '')}${disp.num(p) ? ' · value ' + disp.num(p) : ''}</small>
       <span class="wchips">${!team ? '<span class="wst free">free agent</span>' : team.mine ? '<span class="wst mine">on your team</span>'
         : `<span class="wst">on ${esc(team.name)}</span><button type="button" class="btn small ghost" data-tsearch="${esc(team.id)}|${esc(p.id)}">Trade for him</button>`}</span></span></li>`).join('')}</ul>`;
   }
@@ -2550,17 +2556,24 @@
   // One team's players, most valuable first, then its draft picks. Tapping one puts it in the trade, or takes it out.
   function tradeRoster(cfg, team, which, val, disp) {
     const picked = S.trade.pick[which], picks = tradePicks(cfg, team, which, val, picked, disp);
-    // Most valuable first, by whichever value shows: FantasyCalc's for the owner, Titan's for everyone else.
+    // Value is whichever shows: FantasyCalc's for the owner, Titan's for everyone else.
     const order = r => disp.fc ? (r.x || {}).v || 0 : r.t || 0;
+    const sort = TRADE_SORTS.some(x => x[0] === S.ui.tradeSort) ? S.ui.tradeSort : 'value';
+    const byValue = (a, b) => order(b) - order(a), byName = (a, b) => a.p.name.localeCompare(b.p.name);
+    const byPos = (a, b) => posOrder(a.p.pos) - posOrder(b.p.pos);
     const rows = team.roster.map(p => ({p, x: val(p), t: disp.tv(p)}))
-      .sort((a, b) => order(b) - order(a) || a.p.name.localeCompare(b.p.name));
+      .sort(sort === 'value' ? (a, b) => byValue(a, b) || byName(a, b)
+        : sort === 'pos' ? (a, b) => byPos(a, b) || byName(a, b)
+        : (a, b) => byPos(a, b) || byValue(a, b) || byName(a, b));
+    // Grouped by position, each group gets a header.
+    const head = (r, i) => sort !== 'value' && (i === 0 || rows[i - 1].p.pos !== r.p.pos) ? `<div class="rdiv">${esc(r.p.pos || 'Other')}</div>` : '';
     return `<section class="card tteam"><header class="card-h"><div><h3>${esc(which === 'give' ? 'Your team' : team.name)}</h3>
       <p>${which === 'give' ? esc(team.name) + ' · tap the players you\'d give' : 'Tap the players you\'d get'}</p></div></header>
-      <div class="trows">${rows.map(({p, x}) => `<button type="button" class="trow" data-trade="${which}" data-pid="${esc(p.id)}" aria-pressed="${picked.includes(p.id)}">
-        ${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}${
+      <div class="trows">${rows.map((r, i) => { const {p, x} = r; return `${head(r, i)}<button type="button" class="trow" data-trade="${which}" data-pid="${esc(p.id)}" aria-pressed="${picked.includes(p.id)}">
+        ${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.team || '')}${
           disp.fc && x && x.pr ? ' · ' + esc(p.pos + x.pr) : ''}</small></span>
         <span class="tval">${disp.num(p) || '–'}${disp.fc && x && x.tr ? `<small class="${x.tr > 0 ? 'good' : 'amber'}" title="Change over the last 30 days">${
-          x.tr > 0 ? '▲' : '▼'} ${thousands(Math.abs(x.tr))}</small>` : ''}</span></button>`).join('')}${picks}</div></section>`;
+          x.tr > 0 ? '▲' : '▼'} ${thousands(Math.abs(x.tr))}</small>` : ''}</span></button>`; }).join('')}${picks}</div></section>`;
   }
 
   /* Each team's best starting lineup by this week's projections (Sleeper's, in the
@@ -2585,7 +2598,7 @@
     const items = list => list.map(p => ({v: worth(p), pick: p.pos === 'PICK'}));
     const R = SCC.tradeVerdict(items(give), items(get), waiver), any = give.length || get.length;
     const chips = (list, which) => list.length ? list.map(p => `<button type="button" class="chip tchip" data-trade="${which}" data-pid="${esc(p.id)}" title="Take out of the trade">${
-      esc(p.name)} <small>${disp.num(p) || '–'}</small> ✕</button>`).join('') : '<span class="fine">Nobody yet</span>';
+      p.pos && p.pos !== 'PICK' ? pos(p.pos) + ' ' : ''}${esc(p.name)} <small>${disp.num(p) || '–'}</small> ✕</button>`).join('') : '<span class="fine">Nobody yet</span>';
     const total = (R.give.adj + R.get.adj) || 1, pg = Math.round(R.get.adj / total * 100);
     // A side's total, with the roster-spot value in it spelled out: FantasyCalc's numbers, so the owner's only.
     const tot = (s, whose) => {
@@ -2693,7 +2706,7 @@
     // A tap on a league's header folds or unfolds it; the toggle listener remembers it.
     const head = e.target.closest('details[data-fold] > summary');
     if (head) { tapped = head.parentElement; return; }
-    const t = e.target.closest('[data-go],[data-filter],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-moves],[data-tsearch],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-tsort],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-moves],[data-tsearch],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
     if (t.dataset.tsearch) {
@@ -2736,6 +2749,7 @@
     }
     if (t.dataset.linkTab) { S.ui.linkTab = t.dataset.linkTab; saveUi(); return render(); }
     if (t.dataset.filter) { S.ui.filter = t.dataset.filter; saveUi(); return render(); }
+    if (t.dataset.tsort) { S.ui.tradeSort = t.dataset.tsort; saveUi(); return render(); }
     if (t.dataset.viewPos) { S.view.pos = t.dataset.viewPos; return render(); }
     const a = t.dataset.action;
     if (a === 'score') loadScore(S.score.week || S.snap.week);

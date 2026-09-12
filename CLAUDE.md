@@ -101,7 +101,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   replacement starter at the position, from Sleeper's season projections via
   `API.fetchSeasonProjections`, never derived from FantasyCalc), draft picks without a number, and
   the verdict as percent changes (`tradeDisplay`, `tradeSummary`). In a dynasty league they also get
-  a note (`.tdyn`) that Titan's values are this season only, without age or future seasons.
+  a note (`.tdyn`) that Titan's values are this season only, without age or future seasons. Both
+  rosters sort by value, position, or position then value (`TRADE_SORTS`, `S.ui.tradeSort`, position
+  headers when grouped), and every player shows the colored position tag (`pos()`).
 - The Trade tab uses FantasyCalc's trade values. Their terms: call only `/values/current`, cache on
   Titan's server (the `tradeValues` function keeps each format in Firestore `tradeValues/{format}` for a
   day; the app reads `/api/trade-values`, never FantasyCalc), and credit FantasyCalc with a visible link

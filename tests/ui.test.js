@@ -315,6 +315,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`(() => { const s = document.querySelector('[data-ui="tradePartner"]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
   check(await waitFor(`document.querySelectorAll('.tteam').length === 2 && document.querySelectorAll('.tteam .trow').length > 20`, 5000),
     'picking a partner shows both rosters');
+  check(await ev(`document.querySelectorAll('.tteam .trow .pos[data-pos]').length > 20 && !!document.querySelector('.tteam .trow .pos[data-pos="QB"]')`),
+    'every player on both rosters carries a colored position tag');
+  await ev(`document.querySelector('[data-tsort="posvalue"]').click(); true`);
+  const sorted = await ev(`(() => { const t = document.querySelector('.tteam'), heads = [...t.querySelectorAll('.rdiv')].map(d => d.textContent.trim());
+    const first = t.querySelector('.trow .pos'); return {heads: heads.join(' '), first: first && first.textContent}; })()`);
+  check(/^QB RB WR TE/.test(sorted.heads) && sorted.first === 'QB' && await ev(`document.querySelector('[data-tsort="posvalue"]').getAttribute('aria-pressed') === 'true'`),
+    `sorting by position, then value groups each roster under position headers (${sorted.heads})`);
+  await ev(`document.querySelector('[data-tsort="value"]').click(); true`);
+  check(await ev(`!document.querySelector('.tteam .rdiv')`), 'sorting by value goes back to one list, most valuable first');
   await ev(`document.querySelector('.tteam [data-trade="give"]').click(); true`);
   await ev(`document.querySelector('.tteam [data-trade="get"]').click(); true`);
   check(await waitFor(`/win|Fair/.test((document.querySelector('.trade-sum .tverdict') || {}).textContent || '') && document.querySelectorAll('.trade-sum .tchip').length === 2`, 3000),

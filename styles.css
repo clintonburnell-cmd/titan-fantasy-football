@@ -468,6 +468,9 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .pos[data-pos="TE"] { background: #feae58; color: #3d2404; }
 .pos[data-pos="K"] { background: #c96cff; color: #2c0d45; }
 .pos[data-pos="DEF"] { background: #bf5f40; color: #fff; }
+/* The same position colors, compact, inside a line of text (the Trade tab's players, chips and search). */
+.who small .pos, .tchip .pos { width: auto; height: auto; padding: 1px 6px; border-radius: 5px; font-size: .64rem; vertical-align: 1px; }
+.tsort { align-items: center; gap: 8px; }
 .who { min-width: 0; }
 .who b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who small { display: block; color: var(--muted); font-size: .78rem; }
