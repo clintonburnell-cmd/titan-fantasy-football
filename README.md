@@ -63,6 +63,10 @@ website (such as alerts) to pass review.
 
 ## Screens
 
+Under the header, a scores ticker shows this week's NFL games: live scores and the clock, final
+scores, kickoff times in your time zone, and a count of your starters in each game. Each game opens
+on ESPN, whose scoreboard Titan's server reads for everyone (every 30 seconds while games are on).
+
 The Transactions tab lists every trade, waiver claim, free-agent move and commissioner move in your
 Sleeper leagues over the last three weeks, newest first, with a league picker (all leagues or one)
 and filters for trades, adds and drops, and your own moves (ESPN leagues aren't read yet).
@@ -325,3 +329,4 @@ No build step and no dependencies. It runs on any static host.
 | `v1.15.4` | Team names read "Nickname (account name)" on every tab (Matchup, Standings, Trade, Transactions), in Sleeper and ESPN leagues alike, or the account name alone when a team has no nickname (`SCC.teamLabel`); private ESPN leagues get their managers' names on Standings too |
 | `v1.16.0` | Yahoo, step 1: Sign in with Yahoo in Settings (Titan's owner only while it's built), the tokens kept on Titan's server where no browser can read them, and the person's Yahoo leagues listed with their team in each (Titan's access request is with Yahoo); the service worker leaves Titan's server addresses (`/api/...`) to the browser, which fixed an ERR_FAILED coming back from Yahoo's sign-in |
 | `v1.16.1` | Yahoo, step 2a (owner-only, waiting on Yahoo's approval): each refresh reads every Yahoo league through Titan's server and shows it on Lineups, Rosters, Exposure, Byes and Waivers, players matched to Sleeper's list (matching now shared with ESPN in `engine.js`); Matchup, Standings, Trade and Results say Yahoo is coming next; the tip jar hides for anyone who links Yahoo, Yahoo is credited where its data shows, and a saved refresh over a day old drops its Yahoo leagues |
+| `v1.17.0` | An NFL scores ticker under the app's header: this week's games from ESPN's scoreboard through Titan's server (`/api/scores`, one shared read kept 20 seconds), with live scores and clocks, kickoff times in your time zone, a count of your starters in each game, and each game opening on ESPN; the "Titan server problems" alert now watches all 13 server functions |
