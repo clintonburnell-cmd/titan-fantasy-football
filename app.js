@@ -2439,14 +2439,17 @@
     const P = S.trade.pick;
     if (P.league !== d.cfg.id || P.partner !== (partner ? partner.id : '')) Object.assign(P, {league: d.cfg.id, partner: partner ? partner.id : '', give: [], get: []});
 
+    // The partner picker sits at the top and, once a partner is picked, heads their roster card too.
+    const partnerOptions = `<option value="">Pick a team</option>${teams.filter(t => !t.mine).map(t =>
+      `<option value="${esc(t.id)}"${t === partner ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}`;
+    const canReset = !!(partner || P.give.length || P.get.length || S.trade.ideas[d.cfg.id] || S.trade.q);
     let h = `<p class="credit">${fcShown() ? 'Trade values' : 'Who wins is weighed with trade values'} by <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>${
       V && V.at ? `, updated ${esc(when(V.at))}` : ''}. Titan isn't affiliated with FantasyCalc.</p>
       <div class="bar">
         ${pickedLeague() !== 'all' ? '' : `<label class="field"><span>League</span><select data-ui="tradeLeague">${leagues.map(x =>
           `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('')}</select></label>`}
-        <label class="field"><span>Trade partner</span><select data-ui="tradePartner"${teams.length ? '' : ' disabled'}>
-          <option value="">Pick a team</option>${teams.filter(t => !t.mine).map(t => `<option value="${esc(t.id)}"${t === partner ? ' selected' : ''}>${
-            esc(t.name)}</option>`).join('')}</select></label>
+        <label class="field"><span>Trade partner</span><select data-ui="tradePartner"${teams.length ? '' : ' disabled'}>${partnerOptions}</select></label>
+        <button type="button" class="btn ghost small treset" data-action="trade-reset"${canReset ? '' : ' disabled'}>Clear all</button>
       </div>
       <p class="fine">${fcShown() ? `Values for ${esc(formatName(f))}: what players like these go for in real trades.`
         : `Weighed for ${esc(formatName(f))}. The number beside each player is Titan's own value: his projected points this season above a
@@ -2475,7 +2478,7 @@
     const sort = TRADE_SORTS.some(x => x[0] === S.ui.tradeSort) ? S.ui.tradeSort : 'value';
     h += `<div class="bar tsort"><span class="fine">Sort the rosters by</span><div class="chips" role="group" aria-label="Sort the rosters">${TRADE_SORTS.map(([k, label]) =>
       `<button type="button" class="chip" data-tsort="${k}" aria-pressed="${sort === k}">${label}</button>`).join('')}</div></div>`;
-    return h + `<div class="trade-teams">${tradeRoster(d.cfg, me, 'give', val, disp)}${partner ? tradeRoster(d.cfg, partner, 'get', val, disp)
+    return h + `<div class="trade-teams">${tradeRoster(d.cfg, me, 'give', val, disp)}${partner ? tradeRoster(d.cfg, partner, 'get', val, disp, `<select class="tp-select" data-ui="tradePartner">${partnerOptions}</select>`)
       : '<div class="card pad"><p class="lede">Pick a trade partner to see their roster.</p></div>'}</div>`;
   }
 
@@ -2554,7 +2557,7 @@
   }
 
   // One team's players, most valuable first, then its draft picks. Tapping one puts it in the trade, or takes it out.
-  function tradeRoster(cfg, team, which, val, disp) {
+  function tradeRoster(cfg, team, which, val, disp, partnerSel) {
     const picked = S.trade.pick[which], picks = tradePicks(cfg, team, which, val, picked, disp);
     // Value is whichever shows: FantasyCalc's for the owner, Titan's for everyone else.
     const order = r => disp.fc ? (r.x || {}).v || 0 : r.t || 0;
@@ -2567,7 +2570,10 @@
         : (a, b) => byPos(a, b) || byValue(a, b) || byName(a, b));
     // Grouped by position, each group gets a header.
     const head = (r, i) => sort !== 'value' && (i === 0 || rows[i - 1].p.pos !== r.p.pos) ? `<div class="rdiv">${esc(r.p.pos || 'Other')}</div>` : '';
-    return `<section class="card tteam"><header class="card-h"><div><h3>${esc(which === 'give' ? 'Your team' : team.name)}</h3>
+    // The partner's card is headed by the partner picker, so another team is one tap from "Your team".
+    const title = which === 'give' || !partnerSel ? `<h3>${esc(which === 'give' ? 'Your team' : team.name)}</h3>`
+      : `<label class="tp-pick"><span class="sr-only">Trade partner</span>${partnerSel}</label>`;
+    return `<section class="card tteam"><header class="card-h"><div>${title}
       <p>${which === 'give' ? esc(team.name) + ' · tap the players you\'d give' : 'Tap the players you\'d get'}</p></div></header>
       <div class="trows">${rows.map((r, i) => { const {p, x} = r; return `${head(r, i)}<button type="button" class="trow" data-trade="${which}" data-pid="${esc(p.id)}" aria-pressed="${picked.includes(p.id)}">
         ${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.team || '')}${
@@ -2763,6 +2769,15 @@
     else if (a === 'trade-find') findTrades();
     else if (a === 'trade-ideas-clear') { delete S.trade.ideas[S.trade.pick.league]; render(); }
     else if (a === 'trade-clear') { S.trade.pick.give = []; S.trade.pick.get = []; render(); }
+    else if (a === 'trade-reset') {
+      // Clear all: both sides, the partner, the trade ideas and the player search, for a fresh start.
+      delete S.trade.ideas[S.trade.pick.league];
+      Object.assign(S.trade.pick, {give: [], get: [], partner: ''});
+      S.trade.q = '';
+      S.ui.tradePartner = '';
+      saveUi();
+      render();
+    }
     else if (a === 'trade-retry') {
       [S.trade.teams, S.trade.values].forEach(m => Object.keys(m).forEach(k => { if (m[k].error) delete m[k]; }));
       render();

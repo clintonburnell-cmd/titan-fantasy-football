@@ -471,6 +471,12 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 /* The same position colors, compact, inside a line of text (the Trade tab's players, chips and search). */
 .who small .pos, .tchip .pos { width: auto; height: auto; padding: 1px 6px; border-radius: 5px; font-size: .64rem; vertical-align: 1px; }
 .tsort { align-items: center; gap: 8px; }
+/* The trade partner's roster card: its heading is the partner picker, beside "Your team". */
+.tp-pick { display: block; max-width: 100%; }
+.tp-select { appearance: none; max-width: 100%; font: inherit; font-size: 1rem; font-weight: 800; color: var(--text); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 10px; padding: 4px 30px 4px 10px; background-color: var(--surface);
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
 .who { min-width: 0; }
 .who b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who small { display: block; color: var(--muted); font-size: .78rem; }

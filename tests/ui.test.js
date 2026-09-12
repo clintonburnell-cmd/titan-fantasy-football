@@ -362,6 +362,21 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       a.dataset.tradeCopy.startsWith('Trade offer: my ') && a.dataset.tradeCopy.endsWith(' for your ' + ${JSON.stringify(team3Player)}); })()`, 3000),
     'a two-sided trade can be copied and taken to the league\'s site: ' + await ev(`((document.querySelector('[data-trade-copy]') || {dataset: {}}).dataset.tradeCopy || 'none')`));
 
+  // The partner's roster card picks the partner too, and Clear all starts over.
+  const cardPick = await ev(`(() => { const s = document.querySelector('.tteam .tp-select'); return s ? {value: s.value, n: s.options.length} : null; })()`);
+  check(!!cardPick && cardPick.value === '3' && cardPick.n > 2, 'the partner\'s roster card has the partner picker too, set to the same team');
+  await ev(`(() => { const s = document.querySelector('.tteam .tp-select'); s.value = s.options[1].value === '3' ? s.options[2].value : s.options[1].value;
+    s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
+  await sleep(400);
+  const switched = await ev(`({top: document.querySelector('.bar [data-ui="tradePartner"]').value, card: (document.querySelector('.tteam .tp-select') || {}).value,
+    chips: document.querySelectorAll('.trade-sum .tchip').length})`);
+  check(switched.top === switched.card && switched.top !== '3' && switched.chips === 0,
+    `switching partner on the card switches it at the top too, and starts a new trade (team ${switched.top})`);
+  await ev(`document.querySelector('[data-action="trade-reset"]').click(); true`);
+  await sleep(400);
+  check(await ev(`document.querySelector('.bar [data-ui="tradePartner"]').value === '' && !document.querySelector('.tp-select') && !document.querySelector('.trade-sum') &&
+    document.querySelector('[data-action="trade-reset"]').disabled`), 'Clear all starts over: no partner, no trade, and the button rests until there\'s something to clear');
+
   T.section('game context on Lineups');
   await tab('lineups');
   check(await waitFor(`[...document.querySelectorAll('.lineup .gctx')].some(s => /team expected 28.5 pts/.test(s.textContent) && /wind 20 mph/.test(s.textContent))`, 10000),
