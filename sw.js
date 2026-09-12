@@ -4,7 +4,7 @@
  * time the app opens, with the cached copy as the offline fallback. Sleeper's
  * API is never touched here: live data always comes straight from Sleeper.
  */
-const CACHE = 'titan-v12';
+const CACHE = 'titan-v13';
 // The website (the root page) and the app (/app/), with everything the app loads.
 const SHELL = ['./', 'index.html', 'site.css', 'theme.js', 'stats.js', 'titan.svg', 'app/', 'app/index.html', 'styles.css', 'engine.js', 'demo.js', 'espn.js', 'sleeper.js',
   'syncplan.js', 'app.js', 'sync.js', 'icon.svg', 'icon-192.png', 'apple-touch-icon.png', 'manifest.webmanifest', 'privacy.html'];
@@ -53,8 +53,11 @@ self.addEventListener('notificationclick', event => {
 });
 
 self.addEventListener('fetch', event => {
-  const req = event.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  const req = event.request, url = new URL(req.url);
+  // Titan's server addresses (/api/...) are left to the browser: their answers are live,
+  // and Yahoo's sign-in comes back through one that answers with a redirect, which a
+  // service worker can't hand to a page load (Chrome shows ERR_FAILED).
+  if (req.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
   // A navigation request can't be re-issued with extra options, so page loads
   // fetch the URL itself.
   const fresh = req.mode === 'navigate'
