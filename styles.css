@@ -395,6 +395,8 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .who small { display: block; color: var(--muted); font-size: .78rem; }
 .who .warn { color: var(--swap); }
 .who .bad { color: var(--bad); font-weight: 600; }
+/* Game context under a player on Lineups: expected points, matchup and weather. */
+.who .gctx { font-size: .72rem; margin-top: 1px; white-space: normal; }
 .right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .rank { font-weight: 700; font-size: .9rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rank small { color: var(--muted); font-weight: 600; font-size: .72rem; margin-left: 5px; }

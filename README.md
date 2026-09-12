@@ -63,6 +63,11 @@ website (such as alerts) to pass review.
 
 ## Screens
 
+Each starter on Lineups carries his game's context: his team's expected points (from the betting
+line on ESPN's scoreboard), whether his matchup is soft or tough (the fantasy points his opponent
+gives up to his position, from nflverse's weekly stats), and weather worth knowing at kickoff (from
+the National Weather Service). Titan's server builds this once for everyone every half hour.
+
 The Standings tab shows each league's records, all-play records, luck, power rankings and every
 team's playoff odds (5,000 simulations of the games left). The Waivers tab gathers pickups for every
 league: your rankings' waiver targets, free backups for hurt starters, Sleeper's most-added players

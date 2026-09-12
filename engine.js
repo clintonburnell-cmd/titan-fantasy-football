@@ -368,6 +368,73 @@
     return out;
   }
 
+  /* ------------------------------------------------------------ game context */
+
+  var round1 = function (x) { return Math.round(x * 10) / 10; };
+  function ordinal(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+
+  // Each side's expected points from a game's betting line: the over/under split by the home
+  // team's spread (negative when the home team is favored). Null without a full line.
+  function impliedTotals(game) {
+    if (!game || game.total === null || game.total === undefined || game.spread === null || game.spread === undefined) return null;
+    return {home: round1((game.total - game.spread) / 2), away: round1((game.total + game.spread) / 2)};
+  }
+
+  /* Fantasy points (full PPR) each defense gives up to each position per game, from nflverse's
+     weekly player stats (rows as splitRows gives them, header first; regular season only),
+     ranked 1 (gives up the most: a soft matchup) down. {teams: {TEAM: {QB: {avg, rank}, ...}}, weeks}. */
+  var DVP_POS = {QB: 1, RB: 1, WR: 1, TE: 1};
+  function dvpFrom(rows) {
+    var h = (rows && rows[0]) || [], i = {};
+    h.forEach(function (c, k) { i[String(c).trim()] = k; });
+    if (['position', 'week', 'season_type', 'opponent_team', 'fantasy_points_ppr'].some(function (c) { return i[c] === undefined; })) return {teams: {}, weeks: 0};
+    var sum = {}, weeks = {};
+    for (var r = 1; r < rows.length; r++) {
+      var row = rows[r], pos = row[i.position], team = teamAbbr(row[i.opponent_team]), wk = row[i.week];
+      if (row[i.season_type] !== 'REG' || !DVP_POS[pos] || !team || !wk) continue;
+      weeks[wk] = 1;
+      var k = team + '|' + pos;
+      (sum[k] = sum[k] || {})[wk] = (sum[k][wk] || 0) + (Number(row[i.fantasy_points_ppr]) || 0);
+    }
+    var out = {};
+    Object.keys(DVP_POS).forEach(function (pos) {
+      Object.keys(sum).filter(function (k) { return k.split('|')[1] === pos; }).map(function (k) {
+        var v = Object.keys(sum[k]).map(function (w) { return sum[k][w]; });
+        return {team: k.split('|')[0], avg: v.reduce(function (a, b) { return a + b; }, 0) / v.length};
+      }).sort(function (a, b) { return b.avg - a.avg; }).forEach(function (x, n) {
+        (out[x.team] = out[x.team] || {})[pos] = {avg: round1(x.avg), rank: n + 1};
+      });
+    });
+    return {teams: out, weeks: Object.keys(weeks).length};
+  }
+
+  /* A player's game context for his row on Lineups ([{text, tone}]): who he plays (opts.opp),
+     his team's expected points (a defense: the opponent's), how soft or tough his matchup is
+     (the opponent's rank for points given up to his position: the top or bottom eight), and
+     weather worth knowing (wind from 15 mph, rain or snow from 50%, 25°F or colder). ctx is
+     the server's /api/game-context. */
+  function gameTags(ctx, p, opts) {
+    var t = ctx && ctx.teams && p && ctx.teams[teamAbbr(p.team)];
+    if (!t) return [];
+    var out = [], opp = ctx.teams[t.opp] || {}, n = 32;
+    if (opts && opts.opp) out.push({text: (t.home ? 'vs ' : '@ ') + t.opp, tone: ''});
+    if (p.pos === 'DEF') {
+      if (opp.implied) out.push({text: t.opp + ' expected ' + opp.implied + ' pts', tone: opp.implied <= 18 ? 'good' : opp.implied >= 26 ? 'amber' : ''});
+    } else if (t.implied) {
+      out.push({text: 'team expected ' + t.implied + ' pts', tone: t.implied >= 27 ? 'good' : t.implied <= 18 ? 'amber' : ''});
+    }
+    var d = ctx.dvp && ctx.dvp[t.opp] && ctx.dvp[t.opp][p.pos];
+    if (d && d.rank <= 8) out.push({text: 'soft matchup: ' + t.opp + ' gives up the ' + ordinal(d.rank) + ' most to ' + p.pos + 's', tone: 'good'});
+    else if (d && d.rank > n - 8) out.push({text: 'tough matchup: ' + t.opp + ' gives up the ' + ordinal(n + 1 - d.rank) + ' fewest to ' + p.pos + 's', tone: 'amber'});
+    var w = t.weather;
+    if (w) {
+      if (w.wind >= 15) out.push({text: 'wind ' + w.wind + ' mph', tone: 'amber'});
+      if (w.precip >= 50) out.push({text: (/snow/i.test(w.text || '') ? 'snow ' : 'rain ') + w.precip + '%', tone: 'amber'});
+      if (typeof w.temp === 'number' && w.temp <= 25) out.push({text: w.temp + '° at kickoff', tone: 'amber'});
+    }
+    return out;
+  }
+
   /* ------------------------------------------------------------ standings */
 
   // A seeded random number source (mulberry32), so the same league gives the same odds every time.
@@ -1749,6 +1816,7 @@
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict,
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas,
+    impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,

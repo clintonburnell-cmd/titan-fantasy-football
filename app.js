@@ -108,7 +108,8 @@
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
-    waiv: {trend: null, busy: false, error: '', faab: {}, q: ''}
+    waiv: {trend: null, busy: false, error: '', faab: {}, q: ''},
+    ctx: {busy: false, at: 0, data: null} // game context on Lineups rows (/api/game-context)
   };
   if (!TABS.includes(S.ui.tab)) S.ui.tab = 'lineups';
   // An address like /app/matchup opens that screen.
@@ -591,7 +592,10 @@
       h += `<div class="empty-note">${pickF.id === 'action' ? 'Nothing to do. Every lineup matches your rankings.'
         : `No leagues with ${esc(pickF.label.toLowerCase())} right now.`}</div>`;
     }
-    const credit = Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper.</p>' : '';
+    if (!S.ctx.busy && Date.now() - S.ctx.at > CONTEXT_EVERY) loadContext();
+    const C = S.ctx.data, credit = Object.keys(S.proj).length || C ? `<p class="fine">${Object.keys(S.proj).length ? 'Projections via Sleeper. ' : ''}${C
+      ? `Game lines from ESPN, forecasts from the <a href="https://www.weather.gov" target="_blank" rel="noopener">National Weather Service</a>, and points
+        allowed by position from <a href="https://github.com/nflverse" target="_blank" rel="noopener">nflverse</a> (CC BY 4.0${C.dvpSeason ? ', ' + esc(C.dvpSeason) + ' season' : ''}).` : ''}</p>` : '';
     // Leagues sit two across on wide screens (.league-grid).
     return h + (list.length ? `<div class="league-grid">${list.map(leagueCard).join('')}</div>` : '') + credit;
   }
@@ -723,6 +727,28 @@
     return s ? ` · <span class="${p.outish ? 'bad' : 'warn'}">${esc(s)}</span>` : '';
   }
 
+  /* Game context for start/sit calls, from Titan's server (/api/game-context): each team's
+     expected points, how soft its matchup is by position, and weather worth knowing. Loaded
+     at most every half hour; the loader never draws synchronously. */
+  const CONTEXT_EVERY = 30 * 60000;
+  async function loadContext() {
+    S.ctx.busy = true;
+    try {
+      const res = await fetch('/api/game-context');
+      if (!res.ok) throw new Error('answered ' + res.status);
+      S.ctx.data = await res.json();
+    } catch (e) { /* no context this time: the rows just go without it */ }
+    S.ctx.at = Date.now();
+    S.ctx.busy = false;
+    if (S.ui.tab === 'lineups') render();
+  }
+
+  // A player's game context under his name (SCC.gameTags); who he plays only when his rankings don't say.
+  function ctxLine(p) {
+    const tags = SCC.gameTags(S.ctx.data, p, {opp: !p.opp});
+    return tags.length ? `<small class="gctx">${tags.map(t => `<span class="${t.tone}">${esc(t.text)}</span>`).join(' · ')}</small>` : '';
+  }
+
   function lineupRow(r, cfg) {
     if (!r.p) {
       return `<li class="row r-stop"><span class="slot">${esc(slotName(r.slot))}</span><span class="pphoto"><span class="hs"></span></span>
@@ -732,7 +758,7 @@
     const proj = projOf(p, cfg);
     const sub = [p.pos, p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
     return `<li class="row r-${v}"><span class="slot" data-pos="${esc(p.pos)}">${esc(slotName(r.slot))}</span>${headshot(p)}
-      <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small></span>
+      <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small>${ctxLine(p)}</span>
       <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : `<span class="verdict v-${v}">${esc(r.verdict)}</span>`}</span></li>`;
   }
 

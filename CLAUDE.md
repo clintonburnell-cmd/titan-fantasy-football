@@ -79,6 +79,12 @@ live site, so site changes reach it without a new upload. What's done and what's
   adjustment: a waiver pickup (`SCC.waiverValue`, about the 300th-best player) per spot freed. Trade
   ideas (`SCC.tradeIdeas`): fair 1-2 player trades that raise the value of your best starters
   (`lineupPoints` with values, not one week's projections), at most two per partner.
+- Game context on Lineups rows (`SCC.gameTags`) comes from the `gameContext` function at
+  `/api/game-context` (kept 30 minutes): ESPN's scoreboard lines (`ESPN.scoreboardFrom`,
+  `SCC.impliedTotals`), NWS forecasts at kickoff for outdoor US games (`STADIUMS` holds each home
+  stadium's spot; NWS needs a User-Agent), and points allowed by position (`SCC.dvpFrom` over
+  nflverse's `stats_player_week_<season>.csv.gz`, CC BY 4.0, credited on Lineups; last season's
+  until three weeks are played; Firestore `meta/dvp`, 12 hours).
 - The Waivers tab: rankings' wire targets (`L.wire`), free backups (`SCC.backupOf`), Sleeper's
   trending adds (`API.trendingAdds`) with where each is free (`L.takenNorm`), a search, and bids
   (`SCC.faabBid` from `API.leagueWaivers`: a Sleeper league's last six weeks of winning bids).

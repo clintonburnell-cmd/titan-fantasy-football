@@ -425,5 +425,101 @@ exports.espnNews = onRequest({region: 'us-central1', memory: '256MiB', maxInstan
   }
 });
 
-exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
+/* Game context for start/sit calls (the app's Lineups rows), one copy for everyone kept 30
+   minutes: each team's game this week from ESPN's scoreboard (opponent, kickoff, the betting
+   line and each side's expected points), the forecast at kickoff for outdoor games in the US
+   (the National Weather Service, public domain; each home stadium's spot from STADIUMS), and
+   the fantasy points each defense gives up to each position (nflverse's weekly player stats,
+   CC BY 4.0: last season's until three weeks of this one are played; kept 12 hours). */
+const STADIUMS = {
+  ARI: [33.5276, -112.2626], ATL: [33.7554, -84.4010], BAL: [39.2780, -76.6227], BUF: [42.7738, -78.7870], CAR: [35.2258, -80.8528],
+  CHI: [41.8623, -87.6167], CIN: [39.0955, -84.5161], CLE: [41.5061, -81.6995], DAL: [32.7473, -97.0945], DEN: [39.7439, -105.0201],
+  DET: [42.3400, -83.0456], GB: [44.5013, -88.0622], HOU: [29.6847, -95.4107], IND: [39.7601, -86.1639], JAX: [30.3239, -81.6373],
+  KC: [39.0489, -94.4839], LV: [36.0909, -115.1833], LAC: [33.9535, -118.3392], LAR: [33.9535, -118.3392], MIA: [25.9580, -80.2389],
+  MIN: [44.9737, -93.2575], NE: [42.0909, -71.2643], NO: [29.9511, -90.0812], NYG: [40.8135, -74.0745], NYJ: [40.8135, -74.0745],
+  PHI: [39.9008, -75.1675], PIT: [40.4468, -80.0158], SF: [37.4033, -121.9694], SEA: [47.5952, -122.3316], TB: [27.9759, -82.5033],
+  TEN: [36.1665, -86.7713], WAS: [38.9077, -76.8645]
+};
+const NWS = 'https://api.weather.gov';
+const NWS_HEADERS = {'User-Agent': 'TitanFantasyFootball (gainalphatrading@gmail.com)', Accept: 'application/geo+json'};
+const NFLVERSE = 'https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_';
+const CONTEXT_KEEP = 30 * 60 * 1000, DVP_KEEP = 12 * 3600 * 1000;
+let contextCache = null, dvpCache = null;
+const hourlyAt = {}; // each stadium's hourly-forecast address, which doesn't change
+
+async function nwsJson(url) {
+  const res = await fetch(url, {headers: NWS_HEADERS});
+  if (!res.ok) throw new Error('NWS answered ' + res.status);
+  return res.json();
+}
+
+// The forecast hour covering a kickoff at a team's stadium: {temp (°F), wind (mph, the top of the range), precip (%), text}, or null.
+async function kickoffWeather(team, at, get = nwsJson) {
+  const spot = STADIUMS[team];
+  if (!spot) return null;
+  if (!hourlyAt[team]) hourlyAt[team] = (await get(`${NWS}/points/${spot[0]},${spot[1]}`)).properties.forecastHourly;
+  const periods = (((await get(hourlyAt[team])) || {}).properties || {}).periods || [];
+  const p = periods.find(x => Date.parse(x.startTime) <= at && at < Date.parse(x.endTime));
+  if (!p) return null;
+  const winds = (String(p.windSpeed || '').match(/\d+/g) || []).map(Number);
+  return {temp: p.temperatureUnit === 'C' ? Math.round(p.temperature * 9 / 5 + 32) : p.temperature, wind: winds.length ? Math.max(...winds) : 0,
+    precip: (p.probabilityOfPrecipitation || {}).value || 0, text: p.shortForecast || ''};
+}
+
+async function csvGz(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(url + ' answered ' + res.status);
+  return zlib.gunzipSync(Buffer.from(await res.arrayBuffer())).toString('utf8');
+}
+
+// Points allowed by position (SCC.dvpFrom) for a season, or last season's until three weeks are in.
+async function dvpFor(season, now = Date.now(), get = csvGz, doc = db.doc('meta/dvp')) {
+  if (dvpCache && dvpCache.season === season && now - dvpCache.at < DVP_KEEP) return dvpCache;
+  const saved = (await doc.get()).data();
+  if (saved && saved.season === season && now - saved.at < DVP_KEEP) return (dvpCache = saved);
+  try {
+    let d = null, from = season;
+    try { d = SCC.dvpFrom(SCC.splitRows(await get(`${NFLVERSE}${season}.csv.gz`))); } catch (e) { d = null; }
+    if (!d || d.weeks < 3) { from = season - 1; d = SCC.dvpFrom(SCC.splitRows(await get(`${NFLVERSE}${from}.csv.gz`))); }
+    const out = {season, from, weeks: d.weeks, at: now, teams: d.teams};
+    await doc.set(out);
+    return (dvpCache = out);
+  } catch (e) {
+    if (saved) return (dvpCache = saved);
+    throw e;
+  }
+}
+
+async function buildContext(now = Date.now(), deps = {}) {
+  if (contextCache && now - contextCache.at < CONTEXT_KEEP) return contextCache;
+  const board = await (deps.scoreboard || ESPN.fetchScoreboard)();
+  const weather = deps.weather || kickoffWeather, teams = {};
+  await Promise.all(board.games.map(async g => {
+    const imp = SCC.impliedTotals(g);
+    const forecast = !g.indoor && !g.neutral && g.country === 'USA' && g.state === 'pre' && g.kickoff > now && g.kickoff - now < 6 * 24 * 3600 * 1000;
+    const w = forecast ? await weather(g.home, g.kickoff).catch(() => null) : null;
+    const side = (opp, home) => ({opp, home, kickoff: g.kickoff, spread: g.spread === null ? null : home ? g.spread : -g.spread,
+      total: g.total, implied: imp ? (home ? imp.home : imp.away) : null, indoor: g.indoor, weather: w});
+    teams[g.home] = side(g.away, true);
+    teams[g.away] = side(g.home, false);
+  }));
+  let d = null;
+  try { d = await (deps.dvp || dvpFor)(board.season || new Date(now).getUTCFullYear(), now); }
+  catch (e) { logger.warn('points allowed unavailable: ' + e.message); }
+  return (contextCache = {at: now, season: board.season, week: board.week, teams,
+    dvp: d ? d.teams : null, dvpSeason: d ? d.from : null, dvpWeeks: d ? d.weeks : 0});
+}
+
+exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInstances: 3, timeoutSeconds: 120, invoker: 'public'}, async (req, res) => {
+  try {
+    const out = await buildContext();
+    res.set('Cache-Control', 'public, max-age=900, s-maxage=1800');
+    res.json(out);
+  } catch (e) {
+    logger.warn('game context unavailable: ' + e.message);
+    res.status(502).json({error: 'Game context is unavailable right now.'});
+  }
+});
+
+exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
   setSend: fn => { sendPush = fn; }};

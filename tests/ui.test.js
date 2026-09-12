@@ -46,6 +46,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       links: {web: {href: 'https://www.espn.com/nfl/story/_/id/102'}}, categories: [{type: 'athlete', athleteId: 2, description: 'Somebody Else'}]}]});
   const server = http.createServer((req, res) => {
     const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    // Titan's /api/game-context: every test team expects 28.5 points, with a windy forecast.
+    if (u === '/api/game-context') {
+      const abbrs = [...new Set(inLeague.map(p => p.team).filter(Boolean))];
+      res.writeHead(200, {'content-type': 'application/json'});
+      return res.end(JSON.stringify({at: Date.now(), season: 2026, week: 1, dvpSeason: 2025, dvp: {}, teams: Object.fromEntries(abbrs.map((t, i) =>
+        [t, {opp: abbrs[(i + 1) % abbrs.length], home: i % 2 === 0, implied: 28.5, weather: {temp: 60, wind: 20, precip: 0, text: 'Sunny'}}]))}));
+    }
     // Titan's /api/news: the stand-in stories, trimmed the way the server trims ESPN's.
     if (u === '/api/news') {
       res.writeHead(200, {'content-type': 'application/json'});
@@ -299,6 +306,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check(await waitFor(`document.querySelectorAll('.trade-sum .tchip').length >= 2 && /Fair/.test((document.querySelector('.trade-sum .tverdict') || {}).textContent || '')`, 3000),
       'opening an idea fills in the trade, and it checks out as fair: ' + await text('.trade-sum .tverdict'));
   }
+
+  T.section('game context on Lineups');
+  await tab('lineups');
+  check(await waitFor(`[...document.querySelectorAll('.lineup .gctx')].some(s => /team expected 28.5 pts/.test(s.textContent) && /wind 20 mph/.test(s.textContent))`, 10000),
+    'each starter shows his team\'s expected points and windy weather: ' + await ev(`((document.querySelector('.lineup .gctx') || {}).textContent || 'none').trim()`));
+  check(await ev(`/nflverse/.test(document.getElementById('view').textContent) && !!document.querySelector('a[href="https://github.com/nflverse"]')`),
+    'ESPN, the National Weather Service and nflverse are credited');
 
   T.section('the Waivers tab');
   await tab('waivers');

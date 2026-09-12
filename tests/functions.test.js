@@ -173,6 +173,32 @@ function fakeUser(db) {
   check(nReads === 2 && l1.stories.length === 1 && l2.at === t0n && l3.at === t0n + 100000 && l4.at === l3.at,
     'the News tab\'s feed: one read of ESPN is shared for 90 seconds, and the last copy serves if ESPN is down');
 
+  section('game context');
+  const nwsGet = async url => /\/points\//.test(url) ? {properties: {forecastHourly: 'https://api.weather.gov/gridpoints/BUF/1,1/forecast/hourly'}}
+    : {properties: {periods: [{startTime: '2026-09-13T12:00:00-04:00', endTime: '2026-09-13T13:00:00-04:00', temperature: 48, temperatureUnit: 'F',
+      windSpeed: '10 to 20 mph', shortForecast: 'Rain', probabilityOfPrecipitation: {value: 80}}]}};
+  const kw = await job.kickoffWeather('BUF', Date.parse('2026-09-13T16:30:00Z'), nwsGet);
+  check(kw && kw.temp === 48 && kw.wind === 20 && kw.precip === 80 && kw.text === 'Rain' && await job.kickoffWeather('XYZ', 0, nwsGet) === null,
+    'the forecast hour covering kickoff: temperature, the top of the wind range, chance of rain');
+  const cur = 'position,season_type,week,opponent_team,fantasy_points_ppr\nRB,REG,1,MIA,20\n';
+  const prev = 'position,season_type,week,opponent_team,fantasy_points_ppr\nRB,REG,1,MIA,20\nRB,REG,2,MIA,10\nRB,REG,3,BUF,5\n';
+  let dvpSaved = null;
+  const dvpDoc = {get: async () => ({data: () => dvpSaved}), set: async v => { dvpSaved = v; }};
+  const gcNow = Date.parse('2026-09-12T12:00:00Z');
+  const d1 = await job.dvpFor(2026, gcNow, async url => /2026/.test(url) ? cur : prev, dvpDoc);
+  check(d1.from === 2025 && d1.weeks === 3 && d1.teams.MIA.RB.rank === 1 && dvpSaved && dvpSaved.season === 2026,
+    'with under three weeks of this season, last season\'s points allowed, saved for the next 12 hours');
+  const gcBoard = {season: 2026, week: 1, games: [
+    {id: '1', kickoff: Date.parse('2026-09-13T17:00:00Z'), home: 'BUF', away: 'MIA', indoor: false, country: 'USA', neutral: false, state: 'pre', spread: -6, total: 44},
+    {id: '2', kickoff: Date.parse('2026-09-13T17:00:00Z'), home: 'DET', away: 'NO', indoor: true, country: 'USA', neutral: false, state: 'pre', spread: -7, total: 49.5},
+    {id: '3', kickoff: Date.parse('2026-09-13T13:30:00Z'), home: 'LAR', away: 'SF', indoor: false, country: 'Australia', neutral: true, state: 'pre', spread: null, total: null}]};
+  const forecasts = [];
+  const gc = await job.buildContext(gcNow, {scoreboard: async () => gcBoard, weather: async team => { forecasts.push(team); return {temp: 55, wind: 22, precip: 10, text: 'Windy'}; },
+    dvp: async () => ({from: 2025, weeks: 18, teams: {MIA: {RB: {avg: 25, rank: 2}}}})});
+  check(gc.teams.BUF.implied === 25 && gc.teams.MIA.implied === 19 && gc.teams.BUF.spread === -6 && gc.teams.MIA.spread === 6 && gc.teams.MIA.opp === 'BUF' &&
+    gc.teams.BUF.weather.wind === 22 && gc.teams.DET.weather === null && gc.teams.SF.implied === null && forecasts.join() === 'BUF' &&
+    gc.dvp.MIA.RB.rank === 2 && gc.dvpSeason === 2025, 'each team\'s line and expected points; a forecast only for outdoor games in the US; points allowed');
+
   const pid = Object.keys(lg.players)[0], wasLocked = lg.players[pid].locked;
   db.history['1'].leagues['espn:99999901'].players[pid].rank = -7;
   await job.freezeForUser(fakeUser(db), account, ctx);

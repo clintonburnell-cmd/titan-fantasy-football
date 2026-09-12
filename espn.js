@@ -301,6 +301,31 @@
 
   /* Kickoff times for every NFL game of the season, from ESPN's public NFL
      schedule: {team: {week: [kickoff time in ms, time still to be set]}}. */
+  /* This week's NFL games from ESPN's public scoreboard, for game context: kickoff, teams
+     (Titan's abbreviations), where (indoors, country, neutral site), the game's state, and
+     the betting line when ESPN has one (the home team's spread, negative when it's favored,
+     and the over/under). */
+  var SCOREBOARD = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
+  async function fetchScoreboard() {
+    var res = await fetch(SCOREBOARD);
+    if (!res.ok) throw new Error('ESPN scoreboard answered ' + res.status);
+    return scoreboardFrom(await res.json());
+  }
+
+  function scoreboardFrom(json) {
+    var num = function (x) { return x === undefined || x === null || x === '' || isNaN(Number(x)) ? null : Number(x); };
+    var games = ((json && json.events) || []).map(function (e) {
+      var c = (e.competitions || [])[0] || {}, v = c.venue || {}, o = (c.odds || [])[0] || null;
+      var side = function (k) { return (c.competitors || []).filter(function (t) { return t.homeAway === k; })[0]; };
+      var h = side('home'), a = side('away');
+      if (!h || !a || !h.team || !a.team) return null;
+      return {id: String(e.id || ''), kickoff: Date.parse(e.date) || 0, home: SCC.teamAbbr(h.team.abbreviation), away: SCC.teamAbbr(a.team.abbreviation),
+        indoor: !!v.indoor, country: (v.address || {}).country || '', neutral: !!c.neutralSite, state: ((c.status || {}).type || {}).state || '',
+        spread: o ? num(o.spread) : null, total: o ? num(o.overUnder) : null};
+    }).filter(Boolean);
+    return {season: Number(json && json.season && json.season.year) || 0, week: Number(json && json.week && json.week.number) || 0, games: games};
+  }
+
   /* A league's regular-season schedule and scores, for the Standings tab. readSchedule
      gets ESPN's JSON (with a saved login on the server); fetchSchedule (the app) reads it,
      or asks Titan's server for a private league (kind 'schedule', which answers with
@@ -454,6 +479,7 @@
     fetchPoints: fetchPoints, pointsFromBoxscore: pointsFromBoxscore, fetchKickoffs: fetchKickoffs, kickoffsFrom: kickoffsFrom,
     fetchMatchup: fetchMatchup, matchupFrom: matchupFrom, toSleeper: toSleeper, fetchNews: fetchNews, newsFrom: newsFrom,
     readSchedule: readSchedule, fetchSchedule: fetchSchedule, scheduleFrom: scheduleFrom, slimSchedule: slimSchedule,
+    fetchScoreboard: fetchScoreboard, scoreboardFrom: scoreboardFrom,
     SLOT: SLOT, POS: POS, TEAM: TEAM
   };
 
