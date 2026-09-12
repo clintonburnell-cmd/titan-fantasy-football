@@ -31,14 +31,21 @@ const pre = SCC.standings(teams, games.map(x => Object.assign({}, x, {done: fals
 check(pre.teams.find(t => t.id === 'A').powerRank === 1 && pre.teams.every(t => t.games === 0 && t.luck === 0) &&
   pre.teams.find(t => t.id === 'A').playoffs > pre.teams.find(t => t.id === 'D').playoffs, 'before any games, power and odds follow the projections');
 
+section('team names');
+check(SCC.teamLabel('Gridiron Gang', 'clintb') === 'Gridiron Gang (clintb)', 'a nickname with the account name after it');
+check(SCC.teamLabel('', 'clintb') === 'clintb' && SCC.teamLabel('ClintB', 'clintb') === 'ClintB', 'no nickname, or one repeating the account: the name once');
+check(SCC.teamLabel('Gridiron Gang', '') === 'Gridiron Gang' && SCC.teamLabel('', '', 'Team 4') === 'Team 4', 'no account name: the nickname; neither: the fallback');
+
 section('ESPN schedules');
+const uno = '{00000001-AAAA-4BBB-8CCC-DDDDDDDDDDDD}';
 const json = {settings: {scheduleSettings: {matchupPeriodCount: 2, playoffTeamCount: 4}},
-  teams: [{id: 1, location: 'Team', nickname: 'One'}, {id: 2, location: 'Team', nickname: 'Two'}],
+  members: [{id: uno, displayName: 'Uno'}],
+  teams: [{id: 1, location: 'Team', nickname: 'One', owners: [uno]}, {id: 2, location: 'Team', nickname: 'Two'}],
   schedule: [{matchupPeriodId: 1, winner: 'HOME', home: {teamId: 1, totalPoints: 101}, away: {teamId: 2, totalPoints: 99}},
     {matchupPeriodId: 2, winner: 'UNDECIDED', home: {teamId: 2, totalPoints: 0}, away: {teamId: 1, totalPoints: 0}},
     {matchupPeriodId: 3, winner: 'UNDECIDED', home: {teamId: 1}, away: {teamId: 2}}, {matchupPeriodId: 1, home: {teamId: 3}}]};
 const es = ESPN.scheduleFrom(ESPN.slimSchedule(json), 2);
-check(es.teams.length === 2 && es.teams[0].name === 'Team One' && es.games.length === 2 && es.games[0].done && !es.games[1].done &&
+check(es.teams.length === 2 && es.teams[0].name === 'Team One (Uno)' && es.teams[1].name === 'Team Two' && es.games.length === 2 && es.games[0].done && !es.games[1].done &&
   es.games[0].aPts === 101 && es.playoffTeams === 4, 'regular-season games with scores, trimmed the way the server sends them; byes and playoff weeks left out');
 
 section('a Sleeper league\'s schedule');
@@ -56,7 +63,7 @@ section('a Sleeper league\'s schedule');
     return new Response(JSON.stringify(k ? replies[k] : []), {status: 200});
   };
   const s = await API.leagueSchedule({id: '9', playoffStart: 4, playoffTeams: 4}, '2026', 2);
-  check(s.teams.map(t => t.name).join() === 'Me,Pat\'s Team' && s.games.length === 2 && s.games[0].done && s.games[0].aPts === 110.5 &&
+  check(s.teams.map(t => t.name).join() === 'Me,Pat\'s Team (Pat)' && s.games.length === 2 && s.games[0].done && s.games[0].aPts === 110.5 &&
     !s.games[1].done && s.playoffTeams === 4 && asked.filter(u => /matchups/.test(u)).length === 3,
     'each week up to the playoffs, a week before this one counts as played, and names come from the members');
   T.done();

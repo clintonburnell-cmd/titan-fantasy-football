@@ -89,9 +89,9 @@ section('a dynasty Sleeper league\'s teams and picks');
   };
   const teams = await API.leagueTeams({id: '42', kind: 'Dynasty', rounds: 3, lineup: ['QB']}, 1, '2026');
   const me = teams.find(t => t.mine), pat = teams.find(t => !t.mine);
-  check(teams.length === 2 && me.name === 'Me' && pat.name === 'Pat\'s Team' && me.roster[1].held && pat.roster[1].held && !me.roster[0].held,
-    'both teams, named as Sleeper shows them, with IR and taxi players marked');
-  check(me.picks.length === 10 && pat.picks.length === 8 && me.picks.some(p => p.id === 'pick:2027:1:2' && p.via === 'Pat\'s Team') && me.picks[0].season === '2027',
+  check(teams.length === 2 && me.name === 'Me' && pat.name === 'Pat\'s Team (Pat)' && me.roster[1].held && pat.roster[1].held && !me.roster[0].held,
+    'both teams, named team name (account name), with IR and taxi players marked');
+  check(me.picks.length === 10 && pat.picks.length === 8 && me.picks.some(p => p.id === 'pick:2027:1:2' && p.via === 'Pat\'s Team (Pat)') && me.picks[0].season === '2027',
     `3 rounds of each of the next three drafts, plus the 1st traded from Pat's Team (${me.picks.length} and ${pat.picks.length})`);
   const red = await API.leagueTeams({id: '43', kind: 'Redraft', lineup: ['QB']}, 1, '2026');
   check(!red[0].picks && !asked.some(u => /43\/traded_picks/.test(u)), 'a redraft league has no picks and doesn\'t ask for them');

@@ -139,6 +139,10 @@ live site, so site changes reach it without a new upload. What's done and what's
   promised features in a listing as misleading). The website says Yahoo is coming soon, at the
   owner's request (2026-09-11): its title, a Yahoo card and the FAQ. Keep that wording honest until
   Yahoo leagues work.
+- Team names: every fantasy team, on every tab and both platforms, reads "Nickname (account name)"
+  from `SCC.teamLabel` (Sleeper's `team_name` and `display_name`; ESPN's team name and member name),
+  or the account name alone when there's no nickname. Build new team names with it, and don't add
+  the manager again where one is shown. `slimSchedule` keeps the members so private ESPN leagues get them.
 - Visit counts: Cloudflare Web Analytics, loaded by `stats.js` on the website's pages only (home,
   guides, privacy, terms; a new website page gets the tag too, and `tests/stats.test.js` checks).
   `counts` keeps it off `/app/`, the Play app (`?source=play`, the android-app referrer, `titan.play`),

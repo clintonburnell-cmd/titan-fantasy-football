@@ -165,6 +165,8 @@ app page. Screens show placeholder cards while they load.
   (`winProbability` in `engine.js`).
 - **Folded leagues are remembered per tab.** Lineups and Rosters start open, Matchup
   starts folded; only a person's own taps are saved, not the search opening a league.
+- **Team names read "Nickname (account name)"** on every tab, in Sleeper and ESPN leagues alike
+  (`teamLabel` in `engine.js`). A team without a nickname shows the account name alone.
 - **Saved data carries a version.** An older snapshot on a device is refreshed on open,
   so a new field (like kickoff times) never waits for a manual refresh.
 

@@ -452,7 +452,7 @@
       ESPN.teamsOf(r.json).forEach(function (t) { names[t.id] = t; });
       return (r.json.teams || []).map(function (t) {
         var d = ESPN.buildLeague(Object.assign({}, lg, {teamId: t.id}), r.json, players), n = names[t.id] || {};
-        return {id: String(t.id), name: n.name || ('Team ' + t.id), manager: n.manager || '', mine: t.id === lg.teamId,
+        return {id: String(t.id), name: SCC.teamLabel(n.name, n.manager, 'Team ' + t.id), manager: n.manager || '', mine: t.id === lg.teamId,
           roster: (d.roster || []).map(slim)};
       });
     }
@@ -469,7 +469,7 @@
     var teams = rosters.map(function (x) {
       var u = who[x.owner_id] || {}, held = {};
       (x.reserve || []).concat(x.taxi || []).forEach(function (id) { held[String(id)] = 1; });
-      return {id: String(x.roster_id), name: (u.metadata && u.metadata.team_name) || u.display_name || ('Team ' + x.roster_id),
+      return {id: String(x.roster_id), name: SCC.teamLabel(u.metadata && u.metadata.team_name, u.display_name, 'Team ' + x.roster_id),
         manager: u.display_name || '', mine: x.roster_id === rosterId,
         roster: (x.players || []).map(function (id) {
           var info = SCC.playerInfo(players, id);
@@ -510,7 +510,7 @@
     (got[1] || []).forEach(function (u) { who[u.user_id] = u; });
     (got[0] || []).forEach(function (r) {
       var u = who[r.owner_id] || {};
-      names[r.roster_id] = (u.metadata && u.metadata.team_name) || u.display_name || ('Team ' + r.roster_id);
+      names[r.roster_id] = SCC.teamLabel(u.metadata && u.metadata.team_name, u.display_name, 'Team ' + r.roster_id);
     });
     got.slice(2).forEach(function (list) { all = all.concat(list || []); });
     all.forEach(function (t) { ids = ids.concat(Object.keys(t.adds || {}), Object.keys(t.drops || {})); });
@@ -568,7 +568,7 @@
     });
     return {teams: (got[0] || []).map(function (x) {
       var u = who[x.owner_id] || {};
-      return {id: String(x.roster_id), name: (u.metadata && u.metadata.team_name) || u.display_name || ('Team ' + x.roster_id)};
+      return {id: String(x.roster_id), name: SCC.teamLabel(u.metadata && u.metadata.team_name, u.display_name, 'Team ' + x.roster_id)};
     }), games: games, playoffTeams: Number(lg.playoffTeams) || 6};
   }
 
@@ -587,7 +587,7 @@
       rec[r.roster_id] = (s.wins || 0) + '-' + (s.losses || 0) + (s.ties ? '-' + s.ties : '');
     });
     (users || []).forEach(function (u) {
-      who[u.user_id] = (u.metadata && u.metadata.team_name) || u.display_name || '';
+      who[u.user_id] = SCC.teamLabel(u.metadata && u.metadata.team_name, u.display_name);
       pic[u.user_id] = u.avatar || '';
     });
     var side = function (m) {

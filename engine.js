@@ -1845,8 +1845,18 @@
     return t === 'Out' ? 'out' : t === 'Doubtful' ? 'doubtful' : t === 'IR' ? 'on IR' : t === 'Sus' ? 'suspended' : 'ruled out (' + tag + ')';
   }
 
+  /* A fantasy team as Titan names it on every tab: the team's nickname with the
+     manager's account name after it, "Gridiron Gang (clintb)". A team without a
+     nickname (or one that only repeats the account name) shows the account name
+     alone, and a team with neither shows `fallback`. */
+  function teamLabel(nick, account, fallback) {
+    var n = String(nick || '').trim(), a = String(account || '').trim();
+    if (n && a && n.toLowerCase() !== a.toLowerCase()) return n + ' (' + a + ')';
+    return n || a || fallback || '';
+  }
+
   var api = {
-    INJ_OUT: INJ_OUT, WIRE_GROUPS: WIRE_GROUPS, SLOT_POS: SLOT_POS,
+    INJ_OUT: INJ_OUT, WIRE_GROUPS: WIRE_GROUPS, SLOT_POS: SLOT_POS, teamLabel: teamLabel,
     norm: norm, teamAbbr: teamAbbr, byeOf: byeOf, byesFromSchedule: byesFromSchedule, setByes: setByes,
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,

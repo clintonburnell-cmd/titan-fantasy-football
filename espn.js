@@ -262,7 +262,7 @@
 
   function matchupFrom(json, teamId) {
     var names = {}, recs = {}, found = null;
-    teamsOf(json).forEach(function (t) { names[t.id] = t.name; });
+    teamsOf(json).forEach(function (t) { names[t.id] = SCC.teamLabel(t.name, t.manager); });
     (json.teams || []).forEach(function (t) {
       var o = t.record && t.record.overall;
       if (o) recs[t.id] = (o.wins || 0) + '-' + (o.losses || 0) + (o.ties ? '-' + o.ties : '');
@@ -360,7 +360,7 @@
         aPts: Number(m.home.totalPoints) || 0, bPts: Number(m.away.totalPoints) || 0,
         done: m.winner ? m.winner !== 'UNDECIDED' : Number(m.matchupPeriodId) < Number(week)});
     });
-    return {teams: teamsOf(json || {}).map(function (t) { return {id: String(t.id), name: t.name}; }), games: games,
+    return {teams: teamsOf(json || {}).map(function (t) { return {id: String(t.id), name: SCC.teamLabel(t.name, t.manager)}; }), games: games,
       playoffTeams: Number(sched.playoffTeamCount) || 6};
   }
 
@@ -375,7 +375,10 @@
       teams: ((json && json.teams) || []).map(function (t) {
         return {id: t.id, name: t.name || '', location: t.location || '', nickname: t.nickname || '', owners: t.owners || []};
       }),
-      members: []
+      // Members name each team's manager: "Team name (account name)" on Standings.
+      members: ((json && json.members) || []).map(function (m) {
+        return {id: m.id, displayName: m.displayName || '', firstName: m.firstName || '', lastName: m.lastName || ''};
+      })
     };
   }
 

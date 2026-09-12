@@ -22,7 +22,7 @@ const {check, section} = T;
     {roster_id: 7, owner_id: 'other'}];
   const users = [{user_id: 'me', display_name: 'Me', metadata: {}, avatar: 'abc123'}, {user_id: 'them', display_name: 'Rival', metadata: {team_name: 'The Rivals'}}];
   const m = API.sleeperMatchup(lg, 4, matchups, rosters, users, players);
-  check(m.me.name === 'Me' && m.opp.name === 'The Rivals', 'both sides named, a team name ahead of a display name');
+  check(m.me.name === 'Me' && m.opp.name === 'The Rivals (Rival)', 'both sides named: team name (account name), or the account name alone');
   check(m.me.record === '1-0' && m.opp.record === '0-1-1' && m.me.avatar === 'abc123' && m.opp.avatar === '', 'records and avatars, like Sleeper\'s scoreboard');
   check(m.opp.players.length === 3 && m.opp.players[2].id === ids[4] && m.opp.players[2].slot === 'FLEX' && m.opp.players[2].pts === 3.2,
     'the opponent\'s starters in lineup order, with points');
@@ -35,7 +35,7 @@ const {check, section} = T;
   const {league: L1} = await T.espnLeagues();
   const box = T.espnBoxscore(L1);
   const em = ESPN.matchupFrom(box, 1);
-  check(em && em.me.teamId === 1 && em.opp.teamId === 2 && em.me.name === 'Team 1' && em.opp.name === 'Team 2', 'team 1 plays team 2, both named');
+  check(em && em.me.teamId === 1 && em.opp.teamId === 2 && em.me.name === 'Team 1 (Manager 1)' && em.opp.name === 'Team 2 (Manager 2)', 'team 1 plays team 2, both named with their managers');
   check(em.opp.players.length === 16 && em.opp.players.filter(p => p.start).length === 9, 'the opponent\'s roster: 16 players, 9 starting');
   check(ESPN.matchupFrom(box, 9).opp.teamId === 10 && ESPN.matchupFrom({schedule: [{home: {teamId: 1}}]}, 1) === null, 'either side found; a bye is no matchup');
   ESPN.toSleeper(em.opp.players, players);

@@ -44,7 +44,7 @@ section('loading a league\'s moves');
     return new Response(JSON.stringify(k ? replies[k] : []), {status: 200});
   };
   const got = await API.leagueTransactions({id: '9'}, 1, 2, 3);
-  check(got.length === 3 && got[1].sides.find(s => s.roster === '2').name === 'Pat\'s Team' &&
+  check(got.length === 3 && got[1].sides.find(s => s.roster === '2').name === 'Pat\'s Team (Pat)' &&
     asked.filter(u => /transactions/.test(u)).map(u => u.split('/').pop()).join() === '1,2', 'each week so far, team names from the members');
   T.done();
 })().catch(T.crash);

@@ -2151,7 +2151,7 @@
           `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('')}</select></label>
         <label class="field"><span>Trade partner</span><select data-ui="tradePartner"${teams.length ? '' : ' disabled'}>
           <option value="">Pick a team</option>${teams.filter(t => !t.mine).map(t => `<option value="${esc(t.id)}"${t === partner ? ' selected' : ''}>${
-            esc(t.name)}${t.manager && t.manager !== t.name ? ' (' + esc(t.manager) + ')' : ''}</option>`).join('')}</select></label>
+            esc(t.name)}</option>`).join('')}</select></label>
       </div>
       <p class="fine">Values for ${esc(formatName(f))}: what players like these go for in real trades.</p>`;
     const retry = '<button class="link" data-action="trade-retry">Try again</button>';
