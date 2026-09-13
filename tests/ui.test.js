@@ -319,7 +319,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     hidden: getComputedStyle(d.querySelector('.mh-score')).display === 'none', fits: d.scrollWidth <= d.clientWidth + 1,
     yet: [...d.querySelectorAll('.mpts-col.yet small')].every(s => s.innerText === 'proj')}; })()`);
   check(sb.pts === 2 && sb.hidden && sb.fits && sb.yet, 'opened, one scoreboard with both scores (the header\'s score row steps aside), nothing cut off, players still to play showing their projection');
-  check(mu.tabs === 'Lineups | Matchup | League | Players | Rankings', `five sections (${mu.tabs})`);
+  check(mu.tabs === 'Lineups | Matchup | League | Players | Rankings | Results', `six sections (${mu.tabs})`);
   const addr = await ev(`({path: location.pathname, title: document.title})`);
   check(addr.path === '/app/matchup' && /^Matchup · Titan/.test(addr.title), `each screen has its own address and title (${addr.path}, "${addr.title}")`);
   await ev('history.back(), true');
@@ -351,6 +351,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`document.querySelector('[data-action="fold-none"][data-kind="score"]').click(); true`);
   check(scoreOpen && await ev(`[...document.querySelectorAll('details.score')].every(d => !d.open)`),
     'Results has Expand all and Collapse all, like the other tabs');
+  const rs = await ev(`({pts: !!document.querySelector('.wsum-pts b'), res: [...document.querySelectorAll('details.score .sres')].map(s => s.innerText),
+    ahead: document.querySelectorAll('.wstep [data-sweek]')[1].disabled, help: !!document.querySelector('.results-help'),
+    fits: document.documentElement.scrollWidth <= innerWidth, sec: document.querySelector('#tabs .sec-btn[data-tab="score"]').getAttribute('aria-current')})`);
+  check(rs.pts && rs.res.length === 1 && /^(W|L|T|Winning|Losing|Tied) \d/.test(rs.res[0]) && rs.ahead && rs.help && rs.fits && rs.sec === 'page',
+    `Results is its own section: the week's points up top, won or lost in each league (${rs.res.join(', ')}), no arrow past this week, the explanations in one fold`);
+  await shot('results-espn-390');
+  await send('Page.navigate', {url: ORIGIN + '/app/results'});
+  check(await waitFor(`!!document.querySelector('.wsum-pts b')`, 30000), 'opened straight onto Results (its address, or a reload there), the week loads by itself');
 
   T.section('the Trade tab');
   await tab('trade');
@@ -564,6 +572,33 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`document.querySelectorAll('.msources li').length === 2 && document.querySelectorAll('.mweight')[0].value === '3'`, 5000),
     'back on Import multiple, the week\'s sources and weights are there to change');
 
+  if (process.env.TITAN_SHOTS) {
+    // Screenshots only: Season so far needs two weeks, so a made-up week 0 stands in beside week 1 (removed after).
+    await ev(`(() => { const a = JSON.parse(localStorage.getItem('titan.account.v1')), s = JSON.parse(localStorage.getItem('titan.snapshot.v1'));
+      const cur = JSON.parse(localStorage.getItem('titan.season.v1') || 'null');
+      const weeks = Object.assign({}, cur && cur.weeks, {0: {week: 0, actual: 124.6, proj: 118.2, byRank: 130.1, perfect: 151.3, wins: 1, losses: 0, ties: 0, done: true, sig: ''}});
+      localStorage.setItem('titan.season.v1', JSON.stringify({season: s.season, user: String(a.userId || a.username || ''), weeks})); return true; })()`);
+    await send('Page.navigate', {url: ORIGIN + '/app/results'});
+    if (await waitFor(`!!document.querySelector('.season .sc-chart')`, 30000)) {
+      await ev(`document.querySelector('.season').scrollIntoView(); true`);
+      await sleep(300);
+      await shot('season-390');
+      await ev(`document.documentElement.dataset.theme = 'dark'; true`);
+      await sleep(200);
+      await shot('season-390-dark');
+      await send('Emulation.setDeviceMetricsOverride', {width: 1280, height: 900, deviceScaleFactor: 1, mobile: false});
+      await sleep(500);
+      await ev(`window.scrollTo(0, 0); true`);
+      await shot('results-1280-dark');
+      await ev(`delete document.documentElement.dataset.theme; true`);
+      await sleep(200);
+      await shot('results-1280');
+      await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 2, mobile: true});
+      await sleep(500);
+    } else T.skip('the season chart didn\'t draw for the screenshots');
+    await ev(`localStorage.removeItem('titan.season.v1'); true`);
+  }
+
   if (T.sleeperUser) {
     T.section('linking Sleeper as well');
     await tab('settings');
@@ -591,7 +626,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       'after importing rankings without defenses, those rankings win and DEF uses the defaults');
     await tab('score');
     check(await waitFor(`!!document.querySelector('details.score') || /has not kicked off/.test(document.body.innerText)`, 120000), 'the Results tab loads');
-    check(await ev(`document.querySelectorAll('[data-ui=scoreWeek] option').length === 18`), 'weeks 1 to 18 are listed');
+    check(await ev(`/^Week \\d+/.test((document.querySelector('.wstep h3') || {}).innerText || '') && document.querySelectorAll('.wstep [data-sweek]').length === 2`),
+      'a week at a time, with arrows to step through the weeks played');
+    await shot('results-390');
+    if (process.env.TITAN_SHOTS && await ev(`!!document.querySelector('details.score')`)) {
+      await ev(`document.querySelector('details.score > summary').click(); true`);
+      await sleep(300);
+      await shot('results-open-390');
+    }
     if (await ev(`!!document.querySelector('[data-action="ranks-view"]')`)) {
       await ev(`document.querySelector('[data-action="ranks-view"]').click(); true`);
       check(await waitFor(`!!document.getElementById('ranks-view')`, 5000), 'the week\'s rankings open in the viewer');

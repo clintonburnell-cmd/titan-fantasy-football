@@ -720,7 +720,7 @@
     espn.forEach(function (l, i) {
       var b = boxes[i];
       if (b.error) out.skipped.push(l.key + ': ' + b.error);
-      else out.leagues.push(espnWeek(l, b.me, pmap, userId));
+      else out.leagues.push(espnWeek(l, b.me, pmap, userId, b.opp));
     });
     return out;
   }
@@ -728,7 +728,7 @@
   /* One ESPN team's week in the shape of Sleeper's rosters and matchups, so
      SCC.scoreWeek scores it like any league: its players (Sleeper ids where
      matched), its starters in lineup order, and each player's points. */
-  function espnWeek(lg, me, players, userId) {
+  function espnWeek(lg, me, players, userId, opp) {
     ESPN.toSleeper(me.players, players);
     var ids = [], pts = {}, used = {};
     me.players.forEach(function (p) {
@@ -744,9 +744,12 @@
       return '0';
     });
     var rosterId = Number(me.teamId);
-    return {cfg: lg,
-      rosters: [{roster_id: rosterId, owner_id: userId, players: ids}],
-      matchups: [{roster_id: rosterId, matchup_id: 1, players: ids, starters: starters, players_points: pts}]};
+    var matchups = [{roster_id: rosterId, matchup_id: 1, players: ids, starters: starters, players_points: pts}];
+    // The opponent's score that week, from the same box score, for won or lost on Results.
+    if (opp && opp.teamId !== undefined && Number(opp.teamId) !== rosterId) {
+      matchups.push({roster_id: Number(opp.teamId), matchup_id: 1, points: (opp.players || []).reduce(function (t, p) { return t + (p.start ? Number(p.pts) || 0 : 0); }, 0)});
+    }
+    return {cfg: lg, rosters: [{roster_id: rosterId, owner_id: userId, players: ids}], matchups: matchups};
   }
 
   /* Sleeper's weekly projections (RotoWire's numbers), trimmed and kept for an hour. */

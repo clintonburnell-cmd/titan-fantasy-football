@@ -1878,6 +1878,19 @@
       if (String(matchups[m].roster_id) === String(mineId)) { mine = matchups[m]; break; }
     }
     if (!mine) return {error: 'no matchup found'};
+    // The opponent that week: the other team in the same matchup (none on a bye). His score is
+    // Sleeper's `points`, or his starters' points added up.
+    var opp = null, oppPts = null;
+    if (mine.matchup_id !== null && mine.matchup_id !== undefined) {
+      for (var o = 0; o < matchups.length; o++) {
+        if (matchups[o].matchup_id === mine.matchup_id && String(matchups[o].roster_id) !== String(mineId)) { opp = matchups[o]; break; }
+      }
+    }
+    if (opp) {
+      var opts = opp.players_points || {};
+      oppPts = round2(opp.points !== undefined && opp.points !== null ? Number(opp.points) || 0
+        : (opp.starters || []).reduce(function (t, id) { return t + Number(opts[String(id)] || 0); }, 0));
+    }
 
     var pp = mine.players_points || {};
     var ids = mine.players || [];
@@ -1934,7 +1947,8 @@
         detail.push({slot: 'bench', p: p, benchWin: true});
       });
 
-    return {key: lg.key, name: lg.name, actual: actual, byRank: byRank, perfect: perfect,
+    return {key: lg.key, name: lg.name, lineup: lg.lineup, actual: actual, byRank: byRank, perfect: perfect,
+      opp: oppPts, result: oppPts === null ? null : actual > oppPts ? 'W' : actual < oppPts ? 'L' : 'T',
       leftOnBench: round2(byRank - actual), ceiling: round2(perfect - byRank),
       projActual: projActual, projByRank: projByRank, vsProj: round2(actual - projActual),
       frozen: roster.filter(function (p) { return p.frozen; }).length,
@@ -1947,7 +1961,7 @@
   function scoreWeek(res, weekly, history, projMap) {
     var rankingsFor = typeof weekly === 'function' ? weekly : function () { return weekly; };
     var rows = [], skipped = (res.skipped || []).slice();
-    var T = {actual: 0, byRank: 0, perfect: 0, projActual: 0, projByRank: 0, cw: 0, ct: 0};
+    var T = {actual: 0, byRank: 0, perfect: 0, projActual: 0, projByRank: 0, cw: 0, ct: 0, wins: 0, losses: 0, ties: 0};
     var hist = (history && history.leagues) || {};
     res.leagues.forEach(function (x) {
       var r = scoreLeague(x.cfg, x.rosters, x.matchups, res.userId, res.players, rankingsFor(x.cfg), hist[String(x.cfg.id)], projMap);
@@ -1956,10 +1970,33 @@
       T.actual += r.actual; T.byRank += r.byRank; T.perfect += r.perfect;
       T.projActual += r.projActual; T.projByRank += r.projByRank;
       T.cw += r.close.wins; T.ct += r.close.total;
+      if (r.result === 'W') T.wins++;
+      else if (r.result === 'L') T.losses++;
+      else if (r.result === 'T') T.ties++;
     });
     ['actual', 'byRank', 'perfect', 'projActual', 'projByRank'].forEach(function (k) { T[k] = round2(T[k]); });
     T.vsProj = round2(T.actual - T.projActual);
     return {week: res.week, rows: rows, totals: T, skipped: skipped};
+  }
+
+  /* Points left on the bench, league by league (Results): in each league the bench player
+     who most outscored a starter he could have replaced (his position fits that starter's
+     spot). [{key, sat, started, slot, lost}], most points lost first; a league where nobody
+     on the bench beat a starter he could replace isn't listed. */
+  function benchMistakes(rows) {
+    var out = [];
+    (rows || []).forEach(function (r) {
+      var line = actualLineup(r.roster || [], r.lineup || []), best = null;
+      (r.roster || []).filter(function (p) { return !p.start; }).forEach(function (b) {
+        line.forEach(function (o) {
+          if (!o.p || !slotFits(o.slot, b.pos)) return;
+          var lost = round2(Number(b.pts || 0) - Number(o.p.pts || 0));
+          if (lost > 0 && (!best || lost > best.lost)) best = {key: r.key, sat: b, started: o.p, slot: o.slot, lost: lost};
+        });
+      });
+      if (best) out.push(best);
+    });
+    return out.sort(function (a, b) { return b.lost - a.lost; });
   }
 
   /* ------------------------------------------------------------- alerts */
@@ -2179,7 +2216,7 @@
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
     trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
     openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, applyPoints: applyPoints,
-    keepStartedRanks: keepStartedRanks, winProbability: winProbability, matchStatus: matchStatus
+    keepStartedRanks: keepStartedRanks, winProbability: winProbability, matchStatus: matchStatus, benchMistakes: benchMistakes
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

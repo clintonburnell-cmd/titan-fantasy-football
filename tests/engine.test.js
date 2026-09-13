@@ -158,6 +158,14 @@ check(L.frozen === 3 && L.byRank === 25 && L.projByRank === 28, 'the saved ranks
 const noRecord = SCC.scoreWeek(res, liveRanks, null, proj).rows[0];
 check(noRecord.frozen === 0 && noRecord.projActual === 28 && noRecord.detail.every(d => !d.p || d.p.call), 'without a record, today\'s ranks and projections stand in, calls included');
 check(SCC.scoreWeek(Object.assign({}, res, {skipped: ['X: not scored']}), liveRanks).skipped[0] === 'X: not scored', 'leagues the refresh skipped are listed');
+const vs = Object.assign({}, res, {leagues: [{cfg, rosters: res.leagues[0].rosters, matchups: res.leagues[0].matchups.map(m => Object.assign({}, m, {matchup_id: 4}))
+  .concat([{roster_id: 2, matchup_id: 4, points: 30, starters: [], players_points: {}}, {roster_id: 3, matchup_id: 5, points: 99, starters: [], players_points: {}}])}]});
+const WV = SCC.scoreWeek(vs, liveRanks, null, proj);
+check(WV.rows[0].opp === 30 && WV.rows[0].result === 'L' && WV.totals.losses === 1 && WV.totals.wins === 0 && noRecord.result === null,
+  'won or lost against the other team in the same matchup (25 to 30 is a loss); no opponent, no result');
+const bm = SCC.benchMistakes(WV.rows);
+check(bm.length === 1 && bm[0].sat.name === 'R Two' && bm[0].started.name === 'R One' && bm[0].slot === 'RB' && bm[0].lost === 10,
+  'the bench\'s biggest miss: R Two (15) sat while R One (5) started at RB, 10 points; a running back can\'t take the QB spot');
 
 section('bye-week needs');
 const P = (name, pos, bye, x) => Object.assign({id: name, name, pos, bye, inj: '', held: false}, x);

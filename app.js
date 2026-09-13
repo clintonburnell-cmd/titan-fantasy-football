@@ -16,8 +16,8 @@
   // the demo can't overwrite someone's leagues or rankings.
   const DEMO = new URLSearchParams(location.search).has('demo');
   const KEY = DEMO
-    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1'}
-    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1'};
+    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1'}
+    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1'};
   const STALE_MS = 5 * 60 * 1000;
   const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
@@ -39,7 +39,8 @@
     {id: 'matchup', name: 'Matchup', tabs: ['matchup']},
     {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
     {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes']},
-    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'multi', 'score']}
+    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'multi']},
+    {id: 'results', name: 'Results', tabs: ['score']}
   ];
   const SUB_NAMES = {ranks: 'Import', multi: 'Import multiple', score: 'Results'};
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
@@ -126,6 +127,8 @@
     multi: store.get(KEY.multi) || {week: 0, sources: [], defaults: false, dirty: false},
     mdraft: {text: '', file: '', pos: '', parsed: null, name: '', into: ''},
     mproj: null,
+    // Results' season so far: each week's totals, kept on this device once its games are all played (loadSeason).
+    season: store.get(KEY.season) || null, seasonBusy: false,
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
@@ -284,6 +287,7 @@
       render();
       scheduleLive();
       if (S.ui.tab === 'matchup' && S.snap) loadMatchups(true);
+      if (S.ui.tab === 'score' && S.snap && !S.score.data && !S.score.busy) loadScore(S.score.week || S.snap.week);
       paintTicker(); // the person's starters in each game may have changed
       if (S.again) { S.again = false; refresh(); }
     }
@@ -338,33 +342,68 @@
 
   /* A week's results, scored against the record the server job froze at each
      kickoff (signed-in users), or against today's rankings and projections. */
+  // One week scored (SCC.scoreWeek), or null before its first kickoff.
+  async function scoreFor(week) {
+    const leagues = S.snap.leagues.map(d => d.cfg);
+    const [res, hist, proj] = await Promise.all([
+      API.collectScores(S.account, leagues, week, S.snap.season),
+      S.sync.api && S.sync.user ? S.sync.api.getHistory(week).catch(() => null) : null,
+      API.fetchProjections(S.snap.season, week)
+    ]);
+    if (!res.started) return null;
+    const r = ranksFor(week, proj);
+    const D = SCC.scoreWeek(res, rankingsOf(r, proj, res.players), hist, proj);
+    D.ranks = r;
+    D.history = hist ? hist.updatedAt || 1 : 0;
+    D.provisional = res.done < res.total;
+    return D;
+  }
+
   async function loadScore(week) {
     if (DEMO) return;
     S.score = {week, busy: true, data: null, error: ''};
     if (S.ui.tab === 'score') render();
     try {
-      const leagues = S.snap.leagues.map(d => d.cfg);
-      const [res, hist, proj] = await Promise.all([
-        API.collectScores(S.account, leagues, week, S.snap.season),
-        S.sync.api && S.sync.user ? S.sync.api.getHistory(week).catch(() => null) : null,
-        API.fetchProjections(S.snap.season, week)
-      ]);
+      const D = await scoreFor(week);
       if (S.score.week !== week) return; // another week was picked meanwhile
-      if (!res.started) {
-        S.score.error = `Week ${week} has not kicked off yet, so there's nothing to score.`;
-      } else {
-        const r = ranksFor(week, proj);
-        const D = SCC.scoreWeek(res, rankingsOf(r, proj, res.players), hist, proj);
-        D.ranks = r;
-        D.history = hist ? hist.updatedAt || 1 : 0;
-        D.provisional = res.done < res.total;
-        S.score.data = D;
-      }
+      if (!D) S.score.error = `Week ${week} has not kicked off yet, so there's nothing to score.`;
+      else { S.score.data = D; keepWeek(D); }
     } catch (e) {
       if (S.score.week !== week) return;
       S.score.error = `Could not load week ${week}: ${e && e.message ? e.message : e}`;
     }
     S.score.busy = false;
+    if (S.ui.tab === 'score') render();
+    loadSeason();
+  }
+
+  /* Season so far (Results): each week's totals, kept on this device (KEY.season) and read again
+     while its games are still on. Tied to the account and season, and each week to the leagues and
+     that week's rankings, so a new league or new rankings for a week reads it again. */
+  const weekSig = w => S.snap.leagues.map(d => d.cfg.id).sort().join(',') + '|' + ((S.ranks.weeks[w] || {}).savedAt || 0);
+  function seasonStore() {
+    const s = S.season, user = String(S.account.userId || S.account.username || '');
+    if (!s || s.season !== S.snap.season || s.user !== user) S.season = {season: S.snap.season, user, weeks: {}};
+    return S.season;
+  }
+  function keepWeek(D) {
+    const T = D.totals;
+    seasonStore().weeks[D.week] = {week: D.week, actual: T.actual, proj: T.projActual, byRank: T.byRank, perfect: T.perfect,
+      wins: T.wins, losses: T.losses, ties: T.ties, done: !D.provisional, sig: weekSig(D.week)};
+    store.set(KEY.season, S.season);
+  }
+  // Scores the weeks before this one that aren't kept yet (or have changed), one at a time.
+  async function loadSeason() {
+    if (DEMO || !S.snap || S.seasonBusy) return;
+    const s = seasonStore(), need = [];
+    for (let w = 1; w < S.snap.week; w++) { const x = s.weeks[w]; if (!x || !x.done || x.sig !== weekSig(w)) need.push(w); }
+    if (!need.length) return;
+    S.seasonBusy = true;
+    if (S.ui.tab === 'score') render();
+    for (const w of need) {
+      try { const D = await scoreFor(w); if (D) keepWeek(D); } catch (e) { /* that week stays out for now */ }
+    }
+    S.seasonBusy = false;
     if (S.ui.tab === 'score') render();
   }
 
@@ -1327,74 +1366,145 @@
   const CALL = {'OK': 'start', 'START': 'start', 'BENCH': 'bench', 'SWAP OUT': 'swap out', 'DO NOT START': "don't start", 'ON BYE': 'on bye',
     'UNRANKED': 'unranked', 'LOCKED': 'locked', 'FILL SLOT': 'fill slot'};
 
+  /* Results, its own section: a week at a time (arrows step through the weeks played, loading on
+     their own), led by a summary (points, record, what your rankings would have scored, points left
+     on the bench), then the bench's biggest misses (SCC.benchMistakes), the season so far with a
+     chart, and every league with won or lost and its lineup. The explanations sit in one fold. */
+  const gap = n => (n > 0 ? '+' : n < 0 ? '−' : '') + fmt(Math.abs(n));
   function screenScore() {
     if (DEMO) return demoOnly('Results', 'Results score your real teams week by week, against what your rankings would have started.');
     if (!S.snap) return emptyState();
-    const cur = S.snap.week;
-    const wk = S.score.week || cur;
-    let h = `<div class="bar">
-      <label class="field"><span>Week</span><select data-ui="scoreWeek">
-        ${Array.from({length: 18}, (_, i) => i + 1).map(w => `<option value="${w}" ${w === wk ? 'selected' : ''} ${w > cur ? 'disabled' : ''}>Week ${w}${
-          w === cur ? ' (this week)' : w > cur ? ' (not played yet)' : ''}</option>`).join('')}
-      </select></label>
-      <button class="btn" data-action="score" ${S.score.busy ? 'disabled' : ''}>${S.score.busy ? 'Loading…' : S.score.data ? 'Reload' : 'Load'}</button>
-    </div>
-    <p class="lede"><b>Projected</b> is Sleeper's projection for the players you started. <b>By rank</b> is what your rankings would have
-      started from the same bench, and <b>perfect</b> is the best that roster could have done in hindsight. Open a league for every player's
-      rank, Titan's call, projection and points.</p>`;
+    const cur = S.snap.week, wk = S.score.week || cur, D = S.score.data, busy = S.score.busy;
+    let h = `<div class="wstep">
+      <button type="button" class="btn ghost small" data-sweek="${wk - 1}"${wk <= 1 || busy ? ' disabled' : ''} aria-label="Week ${wk - 1}">‹</button>
+      <h3>Week ${wk}${wk === cur ? ' <small>this week</small>' : ''}</h3>
+      <button type="button" class="btn ghost small" data-sweek="${wk + 1}"${wk >= cur || busy ? ' disabled' : ''} aria-label="Week ${wk + 1}">›</button>
+      ${busy ? '<span class="fine">Loading…</span>' : '<button type="button" class="link" data-action="score">Reload</button>'}</div>`;
     if (S.score.error) h += `<div class="banner swap">${esc(S.score.error)}</div>`;
-    const D = S.score.data;
     // The leagues down the left side on a wide computer window, as on Lineups (Results has no chips).
     jumpBar(D && D.rows.length ? D.rows.map(r => ({cfg: cfgByKey(r.key)})) : S.A.leagues.map(L => ({cfg: L.cfg})), false);
-    if (!D) return h;
+    if (!D) return h + (busy ? '<div class="empty-note">Scoring your leagues…</div>' : '');
 
-    const T = D.totals, gained = Math.round((T.byRank - T.actual) * 10) / 10;
-    if (D.provisional) {
-      h += `<div class="banner swap"><b>Live:</b> games are still in progress, so these numbers will move. Projections cover the whole week.</div>`;
+    const T = D.totals, live = D.provisional, games = T.wins + T.losses + T.ties;
+    const byRank = Math.round((T.byRank - T.actual) * 10) / 10, bench = Math.round((T.perfect - T.actual) * 10) / 10;
+    h += `<section class="card pad wsum">
+      <div class="wsum-top"><div><p class="fine">${live ? 'So far this week' : 'Week ' + D.week}</p>
+          <p class="wsum-pts"><b>${fmt(T.actual)}</b> points</p>
+          <p class="fine">${!T.projActual ? '' : live ? `of ${fmt(T.projActual)} projected for the whole week`
+            : `${T.vsProj >= 0 ? 'Beat' : 'Missed'} the projection (${fmt(T.projActual)}) by <b class="${T.vsProj >= 0 ? 'good' : 'amber'}">${fmt(Math.abs(T.vsProj))}</b>`}</p></div>
+        ${games ? `<div class="wsum-rec"><b>${T.wins}–${T.losses}${T.ties ? '–' + T.ties : ''}</b><small>${live ? 'if it ended now' : 'this week'}</small></div>` : ''}</div>
+      <div class="wsum-stats">
+        <div><b class="${byRank > 0 ? 'amber' : byRank < 0 ? 'good' : ''}">${gap(byRank)}</b><span>${byRank > 0 ? 'more by your rankings'
+          : byRank < 0 ? 'your lineups beat your rankings' : 'your lineups matched your rankings'}</span></div>
+        <div><b>${live ? '–' : fmt(bench)}</b><span>${live ? 'left on the bench, once the games are over' : 'left on the bench, in hindsight'}</span></div>
+        <div><b>${T.ct ? `${T.cw} of ${T.ct}` : '–'}</b><span>close calls right</span></div>
+      </div>
+      ${live ? '<p class="fine"><b class="bad">Live:</b> games are still on, so these numbers will move.</p>' : ''}</section>`;
+    // The bench's biggest misses: the part to fix next week. Only once the week is over: before then a
+    // starter still to play shows 0 and would look like a miss.
+    const BM = live ? [] : SCC.benchMistakes(D.rows).slice(0, 3);
+    if (BM.length) {
+      h += `<section class="card pad bmist"><h3>Points left on your bench</h3><ul class="bm-list">${BM.map(m => `<li>
+        <span class="bm-lg">${leagueIcon(cfgByKey(m.key), 'xs')}${esc(m.key)}</span>
+        <span><b>${esc(m.sat.name)}</b> (${fmt(m.sat.pts)}) sat while <b>${esc(m.started.name)}</b> (${fmt(m.started.pts)}) started at ${esc(slotName(m.slot))}</span>
+        <b class="bm-lost amber">−${fmt(m.lost)}</b></li>`).join('')}</ul></section>`;
     }
-    h += historyBanner(D);
-    if (D.ranks.defaults && !D.history) {
-      h += `<div class="banner ok">No rankings saved for week ${D.week}, so "By rank" uses Titan's default rankings from Sleeper's projections.</div>`;
-    }
-    if (!D.ranks.exact && !D.history) {
-      h += `<div class="banner swap">No rankings saved for week ${D.week}${D.ranks.week
-        ? `, so "By rank" is using week ${D.ranks.week}.` : ', so "By rank" has nothing to order by.'}</div>`;
-    }
-    h += `<section class="tiles">${tile(fmt(T.actual), 'you scored', 'muted')}${tile(T.projActual ? fmt(T.projActual) : 'None', 'projected', 'muted')}${
-      tile(fmt(T.byRank), 'by rank', gained > 0 ? 'swap' : 'ok')}${tile(fmt(T.perfect), 'perfect', 'muted')}</section>`;
-    const vsProj = !T.projActual ? ''
-      : D.provisional ? `So far: <b>${fmt(T.actual)}</b> of <b>${fmt(T.projActual)}</b> projected. `
-      : T.vsProj >= 0 ? `You beat the projection by <b class="good">${fmt(T.vsProj)}</b>. `
-      : `You finished <b class="amber">${fmt(-T.vsProj)}</b> under the projection. `;
-    h += `<p class="verdict-line">${vsProj}${gained > 0 ? `Following your rankings would have scored <b class="amber">${fmt(gained)}</b> more.`
-      : gained < 0 ? `Your lineups beat your rankings by <b class="good">${fmt(-gained)}</b>.` : 'Your lineups matched your rankings.'}${
-      T.ct ? ` Close calls right: ${T.cw} of ${T.ct}.` : ''}</p>`;
+    h += seasonCard();
     if (D.skipped.length) h += `<p class="fine">Skipped: ${esc(D.skipped.join('; '))}</p>`;
     if (D.rows.length) h += foldTools('score');
-    h += D.rows.map(r => `<details class="card score" ${foldAttrs('score', cfgByKey(r.key))}><summary>
-        <span class="sname">${leagueIcon(cfgByKey(r.key))}${esc(r.key)}</span>
-        <span class="n"><small>Actual</small>${fmt(r.actual)}</span>
-        <span class="n"><small>Projected</small>${r.projActual ? fmt(r.projActual) : 'None'}</span>
-        <span class="n${r.projActual && !D.provisional ? (r.vsProj >= 0 ? ' good' : ' amber') : ''}"><small>vs proj</small>${
-          !r.projActual ? '' : D.provisional ? 'Live' : signed(r.vsProj)}</span>
-        <span class="n${r.leftOnBench > 0 ? ' amber' : ''}"><small>Left on bench</small>${signed(r.leftOnBench)}</span>
+    const result = r => {
+      if (r.result === null || r.result === undefined) return '<span class="sres none">No opponent</span>';
+      const score = `${fmt(r.actual)}–${fmt(r.opp)}`;
+      const word = live ? {W: 'Winning', L: 'Losing', T: 'Tied'}[r.result] : r.result;
+      return `<span class="sres ${r.result === 'W' ? 'w' : r.result === 'L' ? 'l' : 't'}">${word} ${score}</span>`;
+    };
+    h += D.rows.map(r => {
+      const left = Math.round((r.perfect - r.actual) * 10) / 10;
+      return `<details class="card score" ${foldAttrs('score', cfgByKey(r.key))}><summary>
+        <span class="sname">${leagueIcon(cfgByKey(r.key))}${esc(r.key)}</span>${result(r)}
+        <span class="sline"><b>${fmt(r.actual)}</b> points${r.projActual ? ` · ${live ? `${fmt(r.projActual)} projected`
+          : `<span class="${r.vsProj >= 0 ? 'good' : 'amber'}">${gap(r.vsProj)}</span> vs projection`}` : ''}${!live && left > 0 ? ` · ${fmt(left)} left on the bench` : ''}</span>
       </summary>
       <p class="sub">By rank ${fmt(r.byRank)} · perfect ${fmt(r.perfect)} · close calls ${r.close.total ? `${r.close.wins} of ${r.close.total}` : 'none'}</p>
-      <ul class="detail">${r.detail.map(d => detailRow(d, D.provisional)).join('')}</ul>
-    </details>`).join('');
-    h += `<p class="fine">Projections via Sleeper.${D.ranks.week
-      ? ` <button class="link" data-action="ranks-view" data-week="${D.ranks.week}">See your week ${D.ranks.week} rankings</button>` : ''}</p>`;
+      <ul class="detail">${r.detail.map(d => detailRow(d, live)).join('')}</ul>
+    </details>`;
+    }).join('');
+    // The explanations, in one fold.
+    const saved = D.history ? 'Ranks, Titan\'s calls and projections are as they stood at each player\'s kickoff, saved automatically.'
+      : `Nothing was saved at kickoff for week ${D.week}, so ranks and calls use your rankings as they are now, with Sleeper's latest projections.${
+        S.sync.user ? '' : ' Sign in with Google (Settings) and Titan saves them at every kickoff.'}`;
+    const ranksNote = D.history ? '' : D.ranks.defaults ? `No rankings were saved for week ${D.week}, so "by rank" uses Titan's default rankings (Sleeper's projections).`
+      : !D.ranks.exact ? `No rankings were saved for week ${D.week}${D.ranks.week ? `, so "by rank" uses week ${D.ranks.week}'s.` : ', so "by rank" has nothing to order by.'}` : '';
+    h += `<details class="help results-help"><summary>How Results works</summary>
+      <p><b>Projected</b> is Sleeper's projection for the players you started. <b>By rank</b> is what your rankings would have started from the same
+        bench, and <b>perfect</b> is the best that roster could have done in hindsight: the difference is what "left on the bench" counts. A close call is
+        a starter picked over a bench player at his position ranked within a few spots; it's right when the starter scored more.</p>
+      <p>${esc(saved)}${S.sync.user || D.history ? '' : ' <button class="link" data-go="settings">Open Settings</button>'}</p>
+      ${ranksNote ? `<p>${esc(ranksNote)}</p>` : ''}
+      <p>Won or lost compares your points with your opponent's that week. While games are on, it says who's ahead.</p></details>
+      <p class="fine">Projections via Sleeper.${D.ranks.week
+        ? ` <button class="link" data-action="ranks-view" data-week="${D.ranks.week}">See your week ${D.ranks.week} rankings</button>` : ''}</p>`;
     return h;
   }
 
-  function historyBanner(D) {
-    if (D.history) {
-      return `<div class="banner ok">Ranks, Titan's calls and projections are as they stood at each player's kickoff, saved automatically.</div>`;
-    }
-    const why = `Nothing was saved at kickoff for week ${D.week}, so ranks and calls use your rankings as they are now, with Sleeper's latest projections.`;
-    return S.sync.user ? `<div class="banner swap">${why}</div>`
-      : `<div class="banner swap">${why} <button class="link" data-go="settings">Sign in with Google</button> and Titan saves them at every kickoff.</div>`;
+  /* Season so far: the record, points and how the rankings did across every week kept (loadSeason),
+     once there are two, with a column for each week's points (its projection a tick across it) and
+     every number in the table below. Each column shows its week on hover or keyboard focus. */
+  function seasonCard() {
+    const s = S.season, cur = S.snap.week;
+    const weeks = s && s.season === S.snap.season ? Object.values(s.weeks).filter(x => x.week <= cur).sort((a, b) => a.week - b.week) : [];
+    if (weeks.length < 2) return S.seasonBusy ? '<p class="fine">Reading your earlier weeks for Season so far…</p>' : '';
+    // The numbers count finished weeks only (a week still being played would sit against its whole projection);
+    // its column still shows the points so far.
+    const done = weeks.filter(x => x.done), counted = done.length ? done : weeks;
+    const sum = k => counted.reduce((t, x) => t + (Number(x[k]) || 0), 0);
+    const W = sum('wins'), L = sum('losses'), Tn = sum('ties'), pts = sum('actual');
+    const vsProj = (pts - sum('proj')) / counted.length, byRank = sum('byRank') - pts;
+    const liveNote = done.length && done.length < weeks.length ? '<p class="fine">This week counts here once its games are over; its column shows the points so far.</p>' : '';
+    const rec = x => x.wins + x.losses + x.ties ? `${x.wins}–${x.losses}${x.ties ? '–' + x.ties : ''}` : '';
+    // A clean top for the scale: 1, 2 or 5 times a power of ten.
+    const top = Math.max(1, ...weeks.map(x => Math.max(x.actual, x.proj || 0)));
+    const p10 = Math.pow(10, Math.floor(Math.log10(top))), m = top / p10;
+    const max = (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p10;
+    const H = 120, PAD = 8, LEFT = 44, BAND = 44, BAR = 22, width = LEFT + weeks.length * BAND + 8;
+    const y = v => PAD + H - Math.max(0, v) / max * H;
+    const cols = weeks.map((x, i) => {
+      const x0 = LEFT + i * BAND + (BAND - BAR) / 2, yt = y(x.actual), r = Math.min(4, PAD + H - yt);
+      const tip = `${fmt(x.actual)} points\nWeek ${x.week}${rec(x) ? ' · ' + rec(x) : ''}${x.done ? '' : ' · so far'}\nProjected ${fmt(x.proj || 0)} · by rank ${fmt(x.byRank)}`;
+      return `<g class="sc-col" tabindex="0" data-tip="${esc(tip)}" aria-label="${esc(tip.replace(/\n/g, ', '))}">
+        <rect class="sc-hit" x="${LEFT + i * BAND}" y="0" width="${BAND}" height="${PAD + H + 18}"/>
+        <path class="sc-bar${x.done ? '' : ' live'}" d="M${x0},${PAD + H}V${yt + r}Q${x0},${yt} ${x0 + r},${yt}H${x0 + BAR - r}Q${x0 + BAR},${yt} ${x0 + BAR},${yt + r}V${PAD + H}Z"/>
+        ${x.proj ? `<line class="sc-proj" x1="${x0 - 4}" x2="${x0 + BAR + 4}" y1="${y(x.proj)}" y2="${y(x.proj)}"/>` : ''}
+        <text class="sc-x" x="${x0 + BAR / 2}" y="${PAD + H + 14}">W${x.week}</text></g>`;
+    }).join('');
+    const grid = [0, max / 2, max].map(v => `<line class="sc-grid" x1="${LEFT}" x2="${width - 4}" y1="${y(v)}" y2="${y(v)}"/>
+      <text class="sc-y" x="${LEFT - 6}" y="${y(v) + 4}">${thousands(v)}</text>`).join('');
+    return `<section class="card pad season"><h3>Season so far</h3>
+      <div class="wsum-stats">
+        <div><b>${W}–${L}${Tn ? '–' + Tn : ''}</b><span>record in your leagues</span></div>
+        <div><b>${thousands(pts)}</b><span>points, ${gap(Math.round(vsProj * 10) / 10)} a week vs projection</span></div>
+        <div><b class="${byRank > 0 ? 'amber' : byRank < 0 ? 'good' : ''}">${gap(Math.round(byRank * 10) / 10)}</b><span>${byRank > 0 ? 'more by your rankings' : 'your lineups vs your rankings'}</span></div>
+      </div>
+      <div class="sc-legend"><span><i class="sw-bar"></i>Points you scored</span><span><i class="sw-proj"></i>Projected</span></div>
+      <div class="table-wrap"><svg class="sc-chart" width="${width}" height="${PAD + H + 20}" viewBox="0 0 ${width} ${PAD + H + 20}" role="img"
+        aria-label="Points you scored each week, with each week's projection">${grid}${cols}</svg></div>
+      <details class="help"><summary>Every week</summary><div class="table-wrap"><table class="season-t"><thead><tr><th>Week</th><th>Record</th><th>Points</th><th>Projected</th><th>By rank</th></tr></thead>
+        <tbody>${weeks.map(x => `<tr><td>${x.week}${x.done ? '' : ' (so far)'}</td><td>${rec(x) || '–'}</td><td>${fmt(x.actual)}</td><td>${fmt(x.proj || 0)}</td><td>${fmt(x.byRank)}</td></tr>`).join('')}</tbody></table></div></details>
+      ${liveNote}${S.seasonBusy ? '<p class="fine">Reading more of your earlier weeks…</p>' : ''}</section>`;
   }
+
+  // The season chart's tooltip: a column's numbers on hover or keyboard focus (the table has them too).
+  let tipEl = null;
+  function showTip(el) {
+    if (!tipEl) { tipEl = document.createElement('div'); tipEl.className = 'chart-tip'; tipEl.setAttribute('role', 'tooltip'); document.body.appendChild(tipEl); }
+    tipEl.textContent = '';
+    el.dataset.tip.split('\n').forEach((line, i) => { const n = document.createElement(i ? 'span' : 'b'); n.textContent = line; tipEl.appendChild(n); });
+    tipEl.hidden = false;
+    const r = el.getBoundingClientRect();
+    tipEl.style.left = Math.min(innerWidth - tipEl.offsetWidth - 8, Math.max(8, r.left + r.width / 2 - tipEl.offsetWidth / 2)) + 'px';
+    tipEl.style.top = Math.max(8, r.top - tipEl.offsetHeight - 6) + 'px';
+  }
+  const hideTip = () => { if (tipEl) tipEl.hidden = true; };
 
   // While the week is live, a player who hasn't scored yet shows no gap to his projection.
   function detailRow(d, live) {
@@ -3162,9 +3272,14 @@
     // A tap on a league's header folds or unfolds it; the toggle listener remembers it.
     const head = e.target.closest('details[data-fold] > summary');
     if (head) { tapped = head.parentElement; return; }
-    const t = e.target.closest('[data-go],[data-filter],[data-mfilter],[data-tsort],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-moves],[data-tsearch],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-mfilter],[data-sweek],[data-tsort],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-moves],[data-tsearch],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
+    if (t.dataset.sweek) {
+      const w = Number(t.dataset.sweek);
+      if (w >= 1 && S.snap && w <= S.snap.week) loadScore(w);
+      return;
+    }
     if (t.dataset.tsearch) {
       // A searched-for player goes into the trade: his team becomes the partner, he goes on the get side.
       const [team, pid] = t.dataset.tsearch.split('|'), P = S.trade.pick;
@@ -3328,6 +3443,12 @@
     }
   });
 
+  // The season chart's columns show their week on hover and on keyboard focus.
+  view.addEventListener('pointerover', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) showTip(el); });
+  view.addEventListener('pointerout', e => { if (e.target.closest && e.target.closest('[data-tip]')) hideTip(); });
+  view.addEventListener('focusin', e => { const el = e.target.closest && e.target.closest('[data-tip]'); if (el) showTip(el); });
+  view.addEventListener('focusout', hideTip);
+
   /* Folding a league is remembered only when the person tapped it, not when the
      Rosters search opens or closes one ('toggle' doesn't bubble, so this listens
      on the way down). */
@@ -3419,4 +3540,6 @@
   // A snapshot saved by an older version lacks what live scores and kickoff times need, so it's refreshed.
   if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS || (S.snap.v || 0) < 3)) refresh();
   else { loadProj(); scheduleLive(); }
+  // Opened straight onto Results (its address, or the last screen used): score the week, as switching to it does.
+  if (S.account && S.snap && S.ui.tab === 'score' && !S.score.busy && !S.score.data) loadScore(S.snap.week);
 })();

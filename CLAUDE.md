@@ -53,9 +53,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   `sw.js` shows them. Keep each alert's key stable, or people get repeats: `out|week|league|player|tag`
   (names the starter's backup when he's a free agent there: depth chart order is index 3 of each
   trimmed player), `check|week|kickoff` (one alert covering every league), `news|week|story|player`.
-- Navigation: five sections (`SECTIONS` in `app.js`): Lineups, Matchup, League (Standings, Rosters,
+- Navigation: six sections (`SECTIONS` in `app.js`): Lineups, Matchup, League (Standings, Rosters,
   Trade, Transactions), Players (Waivers, News, Exposure, Byes) and Rankings (Import, which is the `ranks`
-  screen, Import multiple, which is `multi` at `/app/multiple`, and Results), with Settings behind the gear (`#gear`). Phones, the Android app and home-screen
+  screen, and Import multiple, which is `multi` at `/app/multiple`) and Results (the `score` screen), with Settings behind the gear (`#gear`). Phones, the Android app and home-screen
   copies show them as a bar along the bottom (the header is solid there: a see-through `backdrop-filter`
   header would hold the fixed bar inside it); wide windows as a header menu whose sections drop down
   their screens. `screenBar` puts a section's screens as sub-tabs at the top of each screen, and the one
@@ -186,7 +186,12 @@ live site, so site changes reach it without a new upload. What's done and what's
   in `app.js`, which the card and the summary at the top share; the summary's filters are
   `MATCH_KINDS` (`S.ui.matchFilter`, chips `data-mfilter`). Opened, the scoreboard (`.board`) shows the
   score, so the header's score row hides.
-- The Results tab's internal id is still `score`; only its label changed.
+- The Results tab's internal id is still `score`; only its label changed. It's its own section now. Won or
+  lost comes from `scoreLeague` (the other team in the same matchup; ESPN's opponent from the box score,
+  `espnWeek`), the bench's misses from `SCC.benchMistakes`, both pure and tested. Season so far scores
+  the earlier weeks one at a time (`loadSeason`, through `scoreFor`) and keeps each finished week on
+  the device (`KEY.season`, tied to the leagues and that week's rankings). Its chart's columns use
+  `--chart-bar`, checked with the dataviz palette checks in both themes; a table sits behind it.
 - Folding (Lineups, Rosters, Matchup) goes through `isOpen`, `setFold` and `foldAll` in
   `app.js`, keyed by `FOLD_KEY`. Only a person's tap on a header is saved (`tapped`); code
   that opens or closes a league (the Rosters search, jump chips) must not save it.
