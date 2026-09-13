@@ -689,6 +689,15 @@ details.match > summary::-webkit-details-marker { display: none; }
 .mh-name.opp { text-align: right; }
 .mh-pts { font-size: 1.3rem; font-weight: 850; font-variant-numeric: tabular-nums; }
 .mh-pts.lead { color: var(--ok); }
+.mh-pts.trail { color: var(--faint); }
+/* Where you stand, in words, under the score: green ahead, red behind. */
+.mh-status { font-size: .86rem; font-weight: 800; }
+.mh-status.ahead { color: var(--ok); }
+.mh-status.behind { color: var(--stop); }
+.mh-status.pre { font-weight: 700; }
+.mh-status small { font-size: .76rem; font-weight: 500; color: var(--muted); }
+/* Open, the scoreboard below shows the score. */
+details.match[open] .mh-score { display: none; }
 .winbar { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr) 2.6rem; align-items: center; gap: 8px; }
 .wp { font-size: .74rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
 .wp.opp { text-align: right; }
@@ -879,24 +888,26 @@ details.match > summary::-webkit-details-marker { display: none; }
 .dc-h { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .dc-h .pos { width: auto; height: auto; padding: 1px 5px; border-radius: 5px; font-size: .6rem; }
 .dboard .dc-h small { display: inline; color: var(--faint); }
-.bproj { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-.board, .mrow { display: grid; grid-template-columns: minmax(0, 1fr) 3rem 2.4rem 3rem minmax(0, 1fr); align-items: center; column-gap: 6px; }
-.board { padding: 14px 12px; border-top: 1px solid var(--line); }
-.bside { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.bside.opp { flex-direction: row-reverse; text-align: right; }
-.sinfo { display: grid; min-width: 0; line-height: 1.2; }
+/* The scoreboard when a league is open, like Sleeper's: each side's picture, full name, record
+   and players left, then its score (green ahead, grey behind) and projection. */
+.board { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; column-gap: 10px;
+  padding: 16px 14px 14px; border-top: 1px solid var(--line); }
+.board .vs { align-self: center; }
+.sb-side { display: grid; justify-items: start; gap: 3px; min-width: 0; }
+.sb-side.opp { justify-items: end; text-align: right; }
+.sb-side .avatar { margin-bottom: 4px; }
+.sb-side > small { color: var(--muted); font-size: .72rem; }
+.sb-side .avatar.initials { display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1;
+  font-size: .82rem; font-weight: 800; color: var(--muted); }
+.sb-pts { margin-top: 6px; font-size: 2rem; font-weight: 850; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.sb-pts.lead { color: var(--ok); }
+.sb-pts.trail { color: var(--faint); }
 /* Team names get two lines before they're shortened. */
 .bname { font-weight: 700; font-size: .86rem; line-height: 1.15; overflow: hidden; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.sinfo small, .bscore small { color: var(--muted); font-size: .68rem; }
-.bscore { display: grid; justify-items: end; }
-.bscore.opp { justify-items: start; }
-.btotal { font-size: 1.3rem; font-weight: 850; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.bscore.lead .btotal { color: var(--ok); }
 .vs { justify-self: center; font-size: .66rem; font-weight: 800; letter-spacing: .06em; color: var(--muted); }
 .vs.live { color: var(--stop); }
-.bside .avatar.initials { flex: none; display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1;
-  font-size: .78rem; font-weight: 800; color: var(--muted); }
+.mrow { display: grid; grid-template-columns: minmax(0, 1fr) 3rem 2.4rem 3rem minmax(0, 1fr); align-items: center; column-gap: 6px; }
 .mlist { list-style: none; margin: 0; padding: 0; }
 .mrow { padding: 8px 12px; border-top: 1px solid var(--line); }
 .minfo { display: flex; align-items: center; gap: 7px; min-width: 0; }
@@ -939,12 +950,17 @@ details.match > summary::-webkit-details-marker { display: none; }
 .mpts-col b { font-size: .98rem; font-weight: 800; }
 .mpts-col b.muted { color: var(--faint); }
 .mpts-col small { color: var(--muted); font-size: .66rem; }
+/* The higher score in each spot is green; a player still to play is greyed, his projection in italics. */
+.mpts-col b.win { color: var(--ok); }
+.mpts-col.yet b { color: var(--muted); font-style: italic; font-weight: 700; }
+.minfo.yet .mtext b { color: var(--muted); }
+.minfo.yet .pphoto { opacity: .65; }
 .mslot { justify-self: center; font-size: .6rem; font-weight: 800; letter-spacing: .03em; color: var(--muted);
   background: var(--line); border-radius: 999px; padding: 3px 6px; }
 .mstate { font-size: .6rem; font-weight: 800; letter-spacing: .06em; }
 .mstate.live { color: var(--stop); }
 @media (max-width: 400px) {
-  .board, .mrow { grid-template-columns: minmax(0, 1fr) 2.6rem 2.2rem 2.6rem minmax(0, 1fr); column-gap: 4px; padding-inline: 10px; }
+  .mrow { grid-template-columns: minmax(0, 1fr) 2.6rem 2.2rem 2.6rem minmax(0, 1fr); column-gap: 4px; padding-inline: 10px; }
   .pphoto.sm { width: 24px; }
 }
 

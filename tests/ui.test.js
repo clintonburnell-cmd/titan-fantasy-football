@@ -275,11 +275,37 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await tab('matchup');
   check(await waitFor(`!!document.querySelector('.match .board')`, 30000), 'the Matchup tab loads');
   const head = await ev(`(() => { const d = document.querySelector('details.match'); const w = [...d.querySelectorAll('.winbar .wp')].map(x => parseInt(x.innerText, 10));
-    return {open: d.open, score: d.querySelector('.mh-score').innerText.replace(/\\n/g, ' '), wp: w}; })()`);
+    return {open: d.open, score: d.querySelector('.mh-score').innerText.replace(/\\n/g, ' '), wp: w, status: d.querySelector('.mh-status').innerText}; })()`);
   check(!head.open && /Team 1/.test(head.score) && /Team 2/.test(head.score), 'each league starts collapsed, its header showing both teams and scores: ' + head.score);
   check(head.wp.length === 2 && head.wp[0] + head.wp[1] === 100, `a chance-to-win bar in the header (${head.wp.join('% / ')}%)`);
+  check(/^(Winning|Losing) by \d+\.\d|^Tied|^Projected to (win|lose) by \d|^Projected to tie|^(Won|Lost) by \d/.test(head.status), 'where you stand, in words: ' + head.status);
+  const mchips = await ev(`[...document.querySelectorAll('[data-mfilter]')].map(b => ({id: b.dataset.mfilter, n: Number(b.innerText.match(/(\\d+)$/)[1])}))`);
+  let mchipsOk = mchips.length === 4 && mchips[0].id === 'all' && await ev(`document.querySelectorAll('.match-sum .tile').length === 3`);
+  for (const c of mchips) {
+    await ev(`document.querySelector('[data-mfilter="${c.id}"]').click(); true`);
+    await sleep(150);
+    if (await ev(`document.querySelectorAll('details.match').length`) !== c.n) mchipsOk = false;
+  }
+  await ev(`document.querySelector('[data-mfilter="all"]').click(); true`);
+  await sleep(150);
+  check(mchipsOk, `a summary of where you stand, each count a filter showing exactly its leagues (${mchips.map(c => c.id + ' ' + c.n).join(', ')})`);
+  await shot('matchup-collapsed-390');
   await ev(`document.querySelector('details.match > summary').click(); true`);
   await sleep(300);
+  await shot('matchup-open-390');
+  if (process.env.TITAN_SHOTS) {
+    await ev(`document.documentElement.dataset.theme = 'dark'; true`);
+    await sleep(200);
+    await shot('matchup-open-390-dark');
+    await send('Emulation.setDeviceMetricsOverride', {width: 1280, height: 900, deviceScaleFactor: 1, mobile: false});
+    await sleep(500);
+    await shot('matchup-open-1280-dark');
+    await ev(`delete document.documentElement.dataset.theme; true`);
+    await sleep(200);
+    await shot('matchup-open-1280');
+    await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 2, mobile: true});
+    await sleep(500);
+  }
   await tab('lineups');
   await tab('matchup');
   await waitFor(`!!document.querySelector('details.match')`, 30000);
@@ -289,6 +315,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     opp: [...document.querySelectorAll('.match .minfo.opp b')].map(b => b.innerText).filter(Boolean).length,
     tabs: [...document.querySelectorAll('#tabs .sec-name')].map(b => b.innerText).join(' | ')})`);
   check(/Team 1/.test(mu.board) && /Team 2/.test(mu.board) && mu.rows === 9 && mu.opp === 9, `scoreboard (${mu.board}) and both lineups, 9 spots each`);
+  const sb = await ev(`(() => { const d = document.querySelector('details.match'); return {pts: d.querySelectorAll('.board .sb-pts').length,
+    hidden: getComputedStyle(d.querySelector('.mh-score')).display === 'none', fits: d.scrollWidth <= d.clientWidth + 1,
+    yet: [...d.querySelectorAll('.mpts-col.yet small')].every(s => s.innerText === 'proj')}; })()`);
+  check(sb.pts === 2 && sb.hidden && sb.fits && sb.yet, 'opened, one scoreboard with both scores (the header\'s score row steps aside), nothing cut off, players still to play showing their projection');
   check(mu.tabs === 'Lineups | Matchup | League | Players | Rankings', `five sections (${mu.tabs})`);
   const addr = await ev(`({path: location.pathname, title: document.title})`);
   check(addr.path === '/app/matchup' && /^Matchup · Titan/.test(addr.title), `each screen has its own address and title (${addr.path}, "${addr.title}")`);

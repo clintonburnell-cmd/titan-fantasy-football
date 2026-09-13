@@ -31,6 +31,24 @@ const {check, section} = T;
   check(API.sleeperMatchup(lg, 9, matchups, rosters, users, players).none === true, 'no matchup found: marked as none');
   check(API.sleeperMatchup(lg, 7, matchups, rosters, users, players).none === true, 'nobody else in the matchup (a bye): none');
 
+  section('who is winning, in plain words');
+  {
+    const SCC = T.app('engine.js');
+    const sd = (pts, proj, started, done) => ({pts, proj, started, done});
+    const pre = SCC.matchStatus(sd(0, 117.9, false, false), sd(0, 108, false, false));
+    check(pre.phase === 'pre' && pre.lead === 1 && pre.text === 'Projected to win by 9.9', 'before any game, by projections: ' + pre.text);
+    check(SCC.matchStatus(sd(0, 100, false, false), sd(0, 100, false, false)).text === 'Projected to tie', 'even projections: projected to tie');
+    const up = SCC.matchStatus(sd(112.4, 120, true, false), sd(98.1, 130, true, false));
+    const down = SCC.matchStatus(sd(98.1, 130, true, false), sd(112.4, 120, true, false));
+    check(up.phase === 'live' && up.text === 'Winning by 14.3' && up.lead === 1 && down.text === 'Losing by 14.3' && down.lead === -1,
+      'while games are on, by points, whatever the projections say: ' + up.text + ' / ' + down.text);
+    check(SCC.matchStatus(sd(10, 50, true, false), sd(10, 60, false, false)).text === 'Tied', 'level on points: tied');
+    const won = SCC.matchStatus(sd(120.5, 110, true, true), sd(108.1, 115, true, true));
+    const lost = SCC.matchStatus(sd(99.5, 110, true, true), sd(100, 115, true, true));
+    check(won.phase === 'final' && won.text === 'Won by 12.4' && lost.text === 'Lost by 0.5', 'once both sides are done, the result: ' + won.text + ' / ' + lost.text);
+    check(SCC.matchStatus(sd(120, 110, true, true), sd(80, 115, true, false)).phase === 'live', 'still live while the other side has games to play');
+  }
+
   section('ESPN');
   const {league: L1} = await T.espnLeagues();
   const box = T.espnBoxscore(L1);

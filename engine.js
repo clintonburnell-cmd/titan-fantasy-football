@@ -1129,6 +1129,22 @@
     return n;
   }
 
+  /* A head-to-head in plain words, for the Matchup tab. Each side: {pts (so far), proj,
+     started (one of its starters' games has begun), done (every started game is over)}.
+     Before any game it goes by projections ('Projected to win by 9.9'), while games are on
+     by points ('Winning by 14.3', 'Tied'), and once both sides are done it's the result
+     ('Won by 12.4'). {phase ('pre', 'live' or 'final'), lead (1 ahead, -1 behind, 0 level),
+     by (the margin), text}. */
+  function matchStatus(a, b) {
+    var phase = a.done && b.done ? 'final' : a.started || b.started ? 'live' : 'pre';
+    var diff = Math.round(((phase === 'pre' ? a.proj - b.proj : a.pts - b.pts) || 0) * 10) / 10;
+    var lead = diff > 0 ? 1 : diff < 0 ? -1 : 0, by = Math.abs(diff).toFixed(1);
+    var text = phase === 'pre' ? (lead ? 'Projected to ' + (lead > 0 ? 'win' : 'lose') + ' by ' + by : 'Projected to tie')
+      : phase === 'final' ? (lead ? (lead > 0 ? 'Won' : 'Lost') + ' by ' + by : 'Tied')
+      : lead ? (lead > 0 ? 'Winning' : 'Losing') + ' by ' + by : 'Tied';
+    return {phase: phase, lead: lead, by: Math.abs(diff), text: text};
+  }
+
   /* ------------------------------------------------------ start/sit core */
 
   function rankKey(p) {
@@ -2055,7 +2071,7 @@
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
     trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
     openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, applyPoints: applyPoints,
-    keepStartedRanks: keepStartedRanks, winProbability: winProbability
+    keepStartedRanks: keepStartedRanks, winProbability: winProbability, matchStatus: matchStatus
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

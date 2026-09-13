@@ -1030,16 +1030,17 @@
 
   // Points so far (players whose game has started) and projection, for one side's starters.
   function sideTotals(side, cfg) {
-    let pts = 0, proj = 0, live = false, done = true, started = false;
+    let pts = 0, proj = 0, live = false, done = true, started = false, left = 0;
     side.players.forEach(p => {
       if (!p || p.empty) return;
       const g = gameOf(p.team);
       if (g && g.state !== 'pre') { pts += p.pts || 0; started = true; }
+      if (g && g.state === 'pre') left++;
       if (g && g.state === 'in_game') live = true;
       if (g && g.state !== 'complete') done = false;
       proj += SCC.projFor(S.proj, p.id, cfg.ppr) || 0;
     });
-    return {pts, proj, live, done: done && started, started};
+    return {pts, proj, live, done: done && started, started, left};
   }
 
   // Laid out like Sleeper's matchup: headshots, short names ("J. Allen"), points toward the middle.
@@ -1067,46 +1068,68 @@
     const when = g && g.state !== 'pre'
       ? `<span class="mstate${g.state === 'in_game' ? ' live' : ''}">${g.state === 'in_game' ? 'LIVE' : 'FINAL'}</span>`
       : `<em class="kick">${esc(teamKick(p.team))}</em>`;
-    return `<div class="minfo ${side}">${headshot(p, true)}<div class="mtext"><b>${esc(shortName(p))}</b>
+    // Players still to play are greyed.
+    return `<div class="minfo ${side}${g && g.state === 'pre' ? ' yet' : ''}">${headshot(p, true)}<div class="mtext"><b>${esc(shortName(p))}</b>
       <small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}</small><small>${when}</small></div></div>`;
   }
 
-  // Points once his game starts (grey 0.0 before), his projection underneath.
-  function matchPts(p, cfg, side) {
+  /* Points once his game starts, his projection underneath; green when he's outscoring the
+     player opposite (`other`) in that spot. Before his game, his projection in grey italics. */
+  function matchPts(p, cfg, side, other) {
     if (!p || p.empty) return `<div class="mpts-col ${side}"></div>`;
     const g = gameOf(p.team), started = g && g.state !== 'pre', proj = SCC.projFor(S.proj, p.id, cfg.ppr);
-    return `<div class="mpts-col ${side}"><b${started ? '' : ' class="muted"'}>${fmt(started ? p.pts : 0)}</b>${proj !== null ? `<small>${fmt(proj)}</small>` : ''}</div>`;
+    if (!started) {
+      return g ? `<div class="mpts-col ${side} yet"><b>${proj !== null ? fmt(proj) : '–'}</b><small>proj</small></div>`
+        : `<div class="mpts-col ${side}"><b class="muted">${fmt(0)}</b></div>`;
+    }
+    const og = other && !other.empty ? gameOf(other.team) : null;
+    const theirs = og && og.state !== 'pre' ? other.pts || 0 : 0;
+    return `<div class="mpts-col ${side}"><b${(p.pts || 0) > theirs ? ' class="win"' : ''}>${fmt(p.pts)}</b>${proj !== null ? `<small>${fmt(proj)}</small>` : ''}</div>`;
   }
 
   function matchCard(m) {
     const head = `<header class="card-h"><div><h3>${leagueIcon(m.cfg)}${esc(m.cfg.key)}</h3><p>${esc(SCC.describeLeague(m.cfg))}</p></div></header>`;
     if (m.error) return `<article class="card league">${head}<p class="note">Couldn't load this matchup: ${esc(m.error)}</p></article>`;
     if (m.none) return `<article class="card league">${head}<p class="note">No matchup this week.</p></article>`;
-    const a = sideTotals(m.me, m.cfg), b = sideTotals(m.opp, m.cfg);
-    const status = a.live || b.live ? '<span class="vs live">LIVE</span>' : a.done && b.done ? '<span class="vs">FINAL</span>' : '';
-    const lead = (x, y) => (x.started || y.started) && x.pts > y.pts ? ' lead' : '';
-    const pic = s => (s.avatar ? avatar(s.avatar, 36)
-      : `<span class="avatar blank initials" style="width:36px;height:36px">${esc(initials(s.name))}</span>`);
-    const team = (s, cls) => `<div class="bside ${cls}">${pic(s)}<div class="sinfo"><b class="bname">${esc(s.name)}</b><small>${esc(s.record || '')}</small></div></div>`;
-    const projected = (t, cls) => `<div class="bscore ${cls}"><small>projected</small><span class="bproj">${fmt(t.proj)}</span></div>`;
-    const rows = m.cfg.lineup.map((slot, i) => `<li class="mrow">${matchInfo(m.me.players[i], 'me')}${matchPts(m.me.players[i], m.cfg, 'me')}
-      <span class="mslot">${esc(slotName(slot))}</span>${matchPts(m.opp.players[i], m.cfg, 'opp')}${matchInfo(m.opp.players[i], 'opp')}</li>`).join('');
-    // The header, shown collapsed or open: league, score, and each side's chance to win.
-    const wp = SCC.winProbability(winList(m.me, m.cfg), winList(m.opp, m.cfg));
-    const pa = Math.round(wp.a * 100), pb = 100 - pa;
+    const {a, b, st, pa} = matchState(m), pb = 100 - pa, live = a.live || b.live, final = st.phase === 'final';
+    const status = live ? '<span class="vs live">LIVE</span>' : final ? '<span class="vs">FINAL</span>' : '';
+    // Once games start, the leading score is green and the trailing one grey (x: 1 for you, -1 for them).
+    const tone = x => st.phase === 'pre' || !st.lead ? '' : st.lead * x > 0 ? ' lead' : ' trail';
+    const pic = (s, size) => (s.avatar ? avatar(s.avatar, size)
+      : `<span class="avatar blank initials" style="width:${size}px;height:${size}px">${esc(initials(s.name))}</span>`);
+    const toPlay = t => t.left ? `${t.left} to play` : t.started ? 'all played' : '';
+    // The scoreboard when a league is open, like Sleeper's: picture, full name, record, players left, the score and the projection.
+    const side = (s, t, cls, x) => `<div class="sb-side ${cls}">${pic(s, 44)}<b class="bname">${esc(s.name)}</b>
+      <small>${esc([s.record, toPlay(t)].filter(Boolean).join(' · '))}</small>
+      <span class="sb-pts${tone(x)}">${fmt(t.pts)}</span><small>projected ${fmt(t.proj)}</small></div>`;
+    const say = `<p class="mh-status ${st.phase === 'pre' ? 'pre' : st.lead > 0 ? 'ahead' : st.lead < 0 ? 'behind' : ''}">${esc(st.text)}${
+      st.phase === 'live' ? ` <small>· ${a.left} of yours to play, ${b.left} of theirs</small>` : ''}</p>`;
+    const rows = m.cfg.lineup.map((slot, i) => {
+      const x = m.me.players[i], y = m.opp.players[i];
+      return `<li class="mrow">${matchInfo(x, 'me')}${matchPts(x, m.cfg, 'me', y)}
+        <span class="mslot">${esc(slotName(slot))}</span>${matchPts(y, m.cfg, 'opp', x)}${matchInfo(y, 'opp')}</li>`;
+    }).join('');
+    // The header, shown folded or open: league, score, where you stand, and each side's chance to win.
     const bar = a.proj || b.proj || a.started || b.started ? `<div class="winbar" title="Chance to win">
         <span class="wp me${pa >= pb ? ' up' : ''}">${pa}%</span><span class="wbar"><i class="wme" style="width:${pa}%"></i><i class="wopp" style="width:${pb}%"></i></span>
         <span class="wp opp${pb > pa ? ' up' : ''}">${pb}%</span></div>` : '';
     return `<details class="card match" ${foldAttrs('match', m.cfg)}>
       <summary class="mhead"><div class="mh-top"><span class="sname">${leagueIcon(m.cfg)}${esc(m.cfg.key)}</span>${status}</div>
-        <div class="mh-score"><span class="mh-name">${esc(m.me.name)}</span><b class="mh-pts${lead(a, b)}">${fmt(a.pts)}</b>
-          <b class="mh-pts${lead(b, a)}">${fmt(b.pts)}</b><span class="mh-name opp">${esc(m.opp.name)}</span></div>${bar}</summary>
-      <div class="board">${team(m.me, 'me')}${projected(a, 'me')}<span class="vs">VS</span>${projected(b, 'opp')}${team(m.opp, 'opp')}</div>
+        <div class="mh-score"><span class="mh-name">${esc(m.me.name)}</span><b class="mh-pts${tone(1)}">${fmt(a.pts)}</b>
+          <b class="mh-pts${tone(-1)}">${fmt(b.pts)}</b><span class="mh-name opp">${esc(m.opp.name)}</span></div>${say}${bar}</summary>
+      <div class="board">${side(m.me, a, 'me', 1)}<span class="vs${live ? ' live' : ''}">${live ? 'LIVE' : final ? 'FINAL' : 'VS'}</span>${side(m.opp, b, 'opp', -1)}</div>
       <ol class="mlist">${rows}</ol></details>`;
   }
 
   // One side's starters as the win-chance model reads them.
   const winList = (side, cfg) => side.players.map(p => (!p || p.empty ? null : {pts: p.pts, proj: SCC.projFor(S.proj, p.id, cfg.ppr), state: (gameOf(p.team) || {}).state || ''}));
+  // A matchup's totals, where you stand (SCC.matchStatus) and your chance to win, for its card and the summary.
+  function matchState(m) {
+    const a = sideTotals(m.me, m.cfg), b = sideTotals(m.opp, m.cfg);
+    return {a, b, st: SCC.matchStatus(a, b), pa: Math.round(SCC.winProbability(winList(m.me, m.cfg), winList(m.opp, m.cfg)).a * 100)};
+  }
+  // The summary's filters: winning, losing, and close (a chance to win between 35% and 65%, until it's final).
+  const MATCH_KINDS = {win: x => x.s.st.lead > 0, lose: x => x.s.st.lead < 0, close: x => x.s.st.phase !== 'final' && x.s.pa >= 35 && x.s.pa <= 65};
 
   function screenMatchup() {
     if (DEMO) return demoOnly('Matchups', 'Matchups show your real opponent in every league, week by week.');
@@ -1117,13 +1140,27 @@
     if (gamesLive()) {
       h += `<p class="fine live-note">Games are on: scores update every couple of minutes while Matchup is open${M.at ? ` (last ${esc(when(M.at))})` : ''}.</p>`;
     }
+    // Where you stand in every league (winning, losing, close), each a filter.
+    const list = (M.data || []).filter(x => inPick(x.cfg));
+    const games = list.filter(m => !m.error && !m.none).map(m => ({m, s: matchState(m)}));
+    const pick = MATCH_KINDS[S.ui.matchFilter] ? S.ui.matchFilter : 'all';
+    const shown = pick === 'all' ? list : games.filter(MATCH_KINDS[pick]).map(x => x.m);
     // The leagues down the left side on a wide computer window (Matchup has no chips).
-    jumpBar((M.data && M.data.length ? M.data : S.A.leagues).filter(x => inPick(x.cfg)).map(x => ({cfg: x.cfg})), false);
+    jumpBar((M.data && M.data.length ? shown : S.A.leagues.filter(x => inPick(x.cfg))).map(x => ({cfg: x.cfg})), false);
     if (M.error) h += `<div class="banner stop">${esc(M.error)}</div>`;
     if (!M.data) return h + (M.busy ? '<div class="empty-note">Loading this week\'s matchups…</div>' : '');
     if (!M.data.length) return h + '<div class="empty-note">No leagues to show.</div>';
-    return h + foldTools('match') + '<div class="league-grid">' + M.data.filter(x => inPick(x.cfg)).map(matchCard).join('') + '</div>' +
-      (Object.keys(S.proj).length ? '<p class="fine">Projections via Sleeper. Chance to win is Titan\'s estimate from them and the points so far.</p>' : '');
+    const n = k => games.filter(MATCH_KINDS[k]).length;
+    if (games.length) {
+      h += `<section class="tiles three match-sum" aria-label="Where you stand">${tile(n('win'), 'winning', n('win') ? 'ok' : 'muted')}${
+        tile(n('lose'), 'losing', n('lose') ? 'stop' : 'muted')}${tile(n('close'), 'close', n('close') ? 'swap' : 'muted')}</section>
+        <div class="chips" role="group" aria-label="Filter matchups">${[['all', 'All', list.length], ['win', 'Winning', n('win')], ['lose', 'Losing', n('lose')],
+          ['close', 'Close', n('close')]].map(([k, label, c]) => `<button type="button" class="chip" data-mfilter="${k}" aria-pressed="${pick === k}">${label} ${c}</button>`).join('')}</div>`;
+    }
+    const none = {win: 'No matchups you\'re winning right now.', lose: 'No matchups you\'re losing right now.', close: 'No close matchups right now.'};
+    return h + foldTools('match') + (shown.length ? '<div class="league-grid">' + shown.map(matchCard).join('') + '</div>' : `<div class="empty-note">${none[pick]}</div>`) +
+      (Object.keys(S.proj).length ? `<p class="fine">Projections via Sleeper. Chance to win is Titan's estimate from them and the points so far. Close means a
+        chance to win between 35% and 65%; before any game starts, winning and losing go by projections.</p>` : '');
   }
 
   /* ---- Rosters */
@@ -2961,7 +2998,7 @@
     // A tap on a league's header folds or unfolds it; the toggle listener remembers it.
     const head = e.target.closest('details[data-fold] > summary');
     if (head) { tapped = head.parentElement; return; }
-    const t = e.target.closest('[data-go],[data-filter],[data-tsort],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-moves],[data-tsearch],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-mfilter],[data-tsort],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-moves],[data-tsearch],[data-action]');
     if (!t) return;
     if (t.dataset.go) return go(t.dataset.go);
     if (t.dataset.tsearch) {
@@ -3004,6 +3041,7 @@
     }
     if (t.dataset.linkTab) { S.ui.linkTab = t.dataset.linkTab; saveUi(); return render(); }
     if (t.dataset.filter) { S.ui.filter = t.dataset.filter; saveUi(); return render(); }
+    if (t.dataset.mfilter) { S.ui.matchFilter = t.dataset.mfilter; saveUi(); return render(); }
     if (t.dataset.tsort) { S.ui.tradeSort = t.dataset.tsort; saveUi(); return render(); }
     if (t.dataset.viewPos) { S.view.pos = t.dataset.viewPos; return render(); }
     const a = t.dataset.action;

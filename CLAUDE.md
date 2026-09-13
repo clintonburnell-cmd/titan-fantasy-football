@@ -182,6 +182,10 @@ live site, so site changes reach it without a new upload. What's done and what's
   holding an older snapshot refresh on open instead of showing gaps.
 - Live scores refresh without a full refresh (`livePoints`, `loadMatchups`, `scheduleLive`):
   keep them light. ESPN's box score is ~230 KB, so it's fetched every other tick.
+- Matchup: where you stand, in words, comes from `SCC.matchStatus` (pure, tested) through `matchState`
+  in `app.js`, which the card and the summary at the top share; the summary's filters are
+  `MATCH_KINDS` (`S.ui.matchFilter`, chips `data-mfilter`). Opened, the scoreboard (`.board`) shows the
+  score, so the header's score row hides.
 - The Results tab's internal id is still `score`; only its label changed.
 - Folding (Lineups, Rosters, Matchup) goes through `isOpen`, `setFold` and `foldAll` in
   `app.js`, keyed by `FOLD_KEY`. Only a person's tap on a header is saved (`tapped`); code
