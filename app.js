@@ -932,7 +932,8 @@
     }
   }
 
-  const NEWS_EVERY = 2 * 60000;
+  // A feed older than NEWS_OLD is the server's saved copy, served while ESPN turns Titan's server away.
+  const NEWS_EVERY = 2 * 60000, NEWS_OLD = 15 * 60000;
   async function loadNews() {
     if (S.news.busy) return;
     S.news.busy = true;
@@ -988,6 +989,9 @@
       <div class="chips" role="group" aria-label="Filter the news"><button class="chip" data-news="all" aria-pressed="${!S.ui.newsMine}">All news ${list.length}</button>
         <button class="chip" data-news="mine" aria-pressed="${!!S.ui.newsMine}">Your players ${yours.length}</button></div>`;
     if (N.error) h += `<div class="banner stop">${esc(N.error)} <button class="link" data-action="news-retry">Try again</button></div>`;
+    else if (N.list && Date.now() - N.from > NEWS_OLD) {
+      h += `<div class="banner swap">ESPN isn't letting Titan in right now, so these are its stories as of ${esc(when(N.from))}. Titan keeps trying.</div>`;
+    }
     if (!N.list) h += N.error ? '' : '<div class="empty-note">Loading the latest news…</div>';
     else if (!shown.length) h += `<div class="empty-note">${S.ui.newsMine ? 'Nothing about your players in ESPN\'s latest news.' : 'No news right now.'}</div>`;
     else h += `<ul class="card news-list">${shown.map(s => newsRow(s, yoursIn(s), mine)).join('')}</ul>`;

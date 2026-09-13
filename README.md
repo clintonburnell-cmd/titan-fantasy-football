@@ -100,7 +100,9 @@ Settings) switches the app and the website to a dark theme, remembered on that d
 The News tab shows ESPN's latest NFL stories, newest first, refreshing every couple of minutes while
 it's open. Stories about players on your rosters are marked "Your player", with a filter for just
 those, and each story opens on ESPN. With alerts on, Titan also sends "News about your starters":
-its server checks ESPN every 15 minutes, all week, and tapping the alert opens the story.
+its server checks ESPN every 15 minutes, all week, and tapping the alert opens the story. When ESPN
+turns Titan's server away, the tab shows the last stories Titan saved (up to a day old) and says how
+old they are; the scores ticker and game context fall back the same way.
 
 The Trade tab weighs a trade with any team in a league: pick the league and a trade partner, tap
 players on both rosters, and Titan totals each side with FantasyCalc's trade values for the league's
@@ -305,8 +307,8 @@ No build step and no dependencies. It runs on any static host.
    provides the root domain Google Play needs.
 3. **In progress: Google Play.** The same web app packaged as a Trusted Web Activity
    with Bubblewrap (`com.titanfantasyfootball.app`), built and signed, and linked to the
-   site by `/.well-known/assetlinks.json`. The Play Console account is in verification;
-   then come the closed test Google requires of new personal accounts, and production.
+   site by `/.well-known/assetlinks.json`. The Play Console account is verified (Sept 10, 2026);
+   next come the closed test Google requires of new personal accounts, and production.
 4. **More fantasy platforms**, so one Titan account covers every league:
    - **Done: ESPN Fantasy** (`espn.js`) for lineups, rosters, exposure, byes and the
      kickoff record; public leagues by ID, private ones with the member's saved ESPN
@@ -358,3 +360,4 @@ No build step and no dependencies. It runs on any static host.
 | `v1.19.1` | The Players dot works like a notification: it marks waiver pickups you haven't seen on Waivers yet, clears once you open Waivers, and comes back only for a new pickup (remembered on each device) |
 | `v1.19.2` | Trade tab: both rosters sort by value, by position, or by position then value (with position headers when grouped, remembered), and every player shows Titan's colored position tag on the rosters, in the trade and in Who has him? |
 | `v1.19.3` | Position strength: every team's rank at each position by its best lineup this season (Sleeper's projections, a little credit for bench depth), shown on Standings with the top third green and the bottom third red, and on the Trade tab as "Where you both stand" for you and your partner, with the good fits called out; the Trade tab also gets Clear all and a partner picker on the partner's roster card |
+| `v1.19.4` | When ESPN turns Titan's server away (it started answering 403 on 2026-09-12), the News tab, scores ticker and game context serve their last good copy, saved in Firestore, instead of failing: news up to a day old, with a note on the News tab once it's over 15 minutes old; scores up to half an hour; game context up to six hours. News alerts skip an old copy and ask ESPN directly |

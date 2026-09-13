@@ -166,25 +166,50 @@ function fakeUser(db) {
   check(nMeta.checkedAt === nNow && JSON.stringify(ndb.private.alerts.watch) === JSON.stringify(watching) && ndb.private.alerts.sent['news|1|1|' + watching[0].n] === 1,
     'the check time is saved for next time; the watch list is kept and the story remembered');
   check(await job.newsAlerts(1, nDeps([story('4', nNow - 60000, ['Somebody Else'])])) === 0, 'no story about a starter, no alert');
-  const viaTitan = await job.newsForAlerts(async () => new Response(JSON.stringify({at: 1, stories: [story('7', 1, [])]}), {status: 200}),
+  const viaTitan = await job.newsForAlerts(async () => new Response(JSON.stringify({at: Date.now(), stories: [story('7', 1, [])]}), {status: 200}),
     async () => { throw new Error('ESPN should not be asked'); });
   let nDirect = 0;
   const viaEspn = await job.newsForAlerts(async () => new Response('{"error":"down"}', {status: 502}), async () => { nDirect++; return [story('8', 1, [])]; });
   const viaEspn2 = await job.newsForAlerts(async () => { throw new Error('offline'); }, async () => { nDirect++; return [story('8', 1, [])]; });
-  check(viaTitan[0].id === '7' && viaEspn[0].id === '8' && viaEspn2[0].id === '8' && nDirect === 2,
-    'news alerts read Titan\'s shared copy (/api/news) first, and ESPN directly only if that fails');
+  const viaOld = await job.newsForAlerts(async () => new Response(JSON.stringify({at: Date.now() - 3600e3, stories: [story('7', 1, [])]}), {status: 200}),
+    async () => { nDirect++; return [story('8', 1, [])]; });
+  check(viaTitan[0].id === '7' && viaEspn[0].id === '8' && viaEspn2[0].id === '8' && viaOld[0].id === '8' && nDirect === 3,
+    'news alerts read Titan\'s shared copy (/api/news) first, and ESPN directly if that fails or is an hour-old saved copy');
+  // Each ESPN feed's saved copy in Firestore (meta/newsFeed and the rest), in memory.
+  const feedDoc = v => { const d = {v: v || null, sets: 0}; d.get = async () => ({data: () => d.v}); d.set = async x => { d.v = JSON.parse(JSON.stringify(x)); d.sets++; }; return d; };
+  const refused = async () => { throw new Error('ESPN news answered 403'); };
   let nReads = 0;
   const nRead = async () => { nReads++; return [story('9', 1, [])]; };
-  const t0n = 2e12, l1 = await job.latestNews(t0n, nRead), l2 = await job.latestNews(t0n + 60000, nRead), l3 = await job.latestNews(t0n + 100000, nRead);
-  const l4 = await job.latestNews(t0n + 300000, async () => { throw new Error('down'); });
+  const nDoc = feedDoc();
+  const t0n = 2e12, l1 = await job.latestNews(t0n, nRead, nDoc), l2 = await job.latestNews(t0n + 60000, nRead, nDoc), l3 = await job.latestNews(t0n + 100000, nRead, nDoc);
+  const l4 = await job.latestNews(t0n + 300000, refused, nDoc);
   check(nReads === 2 && l1.stories.length === 1 && l2.at === t0n && l3.at === t0n + 100000 && l4.at === l3.at,
     'the News tab\'s feed: one read of ESPN is shared for 90 seconds, and the last copy serves if ESPN is down');
+  check(nDoc.sets === 1 && nDoc.v.at === t0n && nDoc.v.stories[0].id === '9', 'the feed is saved when it changes, not on every read');
+  await job.latestNews(t0n + 16 * 60000, nRead, nDoc);
+  check(nDoc.sets === 2 && nDoc.v.at === t0n + 16 * 60000, 'an unchanged feed is saved again after 15 minutes, so its time stays true');
+  job.freshInstance();
+  const l5 = await job.latestNews(t0n + 60 * 60000, refused, nDoc);
+  check(l5.at === t0n + 16 * 60000 && l5.stories[0].id === '9', 'a new server instance that ESPN refuses serves the saved copy, with its time');
+  job.freshInstance();
+  let l6 = null;
+  try { await job.latestNews(t0n + 25 * 3600e3, refused, nDoc); } catch (e) { l6 = e.message; }
+  check(l6 === 'ESPN news answered 403', 'a saved copy over a day old doesn\'t serve: the request fails, so the alert can fire');
   let scReads = 0;
   const scRead = async () => { scReads++; return {season: 2026, week: 1, games: [{id: '9', kickoff: 1, home: 'KC', away: 'LAC', state: 'in', hs: 14, as: 7, detail: '2nd - 5:12', spread: -3, indoor: false}]}; };
-  const t0s = 3e12, sc1 = await job.latestScores(t0s, scRead), sc2 = await job.latestScores(t0s + 10000, scRead), sc3 = await job.latestScores(t0s + 30000, scRead);
-  const sc4 = await job.latestScores(t0s + 60000, async () => { throw new Error('down'); });
+  const scDown = async () => { throw new Error('down'); };
+  const scDoc = feedDoc();
+  const t0s = 3e12, sc1 = await job.latestScores(t0s, scRead, scDoc), sc2 = await job.latestScores(t0s + 10000, scRead, scDoc), sc3 = await job.latestScores(t0s + 30000, scRead, scDoc);
+  const sc4 = await job.latestScores(t0s + 60000, scDown, scDoc);
   check(scReads === 2 && sc1.games[0].hs === 14 && sc1.games[0].detail === '2nd - 5:12' && sc1.games[0].spread === undefined && sc2.at === t0s &&
     sc3.at === t0s + 30000 && sc4.at === sc3.at, 'the scores ticker: one read of ESPN shared for 20 seconds, trimmed to what it shows; the last copy serves if ESPN is down');
+  job.freshInstance();
+  const sc5 = await job.latestScores(t0s + 20 * 60000, scDown, scDoc);
+  job.freshInstance();
+  let sc6 = null;
+  try { await job.latestScores(t0s + 40 * 60000, scDown, scDoc); } catch (e) { sc6 = e.message; }
+  check(scDoc.sets === 1 && sc5.at === t0s && sc5.games[0].hs === 14 && sc6 === 'down',
+    'scores are saved when they change; a new instance ESPN refuses serves them for up to half an hour, then fails');
 
   section('game context');
   const nwsGet = async url => /\/points\//.test(url) ? {properties: {forecastHourly: 'https://api.weather.gov/gridpoints/BUF/1,1/forecast/hourly'}}
@@ -205,12 +230,21 @@ function fakeUser(db) {
     {id: '1', kickoff: Date.parse('2026-09-13T17:00:00Z'), home: 'BUF', away: 'MIA', indoor: false, country: 'USA', neutral: false, state: 'pre', spread: -6, total: 44},
     {id: '2', kickoff: Date.parse('2026-09-13T17:00:00Z'), home: 'DET', away: 'NO', indoor: true, country: 'USA', neutral: false, state: 'pre', spread: -7, total: 49.5},
     {id: '3', kickoff: Date.parse('2026-09-13T13:30:00Z'), home: 'LAR', away: 'SF', indoor: false, country: 'Australia', neutral: true, state: 'pre', spread: null, total: null}]};
-  const forecasts = [];
+  const forecasts = [], gcDoc = feedDoc();
   const gc = await job.buildContext(gcNow, {scoreboard: async () => gcBoard, weather: async team => { forecasts.push(team); return {temp: 55, wind: 22, precip: 10, text: 'Windy'}; },
-    dvp: async () => ({from: 2025, weeks: 18, teams: {MIA: {RB: {avg: 25, rank: 2}}}})});
+    dvp: async () => ({from: 2025, weeks: 18, teams: {MIA: {RB: {avg: 25, rank: 2}}}}), doc: gcDoc});
   check(gc.teams.BUF.implied === 25 && gc.teams.MIA.implied === 19 && gc.teams.BUF.spread === -6 && gc.teams.MIA.spread === 6 && gc.teams.MIA.opp === 'BUF' &&
     gc.teams.BUF.weather.wind === 22 && gc.teams.DET.weather === null && gc.teams.SF.implied === null && forecasts.join() === 'BUF' &&
     gc.dvp.MIA.RB.rank === 2 && gc.dvpSeason === 2025, 'each team\'s line and expected points; a forecast only for outdoor games in the US; points allowed');
+  const gcRefused = {scoreboard: async () => { throw new Error('ESPN scoreboard answered 403'); }, doc: gcDoc};
+  check(gcDoc.v && gcDoc.v.at === gcNow && gcDoc.v.teams.BUF.implied === 25, 'each build is saved for a new instance to fall back on');
+  job.freshInstance();
+  const gc2 = await job.buildContext(gcNow + 2 * 3600e3, gcRefused);
+  job.freshInstance();
+  let gc3 = null;
+  try { await job.buildContext(gcNow + 7 * 3600e3, gcRefused); } catch (e) { gc3 = e.message; }
+  check(gc2.at === gcNow && gc2.teams.BUF.implied === 25 && gc3 === 'ESPN scoreboard answered 403',
+    'when ESPN refuses a new instance, the saved game context serves for up to six hours, then the request fails');
 
   const pid = Object.keys(lg.players)[0], wasLocked = lg.players[pid].locked;
   db.history['1'].leagues['espn:99999901'].players[pid].rank = -7;

@@ -142,14 +142,17 @@ const NEWS_OVERLAP = 30 * 60000, NEWS_MAX_AGE = 3 * 3600 * 1000;
 
 /* Where news alerts read ESPN's stories: Titan's own /api/news first (the News tab's shared,
    cached copy), then ESPN directly. ESPN has turned the game-day job's server away (403)
-   while letting the News tab's in, and the shared copy also spares ESPN a reader. */
-const TITAN_NEWS = 'https://titanfantasyfootball.com/api/news';
-async function newsForAlerts(get = fetch, direct = () => ESPN.fetchNews()) {
+   while letting the News tab's in, and the shared copy also spares ESPN a reader. A copy
+   over ten minutes old (the saved one, served while ESPN refuses Titan's server) counts as
+   no answer, so the check isn't recorded and the next one looks back further. */
+const TITAN_NEWS = 'https://titanfantasyfootball.com/api/news', NEWS_FRESH = 10 * 60000;
+async function newsForAlerts(get = fetch, direct = () => ESPN.fetchNews(), now = Date.now()) {
   try {
     const res = await get(TITAN_NEWS);
     if (!res.ok) throw new Error('Titan\'s news answered ' + res.status);
     const j = await res.json();
     if (!Array.isArray(j.stories)) throw new Error('no stories');
+    if (!(now - j.at < NEWS_FRESH)) throw new Error('an old copy');
     return j.stories;
   } catch (e) {
     return direct();
@@ -575,17 +578,45 @@ exports.tradeValues = onRequest({region: 'us-central1', memory: '256MiB', maxIns
   }
 });
 
+/* ESPN's feeds sometimes turn Titan's server away (403, since 2026-09-12), and a new server
+   instance has nothing in memory to fall back on. So each feed's last good copy is also saved
+   in Firestore (meta/newsFeed, meta/scoresFeed, meta/gameContext): when it changes, or at least
+   every 15 minutes so its time stays true. When ESPN refuses, the newer of the instance's copy
+   and the saved one serves while it's young enough, with a warning in the log (its `at` tells
+   the app how old it is); past that the request fails and the "Titan server problems" alert
+   fires. Keep the words "could not" out of these warnings: the alert matches them. */
+const COPY_EVERY = 15 * 60000;
+const copies = {}; // what each feed last saved from this instance: {sig, at}
+async function saveCopy(name, doc, copy, sig) {
+  const last = copies[name];
+  if (last && last.sig === sig && copy.at - last.at < COPY_EVERY) return;
+  try { await doc.set(copy); copies[name] = {sig, at: copy.at}; }
+  catch (e) { logger.warn(`${name}: the saved copy wasn't updated: ${e.message}`); }
+}
+
+async function fallback(name, mem, doc, now, maxAge, err) {
+  let saved = null;
+  try { saved = (await doc.get()).data() || null; } catch (e) { saved = null; }
+  const copy = [mem, saved].filter(c => c && now - c.at < maxAge).sort((a, b) => b.at - a.at)[0];
+  if (!copy) throw err;
+  logger.warn(`${name}: ESPN unavailable (${err.message}), serving the copy from ${new Date(copy.at).toISOString()}`);
+  return copy;
+}
+
 /* ESPN's latest NFL news for the News tab. Browsers can't always read ESPN's feed
    themselves (its bot protection turns some away, and it refuses the check a browser
    sometimes makes first), so Titan's server reads it and shares one copy: kept in memory
    for 90 seconds, and by browsers and Firebase Hosting's CDN for up to two minutes. If
-   ESPN can't be reached, the last copy serves. */
-const NEWS_KEEP = 90 * 1000;
+   ESPN can't be reached, the last copy serves for up to a day. */
+const NEWS_KEEP = 90 * 1000, NEWS_SERVE = 24 * 3600 * 1000;
 let newsCache = null;
-async function latestNews(now = Date.now(), fetchNews = () => ESPN.fetchNews()) {
+async function latestNews(now = Date.now(), fetchNews = () => ESPN.fetchNews(), doc = db.doc('meta/newsFeed')) {
   if (newsCache && now - newsCache.at < NEWS_KEEP) return newsCache;
-  try { newsCache = {at: now, stories: await fetchNews()}; }
-  catch (e) { if (newsCache) return newsCache; throw e; }
+  let stories;
+  try { stories = await fetchNews(); }
+  catch (e) { return (newsCache = await fallback('news', newsCache, doc, now, NEWS_SERVE, e)); }
+  newsCache = {at: now, stories};
+  await saveCopy('news', doc, newsCache, stories.map(s => s.id + ':' + s.at).join());
   return newsCache;
 }
 
@@ -603,19 +634,17 @@ exports.espnNews = onRequest({region: 'us-central1', memory: '256MiB', maxInstan
 /* Live NFL scores for the app's ticker: ESPN's public scoreboard (unofficial, so the ticker
    links each game to ESPN and credits it), read by Titan's server and shared by everyone:
    kept 20 seconds in memory and by Firebase Hosting's CDN. If ESPN can't be reached, the
-   last copy serves. */
-const SCORES_KEEP = 20 * 1000;
+   last copy serves for up to half an hour. */
+const SCORES_KEEP = 20 * 1000, SCORES_SERVE = 30 * 60000;
 let scoresCache = null;
-async function latestScores(now = Date.now(), read = () => ESPN.fetchScoreboard()) {
+async function latestScores(now = Date.now(), read = () => ESPN.fetchScoreboard(), doc = db.doc('meta/scoresFeed')) {
   if (scoresCache && now - scoresCache.at < SCORES_KEEP) return scoresCache;
-  try {
-    const b = await read();
-    scoresCache = {at: now, season: b.season, week: b.week, games: b.games.map(g => ({id: g.id, kickoff: g.kickoff, home: g.home, away: g.away,
-      state: g.state, hs: g.hs, as: g.as, detail: g.detail}))};
-  } catch (e) {
-    if (scoresCache) return scoresCache;
-    throw e;
-  }
+  let b;
+  try { b = await read(); }
+  catch (e) { return (scoresCache = await fallback('scores', scoresCache, doc, now, SCORES_SERVE, e)); }
+  const games = b.games.map(g => ({id: g.id, kickoff: g.kickoff, home: g.home, away: g.away, state: g.state, hs: g.hs, as: g.as, detail: g.detail}));
+  scoresCache = {at: now, season: b.season, week: b.week, games};
+  await saveCopy('scores', doc, scoresCache, JSON.stringify(games));
   return scoresCache;
 }
 
@@ -635,7 +664,8 @@ exports.nflScores = onRequest({region: 'us-central1', memory: '256MiB', maxInsta
    line and each side's expected points), the forecast at kickoff for outdoor games in the US
    (the National Weather Service, public domain; each home stadium's spot from STADIUMS), and
    the fantasy points each defense gives up to each position (nflverse's weekly player stats,
-   CC BY 4.0: last season's until three weeks of this one are played; kept 12 hours). */
+   CC BY 4.0: last season's until three weeks of this one are played; kept 12 hours). If
+   ESPN's scoreboard can't be reached, the last copy serves for up to six hours. */
 const STADIUMS = {
   ARI: [33.5276, -112.2626], ATL: [33.7554, -84.4010], BAL: [39.2780, -76.6227], BUF: [42.7738, -78.7870], CAR: [35.2258, -80.8528],
   CHI: [41.8623, -87.6167], CIN: [39.0955, -84.5161], CLE: [41.5061, -81.6995], DAL: [32.7473, -97.0945], DEN: [39.7439, -105.0201],
@@ -648,7 +678,7 @@ const STADIUMS = {
 const NWS = 'https://api.weather.gov';
 const NWS_HEADERS = {'User-Agent': 'TitanFantasyFootball (gainalphatrading@gmail.com)', Accept: 'application/geo+json'};
 const NFLVERSE = 'https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_';
-const CONTEXT_KEEP = 30 * 60 * 1000, DVP_KEEP = 12 * 3600 * 1000;
+const CONTEXT_KEEP = 30 * 60 * 1000, CONTEXT_SERVE = 6 * 3600 * 1000, DVP_KEEP = 12 * 3600 * 1000;
 let contextCache = null, dvpCache = null;
 const hourlyAt = {}; // each stadium's hourly-forecast address, which doesn't change
 
@@ -697,7 +727,10 @@ async function dvpFor(season, now = Date.now(), get = csvGz, doc = db.doc('meta/
 
 async function buildContext(now = Date.now(), deps = {}) {
   if (contextCache && now - contextCache.at < CONTEXT_KEEP) return contextCache;
-  const board = await (deps.scoreboard || ESPN.fetchScoreboard)();
+  const doc = deps.doc || db.doc('meta/gameContext');
+  let board;
+  try { board = await (deps.scoreboard || ESPN.fetchScoreboard)(); }
+  catch (e) { return (contextCache = await fallback('game context', contextCache, doc, now, CONTEXT_SERVE, e)); }
   const weather = deps.weather || kickoffWeather, teams = {};
   await Promise.all(board.games.map(async g => {
     const imp = SCC.impliedTotals(g);
@@ -711,8 +744,10 @@ async function buildContext(now = Date.now(), deps = {}) {
   let d = null;
   try { d = await (deps.dvp || dvpFor)(board.season || new Date(now).getUTCFullYear(), now); }
   catch (e) { logger.warn('points allowed unavailable: ' + e.message); }
-  return (contextCache = {at: now, season: board.season, week: board.week, teams,
-    dvp: d ? d.teams : null, dvpSeason: d ? d.from : null, dvpWeeks: d ? d.weeks : 0});
+  contextCache = {at: now, season: board.season, week: board.week, teams,
+    dvp: d ? d.teams : null, dvpSeason: d ? d.from : null, dvpWeeks: d ? d.weeks : 0};
+  await saveCopy('game context', doc, contextCache, now); // a new build every half hour, so always saved
+  return contextCache;
 }
 
 exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInstances: 3, timeoutSeconds: 120, invoker: 'public'}, async (req, res) => {
@@ -728,4 +763,6 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
 
 exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
   yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll, latestScores, newsForAlerts,
-  setSend: fn => { sendPush = fn; }};
+  setSend: fn => { sendPush = fn; },
+  // A new server instance: nothing in memory, nothing saved from it yet.
+  freshInstance: () => { newsCache = scoresCache = contextCache = null; Object.keys(copies).forEach(k => delete copies[k]); }};
