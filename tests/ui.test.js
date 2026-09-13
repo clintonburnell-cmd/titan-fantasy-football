@@ -521,6 +521,49 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await ev(`!!document.querySelector('.news-item a[href="https://www.espn.com/nfl/story/_/id/101"][target="_blank"]') && document.querySelectorAll('.xrow').length > 0`),
     'each story opens on ESPN, and the insiders on X are still listed');
 
+  T.section('import multiple sources');
+  await tab('multi');
+  check(await waitFor(`!!document.querySelector('textarea[data-multi="text"]')`, 5000) && await ev(`location.pathname === '/app/multiple'`),
+    'Import multiple sources opens under Rankings, at /app/multiple');
+  // Two sources: the sample rankings, and the same with its top three QBs reordered (A: q0 q1 q2, B: q1 q2 q0).
+  const csvA = T.sampleRanks(), linesA = csvA.split(/\r?\n/);
+  const qbLines = linesA.map((l, i) => [l.split(','), i]).filter(([c]) => c[1] === 'QB').slice(0, 3);
+  const linesB = linesA.slice();
+  [3, 1, 2].forEach((r, j) => { const c = qbLines[j][0].slice(); c[3] = String(r); linesB[qbLines[j][1]] = c.join(','); });
+  const [q0, q1] = qbLines.map(([c]) => c[0]);
+  const addSource = async (name, csv) => {
+    await ev(`(() => { const n = document.querySelector('input[data-multi="name"]'); n.value = ${JSON.stringify(name)}; n.dispatchEvent(new Event('input', {bubbles: true}));
+      const ta = document.querySelector('textarea[data-multi="text"]'); ta.value = ${JSON.stringify(csv)}; ta.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
+    await sleep(200);
+    await ev(`document.querySelector('[data-action="multi-add"]').click(); true`);
+    await sleep(300);
+  };
+  await addSource('Source A', csvA);
+  check(await ev(`document.querySelectorAll('.msources li').length === 1 && document.querySelector('[data-action="multi-save"]').disabled`),
+    'one source listed; saving waits for a second');
+  await addSource('Source B', linesB.join('\n'));
+  await ev(`document.querySelector('.mcombined') && document.querySelector('[data-view-pos="QB"]').click(); true`);
+  await sleep(200);
+  const firstQb = () => ev(`document.querySelector('.mcombined .row b').innerText`);
+  const mc = await ev(`({n: document.querySelectorAll('.msources li').length, save: !document.querySelector('[data-action="multi-save"]').disabled,
+    places: document.querySelector('.mcombined .row small').innerText, fits: document.documentElement.scrollWidth <= innerWidth})`);
+  const even = await firstQb();
+  check(mc.n === 2 && mc.save && /Source A QB\d/.test(mc.places) && /Source B QB\d/.test(mc.places) && mc.fits && even === q1,
+    `two sources combined, each player showing his place in both ("${mc.places}"); at equal weight the QB1 is ${even}`);
+  await ev(`(() => { const s = document.querySelectorAll('.mweight')[0]; s.value = '3'; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
+  await sleep(300);
+  const heavy = await firstQb();
+  check(heavy === q0, `with Source A at 3x its QB1 comes out on top (${heavy})`);
+  await shot('multi-390');
+  await ev(`document.querySelector('[data-action="multi-save"]').click(); true`);
+  await sleep(600);
+  await tab('ranks');
+  check(await waitFor(`/combined: Source A 3x \\+ Source B/.test(document.querySelector('.saved').innerText)`, 5000),
+    'saved as the week\'s rankings, named for its sources: ' + (await text('.saved')).replace(/\s+/g, ' ').slice(0, 110));
+  await tab('multi');
+  check(await waitFor(`document.querySelectorAll('.msources li').length === 2 && document.querySelectorAll('.mweight')[0].value === '3'`, 5000),
+    'back on Import multiple, the week\'s sources and weights are there to change');
+
   if (T.sleeperUser) {
     T.section('linking Sleeper as well');
     await tab('settings');

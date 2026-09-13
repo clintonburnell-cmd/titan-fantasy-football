@@ -825,6 +825,15 @@ details.match[open] .mh-score { display: none; }
 .tnote { padding: 8px 14px 12px; border-top: 1px solid var(--line); }
 .pphoto .hs.tpick { display: flex; align-items: center; justify-content: center; font-size: .66rem; font-weight: 800; color: var(--accent-2);
   box-shadow: inset 0 0 0 1px var(--line); }
+/* Import multiple sources (Rankings): each source's weight, the defaults checkbox, and players
+   the sources are split on. */
+.mweight { font: inherit; font-size: .82rem; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); }
+.check { display: flex; align-items: center; gap: 8px; font-size: .88rem; cursor: pointer; }
+.check input { flex: none; width: 18px; height: 18px; accent-color: var(--accent); }
+.mspread { display: inline-block; margin-right: 6px; padding: 1px 7px; border-radius: 999px; font-size: .66rem; font-weight: 800;
+  background: var(--swap-soft); color: var(--swap); }
+.mcombined .who small { white-space: normal; }
+
 /* Draft results (the Trade tab's pop-up): the whole screen on phones, a centred panel on
    computers. Team grades open to their picks; the board scrolls sideways. */
 .tdraft { padding-block: 10px; }

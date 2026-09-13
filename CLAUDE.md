@@ -55,7 +55,7 @@ live site, so site changes reach it without a new upload. What's done and what's
   trimmed player), `check|week|kickoff` (one alert covering every league), `news|week|story|player`.
 - Navigation: five sections (`SECTIONS` in `app.js`): Lineups, Matchup, League (Standings, Rosters,
   Trade, Transactions), Players (Waivers, News, Exposure, Byes) and Rankings (Import, which is the `ranks`
-  screen, and Results), with Settings behind the gear (`#gear`). Phones, the Android app and home-screen
+  screen, Import multiple, which is `multi` at `/app/multiple`, and Results), with Settings behind the gear (`#gear`). Phones, the Android app and home-screen
   copies show them as a bar along the bottom (the header is solid there: a see-through `backdrop-filter`
   header would hold the fixed bar inside it); wide windows as a header menu whose sections drop down
   their screens. `screenBar` puts a section's screens as sub-tabs at the top of each screen, and the one
@@ -190,6 +190,12 @@ live site, so site changes reach it without a new upload. What's done and what's
 - Folding (Lineups, Rosters, Matchup) goes through `isOpen`, `setFold` and `foldAll` in
   `app.js`, keyed by `FOLD_KEY`. Only a person's tap on a header is saved (`tapped`); code
   that opens or closes a league (the Rosters search, jump chips) must not save it.
+- Import multiple sources (`screenMulti`): `SCC.combineRanks` (pure, tested) combines each position on
+  its own (a source missing a player counts him one below its last there, weights 1x to 3x) and fits RB,
+  WR and TE onto one FLEX list from the sources that have an overall list (`opts.curve`, Titan's default
+  rankings, when none does). The result is saved as the week's `rows`, so every call, the server job
+  and Results read it unchanged; the sources ride along as the week's `multi` (synced with it), and an
+  unsaved set stays on the device (`KEY.multi`). A plain import over that week drops `multi`.
 - A new rankings format: study the person's file locally, then test with a few made-up rows in
   the same format (see The Hall's test in `tests/engine.test.js`). Never commit a ranking
   site's actual file; many are paid. Name known sources in `parseRanks`'s `source`.

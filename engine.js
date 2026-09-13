@@ -934,6 +934,114 @@
       position: single ? fixedPos : '', warning: warning, error: rows.length ? '' : 'No player rows found.'};
   }
 
+  /* Several rankings for one week combined into a single list (Import multiple sources), in
+     the rows an import saves. sources: [{name, rows (parseRanks' rows), weight}]. Each
+     position is combined on its own: a player's place at his position in every source that
+     ranks the position (one below its last player there when it leaves him out), averaged by
+     the sources' weights; a tie goes to the player more sources rank, then by name. QB, K and
+     DEF keep that positional rank. RB, WR and TE also need one overall (FLEX) scale so FLEX
+     spots compare them fairly, so the positions are fitted together the way the sources with
+     an overall list do it (where their Nth RB lands among their RBs, WRs and TEs, averaged), or
+     opts.curve's (Titan's default rankings) when none has one; past every overall list a
+     player gets 1000 + his position rank, as a rankings file does. {rows, players (name, pos,
+     team, posRank, rank, ranks: {source: his place there}), sources, fitted (the lists FLEX
+     follows), warning}. */
+  function combineRanks(sources, opts) {
+    opts = opts || {};
+    var FLEX3 = {RB: 1, WR: 1, TE: 1};
+    var byRank = function (a, b) { return rankKey(a) - rankKey(b); };
+    var onFlexList = function (r) { return FLEX3[r.pos] && r.rank !== null && r.rank !== undefined && r.rank < 1000; };
+    // A list ranks RB, WR and TE on one overall scale when two or more of them share it without repeating a rank.
+    var hasFlexScale = function (rows) {
+      var seen = {}, pos = {}, list = (rows || []).filter(onFlexList);
+      for (var i = 0; i < list.length; i++) {
+        if (seen[list[i].rank]) return false;
+        seen[list[i].rank] = 1;
+        pos[list[i].pos] = 1;
+      }
+      return Object.keys(pos).length >= 2;
+    };
+    // Where a list's Nth RB (WR, TE) lands among its RBs, WRs and TEs: {RB: [place of RB1, RB2, ...]}.
+    var flexCurve = function (rows) {
+      var out = {};
+      rows.filter(onFlexList).sort(byRank).forEach(function (r, i) { (out[r.pos] = out[r.pos] || []).push(i + 1); });
+      return out;
+    };
+    var srcs = (sources || []).filter(function (s) { return s && s.rows && s.rows.length && Number(s.weight) > 0; });
+    var players = {}, list = [];
+    var orders = srcs.map(function (s) {
+      var byPos = {}, place = {}, count = {};
+      s.rows.forEach(function (r) { if (POSITIONS[r.pos]) (byPos[r.pos] = byPos[r.pos] || []).push(r); });
+      Object.keys(byPos).forEach(function (p) {
+        var k = 0;
+        byPos[p].slice().sort(byRank).forEach(function (r) {
+          var key = norm(r.name) + '|' + p;
+          if (place[key]) return;
+          place[key] = ++k;
+          var pl = players[key];
+          if (!pl) list.push(pl = players[key] = {name: r.name, pos: p, team: r.team || '', opp: r.opp || '', ranks: {}});
+          if (!pl.team && r.team) pl.team = r.team;
+          if (!pl.opp && r.opp) pl.opp = r.opp;
+          pl.ranks[s.name] = k;
+        });
+        count[p] = k;
+      });
+      return {name: s.name, weight: Number(s.weight), place: place, count: count, rows: s.rows};
+    });
+    list.forEach(function (pl) {
+      var key = norm(pl.name) + '|' + pl.pos, sum = 0, wsum = 0, n = 0;
+      orders.forEach(function (o) {
+        if (!o.count[pl.pos]) return;
+        var at = o.place[key];
+        if (at) n++;
+        sum += o.weight * (at || o.count[pl.pos] + 1);
+        wsum += o.weight;
+      });
+      pl.score = sum / wsum;
+      pl.n = n;
+    });
+    var byPos = {};
+    list.forEach(function (pl) { (byPos[pl.pos] = byPos[pl.pos] || []).push(pl); });
+    Object.keys(byPos).forEach(function (p) {
+      byPos[p].sort(function (a, b) { return a.score - b.score || b.n - a.n || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0); })
+        .forEach(function (pl, i) { pl.posRank = i + 1; });
+    });
+    // RB, WR and TE onto one overall scale, the way the overall lists fit them together.
+    var fitted = orders.filter(function (o) { return hasFlexScale(o.rows); });
+    var curves = fitted.map(function (o) { return {c: flexCurve(o.rows), w: o.weight}; });
+    var names = fitted.map(function (o) { return o.name; });
+    if (!curves.length && opts.curve && hasFlexScale(opts.curve)) {
+      curves = [{c: flexCurve(opts.curve), w: 1}];
+      names = [opts.curveName || 'default rankings'];
+    }
+    var flex = [];
+    Object.keys(FLEX3).forEach(function (p) {
+      var last = 0;
+      (byPos[p] || []).forEach(function (pl) {
+        var sum = 0, wsum = 0;
+        curves.forEach(function (x) {
+          var v = (x.c[p] || [])[pl.posRank - 1];
+          if (v !== undefined) { sum += x.w * v; wsum += x.w; }
+        });
+        if (!wsum) return;
+        // Never ahead of the player above him at his position.
+        pl.at = last = Math.max(sum / wsum, last + 1e-6);
+        flex.push(pl);
+      });
+    });
+    flex.sort(function (a, b) { return a.at - b.at || a.posRank - b.posRank; }).forEach(function (pl, i) { pl.rank = i + 1; });
+    list.forEach(function (pl) { if (!pl.rank) pl.rank = FLEX3[pl.pos] ? 1000 + pl.posRank : pl.posRank; });
+    var warning = list.some(function (pl) { return FLEX3[pl.pos]; }) && !curves.length
+      ? 'None of these sources ranks RB, WR and TE on one overall list, so FLEX spots can\'t compare them fairly. ' +
+        'Add one that does (FantasyPros\' FLEX rankings, say), or count Titan\'s default rankings too.' : '';
+    list.sort(function (a, b) { return DEFAULT_POS.indexOf(a.pos) - DEFAULT_POS.indexOf(b.pos) || a.posRank - b.posRank; });
+    return {
+      rows: list.map(function (pl) { return {name: pl.name, pos: pl.pos, team: pl.team, rank: pl.rank, opp: pl.opp, implied: '', tier: '', posRank: pl.posRank}; }),
+      players: list.map(function (pl) { return {name: pl.name, pos: pl.pos, team: pl.team, posRank: pl.posRank, rank: pl.rank, ranks: pl.ranks, n: pl.n}; }),
+      sources: orders.map(function (o) { return o.name; }), fitted: names, warning: warning
+    };
+  }
+
   /* A file replaces only the positions it ranks and keeps the rest of the week,
      so FantasyPros' per-position files add up, and a file without K or DEF (like
      the OP list) leaves the saved K and DEF ranks alone. */
@@ -2058,7 +2166,7 @@
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas,
     draftFromSleeper: draftFromSleeper, draftGrades: draftGrades,
     impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags, transactionsFrom: transactionsFrom,
-    splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
+    splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks, combineRanks: combineRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,
     depthCharts: depthCharts, backupOf: backupOf, faabBid: faabBid,

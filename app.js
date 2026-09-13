@@ -16,16 +16,16 @@
   // the demo can't overwrite someone's leagues or rankings.
   const DEMO = new URLSearchParams(location.search).has('demo');
   const KEY = DEMO
-    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1'}
-    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1'};
+    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1'}
+    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'settings'];
+  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
-    score: 'Results', news: 'News', ranks: 'Rankings', trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
+    score: 'Results', news: 'News', ranks: 'Rankings', multi: 'Import multiple sources', trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
   const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes',
-    score: 'results', news: 'news', ranks: 'rankings', trade: 'trade', moves: 'transactions', settings: 'settings'};
+    score: 'results', news: 'news', ranks: 'rankings', multi: 'multiple', trade: 'trade', moves: 'transactions', settings: 'settings'};
   const tabFromPath = () => {
     const m = location.pathname.match(/^\/app\/([a-z]+)\/?$/);
     return (m && Object.keys(SLUG).find(t => SLUG[t] === m[1])) || '';
@@ -39,9 +39,9 @@
     {id: 'matchup', name: 'Matchup', tabs: ['matchup']},
     {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
     {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes']},
-    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'score']}
+    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'multi', 'score']}
   ];
-  const SUB_NAMES = {ranks: 'Import', score: 'Results'};
+  const SUB_NAMES = {ranks: 'Import', multi: 'Import multiple', score: 'Results'};
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
   const LEAGUE_SCREENS = {lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1};
@@ -121,6 +121,11 @@
     // The Trade tab: each league's teams, FantasyCalc's values by league format, and the trade being built.
     trade: {teams: {}, values: {}, pick: {league: '', partner: '', give: [], get: []}, ideas: {}},
     draftRes: {}, draftFor: '', // draft results (the Trade tab's pop-up): each league's draft ({busy, error, data}), and the one showing
+    // Import multiple sources: the week being combined and its sources (kept on this device until saved), the file being added, and
+    // Sleeper's projections for a week other than this one (for Titan's default rankings as a source).
+    multi: store.get(KEY.multi) || {week: 0, sources: [], defaults: false, dirty: false},
+    mdraft: {text: '', file: '', pos: '', parsed: null, name: '', into: ''},
+    mproj: null,
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
@@ -1414,6 +1419,7 @@
       Until you import for a week, it uses default rankings (Sleeper's weekly projections, in each league's own scoring), and those also fill any position your file leaves out. ${S.sync.user
         ? 'Imported rankings sync to your devices through your Google sign-in, and only you can see them.'
         : 'Imported rankings are kept on this device and never shared. Sign in on Settings to sync them to your other devices.'}</p>
+      <p class="fine">Rankings from several places? <button class="link" data-go="multi">Import multiple sources</button> combines them into one list.</p>
       <section class="card pad"><h3>Saved rankings</h3>${weeks.length ? `<ul class="saved">${weeks.map(w => {
         const e = S.ranks.weeks[w];
         return `<li><span><b>Week ${w}</b> · ${e.rows.length} players<small>${esc(countsText(e.rows))} · saved ${esc(when(e.savedAt))}${
@@ -1484,10 +1490,11 @@
     return Object.assign({prev}, SCC.mergeRanks(prev && prev.rows, P.rows));
   }
 
-  function posPicker() {
-    return `<label class="field narrow-select"><span>Which position does this file rank?</span><select data-draft="pos">
+  // The position a file without a position column ranks (the Import screen's data-draft, or Import multiple's data-multi).
+  function posPicker(val = S.draft.pos, attr = 'data-draft') {
+    return `<label class="field narrow-select"><span>Which position does this file rank?</span><select ${attr}="pos">
       <option value="">Choose…</option>${['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].map(p =>
-        `<option ${S.draft.pos === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>`;
+        `<option ${val === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>`;
   }
 
   function draftPreview() {
@@ -1559,6 +1566,163 @@
     pushWeek(w);
     analyze();
     render();
+  }
+
+  /* ---- Import multiple sources (Rankings): several rankings combined into one list for a week
+     (SCC.combineRanks) and saved as that week's rankings, so every call uses it. The sources are
+     saved with it (the week's `multi`) so one can be added or re-weighted later; until then they
+     stay on this device (KEY.multi). A source can be several files (FantasyPros' per-position
+     files), each replacing its own positions. Weights are remembered by source name. */
+  const DEFAULTS_SOURCE = 'Titan defaults';
+  const saveMulti = () => store.set(KEY.multi, S.multi);
+  const noMdraft = into => ({text: '', file: '', pos: '', parsed: null, name: '', into: into || ''});
+  const parseMdraft = () => (S.mdraft.text.trim() ? SCC.parseRanks(S.mdraft.text, {pos: S.mdraft.pos}) : null);
+  // A new source's name: typed, else the format's (FantasyPros, The Hall), else the file's.
+  const mdraftName = () => (S.mdraft.name.trim() || (S.mdraft.parsed && S.mdraft.parsed.source) || S.mdraft.file.replace(/\.[a-z0-9]+$/i, '')).slice(0, 40);
+
+  // Opens a week: its saved sources if it was combined before, else none.
+  function multiWeek(w) {
+    const saved = S.ranks.weeks[w] && S.ranks.weeks[w].multi;
+    S.multi = {week: w, sources: saved ? JSON.parse(JSON.stringify(saved.sources || [])) : [], defaults: !!(saved && saved.defaults), dirty: false};
+    S.mdraft = noMdraft();
+    saveMulti();
+  }
+
+  // Sleeper's projections for a week, for Titan's default rankings: this week's are loaded already, another week's are fetched once.
+  function multiProj(w) {
+    if (S.snap && w === S.snap.week && Object.keys(S.proj).length) return S.proj;
+    if (S.mproj && S.mproj.w === w) return S.mproj.map;
+    if (S.snap && !(S.mproj && S.mproj.busy)) {
+      S.mproj = {w, busy: true, map: null};
+      API.fetchProjections(S.snap.season, w).catch(() => ({})).then(map => {
+        S.mproj = {w, map: map || {}};
+        if (S.ui.tab === 'multi') render();
+      });
+    }
+    return null;
+  }
+
+  // The week's sources combined, with Titan's default rankings when chosen (they also fit RB/WR/TE together when no source can).
+  function combined() {
+    const M = S.multi, proj = multiProj(M.week);
+    const dflt = proj && Object.keys(proj).length ? SCC.defaultRanks(proj, playerList(), 0.5) : null;
+    const srcs = M.sources.map(s => ({name: s.name, rows: s.rows, weight: Number(s.weight) || 1}));
+    if (M.defaults && dflt) srcs.push({name: DEFAULTS_SOURCE, rows: dflt, weight: 1});
+    return srcs.length ? SCC.combineRanks(srcs, {curve: dflt, curveName: DEFAULTS_SOURCE}) : null;
+  }
+
+  function screenMulti() {
+    if (!S.multi.week) multiWeek(S.snap ? S.snap.week : 1);
+    const M = S.multi, w = M.week, saved = S.ranks.weeks[w], C = combined();
+    const weightPick = (s, i) => `<select class="mweight" data-mweight="${i}" aria-label="Weight for ${esc(s.name)}">${[1, 2, 3].map(x =>
+      `<option value="${x}"${x === (Number(s.weight) || 1) ? ' selected' : ''}>${x}x</option>`).join('')}</select>`;
+    let h = `<p class="lede">Combine rankings from several places into one list for a week. Each player's rank is averaged across your sources,
+      position by position (a source that leaves him out counts him just below its last player there), and the combined list is saved as
+      that week's rankings, so every call uses it.</p>
+      <section class="card pad"><div class="bar"><label class="field narrow"><span>Week</span><input type="number" min="1" max="18" data-multi="week" value="${w}"></label></div>
+        ${saved && !saved.multi ? `<p class="fine">Week ${w} already has rankings (${esc(saved.source || 'an import')}). Saving a combined list replaces them.</p>` : ''}
+        <h3>Sources for week ${w}</h3>
+        ${M.sources.length ? `<ul class="saved msources">${M.sources.map((s, i) => `<li><span><b>${esc(s.name)}</b><small>${esc(countsText(s.rows))}${
+          s.files && s.files.length ? ' · ' + esc(s.files.join(', ')) : ''}</small></span>
+          <span class="saved-btns">${weightPick(s, i)}<button class="btn ghost small" data-action="multi-remove" data-i="${i}">Remove</button></span></li>`).join('')}</ul>`
+          : '<p class="muted">None yet. Add your first source below.</p>'}
+        <label class="check"><input type="checkbox" data-multi="defaults"${M.defaults ? ' checked' : ''}> Also count Titan's default rankings (Sleeper's projections) as a source</label>
+        ${M.defaults && !multiProj(w) ? `<p class="fine">Loading Sleeper's projections for week ${w}…</p>` : ''}
+      </section>
+      <section class="card pad"><h3>Add a source</h3>
+        <div class="bar">
+          <label class="field"><span>Add to</span><select data-multi="into"><option value="">A new source</option>${M.sources.map(s =>
+            `<option value="${esc(s.name)}"${S.mdraft.into === s.name ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
+          ${S.mdraft.into ? '' : `<label class="field"><span>Name</span><input type="text" data-multi="name" maxlength="40" value="${esc(S.mdraft.name)}"
+            placeholder="Late-Round, FantasyPros…" autocomplete="off"></label>`}
+          <label class="btn ghost file">Choose CSV file<input type="file" accept=".csv,.tsv,.txt,text/csv" data-multi="file" hidden></label>
+        </div>
+        <label class="field block"><span>…or paste them as CSV, or copied straight out of a spreadsheet</span>
+          <textarea data-multi="text" rows="6" spellcheck="false">${esc(S.mdraft.text)}</textarea></label>
+        <div id="multi-preview" class="draft">${multiPreview()}</div>
+        <p class="fine">Every format the Import screen reads works here. A source can be several files, like FantasyPros' QB, FLEX, K and DST files:
+          add the first as a new source, then add the others to it. A file that ranks one position is fine here: its order counts for that position.</p>
+      </section>`;
+    return h + multiCombined(C, saved);
+  }
+
+  function multiPreview() {
+    const P = S.mdraft.parsed, into = S.mdraft.into, name = into || mdraftName();
+    const taken = !into && name && S.multi.sources.some(s => s.name.toLowerCase() === name.toLowerCase());
+    const ok = P && P.rows.length && !P.error && name && !taken;
+    const btn = `<button class="btn" data-action="multi-add"${ok ? '' : ' disabled'}>${into ? 'Add to ' + esc(into) : name ? 'Add ' + esc(name) : 'Add source'}</button>`;
+    if (!P) return btn;
+    if (P.needsPosition) return `<div class="banner swap">${esc(P.error)}</div>${posPicker(S.mdraft.pos, 'data-multi')}${btn}`;
+    if (P.error) return `<div class="banner stop">${esc(P.error)}</div>${btn}`;
+    const note = taken ? `<div class="banner swap">There's already a source called ${esc(name)}. Choose it under Add to, or give this one another name.</div>`
+      : !name ? '<p class="fine">Give this source a name to add it.</p>' : '';
+    return `<div class="banner ok"><b>${P.rows.length} players read${P.source ? ' from ' + esc(P.source) : ''}</b> · ${esc(countsText(P.rows))}</div>${
+      P.position ? posPicker(S.mdraft.pos, 'data-multi') : ''}${note}${btn}`;
+  }
+
+  function paintMulti() {
+    const el = $('multi-preview');
+    if (el) el.innerHTML = multiPreview();
+  }
+
+  // The combined list: Save first, then a position at a time with each source's place for every player.
+  function multiCombined(C, saved) {
+    const w = S.multi.week, n = C ? C.sources.length : 0;
+    if (!C) return '<section class="card pad"><h3>Combined rankings</h3><p class="muted">Add two or more sources to combine them.</p></section>';
+    const counts = SCC.rankCounts(C.rows), shown = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].filter(p => counts[p]);
+    const pick = shown.includes(S.view.pos) ? S.view.pos : shown[0], flex = pick === 'RB' || pick === 'WR' || pick === 'TE';
+    // Sources 8 or more spots apart on a player are marked.
+    const split = p => { const v = C.sources.map(s => p.ranks[s]).filter(Boolean); return v.length > 1 && Math.max(...v) - Math.min(...v) >= 8; };
+    const places = p => C.sources.map(s => `${esc(s)} ${p.ranks[s] ? esc(pick) + p.ranks[s] : 'unranked'}`).join(' · ');
+    return `<section class="card pad"><h3>Combined rankings</h3>
+      <div class="banner ok"><b>${C.rows.length} players from ${plural(n, 'source')}</b> · ${esc(countsText(C.rows))}</div>
+      ${C.warning ? `<div class="banner swap">${esc(C.warning)}</div>`
+        : C.fitted.length ? `<p class="fine">RB, WR and TE are fitted onto one FLEX list the way ${esc(andList(C.fitted))} ${C.fitted.length === 1 ? 'does' : 'do'}.</p>` : ''}
+      ${n < 2 ? '<p class="fine">Add another source to combine them. For a single file, the Import screen is simpler.</p>' : ''}
+      <button class="btn" data-action="multi-save"${n >= 2 ? '' : ' disabled'}>Save as week ${w} rankings${saved ? ' (replaces saved)' : ''}</button>
+      <div class="chips" role="group" aria-label="Position">${shown.map(p => `<button class="chip" data-view-pos="${p}" aria-pressed="${p === pick}">${p} ${counts[p]}</button>`).join('')}</div>
+      <ol class="roster mcombined">${C.players.filter(p => p.pos === pick).map(p => `<li class="row"><span class="slot">${esc(pick)}${p.posRank}</span>${pos(p.pos)}
+        <span class="who"><b>${esc(p.name)}</b><small>${p.team ? esc(p.team) + ' · ' : ''}${places(p)}</small></span>
+        <span class="right">${split(p) ? '<span class="mspread" title="The sources are 8 or more spots apart on him">split</span>' : ''}<span class="rank">${
+          flex && p.rank < 1000 ? 'FLEX ' + p.rank : ''}</span></span></li>`).join('')}</ol></section>`;
+  }
+
+  function multiAdd() {
+    const P = S.mdraft.parsed, M = S.multi, into = S.mdraft.into;
+    if (!P || !P.rows.length || P.error) return;
+    const file = S.mdraft.file || 'paste';
+    if (into) {
+      const s = M.sources.find(x => x.name === into);
+      if (!s) return;
+      s.rows = SCC.mergeRanks(s.rows, P.rows).rows;
+      s.files = (s.files || []).concat(file);
+    } else {
+      const name = mdraftName();
+      if (!name || M.sources.some(s => s.name.toLowerCase() === name.toLowerCase())) return;
+      M.sources.push({name, rows: P.rows, files: [file], weight: Number((S.ui.multiWeights || {})[name.toLowerCase()]) || 1});
+    }
+    M.dirty = true;
+    S.mdraft = noMdraft(into);
+    if (!saveMulti()) toast('Could not keep these sources on this device. Browser storage is full or blocked.');
+    render();
+  }
+
+  function multiSave() {
+    const M = S.multi, w = M.week, C = combined();
+    if (!C || C.sources.length < 2) return;
+    const kept = keepStarted(C.rows, w);
+    const label = C.sources.map(n => { const s = M.sources.find(x => x.name === n); return n + (s && s.weight > 1 ? ' ' + s.weight + 'x' : ''); }).join(' + ');
+    S.ranks.weeks[w] = {rows: C.rows.concat(kept), savedAt: Date.now(), source: 'combined: ' + label,
+      multi: {sources: M.sources.map(s => ({name: s.name, weight: Number(s.weight) || 1, files: s.files || [], rows: s.rows})), defaults: !!M.defaults}};
+    if (!store.set(KEY.ranks, S.ranks)) { toast('Could not save. Browser storage is full or blocked.'); return; }
+    pushWeek(w);
+    M.dirty = false;
+    saveMulti();
+    if (S.score.week === w) S.score.data = null;
+    analyze();
+    render();
+    toast(`Week ${w} rankings saved, combined from ${plural(C.sources.length, 'source')}. Lineups re-scored.` +
+      (kept.length ? ` Kept the ranks of ${plural(kept.length, 'player')} whose games have started.` : ''));
   }
 
   /* ---- Link more leagues: one tab per platform */
@@ -2939,7 +3103,7 @@
 
   const SCREENS = {
     lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
-    score: screenScore, ranks: screenRanks, trade: screenTrade, moves: screenMoves, settings: screenSettings
+    score: screenScore, ranks: screenRanks, multi: screenMulti, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
 
   /* ------------------------------------------------------------- events */
@@ -3081,6 +3245,15 @@
     else if (a === 'yahoo-refresh') { Object.assign(S.yahoo, {data: null, error: '', note: ''}); render(); }
     else if (a === 'ranks-save') saveRanks();
     else if (a === 'ranks-del') deleteRanks(Number(t.dataset.week));
+    else if (a === 'multi-add') multiAdd();
+    else if (a === 'multi-save') multiSave();
+    else if (a === 'multi-remove') {
+      const gone = S.multi.sources.splice(Number(t.dataset.i), 1)[0];
+      if (gone && S.mdraft.into === gone.name) S.mdraft.into = '';
+      S.multi.dirty = true;
+      saveMulti();
+      render();
+    }
     else if (a === 'leagues-save') saveLeagues();
     else if (a === 'unlink') unlink();
     else if (a === 'players-reload') { API.clearPlayers(); refresh(); }
@@ -3112,6 +3285,34 @@
       if (S.sync.api && S.sync.user) S.sync.api.alertPrefs(alertPrefs()).catch(() => toast('Could not save that choice. Try again.'));
     }
     else if (t.dataset.draft === 'pos') { S.draft.pos = t.value; S.draft.parsed = parseDraft(); paintDraft(); }
+    else if (t.dataset.multi === 'week') {
+      const n = parseInt(t.value, 10), M = S.multi;
+      if (!(n >= 1 && n <= 18) || n === M.week) return;
+      if (M.dirty && M.sources.length && !confirm(`Switch to week ${n}? The sources you added for week ${M.week} haven't been saved.`)) { t.value = M.week; return; }
+      multiWeek(n);
+      render();
+    }
+    else if (t.dataset.multi === 'defaults') { S.multi.defaults = t.checked; S.multi.dirty = true; saveMulti(); render(); }
+    else if (t.dataset.multi === 'into') { S.mdraft.into = t.value; render(); }
+    else if (t.dataset.multi === 'pos') { S.mdraft.pos = t.value; S.mdraft.parsed = parseMdraft(); paintMulti(); }
+    else if (t.dataset.mweight !== undefined) {
+      const s = S.multi.sources[Number(t.dataset.mweight)];
+      if (!s) return;
+      s.weight = Number(t.value) || 1;
+      S.ui.multiWeights = Object.assign({}, S.ui.multiWeights, {[s.name.toLowerCase()]: s.weight});
+      saveUi();
+      S.multi.dirty = true;
+      saveMulti();
+      render();
+    }
+    else if (t.dataset.multi === 'file' && t.files && t.files[0]) {
+      const f = t.files[0];
+      f.text().then(txt => {
+        Object.assign(S.mdraft, {text: txt, file: f.name, pos: SCC.positionHint(f.name)});
+        S.mdraft.parsed = parseMdraft();
+        render();
+      });
+    }
     else if (t.dataset.ui === 'scoreWeek') loadScore(Number(t.value));
     else if (t.dataset.draft === 'file' && t.files && t.files[0]) {
       const f = t.files[0];
@@ -3161,6 +3362,15 @@
     } else if (t.dataset.draft === 'week') {
       const n = parseInt(t.value, 10);
       if (n >= 1 && n <= 18) { S.draft.week = n; paintDraft(); }
+    } else if (t.dataset.multi === 'text') {
+      S.mdraft.text = t.value;
+      S.mdraft.file = '';
+      S.mdraft.parsed = parseMdraft();
+      paintMulti();
+    } else if (t.dataset.multi === 'name') {
+      // Only the preview redraws, so the box keeps its cursor.
+      S.mdraft.name = t.value;
+      paintMulti();
     }
   });
 

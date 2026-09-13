@@ -88,6 +88,38 @@ check(!SCC.mergeRanks(null, qb.rows).merged, 'nothing saved yet: the file become
 const whole = SCC.mergeRanks(op.rows, week);
 check(!whole.merged && whole.rows.length === week.length, 'a file with every saved position replaces the whole week');
 
+section('combining several rankings (Import multiple sources)');
+{
+  const row = (name, pos, rank) => ({name, pos, team: 'KC', rank, opp: '', implied: '', tier: ''});
+  // An overall list of every position, like The Hall's.
+  const hall = [row('Rob One', 'RB', 1), row('Wes One', 'WR', 2), row('Quin One', 'QB', 3), row('Rob Two', 'RB', 4), row('Wes Two', 'WR', 5),
+    row('Ty One', 'TE', 6), row('Rob Three', 'RB', 7), row('Quin Two', 'QB', 8), row('Wes Three', 'WR', 9), row('Kurt Kick', 'K', 1), row('KC D/ST', 'DEF', 1)];
+  // Late-Round's layout: QB by position, RB/WR/TE on its FLEX list, Wes Three outside it (1000 + WR3).
+  const late = [row('Quin Two', 'QB', 1), row('Quin One', 'QB', 2), row('Rob Two', 'RB', 1), row('Wes One', 'WR', 2), row('Rob One', 'RB', 3),
+    row('Wes Two', 'WR', 4), row('Ty One', 'TE', 5), row('Rob Three', 'RB', 6), row('Wes Three', 'WR', 1003), row('Kurt Kick', 'K', 1)];
+  // One position only: an RB file that leaves Rob Two out.
+  const rbs = [row('Rob Three', 'RB', 1), row('Rob One', 'RB', 2)];
+  const C = SCC.combineRanks([{name: 'Hall', rows: hall, weight: 1}, {name: 'Late', rows: late, weight: 1}, {name: 'RBs', rows: rbs, weight: 1}]);
+  const at = n => C.rows.find(r => r.name === n);
+  check(at('Rob One').posRank === 1 && at('Rob Two').posRank === 2 && at('Rob Three').posRank === 3,
+    'each position combined on its own; a source that leaves a player out counts him just below its last, so one list\'s RB1 isn\'t everyone\'s');
+  check(['Rob One', 'Wes One', 'Rob Two', 'Wes Two', 'Ty One', 'Rob Three', 'Wes Three'].every((n, i) => at(n).rank === i + 1),
+    'RB, WR and TE fitted onto one FLEX list the way the overall lists place them: ' +
+    C.rows.filter(r => r.rank < 1000 && ['RB', 'WR', 'TE'].includes(r.pos)).sort((a, b) => a.rank - b.rank).map(r => r.name).join(', '));
+  check(at('Quin One').rank === 1 && at('Quin Two').rank === 2 && at('Kurt Kick').rank === 1 && at('KC D/ST').rank === 1 && C.rows.length === 11,
+    'QB, K and DEF keep a positional rank (an even split goes by name); a position only one source ranks comes from it');
+  const rob2 = C.players.find(p => p.name === 'Rob Two');
+  check(rob2.ranks.Late === 1 && rob2.ranks.Hall === 2 && rob2.ranks.RBs === undefined && C.fitted.join() === 'Hall,Late' && !C.warning,
+    'each player\'s place in every source is kept, to show where they disagree');
+  const heavy = SCC.combineRanks([{name: 'Hall', rows: hall, weight: 1}, {name: 'Late', rows: late, weight: 3}]);
+  check(heavy.rows.find(r => r.name === 'Quin Two').rank === 1, 'a source at 3x pulls the order its way (Late-Round\'s QB1 comes out on top)');
+  const alone = SCC.combineRanks([{name: 'RBs', rows: rbs, weight: 1}]);
+  const curved = SCC.combineRanks([{name: 'RBs', rows: rbs, weight: 1}], {curve: hall, curveName: 'Titan defaults'});
+  check(alone.rows.every(r => r.rank > 1000) && /FLEX/.test(alone.warning) && curved.rows.find(r => r.name === 'Rob Three').rank === 1 &&
+    curved.fitted.join() === 'Titan defaults' && !curved.warning,
+    'with no overall list among the sources, RB/WR/TE stay positional (with a warning) unless Titan\'s default rankings fit them together');
+}
+
 section('projections');
 const pm = SCC.trimProjections([{player_id: '10', stats: {pts_std: 10, pts_half_ppr: 12.5, pts_ppr: 15}},
   {player_id: 'SEA', stats: {pts_std: 8.81, pts_ppr: 8.81}}, {player_id: '99', stats: {}}, {player_id: '98'}]);
