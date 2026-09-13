@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>How to Import Your Fantasy Football Rankings | Titan Fantasy Football Manager</title>
-  <meta name="description" content="Import your weekly fantasy football rankings as a CSV, from your own spreadsheet, Late-Round, FantasyPros or The Hall, and get start/sit calls for every Sleeper and ESPN league.">
+  <meta name="description" content="Import your weekly fantasy football rankings as a CSV, from your own spreadsheet, Late-Round, FantasyPros or The Hall, combine several into one list, and get start/sit calls for every Sleeper and ESPN league.">
   <link rel="canonical" href="https://titanfantasyfootball.com/guides/import-fantasy-rankings.html">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Titan Fantasy Football Manager">
@@ -79,6 +79,19 @@ Denver Broncos,DEF,DEN,1</pre></div>
     </ol>
     <p>A file that ranks only some positions is added to that week and replaces just those positions, so you can import a
       FantasyPros QB file, then the FLEX file, then the kickers.</p>
+
+    <h2>Combining several sources</h2>
+    <p>Have rankings from more than one place? Open <b>Rankings</b>, then <b>Import multiple</b>, and add each source as a
+      file or a paste. A source can be several files, like FantasyPros' QB, FLEX, K and DST files: add the first as a new
+      source, then add the others to it.</p>
+    <ul>
+      <li><b>How they're combined:</b> each position is averaged across your sources. A source that leaves a player out
+        counts him just below its last player there, so one site's favorite can't jump the players everyone else agrees on.</li>
+      <li><b>Weights:</b> every source counts once, and you can set any of them to 2x or 3x.</li>
+      <li><b>Titan's defaults:</b> tick a box to count Sleeper's projections as one more source.</li>
+      <li><b>Saving:</b> the combined list is saved as that week's rankings, so every call uses it. Your sources are kept
+        with it, so you can add one or change a weight later.</li>
+    </ul>
 
     <h2>Step 3: Follow the calls</h2>
     <p>The <b>Lineups</b> tab now orders every league by your rankings. Each spot says OK, swap out, do not start, on bye

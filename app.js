@@ -16,16 +16,16 @@
   // the demo can't overwrite someone's leagues or rankings.
   const DEMO = new URLSearchParams(location.search).has('demo');
   const KEY = DEMO
-    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1'}
-    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1'};
+    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1'}
+    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'settings'];
+  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'lab', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
-    score: 'Results', news: 'News', ranks: 'Rankings', multi: 'Import multiple sources', trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
+    score: 'Results', news: 'News', ranks: 'Rankings', multi: 'Import multiple sources', lab: 'Compare rankings', trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
   const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes',
-    score: 'results', news: 'news', ranks: 'rankings', multi: 'multiple', trade: 'trade', moves: 'transactions', settings: 'settings'};
+    score: 'results', news: 'news', ranks: 'rankings', multi: 'multiple', lab: 'compare', trade: 'trade', moves: 'transactions', settings: 'settings'};
   const tabFromPath = () => {
     const m = location.pathname.match(/^\/app\/([a-z]+)\/?$/);
     return (m && Object.keys(SLUG).find(t => SLUG[t] === m[1])) || '';
@@ -39,10 +39,11 @@
     {id: 'matchup', name: 'Matchup', tabs: ['matchup']},
     {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
     {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes']},
-    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'multi']},
+    // Compare (lab) is Titan's owner's only: it shows only on the owner's account.
+    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'multi', 'lab']},
     {id: 'results', name: 'Results', tabs: ['score']}
   ];
-  const SUB_NAMES = {ranks: 'Import', multi: 'Import multiple', score: 'Results'};
+  const SUB_NAMES = {ranks: 'Import', multi: 'Import multiple', lab: 'Compare', score: 'Results'};
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
   const LEAGUE_SCREENS = {lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1};
@@ -129,6 +130,8 @@
     mproj: null,
     // Results' season so far: each week's totals, kept on this device once its games are all played (loadSeason).
     season: store.get(KEY.season) || null, seasonBusy: false,
+    // Compare rankings (Titan's owner only): each week's test, kept on this device once its games are over (loadLab).
+    lab: store.get(KEY.lab) || null, labBusy: false, labAt: 0, labError: '',
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
@@ -288,6 +291,7 @@
       scheduleLive();
       if (S.ui.tab === 'matchup' && S.snap) loadMatchups(true);
       if (S.ui.tab === 'score' && S.snap && !S.score.data && !S.score.busy) loadScore(S.score.week || S.snap.week);
+      sendLabFormats(); // the owner's league formats, for the server's weekly FantasyCalc snapshot
       paintTicker(); // the person's starters in each game may have changed
       if (S.again) { S.again = false; refresh(); }
     }
@@ -425,6 +429,9 @@
       t.setAttribute('aria-current', t.dataset.tab === S.ui.tab ? 'page' : 'false'));
     document.querySelectorAll('#tabs [data-section]').forEach(t =>
       t.setAttribute('aria-current', sec && sec.id === t.dataset.section ? 'page' : 'false'));
+    // Compare rankings is on the menu only for Titan's owner.
+    const labBtn = document.querySelector('#tabs [data-tab="lab"]');
+    if (labBtn) labBtn.hidden = !S.owner.is;
     // Badges: the lineup changes to make, and a dot on Players for waiver pickups not yet seen on Waivers.
     const changes = S.A ? S.A.changes.length : 0, fresh = newWire();
     const badge = $('badge-lineups'), dot = $('dot-players');
@@ -487,7 +494,8 @@
      (LEAGUE_SCREENS) the one league dropdown that steers them all. */
   function screenBar() {
     const sec = sectionOf(S.ui.tab), leagues = (S.snap && S.snap.leagues) || [], pick = pickedLeague();
-    const subs = sec && sec.tabs.length > 1 ? `<nav class="subtabs" aria-label="${esc(sec.name)}">${sec.tabs.map(t =>
+    const subTabs = sec ? sec.tabs.filter(t => t !== 'lab' || S.owner.is) : [];
+    const subs = subTabs.length > 1 ? `<nav class="subtabs" aria-label="${esc(sec.name)}">${subTabs.map(t =>
       `<button type="button" data-go="${t}"${t === S.ui.tab ? ' aria-current="page"' : ''}>${esc(SUB_NAMES[t] || TAB_NAMES[t])}</button>`).join('')}</nav>` : '';
     const drop = LEAGUE_SCREENS[S.ui.tab] && leagues.length > 1 ? `<label class="lpick"><span class="sr-only">Which leagues</span><select data-ui="league">
       <option value="all">All leagues</option>${leagues.map(d => `<option value="${esc(d.cfg.id)}"${d.cfg.id === pick ? ' selected' : ''}>${esc(d.cfg.key)}</option>`).join('')}
@@ -1835,6 +1843,111 @@
       (kept.length ? ` Kept the ranks of ${plural(kept.length, 'player')} whose games have started.` : ''));
   }
 
+  /* ---- Compare rankings (Titan's owner only, under Rankings): each week, three rankings tested
+     against what happened (SCC.labWeek): Sleeper's projections (Titan's default), FantasyCalc's values
+     as the server saved them before the games (lab/{season}-{week}), and the owner's imported
+     rankings. Each finished week is kept on the device (KEY.lab). The owner's app tells the server
+     which league formats to save (lab/config, sendLabFormats). The plan: switch the default only if
+     FantasyCalc clearly wins over about four weeks. */
+  const labKey = f => `${f.dynasty ? 'dynasty' : 'redraft'}-${f.qbs}qb-${f.teams}teams-${f.ppr}ppr`;
+  const LAB_NAMES = {sleeper: 'Sleeper projections', fc: 'FantasyCalc', imports: 'Your rankings'};
+  const LAB_SOURCES = ['sleeper', 'fc', 'imports'];
+  let labSent = '';
+  function sendLabFormats() {
+    if (DEMO || !S.owner.is || !S.snap || !S.sync.api || !S.sync.api.labFormats) return;
+    const keys = [...new Set(S.snap.leagues.filter(d => d.cfg.platform !== 'yahoo').map(d => labKey(SCC.tradeFormat(d.cfg))))].sort();
+    if (!keys.length || keys.join() === labSent) return;
+    labSent = keys.join();
+    S.sync.api.labFormats(keys).catch(() => { labSent = ''; });
+  }
+  const labSig = w => S.snap.leagues.map(d => d.cfg.id).sort().join(',') + '|' + ((S.ranks.weeks[w] || {}).savedAt || 0);
+
+  async function labFor(week) {
+    const season = S.snap.season, leagues = S.snap.leagues.map(d => d.cfg).filter(c => c.platform !== 'yahoo');
+    const [res, proj, stats, snap] = await Promise.all([
+      API.collectScores(S.account, leagues, week, season), API.fetchProjections(season, week), API.fetchStats(season, week),
+      S.sync.api && S.sync.api.labWeek ? S.sync.api.labWeek(season, week).catch(() => null) : null]);
+    if (!res.started) return null;
+    // A snapshot saved after the week's first kickoff isn't a fair test, so FantasyCalc sits that week out.
+    const fair = snap && !snap.late ? snap.formats || {} : {};
+    const counts = {};
+    leagues.forEach(c => { const k = labKey(SCC.tradeFormat(c)); if (fair[k]) counts[k] = (counts[k] || 0) + 1; });
+    // The order test uses the format most of the leagues play.
+    const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    const imp = S.ranks.weeks[week];
+    const out = SCC.labWeek({res, proj, stats, players: res.players, imports: imp ? imp.rows : null,
+      fcFor: cfg => fair[labKey(SCC.tradeFormat(cfg))] || null, fcOrder: top ? fair[top] : null});
+    return Object.assign(out, {week, done: res.done >= res.total, late: !!(snap && snap.late), sig: labSig(week)});
+  }
+
+  async function loadLab() {
+    if (DEMO || !S.owner.is || !S.snap || S.labBusy) return;
+    if (!S.lab || S.lab.season !== S.snap.season) S.lab = {season: S.snap.season, weeks: {}};
+    S.labBusy = true;
+    S.labError = '';
+    for (let w = 1; w <= S.snap.week; w++) {
+      const x = S.lab.weeks[w];
+      // A finished week is kept; one without FantasyCalc is tested again in case its snapshot turns up.
+      if (x && x.done && x.sig === labSig(w) && (x.sources.includes('fc') || x.late)) continue;
+      try {
+        const r = await labFor(w);
+        if (r) { S.lab.weeks[w] = r; store.set(KEY.lab, S.lab); }
+      } catch (e) { S.labError = `Could not test week ${w}: ${e && e.message ? e.message : e}`; }
+      if (S.ui.tab === 'lab') render();
+    }
+    S.labBusy = false;
+    S.labAt = Date.now();
+    if (S.ui.tab === 'lab') render();
+  }
+
+  function screenLab() {
+    if (!S.owner.is) return '<div class="empty-note">Only Titan\'s owner sees this screen.</div>';
+    if (!S.snap) return emptyState();
+    if (!S.labAt && !S.labBusy) loadLab();
+    const weeks = S.lab && S.lab.season === S.snap.season ? Object.values(S.lab.weeks).sort((a, b) => a.week - b.week) : [];
+    const done = weeks.filter(x => x.done);
+    const orderOf = (x, k) => Object.keys(x.order).map(P => x.order[P][k]).filter(n => n !== null && n !== undefined);
+    const avg = list => list.length ? Math.round(list.reduce((t, n) => t + n, 0) / list.length) : null;
+    let h = `<p class="lede">Only you see this. After each week's games, Titan tests three rankings against what happened: <b>Sleeper's projections</b>
+      (Titan's default today), <b>FantasyCalc</b>'s values as they stood before kickoff, and <b>your rankings</b>. The plan: switch the default
+      only if FantasyCalc clearly wins over about four weeks.</p>
+      <div class="bar"><button class="btn ghost small" data-action="lab-run"${S.labBusy ? ' disabled' : ''}>${S.labBusy ? 'Testing…' : 'Test again'}</button></div>`;
+    if (S.labError) h += `<div class="banner stop">${esc(S.labError)}</div>`;
+    if (!weeks.length) return h + `<div class="empty-note">${S.labBusy ? 'Testing the rankings…' : 'No week has kicked off yet.'}</div>`;
+    // So far: each source against Sleeper's projections, over the finished weeks both were tested.
+    const line = k => {
+      const both = done.filter(x => x.sources.includes(k));
+      if (!both.length) {
+        return `<li><b>${LAB_NAMES[k]}</b>: no finished week to compare yet${k === 'fc'
+          ? '. Its first fair week is the first one whose snapshot is saved before kickoff (week 2).' : '. Import rankings for a week to include them.'}</li>`;
+      }
+      const pts = Math.round(both.reduce((t, x) => t + x.lineups[k] - x.lineups.sleeper, 0) / both.length * 10) / 10;
+      const ord = Math.round(both.reduce((t, x) => t + (avg(orderOf(x, k)) || 0) - (avg(orderOf(x, 'sleeper')) || 0), 0) / both.length);
+      return `<li><b>${LAB_NAMES[k]}</b>: <b class="${pts > 0 ? 'good' : pts < 0 ? 'amber' : ''}">${gap(pts)}</b> lineup points a week against Sleeper's
+        projections, and order <b class="${ord > 0 ? 'good' : ord < 0 ? 'amber' : ''}">${ord > 0 ? '+' : ord < 0 ? '−' : '±'}${Math.abs(ord)}</b> (${plural(both.length, 'finished week')})</li>`;
+    };
+    h += `<section class="card pad"><h3>So far</h3><ul class="lab-sum">${line('fc')}${line('imports')}</ul></section>`;
+    const cell = (x, k, best) => !x.sources.includes(k) ? '<small>not tested</small>'
+      : `<span class="${x.sources.length > 1 && x.lineups[k] === best ? 'best' : ''}">${fmt(x.lineups[k])}</span><small>order ${avg(orderOf(x, k)) === null ? '–' : avg(orderOf(x, k))}</small>`;
+    h += `<section class="card pad"><h3>Week by week</h3><div class="table-wrap"><table class="season-t lab-t"><thead><tr><th>Week</th>${
+        LAB_SOURCES.map(k => `<th>${LAB_NAMES[k]}</th>`).join('')}<th>You started</th></tr></thead><tbody>${weeks.map(x => {
+          const best = Math.max(...x.sources.map(k => x.lineups[k]));
+          return `<tr><td>${x.week}${x.done ? '' : '<small>so far</small>'}${x.late ? '<small>FantasyCalc saved late</small>' : ''}</td>${
+            LAB_SOURCES.map(k => `<td>${cell(x, k, best)}</td>`).join('')}<td>${fmt(x.lineups.actual)}<small>${x.lineups.leagues} of ${x.lineups.of} leagues</small></td></tr>`;
+        }).join('')}</tbody></table></div>
+      <p class="fine">Lineup points: what each source's lineup would have scored, from your rosters, in the leagues every source covers that week. Order:
+        how closely each source ranked QBs, RBs, WRs and TEs against their actual PPR points, from −100 to 100, averaged over the positions.
+        A week counts once its games are over.</p></section>`;
+    const last = done[done.length - 1];
+    if (last) {
+      h += `<section class="card pad"><h3>Week ${last.week} by position</h3><div class="table-wrap"><table class="season-t lab-t"><thead><tr><th>Order</th>${
+          last.sources.map(k => `<th>${LAB_NAMES[k]}</th>`).join('')}</tr></thead><tbody>${Object.keys(last.order).map(P => `<tr><td>${P}</td>${
+          last.sources.map(k => `<td>${last.order[P][k] === null || last.order[P][k] === undefined ? '–' : last.order[P][k]}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+        <p class="fine">Among each source's top 24 QBs, 48 RBs, 60 WRs and 24 TEs; a player a source leaves out counts after its last.</p></section>`;
+    }
+    return h;
+  }
+
   /* ---- Link more leagues: one tab per platform */
 
   const LINK_TABS = [{id: 'sleeper', name: 'Sleeper'}, {id: 'espn', name: 'ESPN'}, {id: 'yahoo', name: 'Yahoo'}];
@@ -2362,7 +2475,9 @@
       if (S.owner.is === !!is) return;
       S.owner = {is: !!is, busy: false, data: null, error: ''};
       Object.assign(S.yahoo, {busy: false, error: '', data: null});
-      if (S.ui.tab === 'settings') render();
+      if (is) sendLabFormats();
+      paintHeader();
+      if (['settings', 'ranks', 'multi', 'lab'].includes(S.ui.tab)) render();
     },
     setAlerts(a) {
       S.alerts = a;
@@ -3213,7 +3328,7 @@
 
   const SCREENS = {
     lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
-    score: screenScore, ranks: screenRanks, multi: screenMulti, trade: screenTrade, moves: screenMoves, settings: screenSettings
+    score: screenScore, ranks: screenRanks, multi: screenMulti, lab: screenLab, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
 
   /* ------------------------------------------------------------- events */
@@ -3360,6 +3475,7 @@
     else if (a === 'yahoo-refresh') { Object.assign(S.yahoo, {data: null, error: '', note: ''}); render(); }
     else if (a === 'ranks-save') saveRanks();
     else if (a === 'ranks-del') deleteRanks(Number(t.dataset.week));
+    else if (a === 'lab-run') { S.labAt = 0; loadLab(); render(); }
     else if (a === 'multi-add') multiAdd();
     else if (a === 'multi-save') multiSave();
     else if (a === 'multi-remove') {

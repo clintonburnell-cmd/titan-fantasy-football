@@ -226,6 +226,9 @@ async function run() {
   // gives game dates (Eastern), not kickoff times.
   const sched = await getJson(SLEEPER + '/schedule/nfl/regular/' + season);
   const games = sched.filter(g => Number(g.week) === week);
+  // The rankings lab's FantasyCalc snapshot for the week, the first run that finds none (every run, every day).
+  const begun = games.some(g => g.status === 'in_game' || g.status === 'complete');
+  await labSnapshot(season, week, Date.now(), {late: begun}).catch(e => logger.warn('rankings lab snapshot failed: ' + e.message));
   const today = new Date().toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
   const et = new Date(new Date().toLocaleString('en-US', {timeZone: 'America/New_York'}));
   const gameDay = games.some(g => g.date === today || g.status === 'in_game');
@@ -583,6 +586,37 @@ exports.tradeValues = onRequest({region: 'us-central1', memory: '256MiB', maxIns
   }
 });
 
+/* The rankings lab (Titan's owner's Compare screen): once a week, before the games,
+   FantasyCalc's values as they stand, for every league format the owner plays (lab/config,
+   which the owner's app keeps up to date) and any format already cached, so the Compare screen
+   can score FantasyCalc's order against Sleeper's projections and the owner's own rankings
+   once the games are played. One snapshot a week, lab/{season}-{week}, marked late when it's
+   saved after the week's first kickoff (not a fair test). Only the owner can read lab/
+   (firestore.rules). deps (tests): {doc, config, cached (format keys), values, late}. */
+const FORMAT_KEY = /^(redraft|dynasty)-(1|2)qb-(8|10|12|14)teams-(0|0\.5|1)ppr$/;
+function formatFromKey(k) {
+  const m = FORMAT_KEY.exec(String(k || ''));
+  return m ? {dynasty: m[1] === 'dynasty', qbs: Number(m[2]), teams: Number(m[3]), ppr: Number(m[4])} : null;
+}
+
+async function labSnapshot(season, week, now = Date.now(), deps = {}) {
+  const ref = deps.doc || db.doc(`lab/${season}-${week}`);
+  if ((await ref.get()).exists) return 'kept';
+  const cfg = (await (deps.config || db.doc('lab/config')).get()).data() || {};
+  const keys = new Set((cfg.formats || []).filter(k => formatFromKey(k)));
+  (deps.cached || (await db.collection('tradeValues').get()).docs.map(d => d.id)).forEach(k => { if (formatFromKey(k)) keys.add(k); });
+  const formats = {};
+  for (const k of keys) {
+    try {
+      const got = await (deps.values || tradeValues)(formatFromKey(k), db.doc('tradeValues/' + k), now);
+      formats[k] = (got.values || []).map(x => ({s: x.s, e: x.e, n: x.n, p: x.p, t: x.t, v: x.v}));
+    } catch (e) { logger.warn(`rankings lab: no FantasyCalc values for ${k} (${e.message})`); }
+  }
+  if (!Object.keys(formats).length) return 'none';
+  await ref.set({season: String(season), week: Number(week), at: now, late: !!deps.late, formats});
+  return 'saved';
+}
+
 /* ESPN's feeds sometimes turn Titan's server away (403, since 2026-09-12), and a new server
    instance has nothing in memory to fall back on. So each feed's last good copy is also saved
    in Firestore (meta/newsFeed, meta/scoresFeed, meta/gameContext): when it changes, or at least
@@ -767,7 +801,7 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
 });
 
 exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
-  yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll, latestScores, newsForAlerts,
+  yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll, latestScores, newsForAlerts, labSnapshot, formatFromKey,
   setSend: fn => { sendPush = fn; },
   // A new server instance: nothing in memory, nothing saved from it yet.
   freshInstance: () => { newsCache = scoresCache = contextCache = null; Object.keys(copies).forEach(k => delete copies[k]); }};

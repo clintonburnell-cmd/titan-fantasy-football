@@ -211,6 +211,26 @@ function fakeUser(db) {
   check(scDoc.sets === 1 && sc5.at === t0s && sc5.games[0].hs === 14 && sc6 === 'down',
     'scores are saved when they change; a new instance ESPN refuses serves them for up to half an hour, then fails');
 
+  section('the rankings lab\'s weekly FantasyCalc snapshot');
+  {
+    let lab = null, labSets = 0;
+    const labDoc = {get: async () => ({exists: !!lab, data: () => lab}), set: async v => { lab = JSON.parse(JSON.stringify(v)); labSets++; }};
+    const cfgDoc = {get: async () => ({data: () => ({formats: ['redraft-1qb-12teams-1ppr', 'junk']})})};
+    const asked = [];
+    const one = [{s: '1', e: '', n: 'Q', p: 'QB', t: 'KC', v: 9000, r: 1, pr: 1, tr: 5}];
+    const r1 = await job.labSnapshot('2026', 2, 5e12, {doc: labDoc, config: cfgDoc, cached: ['dynasty-2qb-10teams-1ppr', 'redraft-1qb-12teams-1ppr'],
+      values: async f => { asked.push(f); return {values: one}; }});
+    const r2 = await job.labSnapshot('2026', 2, 5e12 + 1, {doc: labDoc, config: cfgDoc, cached: [], values: async () => { throw new Error('should not ask'); }});
+    check(r1 === 'saved' && r2 === 'kept' && labSets === 1 && Object.keys(lab.formats).sort().join() === 'dynasty-2qb-10teams-1ppr,redraft-1qb-12teams-1ppr' &&
+      lab.formats['redraft-1qb-12teams-1ppr'][0].v === 9000 && lab.formats['redraft-1qb-12teams-1ppr'][0].tr === undefined && lab.late === false &&
+      asked.length === 2 && asked.some(f => f.dynasty && f.qbs === 2 && f.teams === 10),
+      'once a week, FantasyCalc\'s values for the owner\'s league formats (and any already cached) are saved, trimmed; the next run keeps it');
+    lab = null;
+    await job.labSnapshot('2026', 1, 5e12, {doc: labDoc, config: cfgDoc, cached: [], late: true, values: async () => ({values: one})});
+    check(lab.late === true && job.formatFromKey('dynasty-2qb-14teams-0.5ppr').ppr === 0.5 && job.formatFromKey('junk') === null,
+      'a snapshot saved after the week\'s first kickoff is marked late (not a fair test)');
+  }
+
   section('game context');
   const nwsGet = async url => /\/points\//.test(url) ? {properties: {forecastHourly: 'https://api.weather.gov/gridpoints/BUF/1,1/forecast/hourly'}}
     : {properties: {periods: [{startTime: '2026-09-13T12:00:00-04:00', endTime: '2026-09-13T13:00:00-04:00', temperature: 48, temperatureUnit: 'F',

@@ -167,6 +167,32 @@ const bm = SCC.benchMistakes(WV.rows);
 check(bm.length === 1 && bm[0].sat.name === 'R Two' && bm[0].started.name === 'R One' && bm[0].slot === 'RB' && bm[0].lost === 10,
   'the bench\'s biggest miss: R Two (15) sat while R One (5) started at RB, 10 points; a running back can\'t take the QB spot');
 
+section('the rankings lab (Compare rankings, Titan\'s owner only)');
+{
+  const pl = {1: ['Q A', 'QB', 'KC'], 2: ['Q B', 'QB', 'BUF'], 3: ['Q C', 'QB', 'SF'], 11: ['R A', 'RB', 'KC'], 12: ['R B', 'RB', 'BUF'], 13: ['R C', 'RB', 'SF']};
+  const lc = {id: 'L', key: 'L', ppr: 1, lineup: ['QB', 'RB']};
+  const lres = {userId: 'u', leagues: [{cfg: lc, rosters: [{owner_id: 'u', roster_id: 1, players: ['1', '2', '11', '12']}],
+    matchups: [{roster_id: 1, players: ['1', '2', '11', '12'], starters: ['1', '11'], players_points: {1: 10, 2: 25, 11: 8, 12: 20}}]}]};
+  // Sleeper projects Q A and R A best; FantasyCalc values Q B and R B most; the owner's rankings like Q A and R B.
+  const lproj = {1: [20, 0], 2: [15, 0], 3: [5, 0], 11: [18, 0], 12: [10, 0], 13: [4, 0]};
+  const fcv = [{s: '2', n: 'Q B', p: 'QB', v: 900}, {s: '1', n: 'Q A', p: 'QB', v: 800}, {s: '12', n: 'R B', p: 'RB', v: 700},
+    {s: '11', n: 'R A', p: 'RB', v: 600}, {s: '3', n: 'Q C', p: 'QB', v: 100}, {s: '13', n: 'R C', p: 'RB', v: 50}];
+  const imports = [{name: 'Q A', pos: 'QB', team: 'KC', rank: 1}, {name: 'Q B', pos: 'QB', team: 'BUF', rank: 2},
+    {name: 'R B', pos: 'RB', team: 'BUF', rank: 1}, {name: 'R A', pos: 'RB', team: 'KC', rank: 2}];
+  const lstats = {1: {ppr: 10}, 2: {ppr: 25}, 3: {ppr: 30}, 11: {ppr: 8}, 12: {ppr: 20}, 13: {ppr: 1}};
+  const LW = SCC.labWeek({res: lres, proj: lproj, stats: lstats, players: pl, imports, fcFor: () => fcv, fcOrder: fcv});
+  check(LW.sources.join() === 'sleeper,fc,imports' && LW.lineups.sleeper === 18 && LW.lineups.fc === 45 && LW.lineups.imports === 30 &&
+    LW.lineups.actual === 18 && LW.lineups.leagues === 1,
+    'lineups: what each source would have started from the roster, scored by what happened (Sleeper 18, FantasyCalc 45, your rankings 30)');
+  check(LW.order.QB.sleeper === -100 && LW.order.QB.fc === -50 && LW.order.QB.imports === -100 && LW.order.RB.sleeper === 50 &&
+    LW.order.RB.fc === 100 && LW.order.RB.imports === 100 && LW.order.WR.sleeper === null,
+    'order: each source\'s order at a position against actual points, -100 to 100 (a player a source leaves out counts after its last)');
+  const noFc = SCC.labWeek({res: lres, proj: lproj, stats: lstats, players: pl, imports: null, fcFor: () => null, fcOrder: null});
+  check(noFc.sources.join() === 'sleeper' && noFc.lineups.fc === undefined && noFc.order.QB.fc === undefined && noFc.order.QB.imports === undefined,
+    'without a FantasyCalc snapshot or imported rankings, only Sleeper\'s projections are tested');
+  check(SCC.rankCorrelation([1, 2, 3], [1, 2, 3]) === 1 && SCC.rankCorrelation([1, 2], [2, 1]) === null, 'a rank correlation needs three players');
+}
+
 section('bye-week needs');
 const P = (name, pos, bye, x) => Object.assign({id: name, name, pos, bye, inj: '', held: false}, x);
 const lg = {cfg: {key: 'T', name: 'Test', lineup: ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF']}, roster: [

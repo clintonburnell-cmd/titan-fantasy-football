@@ -533,6 +533,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await tab('multi');
   check(await waitFor(`!!document.querySelector('textarea[data-multi="text"]')`, 5000) && await ev(`location.pathname === '/app/multiple'`),
     'Import multiple sources opens under Rankings, at /app/multiple');
+  check(await ev(`document.querySelector('#tabs [data-tab="lab"]').hidden && !document.querySelector('.subtabs [data-go="lab"]') &&
+    document.querySelectorAll('.subtabs [data-go]').length === 2`), 'Compare rankings stays hidden from everyone but Titan\'s owner');
   // Two sources: the sample rankings, and the same with its top three QBs reordered (A: q0 q1 q2, B: q1 q2 q0).
   const csvA = T.sampleRanks(), linesA = csvA.split(/\r?\n/);
   const qbLines = linesA.map((l, i) => [l.split(','), i]).filter(([c]) => c[1] === 'QB').slice(0, 3);

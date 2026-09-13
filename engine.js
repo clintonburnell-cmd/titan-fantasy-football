@@ -1999,6 +1999,107 @@
     return out.sort(function (a, b) { return b.lost - a.lost; });
   }
 
+  /* ------------------------------------------------------------ rankings lab */
+
+  // Average ranks, 1 the best (desc: the biggest value is best), ties sharing their average.
+  function avgRanks(values, desc) {
+    var idx = values.map(function (v, i) { return i; }).sort(function (a, b) { return desc ? values[b] - values[a] : values[a] - values[b]; });
+    var out = new Array(values.length);
+    for (var i = 0; i < idx.length;) {
+      var j = i;
+      while (j + 1 < idx.length && values[idx[j + 1]] === values[idx[i]]) j++;
+      for (var k = i; k <= j; k++) out[idx[k]] = (i + j) / 2 + 1;
+      i = j + 1;
+    }
+    return out;
+  }
+
+  // How closely two lists of ranks agree: 1 the same order, -1 the reverse, null with under three.
+  function rankCorrelation(x, y) {
+    var n = x.length, mx = 0, my = 0, sxy = 0, sxx = 0, syy = 0, i;
+    if (n < 3) return null;
+    for (i = 0; i < n; i++) { mx += x[i]; my += y[i]; }
+    mx /= n; my /= n;
+    for (i = 0; i < n; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) * (x[i] - mx); syy += (y[i] - my) * (y[i] - my); }
+    return sxx && syy ? sxy / Math.sqrt(sxx * syy) : null;
+  }
+
+  // FantasyCalc's values as rankings rows: QB, RB, WR and TE on one overall scale, most valuable first.
+  var LAB_TOP = {QB: 24, RB: 48, WR: 60, TE: 24};
+  function valuesRows(values, players) {
+    return (values || []).filter(function (x) { return LAB_TOP[x.p] && Number(x.v) > 0; })
+      .sort(function (a, b) { return b.v - a.v; })
+      .map(function (x, i) {
+        var known = x.s && players && players[x.s];
+        return {name: known ? players[x.s][0] : x.n, pos: x.p, team: known ? players[x.s][2] : (x.t || ''), rank: i + 1, id: x.s || ''};
+      });
+  }
+
+  /* Titan's owner's Compare screen: one week's test of three sources of rankings. 'sleeper' is
+     Titan's default rankings (Sleeper's projections, in each league's scoring); 'fc' ranks by
+     FantasyCalc's values as saved before the games (K and DEF from the defaults, since
+     FantasyCalc has none); 'imports' is the owner's imported rankings for the week (with the
+     defaults filling what they leave out, as Titan uses them). Two measures:
+       lineups  in each league, the lineup each source would have started from the owner's
+                roster, scored by what those players actually scored (scoreLeague's by-rank),
+                added up over the leagues every source covers so the totals compare
+       order    at QB, RB, WR and TE, how closely each source's order matched actual PPR
+                points among the players that matter (every source's top 24 QBs, 48 RBs, 60 WRs
+                and 24 TEs; a source missing one counts him after its last), from -100 to 100
+     opts: {res (collectScores), proj, stats ({id: {ppr}}), players, imports (rows or null),
+     fcFor(cfg) (values or null), fcOrder (the values for the order test, or null)}. */
+  function labWeek(opts) {
+    var res = opts.res || {}, players = opts.players || {}, proj = opts.proj || {};
+    var have = {sleeper: true, fc: false, imports: !!(opts.imports && opts.imports.length)};
+    var rows = [];
+    (res.leagues || []).forEach(function (x) {
+      var cfg = x.cfg, dflt = defaultRanks(proj, players, cfg.ppr), lists = {sleeper: weeklyMap(dflt)};
+      var fv = opts.fcFor ? opts.fcFor(cfg) : null;
+      if (fv && fv.length) {
+        have.fc = true;
+        lists.fc = weeklyMap(valuesRows(fv, players).concat(dflt.filter(function (r) { return r.pos === 'K' || r.pos === 'DEF'; })));
+      }
+      if (have.imports) lists.imports = rankingsBy(opts.imports, proj, players)(cfg);
+      var row = {key: cfg.key};
+      Object.keys(lists).forEach(function (k) {
+        var r = scoreLeague(cfg, x.rosters, x.matchups, res.userId, players, lists[k], null, proj);
+        if (!r.error) { row[k] = r.byRank; row.actual = r.actual; }
+      });
+      if (row.sleeper !== undefined) rows.push(row);
+    });
+    var srcs = Object.keys(have).filter(function (k) { return have[k]; });
+    var common = rows.filter(function (r) { return srcs.every(function (k) { return r[k] !== undefined; }); });
+    var lineups = {leagues: common.length, of: rows.length};
+    srcs.concat(['actual']).forEach(function (k) { lineups[k] = round2(common.reduce(function (t, r) { return t + (r[k] || 0); }, 0)); });
+
+    var idx = playerIndex(players), order = {};
+    var pts = function (id) { var s = (opts.stats || {})[id]; return s ? Number(s.ppr) || 0 : 0; };
+    Object.keys(LAB_TOP).forEach(function (P) {
+      var lists = {};
+      lists.sleeper = Object.keys(proj).filter(function (id) { return players[id] && players[id][1] === P && (projFor(proj, id, 1) || 0) > 0; })
+        .sort(function (a, b) { return projFor(proj, b, 1) - projFor(proj, a, 1); });
+      if (have.fc && opts.fcOrder && opts.fcOrder.length) {
+        lists.fc = valuesRows(opts.fcOrder, players).filter(function (r) { return r.pos === P; })
+          .map(function (r) { return r.id || matchPlayer(idx, players, r.name, P, r.team); }).filter(Boolean);
+      }
+      if (have.imports) {
+        lists.imports = opts.imports.filter(function (r) { return r.pos === P; }).slice().sort(function (a, b) { return rankKey(a) - rankKey(b); })
+          .map(function (r) { return matchPlayer(idx, players, r.name, P, r.team); }).filter(Boolean);
+      }
+      var names = Object.keys(lists), pool = {}, ids = [], out = {};
+      names.forEach(function (k) { lists[k].slice(0, LAB_TOP[P]).forEach(function (id) { if (!pool[id]) { pool[id] = 1; ids.push(id); } }); });
+      var actual = avgRanks(ids.map(pts), true);
+      names.forEach(function (k) {
+        var at = {};
+        lists[k].forEach(function (id, i) { if (at[id] === undefined) at[id] = i + 1; });
+        var c = rankCorrelation(avgRanks(ids.map(function (id) { return at[id] || lists[k].length + 1; }), false), actual);
+        out[k] = c === null ? null : Math.round(c * 100);
+      });
+      order[P] = out;
+    });
+    return {lineups: lineups, order: order, sources: srcs};
+  }
+
   /* ------------------------------------------------------------- alerts */
 
   /* Game-day alerts from one person's analysed leagues (analyzeAll):
@@ -2216,7 +2317,8 @@
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
     trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
     openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, applyPoints: applyPoints,
-    keepStartedRanks: keepStartedRanks, winProbability: winProbability, matchStatus: matchStatus, benchMistakes: benchMistakes
+    keepStartedRanks: keepStartedRanks, winProbability: winProbability, matchStatus: matchStatus, benchMistakes: benchMistakes,
+    labWeek: labWeek, rankCorrelation: rankCorrelation
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

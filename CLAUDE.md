@@ -195,6 +195,14 @@ live site, so site changes reach it without a new upload. What's done and what's
 - Folding (Lineups, Rosters, Matchup) goes through `isOpen`, `setFold` and `foldAll` in
   `app.js`, keyed by `FOLD_KEY`. Only a person's tap on a header is saved (`tapped`); code
   that opens or closes a league (the Rosters search, jump chips) must not save it.
+- Compare rankings (`screenLab`, tab `lab`, `/app/compare`) is Titan's owner's only: its sub-tab and menu
+  button show only with the `titanOwner` claim. The server's `run` saves FantasyCalc's values once a week
+  (`labSnapshot` → `lab/{season}-{week}`, every format in `lab/config` plus any cached in `tradeValues`;
+  `late` when saved after the week's first kickoff, and a late week doesn't count for FantasyCalc). The
+  owner's app keeps `lab/config` (`sendLabFormats`, keys like `redraft-1qb-12teams-1ppr`, matching
+  `valuesKey`). Only the owner can read `lab/` and write `lab/config` (firestore.rules). `SCC.labWeek`
+  (pure, tested) scores lineup points (scoreLeague's by-rank per source) and order (rank correlation
+  against Sleeper's stats feed, `API.fetchStats`, PPR). Finished weeks are kept on the device (`KEY.lab`).
 - Import multiple sources (`screenMulti`): `SCC.combineRanks` (pure, tested) combines each position on
   its own (a source missing a player counts him one below its last there, weights 1x to 3x) and fits RB,
   WR and TE onto one FLEX list from the sources that have an overall list (`opts.curve`, Titan's default

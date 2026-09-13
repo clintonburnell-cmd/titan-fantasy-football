@@ -628,6 +628,10 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 .season-t th, .season-t td { padding: 6px 8px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
 .season-t th:first-child, .season-t td:first-child { text-align: left; }
 .season-t th { color: var(--muted); font-size: .72rem; }
+/* Compare rankings (Titan's owner only): the summary and each week's table. */
+.lab-sum { margin: 0; padding-left: 1.1rem; display: grid; gap: 6px; font-size: .9rem; }
+.lab-t td small { display: block; color: var(--muted); font-size: .7rem; }
+.lab-t td .best { color: var(--ok); font-weight: 800; }
 .chart-tip { position: fixed; z-index: 60; display: grid; gap: 2px; max-width: 16rem; padding: 7px 10px; border-radius: 10px; pointer-events: none;
   background: var(--surface); color: var(--muted); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: .76rem; }
 .chart-tip b { color: var(--text); font-size: .92rem; }

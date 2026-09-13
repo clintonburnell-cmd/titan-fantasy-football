@@ -208,6 +208,17 @@ const api = {
     return readOwnerStats().then(r => r.data);
   },
 
+  /* The rankings lab (Compare rankings; Titan's owner only, the rules refuse everyone else):
+     the formats of the owner's leagues, for the server's weekly FantasyCalc snapshot, and a
+     week's snapshot (null if there isn't one). */
+  labFormats(formats) {
+    return setDoc(doc(db, 'lab', 'config'), {formats, at: Date.now()});
+  },
+  async labWeek(season, week) {
+    const s = await getDoc(doc(db, 'lab', `${season}-${week}`));
+    return s.exists() ? s.data() : null;
+  },
+
   /* A week's frozen record of Titan's calls, saved by the server job at each
      kickoff, or null if there isn't one. */
   async getHistory(week) {

@@ -752,6 +752,17 @@
     return {cfg: lg, rosters: [{roster_id: rosterId, owner_id: userId, players: ids}], matchups: matchups};
   }
 
+  /* Each player's actual fantasy points for a week, from Sleeper's stats feed (like its
+     projections, not documented): {id: {ppr, half, std}}. For Titan's owner's Compare screen. */
+  async function fetchStats(season, week) {
+    var list = await getJson('https://api.sleeper.app/stats/nfl/' + season + '/' + week + '?season_type=regular' + PROJ_POS);
+    var out = {};
+    (Array.isArray(list) ? list : []).forEach(function (r) {
+      if (r && r.player_id && r.stats) out[String(r.player_id)] = {ppr: Number(r.stats.pts_ppr) || 0, half: Number(r.stats.pts_half_ppr) || 0, std: Number(r.stats.pts_std) || 0};
+    });
+    return out;
+  }
+
   /* Sleeper's weekly projections (RotoWire's numbers), trimmed and kept for an hour. */
   var PROJ_POS = '&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=K&position[]=DEF';
   function projectionsUrl(season, week) {
@@ -792,7 +803,7 @@
     collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule, leagueDraft: leagueDraft,
     trendingAdds: trendingAdds, leagueWaivers: leagueWaivers, leagueTransactions: leagueTransactions,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
-    fetchProjections: fetchProjections, PLAYERS_KEY: PLAYERS_KEY
+    fetchProjections: fetchProjections, fetchStats: fetchStats, PLAYERS_KEY: PLAYERS_KEY
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

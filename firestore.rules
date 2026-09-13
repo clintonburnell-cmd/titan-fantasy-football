@@ -7,5 +7,12 @@ service cloud.firestore {
     match /users/{uid}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
+    // The rankings lab (Compare rankings): Titan's owner only, the account with the titanOwner claim.
+    // The server writes each week's FantasyCalc snapshot; the owner's app keeps lab/config, the
+    // league formats to save.
+    match /lab/{doc} {
+      allow read: if request.auth != null && request.auth.token.titanOwner == true;
+      allow write: if request.auth != null && request.auth.token.titanOwner == true && doc == 'config';
+    }
   }
 }
