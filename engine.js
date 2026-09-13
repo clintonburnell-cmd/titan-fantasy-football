@@ -477,15 +477,16 @@
      value the Trade tab shows: Titan's own or FantasyCalc's): the Nth pick gets the Nth-best value
      among the players drafted. In an auction the spots follow price, so the Nth-dearest player
      should be the Nth most valuable. Keepers aren't graded, since nobody chose them there. Each
-     pick gets its value (v), its spot's (exp), the difference (gain), its place by value (vrank)
-     and a tag when its gain is a spread or more either way ('steal', 'reach'). Each team gets its
+     pick gets its value (v), its spot's (exp), the difference (gain), its place by value (vrank),
+     its place at its position taken and by value (posTaken, posNow) and a tag when its gain is a
+     spread or more either way ('steal', 'reach'). Each team gets its
      total gain, its best and worst pick, and a grade from how many spreads its total sits from the
      league's average (A+ down to D). Teams best first. */
   var DRAFT_GRADES = [[1.5, 'A+'], [1, 'A'], [0.5, 'A-'], [0.2, 'B+'], [-0.2, 'B'], [-0.5, 'B-'], [-1, 'C+'], [-1.5, 'C'], [-Infinity, 'D']];
   function draftGrades(draft, value) {
     var picks = ((draft && draft.picks) || []).map(function (p) {
       var v = Number(value(p));
-      return Object.assign({}, p, {v: v > 0 ? v : 0, exp: null, gain: null, vrank: 0, tag: ''});
+      return Object.assign({}, p, {v: v > 0 ? v : 0, exp: null, gain: null, vrank: 0, posTaken: 0, posNow: 0, tag: ''});
     });
     var graded = picks.filter(function (p) { return !p.keeper; });
     var auction = draft && draft.type === 'auction';
@@ -493,6 +494,10 @@
     var byValue = graded.slice().sort(function (a, b) { return b.v - a.v || a.no - b.no; });
     byValue.forEach(function (p, i) { p.vrank = i + 1; });
     bySpot.forEach(function (p, i) { p.exp = byValue[i].v; p.gain = p.v - p.exp; });
+    // His place at his position: the Nth taken there, and the Nth there by value now ("RB5 taken, RB2 now").
+    var taken = {}, now = {};
+    bySpot.forEach(function (p) { p.posTaken = taken[p.pos] = (taken[p.pos] || 0) + 1; });
+    byValue.forEach(function (p) { p.posNow = now[p.pos] = (now[p.pos] || 0) + 1; });
     var sd = spread(graded.map(function (p) { return p.gain; }));
     graded.forEach(function (p) { p.tag = sd && p.gain >= sd ? 'steal' : sd && p.gain <= -sd ? 'reach' : ''; });
     var byTeam = {}, teams = [];

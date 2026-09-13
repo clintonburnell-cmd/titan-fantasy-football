@@ -2717,6 +2717,9 @@
      owner, Titan's own for everyone else. Team grades first (tap a team for its picks); Board
      shows the draft round by round. Back, the Android app's included, closes it. */
   const DRAFT_KIND = {snake: 'Snake draft', linear: 'Linear draft', auction: 'Auction'};
+  // Where a pick went at its position against where he ranks there by value now: short on each pick's row, spelled out on the Board.
+  const posSpots = (p, long) => p.keeper || !p.posTaken || p.pos === '?' ? ''
+    : `${esc(p.pos)}${p.posTaken} taken, ${esc(p.pos)}${p.posNow}${long ? ' by value' : ''} now`;
   const draftCard = cfg => `<section class="card pad tdraft"><div class="tdraft-h"><div><h3>Draft results</h3>
       <p class="fine">How every team in ${esc(cfg.key)} drafted, pick by pick</p></div>
       <button type="button" class="btn small" data-action="draft-open">See the draft</button></div></section>`;
@@ -2861,7 +2864,7 @@
   function draftTeams(G, f) {
     const line = (what, p) => p ? `${what}: ${esc(f.label(p))} ${esc(p.name)} ${f.gain(p.gain)}` : '';
     const row = p => `<li class="dpick${p.tag ? ' d-' + p.tag : ''}"><span class="dno">${esc(f.label(p))}</span>
-      <span class="who"><b>${esc(p.name)}</b><small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.nfl || '')}${p.keeper ? '' : ' · ' + nth(p.vrank) + ' by value'}</small></span>
+      <span class="who"><b>${esc(p.name)}</b><small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.nfl || '')}${posSpots(p) ? ' · ' + posSpots(p) : ''}</small></span>
       <span class="dval">${p.keeper ? '<small>keeper</small>' : `${f.gain(p.gain)}<small>value ${thousands(p.v)}</small>`}</span></li>`;
     return `<ol class="dgrades">${G.teams.map(t => `<li><details class="dteam${t.team === f.mine ? ' mine' : ''}" data-dteam="${esc(t.team)}"${dOpen.has(t.team) ? ' open' : ''}>
       <summary><span class="dgrade g-${t.grade[0].toLowerCase()}" title="Draft grade">${esc(t.grade)}</span>
@@ -2887,7 +2890,8 @@
       if (!p) return '<td></td>';
       // A traded pick says which team made it.
       const by = owner[s] && p.team !== owner[s] ? ` · ${esc(f.name(p.team))}` : '';
-      return `<td class="${[p.tag && !f.plain ? 'd-' + p.tag : '', p.team === f.mine ? 'mine' : ''].filter(Boolean).join(' ')}"><span class="dc-h">${pos(p.pos)}<small>${esc(f.label(p))}</small></span>
+      return `<td class="${[p.tag && !f.plain ? 'd-' + p.tag : '', p.team === f.mine ? 'mine' : ''].filter(Boolean).join(' ')}"${
+        f.plain || !posSpots(p) ? '' : ` title="${posSpots(p, true)}"`}><span class="dc-h">${pos(p.pos)}<small>${esc(f.label(p))}</small></span>
         <b>${esc(shortName(p))}</b><small>${p.keeper ? 'keeper' : f.gain(p.gain)}${by}</small></td>`;
     };
     return `<div class="table-wrap dboard-wrap"><table class="dboard"><thead><tr><th class="drd" scope="col">Rd</th>${slots.map(s =>

@@ -77,6 +77,8 @@ section('draft results');
     'each pick against its spot: the value that spot would get with everyone going in order of value; keepers aren\'t graded');
   check(at(4).tag === 'steal' && at(6).tag === 'steal' && at(2).tag === 'reach' && at(5).tag === '' && at(1).vrank === 1 && at(6).vrank === 3,
     'a gain of a spread or more is a steal, a loss of one a reach; each player\'s place by value');
+  check(at(2).posTaken === 1 && at(2).posNow === 2 && at(6).posTaken === 2 && at(6).posNow === 1 && at(4).posTaken === 1 && at(3).posTaken === 0,
+    'each pick\'s place at its position: B Two was the 1st WR taken and is WR2 by value now, the rookie WR2 taken and WR1 now; keepers left out');
   check(G.graded === 5 && G.teams[0].team === '1' && G.teams[0].total === 10 && G.teams[0].best.no === 4 && G.teams[0].worst.no === 5 &&
     G.teams[0].grade === 'A' && G.teams[1].grade === 'C+' && G.teams[1].picks.length === 3,
     `teams best first, each with its total, best and worst pick, and a grade by how far it sits from the league\'s average (${G.teams.map(t => t.grade).join(', ')})`);

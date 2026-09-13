@@ -407,7 +407,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(/^[A-D][+-]?( [A-D][+-]?){9}$/.test(dg.grades) && dg.mine === 1 && dg.fits && dg.full,
     `a grade for each team, best first (${dg.grades}), yours marked, the whole screen on a phone with nothing cut off`);
   await ev(`document.querySelector('.dteam.mine > summary').click(); true`);
-  check(await waitFor(`document.querySelectorAll('.dteam.mine[open] .dpick').length === ${ROUNDS}`, 3000), `your team opens to its ${ROUNDS} picks`);
+  check(await waitFor(`document.querySelectorAll('.dteam.mine[open] .dpick').length === ${ROUNDS}`, 3000) &&
+    await ev(`/^[A-Z]+\\d+ taken, [A-Z]+\\d+ now$/.test(document.querySelector('.dteam.mine .dpick small').textContent.split(' · ').pop())`),
+    `your team opens to its ${ROUNDS} picks, each with its place at its position: ` + await ev(`document.querySelector('.dteam.mine .dpick small').textContent`));
   await ev(`document.querySelector('[data-dview="board"]').click(); true`);
   check(await waitFor(`document.querySelectorAll('.dboard tbody tr').length === ${ROUNDS} && document.querySelectorAll('.dboard thead th').length === 11`, 3000),
     'Board shows the draft round by round, a column for each team');
