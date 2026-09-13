@@ -120,6 +120,7 @@
     view: {week: 0, pos: 'QB'}, // the saved rankings open on the Rankings tab
     // The Trade tab: each league's teams, FantasyCalc's values by league format, and the trade being built.
     trade: {teams: {}, values: {}, pick: {league: '', partner: '', give: [], get: []}, ideas: {}},
+    draftRes: {}, draftFor: '', // draft results (the Trade tab's pop-up): each league's draft ({busy, error, data}), and the one showing
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
@@ -156,6 +157,9 @@
 
   const $ = id => document.getElementById(id);
   const view = $('view');
+  // Draft results' pop-up (made on first use), what it last showed, whether Back closed it, and the teams open in it.
+  let DLG = null, dlgHtml = '', dlgBack = false;
+  const dOpen = new Set();
 
   /* ------------------------------------------------------------ helpers */
 
@@ -414,6 +418,8 @@
     if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
     spySide();
     syncUrl(false);
+    // Values or teams that arrive while draft results are open show there too.
+    if (DLG && DLG.open) paintDraftResults();
   }
 
   /* Each screen has its own address (/app/lineups, /app/results…) and title,
@@ -2524,7 +2530,7 @@
     h += `<section class="card pad tsearch"><label class="field"><span>Who has him? Search for a player in ${esc(d.cfg.key)}</span>
         <input type="search" data-trade-search placeholder="At least three letters" value="${esc(S.trade.q || '')}" autocomplete="off"
           autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="tsearch">${tradeSearchResults()}</div></section>`;
-    h += tradeIdeasCard(d.cfg, disp);
+    h += tradeIdeasCard(d.cfg, disp) + draftCard(d.cfg);
     if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth, V.waiver, disp);
     // How both rosters sort: by value, by position, or by position then value (remembered).
     const sort = TRADE_SORTS.some(x => x[0] === S.ui.tradeSort) ? S.ui.tradeSort : 'value';
@@ -2705,6 +2711,191 @@
     </section>`;
   }
 
+  /* ---- Draft results: "See the draft" on the Trade tab opens the league's draft this season in
+     a pop-up (a <dialog> outside the screen, so redraws leave it alone). Every pick is weighed
+     against its spot (SCC.draftGrades) by the value the Trade tab shows: FantasyCalc's for Titan's
+     owner, Titan's own for everyone else. Team grades first (tap a team for its picks); Board
+     shows the draft round by round. Back, the Android app's included, closes it. */
+  const DRAFT_KIND = {snake: 'Snake draft', linear: 'Linear draft', auction: 'Auction'};
+  const draftCard = cfg => `<section class="card pad tdraft"><div class="tdraft-h"><div><h3>Draft results</h3>
+      <p class="fine">How every team in ${esc(cfg.key)} drafted, pick by pick</p></div>
+      <button type="button" class="btn small" data-action="draft-open">See the draft</button></div></section>`;
+
+  async function loadDraftResults(d) {
+    const id = d.cfg.id;
+    S.draftRes[id] = {busy: true};
+    paintDraftResults();
+    try { S.draftRes[id] = {data: await API.leagueDraft(d.cfg, S.snap.season)}; }
+    catch (e) { S.draftRes[id] = {error: `Could not load the draft in ${d.cfg.key}: ${e && e.message ? e.message : e}.`}; }
+    paintDraftResults();
+  }
+
+  function draftDialog() {
+    if (DLG) return DLG;
+    DLG = document.createElement('dialog');
+    DLG.className = 'dlg';
+    DLG.setAttribute('aria-labelledby', 'dlg-title');
+    document.body.appendChild(DLG);
+    DLG.addEventListener('click', e => {
+      if (e.target === DLG) return DLG.close(); // a tap outside the panel
+      const t = e.target.closest('[data-dview],[data-action]');
+      if (!t) return;
+      if (t.dataset.dview) {
+        S.ui.draftView = t.dataset.dview;
+        saveUi();
+        paintDraftResults();
+        const b = DLG.querySelector('.dlg-body');
+        if (b) b.scrollTop = 0;
+      } else if (t.dataset.action === 'draft-close') DLG.close();
+      else if (t.dataset.action === 'draft-retry') draftRetry();
+    });
+    // The teams opened stay open while the pop-up is, through redraws.
+    DLG.addEventListener('toggle', e => {
+      const x = e.target;
+      if (!x.dataset || !x.dataset.dteam) return;
+      if (x.open) dOpen.add(x.dataset.dteam);
+      else dOpen.delete(x.dataset.dteam);
+    }, true);
+    // Closing takes back the history entry opening added, unless Back is what closed it.
+    DLG.addEventListener('close', () => {
+      if (!dlgBack && history.state && history.state.draft) history.back();
+      dlgBack = false;
+    });
+    return DLG;
+  }
+
+  function openDraftResults() {
+    const d = ((S.snap && S.snap.leagues) || []).find(x => x.cfg.id === S.trade.pick.league);
+    if (!d) return;
+    draftDialog();
+    if (S.draftFor !== d.cfg.id) dOpen.clear();
+    S.draftFor = d.cfg.id;
+    const R = S.draftRes[d.cfg.id];
+    if (!R || R.error) loadDraftResults(d);
+    else paintDraftResults();
+    if (DLG.open) return;
+    DLG.showModal();
+    if (location.protocol !== 'file:') history.pushState(Object.assign({}, history.state, {draft: 1}), '', location.href);
+  }
+
+  // Try again: the draft, and the values it's graded by if they didn't load.
+  function draftRetry() {
+    const d = ((S.snap && S.snap.leagues) || []).find(x => x.cfg.id === S.draftFor);
+    if (!d) return;
+    const f = SCC.tradeFormat(d.cfg), V = S.trade.values[tradeKey(f)], sp = S.trade.season;
+    if (V && V.error) loadTradeValues(f);
+    if (sp && !sp.busy && !Object.keys(sp.map || {}).length) loadSeasonProj();
+    const R = S.draftRes[d.cfg.id];
+    if (!R || R.error) loadDraftResults(d);
+    else paintDraftResults();
+  }
+
+  // Redrawn only when what it shows changes, so an open team and the scroll stay put.
+  function paintDraftResults() {
+    if (!DLG) return;
+    const html = draftResultsHtml();
+    if (html === dlgHtml) return;
+    const old = DLG.querySelector('.dlg-body'), top = old ? old.scrollTop : 0;
+    DLG.innerHTML = dlgHtml = html;
+    const body = DLG.querySelector('.dlg-body');
+    if (body) body.scrollTop = top;
+  }
+
+  function draftResultsHtml() {
+    const d = ((S.snap && S.snap.leagues) || []).find(x => x.cfg.id === S.draftFor);
+    const R = d ? S.draftRes[d.cfg.id] : null, D = R && R.data;
+    const sub = D && D.picks.length ? [DRAFT_KIND[D.type], D.type === 'auction' ? plural(D.picks.length, 'player') : plural(D.rounds, 'round'),
+      D.teams + ' teams'].join(', ') : '';
+    const head = `<header class="dlg-h"><div class="dlg-t">${d ? leagueIcon(d.cfg) : ''}<div><h2 id="dlg-title">Draft results</h2>
+        <p>${d ? esc(d.cfg.key) : ''}${sub ? ' · ' + esc(sub) : ''}</p></div></div>
+      <button type="button" class="dlg-x" data-action="draft-close" aria-label="Close">✕</button></header>`;
+    const body = inner => `${head}<div class="dlg-body">${inner}</div>`;
+    const retry = '<button class="link" data-action="draft-retry">Try again</button>';
+    if (!d) return body('<p class="empty-note">That league isn\'t loaded anymore.</p>');
+    if (!R || R.busy) return body('<p class="empty-note">Loading the draft…</p>');
+    if (R.error) return body(`<div class="banner stop">${esc(R.error)} ${retry}</div>`);
+    if (!D || !D.picks.length) {
+      return body(`<p class="empty-note">${D && D.status === 'pre_draft' ? esc(d.cfg.key) + ' hasn\'t drafted yet.' : 'Titan found no draft for ' + esc(d.cfg.key) + ' this season.'}</p>`);
+    }
+    const fc = fcShown(), V = S.trade.values[tradeKey(SCC.tradeFormat(d.cfg))], sp = S.trade.season;
+    if (fc ? !V || V.busy : !sp || sp.busy) return body('<p class="empty-note">Working out what every player is worth…</p>');
+    if (fc ? !V.idx : !Object.keys(sp.map || {}).length) {
+      return body(`<div class="banner stop">Titan couldn't load ${fc ? 'the trade values' : 'this season\'s projections'}, so it can't grade the draft right now. ${retry}</div>`);
+    }
+    const G = SCC.draftGrades(D, fc ? p => (SCC.playerValue(V.idx, p) || {}).v || 0 : titanValueFor(d.cfg));
+    const T = S.trade.teams[d.cfg.id], names = {};
+    let mine = '';
+    ((T && T.list) || []).forEach(t => { names[t.id] = t.name; if (t.mine) mine = t.id; });
+    // Most players with no value this season (a dynasty rookie draft, by Titan's values) can't be graded fairly: the board shows ungraded.
+    const plain = !fc && G.valued < G.graded / 2;
+    const f = {
+      mine, plain,
+      name: id => names[id] || 'Team ' + id,
+      label: p => D.type === 'auction' ? '$' + p.amount : p.round + '.' + String(p.pick).padStart(2, '0'),
+      gain: n => plain ? '' : `<span class="${n > 0 ? 'good' : n < 0 ? 'amber' : 'fine'}">${n > 0 ? '+' : n < 0 ? '−' : '±'}${thousands(Math.abs(n))}</span>`
+    };
+    const view = plain || S.ui.draftView === 'board' ? 'board' : 'grades';
+    let h = plain ? `<div class="banner swap">Not graded: most of these players aren't projected to start this season, and Titan's values count
+        this season only. Here's the board.</div>`
+      : `<div class="chips" role="group" aria-label="Show the draft as">${[['grades', 'Team grades'], ['board', 'Board']].map(([k, label]) =>
+        `<button type="button" class="chip" data-dview="${k}" aria-pressed="${view === k}">${label}</button>`).join('')}</div>`;
+    if (D.status === 'drafting') h += '<div class="banner swap">The draft is still going: these are the picks so far.</div>';
+    h += view === 'board' ? draftBoard(G, D, f) : draftTeams(G, f);
+    if (!plain) {
+      h += `<p class="fine">Each pick is weighed against its spot: what that pick would get if this draft were held again today, with every player going
+        in order of value${D.type === 'auction' ? ' (in an auction, the spots follow price)' : ''}. ${fc
+          ? 'Values are FantasyCalc\'s trade values for this league\'s format.'
+          : 'Values are Titan\'s own: a player\'s projected points this season above a replacement starter at his position, in this league\'s scoring.'}
+        Grades compare each team with the rest of the league. Keepers aren't graded.</p>`;
+    }
+    if (!fc && !plain && d.cfg.kind === 'Dynasty') {
+      h += `<div class="banner swap tdyn"><b>Dynasty league:</b> these values come from this season's projections only. They don't account for
+        age or future seasons, so rookies and young players can look worth less than they are to a dynasty team.</div>`;
+    }
+    h += fc ? '<p class="credit">Values by <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>. Titan isn\'t affiliated with FantasyCalc.</p>'
+      : '<p class="credit">Projections via Sleeper.</p>';
+    return body(h);
+  }
+
+  // Team grades, best first, each opening to its picks.
+  function draftTeams(G, f) {
+    const line = (what, p) => p ? `${what}: ${esc(f.label(p))} ${esc(p.name)} ${f.gain(p.gain)}` : '';
+    const row = p => `<li class="dpick${p.tag ? ' d-' + p.tag : ''}"><span class="dno">${esc(f.label(p))}</span>
+      <span class="who"><b>${esc(p.name)}</b><small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.nfl || '')}${p.keeper ? '' : ' · ' + nth(p.vrank) + ' by value'}</small></span>
+      <span class="dval">${p.keeper ? '<small>keeper</small>' : `${f.gain(p.gain)}<small>value ${thousands(p.v)}</small>`}</span></li>`;
+    return `<ol class="dgrades">${G.teams.map(t => `<li><details class="dteam${t.team === f.mine ? ' mine' : ''}" data-dteam="${esc(t.team)}"${dOpen.has(t.team) ? ' open' : ''}>
+      <summary><span class="dgrade g-${t.grade[0].toLowerCase()}" title="Draft grade">${esc(t.grade)}</span>
+        <span class="dsum"><b>${esc(f.name(t.team))}${t.team === f.mine ? ' <small>(you)</small>' : ''}</b>
+          <small>${[line('Best pick', t.best), line('Biggest reach', t.worst)].filter(Boolean).join(' · ') || 'Every pick went about where it should'}</small></span>
+        <span class="dval">${f.gain(t.total)}<small>vs. its spots</small></span></summary>
+      <ul class="dpicks">${t.picks.map(row).join('')}</ul></details></li>`).join('')}</ol>`;
+  }
+
+  // The draft round by round, a column for each draft slot (an auction: every player by price).
+  function draftBoard(G, D, f) {
+    if (D.type === 'auction') {
+      return `<ul class="card dpicks">${G.picks.slice().sort((a, b) => b.amount - a.amount || a.no - b.no).map(p => `<li class="dpick${p.tag ? ' d-' + p.tag : ''}">
+        <span class="dno">${esc(f.label(p))}</span><span class="who"><b>${esc(p.name)}</b><small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(f.name(p.team))}</small></span>
+        <span class="dval">${p.keeper ? '<small>keeper</small>' : f.gain(p.gain)}</span></li>`).join('')}</ul>`;
+    }
+    const at = {}, owner = {}, slots = [], rounds = [];
+    G.picks.forEach(p => { at[p.round + '|' + p.slot] = p; if (p.round === 1) owner[p.slot] = p.team; });
+    for (let s = 1; s <= D.teams; s++) slots.push(s);
+    for (let r = 1; r <= D.rounds; r++) rounds.push(r);
+    const cell = (r, s) => {
+      const p = at[r + '|' + s];
+      if (!p) return '<td></td>';
+      // A traded pick says which team made it.
+      const by = owner[s] && p.team !== owner[s] ? ` · ${esc(f.name(p.team))}` : '';
+      return `<td class="${[p.tag && !f.plain ? 'd-' + p.tag : '', p.team === f.mine ? 'mine' : ''].filter(Boolean).join(' ')}"><span class="dc-h">${pos(p.pos)}<small>${esc(f.label(p))}</small></span>
+        <b>${esc(shortName(p))}</b><small>${p.keeper ? 'keeper' : f.gain(p.gain)}${by}</small></td>`;
+    };
+    return `<div class="table-wrap dboard-wrap"><table class="dboard"><thead><tr><th class="drd" scope="col">Rd</th>${slots.map(s =>
+        `<th scope="col"${owner[s] && owner[s] === f.mine ? ' class="mine"' : ''} title="${esc(owner[s] ? f.name(owner[s]) : '')}">${esc(owner[s] ? f.name(owner[s]) : 'Slot ' + s)}</th>`).join('')}</tr></thead>
+      <tbody>${rounds.map(r => `<tr><th class="drd" scope="row">${r}</th>${slots.map(s => cell(r, s)).join('')}</tr>`).join('')}</tbody></table></div>
+      <p class="fine">${f.plain ? '' : 'Green picks beat their spot the most, amber ones fell furthest short. '}Scroll sideways to see every team.</p>`;
+  }
+
   const SCREENS = {
     lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
     score: screenScore, ranks: screenRanks, trade: screenTrade, moves: screenMoves, settings: screenSettings
@@ -2727,6 +2918,8 @@
 
   // Back and Forward move between screens, as on any website.
   window.addEventListener('popstate', () => {
+    // Back with draft results open closes them and stays on the screen.
+    if (DLG && DLG.open) { dlgBack = true; DLG.close(); return; }
     const t = tabFromPath();
     if (t && t !== S.ui.tab) go(t, true);
   });
@@ -2834,6 +3027,7 @@
       [S.trade.teams, S.trade.values].forEach(m => Object.keys(m).forEach(k => { if (m[k].error) delete m[k]; }));
       render();
     }
+    else if (a === 'draft-open') openDraftResults();
     else if (a === 'fold-all' || a === 'fold-none') foldAll(t.dataset.kind, a === 'fold-all');
     else if (a === 'espn-start') startEspnOnly();
     else if (a === 'espn-team') pickEspnTeam(t.dataset.team);

@@ -20,6 +20,45 @@ const {check, section} = T;
   check(teams.length === 10 && teams[2].name === 'Team 3' && teams[2].manager === 'Manager 3', 'teams listed with their managers');
   check(ESPN.ownedTeam(L1, '00000003-aaaa-4bbb-8ccc-dddddddddddd') === 3, 'a SWID without braces, in lower case, finds its team');
 
+  section('draft results');
+  {
+    const e1 = L1.teams[0].roster.entries, e2 = L1.teams[1].roster.entries, pl = e => e.playerPoolEntry.player;
+    const def1 = e1.find(e => pl(e).defaultPositionId === 16);
+    const picks = [
+      {overallPickNumber: 1, roundId: 1, roundPickNumber: 1, teamId: 1, playerId: e1[0].playerId},
+      {overallPickNumber: 2, roundId: 1, roundPickNumber: 2, teamId: 2, playerId: e2[0].playerId},
+      {overallPickNumber: 3, roundId: 2, roundPickNumber: 1, teamId: 2, playerId: e2[1].playerId, keeper: true},
+      {overallPickNumber: 4, roundId: 2, roundPickNumber: 2, teamId: 1, playerId: e1[1].playerId},
+      {overallPickNumber: 5, roundId: 3, roundPickNumber: 1, teamId: 1, playerId: def1.playerId}];
+    const pool = [e1[0], e2[0], e2[1], e1[1], def1].map(e => ({id: e.playerId, fullName: pl(e).fullName, defaultPositionId: pl(e).defaultPositionId, proTeamId: pl(e).proTeamId}));
+    // ESPN's answers, through a stand-in: the draft (one empty pick at the end) and its player list.
+    const real = global.fetch;
+    let asked = null;
+    global.fetch = async (url, opts) => {
+      if (/\/players\?/.test(url)) { asked = JSON.parse(opts.headers['x-fantasy-filter']); return new Response(JSON.stringify(pool.map(p => Object.assign({ownership: {}}, p)))); }
+      if (/mDraftDetail/.test(url)) return new Response(JSON.stringify({seasonId: 2026, settings: {size: 2, name: 'x', draftSettings: {type: 'SNAKE', keeperCount: 1}},
+        draftDetail: {drafted: true, inProgress: false, picks: picks.concat([{overallPickNumber: 6, roundId: 3, teamId: 2, playerId: -1}])}}));
+      throw new Error('a test tried to read ESPN: ' + url);
+    };
+    const slim = await ESPN.readDraft('99999901', '2026', {});
+    global.fetch = async () => new Response('{}', {status: 401});
+    let why = '';
+    try { await ESPN.readDraft('99999901', '2026', {}); } catch (e) { why = e.message; }
+    global.fetch = real;
+    check(slim.draftDetail.picks.length === 5 && slim.pool.length === 5 && asked.filterIds.value.length === 5 && why === 'private',
+      'readDraft asks ESPN\'s player list for just the drafted players (an empty pick left out, a defense kept); a private league says so');
+    const ED = ESPN.draftFrom(slim, players);
+    const r1 = ESPN.buildLeague(ESPN.leagueCfg(L1, {id: L1.id, teamId: 1}, {}), L1, players).roster;
+    check(ED.type === 'snake' && ED.status === 'complete' && ED.teams === 2 && ED.rounds === 3 && ED.picks.length === 5,
+      'an ESPN draft in the shape Sleeper\'s takes: snake, complete, 2 teams, 3 rounds');
+    check(ED.picks[0].id === r1[0].id && ED.picks[0].name === r1[0].name && ED.picks[0].espnId === e1[0].playerId && ED.picks[0].team === '1',
+      'each player named from ESPN\'s list and matched to Sleeper\'s, as on rosters: ' + ED.picks[0].name);
+    const rDef = r1.find(p => p.pos === 'DEF');
+    check(ED.picks[4].pos === 'DEF' && ED.picks[4].name === rDef.name && ED.picks[4].id === rDef.id, 'a defense is named and matched as on rosters: ' + ED.picks[4].name);
+    check(ED.picks[2].keeper && ED.picks[2].slot === 2 && ED.picks[3].slot === 1 && ED.picks[3].pick === 2 && ED.picks[4].slot === 1,
+      'keepers marked; in even rounds the slots run backwards');
+  }
+
   section('league settings');
   const cfg = ESPN.leagueCfg(L1, {id: L1.id, teamId: 1}, {});
   check(cfg.id === 'espn:99999901' && cfg.platform === 'espn' && cfg.teams === 10 && cfg.ppr === 0.5, SCC.describeLeague(cfg));

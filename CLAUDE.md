@@ -151,6 +151,16 @@ live site, so site changes reach it without a new upload. What's done and what's
   bottom third 'thin'. Standings shows every team's ranks (`strengthTable`, table `.pstr`, not
   `.stand`, which the UI test counts); the Trade tab shows the partner and you once a partner is
   picked (`tradeFit`, "Where you both stand", with the good fits). Both load the season projections.
+- Draft results (the Trade tab's See the draft, `openDraftResults` in `app.js`): a `<dialog>` outside
+  `#view`, repainted only when its HTML changes (`paintDraftResults`, so an open team and the scroll
+  survive redraws) and closed by Back (opening pushes a history entry; `popstate` closes it). Drafts
+  come from `API.leagueDraft`: Sleeper's `/league/:id/drafts` then `/draft/:id/picks`
+  (`SCC.draftFromSleeper`); ESPN's `ESPN.fetchDraft`, `view=mDraftDetail` plus ESPN's player list
+  filtered to the drafted ids (the draft gives ids only), private leagues through `espnLeague` kind
+  `draft`. ESPN defenses have negative player ids; only -1 is an empty pick. `SCC.draftGrades` weighs
+  each pick against its spot by the value the Trade tab shows (FantasyCalc's only for the owner).
+  When most picks have no Titan value (a dynasty rookie draft), everyone but the owner sees the board
+  ungraded (`plain`).
 - The Standings tab (`SCC.standings`): records, all-play, luck, power and playoff odds from 5,000
   seeded simulations; schedules from `API.leagueSchedule` (Sleeper matchups, or ESPN via
   `ESPN.fetchSchedule`; private ESPN leagues through `espnLeague` kind `schedule`).

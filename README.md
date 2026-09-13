@@ -126,6 +126,16 @@ from the heading of their roster card, and Clear all empties the trade, the part
 and the search for a fresh start. The app page's footer
 links FantasyCalc without needing JavaScript, as FantasyCalc asks.
 
+Draft results: See the draft, on the Trade tab, opens the league's draft this season in a pop-up.
+Every pick is weighed against its spot: what that pick would get if the draft were held again today,
+with every player going in order of value (Titan's own values, or FantasyCalc's on the owner's
+account). Teams are graded A+ to D against the rest of the league, best first, each with its best
+pick and biggest reach, and open to all their picks. Board shows the draft round by round, a column
+per team, steals in green and reaches in amber. It works for Sleeper and ESPN leagues (private ESPN
+leagues through Titan's server). Keepers aren't graded, and a draft whose players mostly aren't
+projected to start this season (a dynasty rookie draft) shows its board ungraded, except to the owner,
+whose FantasyCalc values cover rookies. Back closes the pop-up.
+
 On computers and tablets, the app in a browser takes the website's look: its sections become a
 menu across the header, the page is a centred 1100px column (one league per row, as on a phone), the
 league chips wrap instead of scrolling (on wider windows the page grows to 1280px and Lineups,
@@ -360,4 +370,5 @@ No build step and no dependencies. It runs on any static host.
 | `v1.19.1` | The Players dot works like a notification: it marks waiver pickups you haven't seen on Waivers yet, clears once you open Waivers, and comes back only for a new pickup (remembered on each device) |
 | `v1.19.2` | Trade tab: both rosters sort by value, by position, or by position then value (with position headers when grouped, remembered), and every player shows Titan's colored position tag on the rosters, in the trade and in Who has him? |
 | `v1.19.3` | Position strength: every team's rank at each position by its best lineup this season (Sleeper's projections, a little credit for bench depth), shown on Standings with the top third green and the bottom third red, and on the Trade tab as "Where you both stand" for you and your partner, with the good fits called out; the Trade tab also gets Clear all and a partner picker on the partner's roster card |
+| `v1.20.0` | Draft results on the Trade tab: See the draft opens the league's draft in a pop-up, every pick weighed against its spot by today's values (Titan's own, FantasyCalc's for the owner), each team graded A+ to D with its best pick and biggest reach, and a Board view round by round; Sleeper and ESPN leagues, private ESPN leagues through Titan's server; a dynasty rookie draft shows ungraded by Titan's values; Back closes it |
 | `v1.19.4` | When ESPN turns Titan's server away (it started answering 403 on 2026-09-12), the News tab, scores ticker and game context serve their last good copy, saved in Firestore, instead of failing: news up to a day old, with a note on the News tab once it's over 15 minutes old; scores up to half an hour; game context up to six hours. News alerts skip an old copy and ask ESPN directly |

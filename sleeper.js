@@ -520,6 +520,22 @@
     return teams;
   }
 
+  /* A league's draft this season, for draft results on the Trade tab: every pick in order
+     (SCC.draftFromSleeper, or ESPN.fetchDraft). A Sleeper league's latest draft that has
+     started (a dynasty league's is its rookie draft), else one still to come; null for none. */
+  async function leagueDraft(lg, season) {
+    if (lg.platform === 'yahoo') throw new Error('Yahoo drafts are coming next');
+    var players = await loadPlayers();
+    if (lg.platform === 'espn') return ESPN.fetchDraft(lg.espnId, season, players);
+    var drafts = (await getJson(API + '/league/' + lg.id + '/drafts')) || [];
+    var d = drafts.slice().sort(function (a, b) {
+      return (a.status === 'pre_draft') - (b.status === 'pre_draft') || (Number(b.start_time) || 0) - (Number(a.start_time) || 0);
+    })[0];
+    if (!d) return null;
+    var picks = d.status === 'pre_draft' ? [] : (await getJson(API + '/draft/' + d.draft_id + '/picks')) || [];
+    return SCC.draftFromSleeper(d, picks, players);
+  }
+
   // Sleeper's most-added players over the last day, most first: [{id, count}] (the Waivers tab).
   async function trendingAdds(limit) {
     var list = await getJson(API + '/players/nfl/trending/add?lookback_hours=24&limit=' + (limit || 40));
@@ -770,7 +786,7 @@
     fetchSeasonProjections: fetchSeasonProjections,
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
     collect: collect, collectScores: collectScores, livePoints: livePoints,
-    collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule,
+    collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule, leagueDraft: leagueDraft,
     trendingAdds: trendingAdds, leagueWaivers: leagueWaivers, leagueTransactions: leagueTransactions,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
     fetchProjections: fetchProjections, PLAYERS_KEY: PLAYERS_KEY

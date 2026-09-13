@@ -37,6 +37,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   }
   const SCHED = JSON.stringify({id: L1.id, settings: {scheduleSettings: {matchupPeriodCount: 14, playoffTeamCount: 4}}, schedule: rr,
     members: L1.members, teams: L1.teams.map(t => ({id: t.id, location: t.location, nickname: t.nickname, owners: t.owners}))});
+  // A stand-in for the test league's draft: a snake draft of every roster, round by round, and ESPN's player list for its players.
+  const ROUNDS = Math.min(...L1.teams.map(t => t.roster.entries.length)), dpicks = [];
+  for (let r = 1; r <= ROUNDS; r++) {
+    (r % 2 ? L1.teams : L1.teams.slice().reverse()).forEach((t, i) => dpicks.push({overallPickNumber: dpicks.length + 1, roundId: r, roundPickNumber: i + 1,
+      teamId: t.id, playerId: t.roster.entries[r - 1].playerId, keeper: false, bidAmount: 0}));
+  }
+  const DRAFT = JSON.stringify({seasonId: 2026, settings: {size: L1.teams.length, draftSettings: {type: 'SNAKE', keeperCount: 0}},
+    draftDetail: {drafted: true, inProgress: false, picks: dpicks}});
+  const POOL = JSON.stringify([].concat(...L1.teams.map(t => t.roster.entries.map(e => {
+    const p = e.playerPoolEntry.player;
+    return {id: p.id, fullName: p.fullName, defaultPositionId: p.defaultPositionId, proTeamId: p.proTeamId};
+  }))));
   // A stand-in for ESPN's news feed: a story about the test team's QB, and one about nobody on it.
   const newsQb = inLeague.find(p => p.pos === 'QB').name, newsAt = new Date(Date.now() - 10 * 60000).toISOString();
   const NEWS = JSON.stringify({articles: [
@@ -110,8 +122,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
           {name: 'access-control-allow-methods', value: 'GET'}]});
         return;
       }
-      const ok = url.includes('/leagues/' + L1.id);
-      const body = !ok ? '{}' : /mBoxscore/.test(url) ? BOX : /mMatchupScore/.test(url) ? SCHED : JSON.stringify(L1);
+      const pool = /\/players\?/.test(url), ok = pool || url.includes('/leagues/' + L1.id);
+      const body = pool ? POOL : !ok ? '{}' : /mBoxscore/.test(url) ? BOX : /mMatchupScore/.test(url) ? SCHED : /mDraftDetail/.test(url) ? DRAFT : JSON.stringify(L1);
       send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: ok ? 200 : 401, responseHeaders: headers,
         body: Buffer.from(body).toString('base64')});
     }
@@ -127,7 +139,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   await send('Page.enable');
   await send('Runtime.enable');
-  await send('Fetch.enable', {patterns: [{urlPattern: '*fantasy.espn.com*leagues*'}]});
+  await send('Fetch.enable', {patterns: [{urlPattern: '*fantasy.espn.com*leagues*'}, {urlPattern: '*fantasy.espn.com*players*'}]});
+  // TITAN_SHOTS=<folder> saves screenshots of new screens there (phone and computer widths, both themes).
+  const shot = async name => {
+    if (!process.env.TITAN_SHOTS) return;
+    const r = await send('Page.captureScreenshot', {format: 'png'});
+    fs.writeFileSync(path.join(process.env.TITAN_SHOTS, name + '.png'), Buffer.from(r.result.data, 'base64'));
+  };
   await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 2, mobile: true});
   T.section('the website');
   await send('Page.navigate', {url: ORIGIN + '/'});
@@ -378,6 +396,49 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await sleep(400);
   check(await ev(`document.querySelector('.bar [data-ui="tradePartner"]').value === '' && !document.querySelector('.tp-select') && !document.querySelector('.trade-sum') &&
     document.querySelector('[data-action="trade-reset"]').disabled`), 'Clear all starts over: no partner, no trade, and the button rests until there\'s something to clear');
+
+  // Draft results: the league's draft in a pop-up, every pick graded by Titan's values.
+  await ev(`document.querySelector('[data-action="draft-open"]').click(); true`);
+  check(await waitFor(`!!document.querySelector('dialog.dlg[open]') && document.querySelectorAll('.dgrades .dteam').length === 10`, 20000),
+    'See the draft opens the league\'s draft in a pop-up, every team graded: ' + (await text('.dlg-body')).replace(/\s+/g, ' ').slice(0, 90));
+  const dg = await ev(`(() => { const b = document.querySelector('.dlg-body');
+    return {grades: [...document.querySelectorAll('.dteam .dgrade')].map(x => x.textContent).join(' '), mine: document.querySelectorAll('.dteam.mine').length,
+      fits: b.scrollWidth <= b.clientWidth + 1, full: document.querySelector('dialog.dlg').getBoundingClientRect().width >= innerWidth - 1}; })()`);
+  check(/^[A-D][+-]?( [A-D][+-]?){9}$/.test(dg.grades) && dg.mine === 1 && dg.fits && dg.full,
+    `a grade for each team, best first (${dg.grades}), yours marked, the whole screen on a phone with nothing cut off`);
+  await ev(`document.querySelector('.dteam.mine > summary').click(); true`);
+  check(await waitFor(`document.querySelectorAll('.dteam.mine[open] .dpick').length === ${ROUNDS}`, 3000), `your team opens to its ${ROUNDS} picks`);
+  await ev(`document.querySelector('[data-dview="board"]').click(); true`);
+  check(await waitFor(`document.querySelectorAll('.dboard tbody tr').length === ${ROUNDS} && document.querySelectorAll('.dboard thead th').length === 11`, 3000),
+    'Board shows the draft round by round, a column for each team');
+  if (process.env.TITAN_SHOTS) {
+    await shot('draft-board-390');
+    await ev(`document.querySelector('[data-dview="grades"]').click(); true`);
+    await sleep(200);
+    await shot('draft-grades-390');
+    await ev(`document.documentElement.dataset.theme = 'dark'; true`);
+    await sleep(200);
+    await shot('draft-grades-390-dark');
+    await send('Emulation.setDeviceMetricsOverride', {width: 1280, height: 900, deviceScaleFactor: 1, mobile: false});
+    await sleep(500);
+    await shot('draft-grades-1280-dark');
+    await ev(`document.querySelector('[data-dview="board"]').click(); true`);
+    await sleep(200);
+    await shot('draft-board-1280-dark');
+    await ev(`delete document.documentElement.dataset.theme; true`);
+    await sleep(200);
+    await shot('draft-board-1280');
+    await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 2, mobile: true});
+    await sleep(500);
+  }
+  await ev(`document.querySelector('[data-dview="grades"]').click(); true`);
+  await ev(`document.querySelector('[data-action="draft-close"]').click(); true`);
+  check(await waitFor(`!document.querySelector('dialog.dlg[open]') && location.pathname === '/app/trade'`, 3000), 'Close shuts it, back on the Trade tab');
+  await ev(`document.querySelector('[data-action="draft-open"]').click(); true`);
+  await waitFor(`!!document.querySelector('dialog.dlg[open]')`, 3000);
+  await ev(`history.back(); true`);
+  check(await waitFor(`!document.querySelector('dialog.dlg[open]') && location.pathname === '/app/trade' && !!document.querySelector('[data-action="draft-open"]')`, 3000),
+    'Back closes it too (the Android app\'s Back button) and stays on the Trade tab');
 
   T.section('game context on Lineups');
   await tab('lineups');

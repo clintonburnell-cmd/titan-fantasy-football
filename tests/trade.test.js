@@ -53,6 +53,42 @@ const many = Array.from({length: 320}, (_, i) => ({p: 'RB', v: 10000 - i * 30}))
 check(SCC.waiverValue(many) === 10000 - 299 * 30 && SCC.waiverValue([{p: 'QB', v: 900}, {p: 'PICK', v: 50}, {p: 'WR', v: 120}]) === 120 && SCC.waiverValue([]) === 0,
   'a waiver pickup is worth about the 300th-best player; with fewer listed, the last player (picks aside)');
 
+section('draft results');
+{
+  const pl = {101: ['A One', 'RB', 'KC'], 102: ['B Two', 'WR', 'BUF'], 103: ['C Three', 'QB', 'SF'], 104: ['D Four', 'TE', 'MIA']};
+  // Sleeper's answers for a two-team, three-round snake: team 2 keeps D Four in round 2, team 1 takes KC's defense in
+  // round 3, and team 2 a rookie Titan's player list doesn't have yet.
+  const sp = (no, round, slot, roster, id, extra) => Object.assign({pick_no: no, round, draft_slot: slot, roster_id: roster, player_id: id, is_keeper: null,
+    metadata: {first_name: 'Meta', last_name: 'Name', position: pl[id] ? pl[id][1] : 'DEF', team: pl[id] ? pl[id][2] : id}}, extra);
+  const raw = [sp(1, 1, 1, 1, '101'), sp(2, 1, 2, 2, '102'), sp(3, 2, 2, 2, '104', {is_keeper: true}), sp(4, 2, 1, 1, '103'), sp(5, 3, 1, 1, 'KC'),
+    sp(6, 3, 2, 2, '999', {metadata: {first_name: 'Rookie', last_name: 'Newman', position: 'WR', team: 'LV'}})];
+  const D = SCC.draftFromSleeper({type: 'snake', status: 'complete', season: '2026', settings: {rounds: 3, teams: 2}}, raw.slice().reverse(), pl);
+  check(D.type === 'snake' && D.status === 'complete' && D.teams === 2 && D.rounds === 3 && D.picks.map(p => p.no).join() === '1,2,3,4,5,6',
+    'a Sleeper draft: its picks in order, with its type, rounds and teams');
+  check(D.picks[0].name === 'A One' && D.picks[0].team === '1' && D.picks[2].keeper && D.picks[3].pick === 2 && D.picks[3].slot === 1,
+    'each pick names its player from Titan\'s list, the team that made it, its place in the round and its draft slot; keepers marked');
+  check(D.picks[4].name === 'KC D/ST' && D.picks[4].pos === 'DEF' && D.picks[5].name === 'Rookie Newman' && D.picks[5].nfl === 'LV',
+    'a defense is named as Titan names them; a player not in the list yet keeps Sleeper\'s name for him');
+  const vals = {101: 50, 102: 10, 103: 40, 104: 30, KC: 0, 999: 20};
+  const G = SCC.draftGrades(D, p => vals[p.id]);
+  const at = no => G.picks.find(p => p.no === no);
+  // By value now the five graded players go 50, 40, 20, 10, 0; the spots they used were 1, 2, 4, 5, 6.
+  check(at(1).exp === 50 && at(1).gain === 0 && at(2).gain === -30 && at(4).gain === 20 && at(5).gain === -10 && at(6).gain === 20 && at(3).gain === null,
+    'each pick against its spot: the value that spot would get with everyone going in order of value; keepers aren\'t graded');
+  check(at(4).tag === 'steal' && at(6).tag === 'steal' && at(2).tag === 'reach' && at(5).tag === '' && at(1).vrank === 1 && at(6).vrank === 3,
+    'a gain of a spread or more is a steal, a loss of one a reach; each player\'s place by value');
+  check(G.graded === 5 && G.teams[0].team === '1' && G.teams[0].total === 10 && G.teams[0].best.no === 4 && G.teams[0].worst.no === 5 &&
+    G.teams[0].grade === 'A' && G.teams[1].grade === 'C+' && G.teams[1].picks.length === 3,
+    `teams best first, each with its total, best and worst pick, and a grade by how far it sits from the league\'s average (${G.teams.map(t => t.grade).join(', ')})`);
+  const none = SCC.draftGrades(D, () => 0);
+  check(none.teams.every(t => t.grade === 'B' && t.total === 0) && none.valued === 0 && G.valued === 4,
+    'with no values to go on, every team gets a B, and the count of valued picks says so (the app then shows the board ungraded)');
+  const auc = {type: 'auction', picks: [{no: 1, team: '1', id: 'a', amount: 10}, {no: 2, team: '2', id: 'b', amount: 40}, {no: 3, team: '1', id: 'c', amount: 20}]};
+  const GA = SCC.draftGrades(auc, p => ({a: 30, b: 10, c: 20})[p.id]);
+  check(GA.picks[1].exp === 30 && GA.picks[1].gain === -20 && GA.picks[2].gain === 0 && GA.picks[0].gain === 20,
+    'in an auction the spots follow price: the dearest player should be the most valuable');
+}
+
 section('draft picks (dynasty)');
 const dp = SCC.draftPicks([1, 2, 3], [{season: '2027', round: 1, roster_id: 2, owner_id: 1}, {season: '2028', round: 2, roster_id: 1, owner_id: 3},
   {season: '2027', round: 2, roster_id: 3, owner_id: 9}], ['2027', '2028'], 2);

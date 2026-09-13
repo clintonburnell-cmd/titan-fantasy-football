@@ -441,6 +441,81 @@
     return out;
   }
 
+  /* ------------------------------------------------------------ draft results */
+
+  /* A Sleeper draft in the shape draft results read (espn.js draftFrom gives the same):
+     {type ('snake', 'linear' or 'auction'), status ('complete', 'drafting' or 'pre_draft'),
+     rounds, teams, picks in order: [{no, round, pick (its place in the round), slot (the draft
+     slot it belongs to), team (the roster that made it), id, name, pos, nfl, keeper, amount (an
+     auction's price)}]}. A team defense's id is its team; a player Titan's list doesn't have yet
+     keeps Sleeper's name for him. */
+  var DRAFT_TYPES = {snake: 1, linear: 1, auction: 1};
+  function draftFromSleeper(draft, picks, players) {
+    draft = draft || {};
+    var st = draft.settings || {};
+    var list = (picks || []).map(function (p) {
+      var m = p.metadata || {}, id = String(p.player_id || ''), info = playerInfo(players, id);
+      var pos = m.position || info.pos, meta = String((m.first_name || '') + ' ' + (m.last_name || '')).replace(/\s+/g, ' ').trim();
+      return {no: Number(p.pick_no) || 0, round: Number(p.round) || 0, pick: 0, slot: Number(p.draft_slot) || 0, team: String(p.roster_id || ''),
+        id: id, name: (players && players[id]) || pos === 'DEF' ? info.name : meta || info.name, pos: pos, nfl: m.team || info.team,
+        keeper: !!p.is_keeper, amount: Number(m.amount) || 0};
+    }).sort(function (a, b) { return a.no - b.no; });
+    var teams = Number(st.teams) || list.filter(function (p) { return p.round === 1; }).length;
+    list.forEach(function (p) { p.pick = teams ? ((p.no - 1) % teams) + 1 : p.no; });
+    return {type: DRAFT_TYPES[draft.type] ? draft.type : 'snake', status: draft.status || '', season: String(draft.season || ''),
+      rounds: Number(st.rounds) || list.reduce(function (n, p) { return Math.max(n, p.round); }, 0), teams: teams, picks: list};
+  }
+
+  function spread(list) {
+    if (!list.length) return 0;
+    var mean = list.reduce(function (s, x) { return s + x; }, 0) / list.length;
+    return Math.sqrt(list.reduce(function (s, x) { return s + (x - mean) * (x - mean); }, 0) / list.length);
+  }
+
+  /* Draft results: every pick against the spot it used. A spot is worth what it would get if the
+     draft were held again today with every player going in order of value (`value(pick)`, the
+     value the Trade tab shows: Titan's own or FantasyCalc's): the Nth pick gets the Nth-best value
+     among the players drafted. In an auction the spots follow price, so the Nth-dearest player
+     should be the Nth most valuable. Keepers aren't graded, since nobody chose them there. Each
+     pick gets its value (v), its spot's (exp), the difference (gain), its place by value (vrank)
+     and a tag when its gain is a spread or more either way ('steal', 'reach'). Each team gets its
+     total gain, its best and worst pick, and a grade from how many spreads its total sits from the
+     league's average (A+ down to D). Teams best first. */
+  var DRAFT_GRADES = [[1.5, 'A+'], [1, 'A'], [0.5, 'A-'], [0.2, 'B+'], [-0.2, 'B'], [-0.5, 'B-'], [-1, 'C+'], [-1.5, 'C'], [-Infinity, 'D']];
+  function draftGrades(draft, value) {
+    var picks = ((draft && draft.picks) || []).map(function (p) {
+      var v = Number(value(p));
+      return Object.assign({}, p, {v: v > 0 ? v : 0, exp: null, gain: null, vrank: 0, tag: ''});
+    });
+    var graded = picks.filter(function (p) { return !p.keeper; });
+    var auction = draft && draft.type === 'auction';
+    var bySpot = graded.slice().sort(function (a, b) { return auction ? b.amount - a.amount || a.no - b.no : a.no - b.no; });
+    var byValue = graded.slice().sort(function (a, b) { return b.v - a.v || a.no - b.no; });
+    byValue.forEach(function (p, i) { p.vrank = i + 1; });
+    bySpot.forEach(function (p, i) { p.exp = byValue[i].v; p.gain = p.v - p.exp; });
+    var sd = spread(graded.map(function (p) { return p.gain; }));
+    graded.forEach(function (p) { p.tag = sd && p.gain >= sd ? 'steal' : sd && p.gain <= -sd ? 'reach' : ''; });
+    var byTeam = {}, teams = [];
+    picks.forEach(function (p) {
+      if (!byTeam[p.team]) teams.push(byTeam[p.team] = {team: p.team, slot: p.slot, picks: [], total: 0, best: null, worst: null, grade: 'B'});
+      var t = byTeam[p.team];
+      t.picks.push(p);
+      if (p.keeper) return;
+      t.total += p.gain;
+      if (p.gain > 0 && (!t.best || p.gain > t.best.gain)) t.best = p;
+      if (p.gain < 0 && (!t.worst || p.gain < t.worst.gain)) t.worst = p;
+    });
+    var totals = teams.map(function (t) { return t.total; }), tsd = spread(totals);
+    var mean = totals.reduce(function (s, x) { return s + x; }, 0) / (totals.length || 1);
+    teams.forEach(function (t) {
+      var z = tsd ? (t.total - mean) / tsd : 0;
+      t.grade = DRAFT_GRADES.filter(function (g) { return z >= g[0]; })[0][1];
+    });
+    teams.sort(function (a, b) { return b.total - a.total || a.slot - b.slot; });
+    // valued: how many graded picks have any value at all (few in a dynasty rookie draft by this season's projections).
+    return {picks: picks, teams: teams, graded: graded.length, valued: graded.filter(function (p) { return p.v > 0; }).length};
+  }
+
   /* ------------------------------------------------------------ transactions */
 
   /* A Sleeper league's completed transactions, newest first, for the Transactions tab:
@@ -1960,6 +2035,7 @@
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues, positionStrength: positionStrength,
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas,
+    draftFromSleeper: draftFromSleeper, draftGrades: draftGrades,
     impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags, transactionsFrom: transactionsFrom,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,

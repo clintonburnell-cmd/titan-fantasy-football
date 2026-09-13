@@ -284,6 +284,11 @@ exports.espnLeague = onCall({region: 'us-central1', memory: '256MiB', maxInstanc
     try { return ESPN.slimSchedule(await ESPN.readSchedule(String(leagueId), String(season), {creds: login})); }
     catch (e) { throw new HttpsError(e.message === 'private' ? 'permission-denied' : 'unavailable', e.message === 'private' ? 'private' : e.message); }
   }
+  // The league's draft this season, with the drafted players' names (draft results on the Trade tab).
+  if (kind === 'draft') {
+    try { return await ESPN.readDraft(String(leagueId), String(season), {creds: login}); }
+    catch (e) { throw new HttpsError(e.message === 'private' ? 'permission-denied' : 'unavailable', e.message === 'private' ? 'private' : e.message); }
+  }
   // This week's head-to-head: both lineups (null when there's no matchup).
   if (matchup) return ESPN.fetchMatchup(String(leagueId), String(season), Number(week), Number(teamId), {creds: login});
   // Live scores: one team's points so far this week.

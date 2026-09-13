@@ -363,6 +363,69 @@
     };
   }
 
+  /* A league's draft this season, for draft results on the Trade tab. ESPN's draft
+     (view=mDraftDetail) gives only player ids, so the drafted players' names, positions and
+     teams come from ESPN's player list, asked for just those ids. readDraft answers with only
+     what draftFrom reads; Titan's server uses it for private leagues, with the person's saved
+     login. fetchDraft is the app's: public leagues directly, private ones through the server. */
+  var POOL = 'players?scoringPeriodId=0&view=players_wl';
+  async function readDraft(id, season, opts) {
+    opts = opts || {};
+    var browser = typeof window !== 'undefined';
+    var res = await fetch(BASE + season + '/segments/0/leagues/' + id + '?view=mDraftDetail&view=mSettings',
+      browser ? {cache: 'no-store', credentials: 'omit'} : {headers: opts.creds && opts.creds.s2 ? {Cookie: cookieHeader(opts.creds)} : {}});
+    if (!res.ok) throw new Error(res.status === 401 || res.status === 403 ? 'private' : 'ESPN answered ' + res.status);
+    var json = await res.json(), dd = json.draftDetail || {}, s = json.settings || {};
+    // An empty pick has player -1; team defenses have other negative ids.
+    var picks = (dd.picks || []).filter(function (p) { return Number(p.playerId) && Number(p.playerId) !== -1; }).map(function (p) {
+      return {overallPickNumber: p.overallPickNumber, roundId: p.roundId, roundPickNumber: p.roundPickNumber, teamId: p.teamId,
+        playerId: p.playerId, keeper: !!p.keeper, bidAmount: Number(p.bidAmount) || 0};
+    });
+    var pool = [];
+    if (picks.length) {
+      var filter = {'x-fantasy-filter': JSON.stringify({filterIds: {value: picks.map(function (p) { return p.playerId; })}})};
+      var pr = await fetch(BASE + season + '/' + POOL, browser ? {credentials: 'omit', headers: filter} : {headers: filter});
+      if (!pr.ok) throw new Error('ESPN\'s player list answered ' + pr.status);
+      pool = ((await pr.json()) || []).map(function (p) {
+        return {id: p.id, fullName: p.fullName || '', defaultPositionId: p.defaultPositionId, proTeamId: p.proTeamId};
+      });
+    }
+    return {seasonId: json.seasonId, settings: {size: s.size, draftSettings: {type: (s.draftSettings || {}).type || '', keeperCount: (s.draftSettings || {}).keeperCount || 0}},
+      draftDetail: {drafted: !!dd.drafted, inProgress: !!dd.inProgress, picks: picks}, pool: pool};
+  }
+
+  // readDraft's answer in the shape of SCC.draftFromSleeper, each player matched to Sleeper's list as on rosters.
+  function draftFrom(json, players) {
+    json = json || {};
+    players = players || {};
+    var dd = json.draftDetail || {}, s = json.settings || {}, byId = {}, idx = indexPlayers(players);
+    (json.pool || []).forEach(function (p) { byId[p.id] = p; });
+    var picks = (dd.picks || []).map(function (p) {
+      var pl = byId[p.playerId] || {}, pos = POS[pl.defaultPositionId] || '?', nfl = SCC.teamAbbr(TEAM[pl.proTeamId] || '');
+      var name = pos === 'DEF' ? nfl + ' D/ST' : cleanName(pl.fullName) || ('ESPN player ' + p.playerId);
+      var sid = matchSleeper(idx, players, name, pos, nfl);
+      return {no: Number(p.overallPickNumber) || 0, round: Number(p.roundId) || 0, pick: Number(p.roundPickNumber) || 0, slot: 0,
+        team: String(p.teamId), id: sid || ('espn:' + p.playerId), espnId: p.playerId, name: sid && pos !== 'DEF' ? players[sid][0] : name,
+        pos: pos, nfl: nfl, keeper: !!p.keeper, amount: Number(p.bidAmount) || 0};
+    }).sort(function (a, b) { return a.no - b.no; });
+    var teams = Number(s.size) || picks.filter(function (p) { return p.round === 1; }).length;
+    var auction = (s.draftSettings || {}).type === 'AUCTION' || picks.some(function (p) { return p.amount > 0; });
+    // ESPN doesn't say which draft slot a pick belongs to: in a snake draft, the even rounds run backwards.
+    picks.forEach(function (p) { p.slot = p.round % 2 ? p.pick : teams + 1 - p.pick; });
+    return {type: auction ? 'auction' : 'snake', status: dd.drafted ? 'complete' : dd.inProgress ? 'drafting' : 'pre_draft',
+      season: String(json.seasonId || ''), rounds: picks.reduce(function (n, p) { return Math.max(n, p.round); }, 0), teams: teams, picks: picks};
+  }
+
+  async function fetchDraft(id, season, players) {
+    var json;
+    try { json = await readDraft(id, season); }
+    catch (e) {
+      if (typeof window === 'undefined' || !transport) throw e;
+      json = await transport({leagueId: String(id), season: String(season), kind: 'draft'});
+    }
+    return draftFrom(json, players);
+  }
+
   /* ESPN's latest NFL news (the public feed behind espn.com/nfl), newest first, trimmed
      to what Titan shows: headline, summary, link, picture, when, whether it's a video or
      ESPN+, and the players and teams the story tags. */
@@ -463,7 +526,7 @@
     fetchPoints: fetchPoints, pointsFromBoxscore: pointsFromBoxscore, fetchKickoffs: fetchKickoffs, kickoffsFrom: kickoffsFrom,
     fetchMatchup: fetchMatchup, matchupFrom: matchupFrom, toSleeper: toSleeper, fetchNews: fetchNews, newsFrom: newsFrom,
     readSchedule: readSchedule, fetchSchedule: fetchSchedule, scheduleFrom: scheduleFrom, slimSchedule: slimSchedule,
-    fetchScoreboard: fetchScoreboard, scoreboardFrom: scoreboardFrom,
+    fetchScoreboard: fetchScoreboard, scoreboardFrom: scoreboardFrom, readDraft: readDraft, draftFrom: draftFrom, fetchDraft: fetchDraft,
     SLOT: SLOT, POS: POS, TEAM: TEAM
   };
 
