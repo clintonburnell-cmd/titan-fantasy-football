@@ -797,11 +797,11 @@
      picture, or one that fails to load, a plain football shows (as Sleeper shows its default).
      size 'xs' is smaller, without the badge. */
   const SITE_LETTER = {sleeper: 'S', espn: 'E', yahoo: 'Y'};
-  const BALL = '<svg viewBox="0 0 24 24" width="62%" height="62%"><g transform="rotate(-40 12 12)"><ellipse cx="12" cy="12" rx="10.5" ry="6.2" fill="currentColor"/>' +
-    '<path d="M8.5 12h7M10 10.4v3.2M12 10.4v3.2M14 10.4v3.2" stroke="var(--surface-2)" stroke-width="1.3" stroke-linecap="round"/></g></svg>';
+  // A league without a picture of its own shows the Titan icon; the site's badge stays in the corner.
+  const NO_PIC = '<img src="/icon.svg" alt="" width="26" height="26">';
   function leagueIcon(cfg, size = '') {
     const site = SITE_LETTER[cfg.platform] ? cfg.platform : 'sleeper';
-    return `<span class="licon${size ? ' ' + size : ''}" aria-hidden="true"><span class="lini">${BALL}</span>${
+    return `<span class="licon${size ? ' ' + size : ''}" aria-hidden="true"><span class="lini">${NO_PIC}</span>${
       cfg.pic ? `<img src="${esc(cfg.pic)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}${
       size === 'xs' ? '' : `<i class="lsite s-${site}" title="${siteName(cfg)}">${SITE_LETTER[site]}</i>`}</span>`;
   }
@@ -1145,8 +1145,10 @@
     if (m.none) return `<article class="card league">${head}<p class="note">No matchup this week.</p></article>`;
     const {a, b, st, pa} = matchState(m), pb = 100 - pa, live = a.live || b.live, final = st.phase === 'final';
     const status = live ? '<span class="vs live">LIVE</span>' : final ? '<span class="vs">FINAL</span>' : '';
-    // Once games start, the leading score is green and the trailing one grey (x: 1 for you, -1 for them).
-    const tone = x => st.phase === 'pre' || !st.lead ? '' : st.lead * x > 0 ? ' lead' : ' trail';
+    /* Once games start, the leading score is green. Behind, your score is red, or purple while Titan still has you
+       projected to win (over a 50% chance); their trailing score is grey (x: 1 for you, -1 for them). */
+    const favored = st.phase === 'live' && st.lead < 0 && pa > 50;
+    const tone = x => st.phase === 'pre' || !st.lead ? '' : st.lead * x > 0 ? ' lead' : x > 0 ? (favored ? ' fav' : ' losing') : ' trail';
     const pic = (s, size) => (s.avatar ? avatar(s.avatar, size)
       : `<span class="avatar blank initials" style="width:${size}px;height:${size}px">${esc(initials(s.name))}</span>`);
     const toPlay = t => t.left ? `${t.left} to play` : t.started ? 'all played' : '';
@@ -1154,7 +1156,8 @@
     const side = (s, t, cls, x) => `<div class="sb-side ${cls}">${pic(s, 44)}<b class="bname">${esc(s.name)}</b>
       <small>${esc([s.record, toPlay(t)].filter(Boolean).join(' · '))}</small>
       <span class="sb-pts${tone(x)}">${fmt(t.pts)}</span><small>projected ${fmt(t.proj)}</small></div>`;
-    const say = `<p class="mh-status ${st.phase === 'pre' ? 'pre' : st.lead > 0 ? 'ahead' : st.lead < 0 ? 'behind' : ''}">${esc(st.text)}${
+    const say = `<p class="mh-status ${st.phase === 'pre' ? 'pre' : st.lead > 0 ? 'ahead' : st.lead < 0 ? (favored ? 'fav' : 'behind') : ''}">${esc(st.text)}${
+      favored ? ', still projected to win' : ''}${
       st.phase === 'live' ? ` <small>· ${a.left} of yours to play, ${b.left} of theirs</small>` : ''}</p>`;
     const rows = m.cfg.lineup.map((slot, i) => {
       const x = m.me.players[i], y = m.opp.players[i];

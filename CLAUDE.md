@@ -172,7 +172,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   screens in both themes.
 - Every league name shows `leagueIcon(cfg)`: the league's picture (`cfg.pic`: Sleeper's league avatar,
   or your team's logo in an ESPN league, kept through `slimLeague`) with a lettered site badge in the
-  corner (not the sites' logos), or a plain football when there's no picture. Give Yahoo a `pic` too.
+  corner (not the sites' logos), or the Titan icon (`/icon.svg`, `NO_PIC`) when there's no picture. Give Yahoo a `pic` too.
+  On Matchup, your score in the middle is red when you're behind, or purple (`--fav`) while you're behind but
+  still projected to win (over a 50% chance); the status line says so in words too.
 - Screens have addresses under `/app/` (`SLUG` in `app.js`; `firebase.json` rewrites `/app/**` to
   the app page, and the UI test's server does the same). A new screen needs a slug.
 - The demo (`DEMO` in `app.js`) uses its own storage names and never loads `sync.js`, so it can't

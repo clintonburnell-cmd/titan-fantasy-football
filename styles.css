@@ -36,6 +36,7 @@
   --art-opacity: .12;
   --pos-qb: #d0185a; --pos-rb: #087a6b; --pos-wr: #1f6fd1; --pos-te: #9c5a06; --pos-k: #8e35c9; --pos-def: #b24f2e;
   --chart-bar: #2456d6; /* the Results season chart's columns (checked with the dataviz palette checks, light and dark) */
+  --fav: #7b3fe4; /* Matchup: behind but still projected to win (WCAG 4.5:1 on every surface, both themes) */
   --radius: 14px;
   --gutter: 16px;
   color-scheme: light;
@@ -68,6 +69,7 @@
   --art-opacity: .16;
   --pos-qb: #fc2b6d; --pos-rb: #20ceb8; --pos-wr: #59a7ff; --pos-te: #feae58; --pos-k: #c96cff; --pos-def: #e07a58;
   --chart-bar: #4f7cf0;
+  --fav: #b18cff;
   color-scheme: dark;
 }
 
@@ -739,6 +741,9 @@ details.match > summary::-webkit-details-marker { display: none; }
 .mh-pts { font-size: 1.3rem; font-weight: 850; font-variant-numeric: tabular-nums; }
 .mh-pts.lead { color: var(--ok); }
 .mh-pts.trail { color: var(--faint); }
+/* Your score when you're behind: red, or purple while you're still projected to win. */
+.mh-pts.losing, .sb-pts.losing { color: var(--stop); }
+.mh-pts.fav, .sb-pts.fav, .mh-status.fav { color: var(--fav); }
 /* Where you stand, in words, under the score: green ahead, red behind. */
 .mh-status { font-size: .86rem; font-weight: 800; }
 .mh-status.ahead { color: var(--ok); }
