@@ -231,7 +231,11 @@ live site, so site changes reach it without a new upload. What's done and what's
   `upload.js` writes the report as a JSON string to `lab/value-latest` (and `lab/value-<season>-<week>`) through
   Firestore's REST API with firebase-tools' login. The app reads it with `S.sync.api.valueReport` (`loadValue`);
   only the owner can read `lab/`. The report's shape is set by titan-analytics' `fantasy_report.py` (`payload`):
-  change both together. Never add FantasyCalc's numbers to anything someone other than the owner can see.
+  change both together (version 2: every format's lists under `formats`, `main` the format most leagues play, and
+  each league's `fmt` and who has each valued player there, `own`; version 1 reports still show). It follows the league
+  dropdown (`value` is in `LEAGUE_SCREENS`): a league picked there shows only its moves, the lists in its own format and
+  a Where column (Yours, the team, or Free agent); under All leagues, format chips (`S.ui.valueFmt`) pick the lists and
+  put that format's leagues first. Never add FantasyCalc's numbers to anything someone other than the owner can see.
 - Import multiple sources (`screenMulti`): `SCC.combineRanks` (pure, tested) combines each position on
   its own (a source missing a player counts him one below its last there, weights 1x to 3x) and fits RB,
   WR and TE onto one FLEX list from the sources that have an overall list (`opts.curve`, Titan's default

@@ -787,27 +787,51 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     !/titan\\.svg/.test(getComputedStyle(document.body, '::before').backgroundImage)`), 'a phone keeps the app look, without the background Titan');
 
   T.section('the value report (Titan\'s owner only)');
-  // A made-up report, in the shape titan-analytics posts to lab/value-latest, handed over as the sync bridge would.
-  const vrow = (n, p, buy, sell) => ({n, p, t: 'KC', proj: 12.3, val: 12, fp: 10, fpoe: -2.1, snap: 0.8, tgt: 0.2, rz: 1, ur: 12, mr: 30, gap: 18, tr: 5, ch: null, buy, sell});
-  const VR = {v: 1, season: 2026, week: 2, through: 'Through week 1 of 2026 (16 of 16 games)', at: Date.now(), notes: ['Only 1 week of 2026 so far.'],
-    format: 'Redraft, 12 teams, PPR', tiles: [['leagues', 1], ['sell-high moves', 1], ['buy-low targets', 1], ['claims', 1], ['players valued', 3]],
-    leagues: [{id: 'none', name: 'Value Test League', format: 'Redraft, 12 teams, PPR', need: 'Your team by position: QB 1st, RB 11th of 12. Thin at RB.', caveat: '',
-      sell: [{n: 'Sell Guy', why: 'The market says WR10; his projection says WR30.', x: 'WR, KC'}],
-      buy: [{n: 'Buy Guy', why: 'His projection says RB12; the market says RB30.', x: 'RB, KC'}],
-      add: [{n: 'Claim Guy', why: 'He\'d start over Someone.', x: 'TE, KC'}]}],
-    buys: [vrow('Buy Guy', 'RB', true, false)], sells: [vrow('Sell Guy', 'WR', false, true)], risers: [],
-    all: [vrow('Buy Guy', 'RB', true, false), vrow('Sell Guy', 'WR', false, true), vrow('Other Guy', 'QB', false, false)]};
+  // A made-up report, in the shape titan-analytics posts to lab/value-latest (version 2), handed over as the sync bridge
+  // would. Its first league is the test league (so the league dropdown can pick it), in a dynasty superflex format.
+  const lid = await ev(`((JSON.parse(localStorage.getItem('titan.snapshot.v1') || '{}').leagues || [])[0] || {cfg: {}}).cfg.id || ''`);
+  const vrow = (s, n, p, buy, sell) => ({s, n, p, t: 'KC', proj: 12.3, val: 12, fp: 10, fpoe: -2.1, snap: 0.8, tgt: 0.2, rz: 1, ur: 12, mr: 30, gap: 18, tr: 5, ch: null, buy, sell});
+  const RD = 'redraft-1qb-12teams-1ppr', DY = 'dynasty-2qb-10teams-1ppr';
+  const vlg = (id, name, fmt, own) => ({id, fmt, name, own, teams: ['Rival Team (rival)', 'My Team (me)'], caveat: '',
+    format: fmt === RD ? 'Redraft, 12 teams, PPR' : 'Dynasty, 10 teams, PPR, superflex', need: 'Your team by position: QB 1st, RB 11th of 12. Thin at RB.',
+    sell: [{n: 'Sell Guy', why: 'The market says WR10; his projection says WR30.', x: 'WR, KC'}],
+    buy: [{n: 'Buy Guy', why: 'His projection says RB12; the market says RB30.', x: 'RB, KC'}],
+    add: [{n: 'Claim Guy', why: 'He\'d start over Someone.', x: 'TE, KC'}]});
+  const VR = {v: 2, season: 2026, week: 2, through: 'Through week 1 of 2026 (16 of 16 games)', at: Date.now(), notes: ['Only 1 week of 2026 so far.'],
+    format: 'Redraft, 12 teams, PPR', main: RD, tiles: [['leagues', 2], ['sell-high moves', 2], ['buy-low targets', 2], ['claims', 2], ['players valued', 3]],
+    leagues: [vlg(lid, 'Value Test League', DY, {1: 'me', 2: 0}), vlg('other', 'Another League', RD, {})],
+    formats: {
+      [RD]: {name: 'Redraft, 12 teams, PPR', buys: [vrow('1', 'Buy Guy', 'RB', true, false)], sells: [vrow('2', 'Sell Guy', 'WR', false, true)], risers: [],
+        all: [vrow('1', 'Buy Guy', 'RB', true, false), vrow('2', 'Sell Guy', 'WR', false, true), vrow('3', 'Other Guy', 'QB', false, false)]},
+      [DY]: {name: 'Dynasty, 10 teams, PPR, superflex', buys: [vrow('4', 'Dynasty Guy', 'QB', true, false)], sells: [], risers: [],
+        all: [vrow('1', 'Buy Guy', 'RB', false, false), vrow('2', 'Sell Guy', 'WR', false, false), vrow('4', 'Dynasty Guy', 'QB', true, false)]}}};
+  // Picks a league the way the dropdown at the top does (the test app has one league, so the dropdown itself stays hidden).
+  const pickLeague = id => ev(`(() => { const s = document.createElement('select'); s.dataset.ui = 'league'; s.innerHTML = '<option selected></option>';
+    s.options[0].value = ${JSON.stringify(id)}; document.getElementById('view').appendChild(s); s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
+  const vsec = i => `(document.querySelectorAll('.vr-sec')[${i}] || {}).textContent || ''`;
   check(await ev(`document.querySelector('#tabs [data-tab="value"]').hidden`), 'it isn\'t on the menu for anyone but Titan\'s owner');
   await ev(`window.TitanApp.syncReady({valueReport: async () => ({json: ${JSON.stringify(JSON.stringify(VR))}})}); window.TitanApp.setOwner(true); true`);
   await tab('value');
-  check(await waitFor(`location.pathname === '/app/value' && document.querySelectorAll('.vr-lg').length === 1 && document.querySelectorAll('.vr-moves li').length === 3 &&
+  check(await waitFor(`location.pathname === '/app/value' && document.querySelectorAll('.vr-lg').length === 2 && document.querySelectorAll('.vr-moves li').length === 6 &&
     document.querySelectorAll('.subtabs [data-go]').length === 4`, 5000), 'the owner sees it under Rankings, at /app/value: each league\'s sells, buys and claims');
+  check(await ev(`document.querySelectorAll('[data-vfmt]').length === 2 && /Buy Guy/.test(${vsec(0)}) &&
+    [...document.querySelectorAll('.vr-t th')].every(th => th.textContent !== 'Where')`), 'under All leagues, the lists are in the format most leagues play, with a chip for each format');
   await ev(`document.querySelector('[data-vpos="QB"]').click(); true`);
   check(await ev(`[...document.querySelectorAll('tr[data-vp]')].filter(r => !r.hidden).map(r => r.dataset.vp).join() === 'QB' && !!document.querySelector('tr[data-vp] .pill.p-ok')`),
     'the position chips filter the players table, and buys and sells are tagged');
   await ev(`document.querySelector('[data-vpos="ALL"]').click(); true`);
+  await ev(`document.querySelector('[data-vfmt="${DY}"]').click(); true`);
+  check(await waitFor(`/Dynasty Guy/.test(${vsec(0)}) && document.querySelector('[data-vfmt="${DY}"]').getAttribute('aria-pressed') === 'true' &&
+    /Value Test League/.test(document.querySelector('.vr-lg h3').textContent)`, 3000), 'a format chip switches the lists to that format, and puts its leagues first');
+  check(!!lid, 'the test league has an id to pick: ' + lid);
+  await pickLeague(lid);
+  check(await waitFor(`document.querySelectorAll('.vr-lg').length === 1 && !document.querySelector('[data-vfmt]') && /Dynasty Guy/.test(${vsec(0)}) &&
+    /\\(Value Test League\\)/.test(${vsec(0)})`, 3000), 'picking a league shows just its moves, and the lists in its own format');
+  const wh = await ev(`[...document.querySelectorAll('tr[data-vp]')].map(r => r.cells[0].querySelector('b').textContent + ': ' + r.cells[1].textContent).join(' | ')`);
+  check(wh === 'Buy Guy: Yours | Sell Guy: Rival Team (rival) | Dynasty Guy: Free agent', 'and a Where column says who has each player there: ' + wh);
   check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'it fits a 390px phone (the tables scroll in their own boxes)');
   await shot('value-report');
+  await pickLeague('all');
   await ev(`window.TitanApp.setOwner(false); true`);
   check(await waitFor(`/Only Titan's owner sees this screen/.test(document.getElementById('view').textContent) && document.querySelector('#tabs [data-tab="value"]').hidden`, 3000),
     'without the owner account it hides again');

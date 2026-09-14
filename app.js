@@ -47,7 +47,7 @@
   const OWNER_TABS = ['lab', 'value']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else)
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
-  const LEAGUE_SCREENS = {lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1};
+  const LEAGUE_SCREENS = {lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1, value: 1};
   const AVATAR = 'https://sleepercdn.com/avatars/thumbs/';
   // News-only accounts on the News tab. X doesn't let apps read posts without a
   // paid plan, so each one opens on X.
@@ -1938,18 +1938,19 @@
   }
 
   const VALUE_POS = ['ALL', 'QB', 'RB', 'WR', 'TE'];
-  function valueTable(rows, filtered) {
+  // where(row): who has him in the picked league (a Where column), or null under All leagues.
+  function valueTable(rows, filtered, where) {
     const n = (v, d = 1) => (v === null || v === undefined ? '–' : Number(v).toFixed(d));
     const share = v => (v === null || v === undefined ? '–' : Math.round(v * 100) + '%');
     const sgn = (v, d = 1) => (v === null || v === undefined ? '–'
       : `<span class="${v > 0 ? 'good' : v < 0 ? 'amber' : ''}">${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(d)}</span>`);
     const rank = (p, r) => (r === null || r === undefined ? '–' : esc(p) + r);
     const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
-    return `<div class="table-wrap"><table class="season-t vr-t"><thead><tr><th>Player</th><th>Projection</th><th>Points</th><th>Over usage</th>
+    return `<div class="table-wrap"><table class="season-t vr-t"><thead><tr><th>Player</th>${where ? '<th>Where</th>' : ''}<th>Projection</th><th>Points</th><th>Over usage</th>
       <th>Snaps</th><th>Target share</th><th>Red zone</th><th>By projection</th><th>Market</th><th>Gap</th><th>Rank change</th></tr></thead><tbody>${rows.map(r =>
       `<tr${filtered ? ` data-vp="${esc(r.p)}"${vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${filtered && (r.buy || r.sell)
         ? `<span class="pill ${r.buy ? 'p-ok' : 'p-stop'}">${r.buy ? 'buy' : 'sell'}</span>` : ''}<b>${esc(r.n)}</b><small>${esc([r.p, r.t].filter(Boolean).join(' · '))}</small></td>
-      <td>${n(r.proj)}</td><td>${n(r.fp)}</td><td>${sgn(r.fpoe)}</td><td>${share(r.snap)}</td><td>${share(r.tgt)}</td><td>${n(r.rz)}</td>
+      ${where ? `<td>${where(r)}</td>` : ''}<td>${n(r.proj)}</td><td>${n(r.fp)}</td><td>${sgn(r.fpoe)}</td><td>${share(r.snap)}</td><td>${share(r.tgt)}</td><td>${n(r.rz)}</td>
       <td>${rank(r.p, r.ur)}</td><td>${rank(r.p, r.mr)}</td><td>${sgn(r.gap, 0)}</td><td>${sgn(r.ch, 0)}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
@@ -1963,15 +1964,32 @@
     if (V.error) h += `<div class="banner stop">${esc(V.error)}</div>`;
     const R = V.data;
     if (!R) return h + `<div class="empty-note">${V.busy || !V.at ? 'Loading the value report…' : 'No report yet. Your PC posts one every Tuesday morning.'}</div>`;
+    // A league picked in the dropdown at the top: its moves, its own format's lists, and who has each player there.
+    // Under All leagues, the format chips pick which format's lists show (S.ui.valueFmt). A first-version report
+    // (one format's lists at the top level) still shows.
+    const fmts = R.formats || {main: {name: R.format, buys: R.buys || [], sells: R.sells || [], risers: R.risers || [], all: R.all || []}};
+    const keys = Object.keys(fmts), pick = pickedLeague(), one = (R.leagues || []).find(L => L.id === pick) || null;
+    const fkey = one && fmts[one.fmt] ? one.fmt : fmts[S.ui.valueFmt] ? S.ui.valueFmt : fmts[R.main] ? R.main : keys[0];
+    const F = fmts[fkey];
     h += `<p class="fine">Week ${esc(R.week)} · ${esc(R.through)} · made ${esc(when(R.at))}</p>`;
+    if (pick !== 'all' && !one) h += '<div class="banner swap">That league isn\'t in this report, which covers your Sleeper leagues. Here are all of them.</div>';
     (R.notes || []).forEach(t => { h += `<div class="banner swap">${esc(t)}</div>`; });
-    h += `<section class="tiles">${(R.tiles || []).filter(t => t[0] !== 'leagues').map(t => tile(t[1], t[0], 'muted')).join('')}</section>`;
+    const tiles = one ? [['sell-high moves', one.sell.length], ['buy-low targets', one.buy.length], ['claims', one.add.length], ['players valued', (F.all || []).length]]
+      : (R.tiles || []).filter(t => t[0] !== 'leagues');
+    h += `<section class="tiles">${tiles.map(t => tile(t[1], t[0], 'muted')).join('')}</section>`;
+    const inFmt = k => (R.leagues || []).filter(L => L.fmt === k).length;
+    if (!one && keys.length > 1) {
+      h += `<div class="chips vr-fmts" role="group" aria-label="League format">${keys.map(k => `<button type="button" class="chip" data-vfmt="${esc(k)}" aria-pressed="${
+        k === fkey}">${esc(fmts[k].name)} · ${plural(inFmt(k), 'league')}</button>`).join('')}</div>`;
+    }
 
     // League by league: sells from depth, buys where thin, claims that would start.
     const move = m => `<li><b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
     const group = (list, title, cls) => (list.length ? `<h4 class="vr-k ${cls}">${title}</h4><ul class="vr-moves">${list.map(move).join('')}</ul>` : '');
     const cfgOf = id => (((S.snap && S.snap.leagues) || []).find(d => d.cfg.id === id) || {}).cfg;
-    h += `<h3 class="vr-h">Your moves, league by league</h3><div class="league-grid">${(R.leagues || []).map(L => {
+    // The chosen format's leagues first.
+    const shown = one ? [one] : [...(R.leagues || [])].sort((a, b) => (a.fmt !== fkey) - (b.fmt !== fkey) || String(a.name).localeCompare(String(b.name)));
+    h += `<h3 class="vr-h">${one ? 'Your moves' : 'Your moves, league by league'}</h3><div class="league-grid">${shown.map(L => {
       const count = L.sell.length + L.buy.length + L.add.length, cfg = cfgOf(L.id);
       return `<details class="card vr-lg"${count ? ' open' : ''}><summary class="card-h"><div><h3>${cfg ? leagueIcon(cfg) : ''}${esc(L.name)}</h3>
         <p>${esc(L.format)} · ${plural(count, 'move')}</p></div></summary><div class="vr-body"><p class="fine">${esc(L.need)}</p>${
@@ -1979,15 +1997,21 @@
         group(L.buy, 'Buy low from a rival', 'buy')}${group(L.add, 'Claim', 'add')}${count ? '' : '<p class="fine">Nothing stands out this week.</p>'}</div></details>`;
     }).join('')}</div>`;
 
+    // The lists in the chosen format; with a league picked, who has each player there.
+    const where = one && one.own ? r => {
+      const o = one.own[r.s];
+      return o === undefined ? '<span class="good">Free agent</span>' : o === 'me' ? '<b>Yours</b>' : esc((one.teams || [])[o] || 'Taken');
+    } : null;
+    const fname = esc(F.name || '') + (one ? ` (${esc(one.name)})` : '');
     const section = (title, sub, rows) => `<section class="card pad vr-sec"><h3>${title}</h3><p class="fine">${sub}</p>${
-      rows.length ? valueTable(rows) : '<p class="fine">None this week.</p>'}</section>`;
-    h += section('Buy low', `${esc(R.format)}: the projection well ahead of the market, and not already scoring above his usage.`, R.buys || []);
-    h += section('Sell high', `${esc(R.format)}: the market well ahead of the projection, often on touchdowns that don't last.`, R.sells || []);
-    h += section('Role risers', 'The biggest jumps in snap share over last season, among players with a real role.', R.risers || []);
+      rows.length ? valueTable(rows, false, where) : '<p class="fine">None this week.</p>'}</section>`;
+    h += section('Buy low', `${fname}: the projection well ahead of the market, and not already scoring above his usage.`, F.buys || []);
+    h += section('Sell high', `${fname}: the market well ahead of the projection, often on touchdowns that don't last.`, F.sells || []);
+    h += section('Role risers', 'The biggest jumps in snap share over last season, among players with a real role.', F.risers || []);
     const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
-    h += `<section class="card pad vr-sec"><h3>Every valued player</h3><p class="fine">${esc(R.format)}, by projection.</p>
+    h += `<section class="card pad vr-sec"><h3>Every valued player</h3><p class="fine">${fname}, by projection.</p>
       <div class="chips" role="group" aria-label="Position">${VALUE_POS.map(p =>
-        `<button type="button" class="chip" data-vpos="${p}" aria-pressed="${vp === p}">${p === 'ALL' ? 'All' : p}</button>`).join('')}</div>${valueTable(R.all || [], true)}</section>`;
+        `<button type="button" class="chip" data-vpos="${p}" aria-pressed="${vp === p}">${p === 'ALL' ? 'All' : p}</button>`).join('')}</div>${valueTable(F.all || [], true, where)}</section>`;
     h += `<details class="card pad vr-how"><summary>How it works</summary><p class="fine"><b>Projection</b> is expected fantasy points a game from a player's
       usage (targets, carries, throws, field position and depth, from nflverse's ffopportunity model), blended with last season's while this season's
       sample is small, plus 40% of what he's scored above or below his usage over the last two seasons. <b>Over usage</b> is this season's points a game
@@ -3799,8 +3823,11 @@
     }
   });
 
-  // The value report's position chips filter its players table in place (no redraw, so open leagues stay open).
+  // The value report's format chips switch its lists (a redraw); its position chips filter the players table in place
+  // (no redraw, so open leagues stay open).
   view.addEventListener('click', e => {
+    const fb = e.target.closest('[data-vfmt]');
+    if (fb) { S.ui.valueFmt = fb.dataset.vfmt; saveUi(); render(); return; }
     const t = e.target.closest('[data-vpos]');
     if (!t) return;
     S.ui.valuePos = t.dataset.vpos;
