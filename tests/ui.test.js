@@ -804,7 +804,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       [RD]: {name: 'Redraft, 12 teams, PPR', buys: [vrow('1', 'Buy Guy', 'RB', true, false)], sells: [vrow('2', 'Sell Guy', 'WR', false, true)], risers: [],
         all: [vrow('1', 'Buy Guy', 'RB', true, false), vrow('2', 'Sell Guy', 'WR', false, true), vrow('3', 'Other Guy', 'QB', false, false)]},
       [DY]: {name: 'Dynasty, 10 teams, PPR, superflex', buys: [vrow('4', 'Dynasty Guy', 'QB', true, false)], sells: [], risers: [],
-        all: [vrow('1', 'Buy Guy', 'RB', false, false), vrow('2', 'Sell Guy', 'WR', false, false), vrow('4', 'Dynasty Guy', 'QB', true, false)]}}};
+        // Forty more players, so the table's box has to scroll (its header row and player column stay in view).
+        all: [vrow('1', 'Buy Guy', 'RB', false, false), vrow('2', 'Sell Guy', 'WR', false, false), vrow('4', 'Dynasty Guy', 'QB', true, false),
+          ...Array.from({length: 40}, (_, i) => vrow(String(100 + i), 'Depth Guy ' + i, 'WR', false, false))]}}};
   // Picks a league the way the dropdown at the top does (the test app has one league, so the dropdown itself stays hidden).
   const pickLeague = id => ev(`(() => { const s = document.createElement('select'); s.dataset.ui = 'league'; s.innerHTML = '<option selected></option>';
     s.options[0].value = ${JSON.stringify(id)}; document.getElementById('view').appendChild(s); s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
@@ -827,7 +829,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await pickLeague(lid);
   check(await waitFor(`document.querySelectorAll('.vr-lg').length === 1 && !document.querySelector('[data-vfmt]') && /Dynasty Guy/.test(${vsec(0)}) &&
     /\\(Value Test League\\)/.test(${vsec(0)})`, 3000), 'picking a league shows just its moves, and the lists in its own format');
-  const wh = await ev(`[...document.querySelectorAll('tr[data-vp]')].map(r => r.cells[0].querySelector('b').textContent + ': ' + r.cells[1].textContent).join(' | ')`);
+  const wh = await ev(`[...document.querySelectorAll('tr[data-vp]')].slice(0, 3).map(r => r.cells[0].querySelector('b').textContent + ': ' + r.cells[1].textContent).join(' | ')`);
   check(wh === 'Buy Guy: Yours | Sell Guy: Rival Team (rival) | Dynasty Guy: Free agent', 'and a Where column says who has each player there: ' + wh);
   const vsearch = q => ev(`(() => { const i = document.querySelector('[data-value-search]'); i.focus(); i.value = ${JSON.stringify(q)};
     i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
@@ -845,6 +847,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const sticky = await ev(`(() => { const th = document.querySelector('.vr-t thead th'), td = document.querySelector('.vr-t tbody td'), box = document.querySelector('.vr-scroll');
     return [getComputedStyle(th).position, getComputedStyle(td).position, getComputedStyle(box).overflowY].join(' '); })()`);
   check(sticky === 'sticky sticky auto', 'each table scrolls in its own box, its header row and player column pinned: ' + sticky);
+  // Scrolled down and across, the long table's header row stays at the top of its box and the player column at its left.
+  const pinned = await ev(`(() => { const box = [...document.querySelectorAll('.vr-scroll')].pop(); box.scrollTop = 400; box.scrollLeft = 200;
+    const b = box.getBoundingClientRect(), th = box.querySelector('thead th:nth-child(5)').getBoundingClientRect(), td = box.querySelector('tbody tr:nth-child(20) td').getBoundingClientRect();
+    return {down: box.scrollTop, across: box.scrollLeft, head: Math.round(th.top - b.top), name: Math.round(td.left - b.left)}; })()`);
+  check(pinned.down > 0 && pinned.across > 0 && Math.abs(pinned.head) <= 2 && Math.abs(pinned.name) <= 2,
+    `scrolled ${pinned.down}px down and ${pinned.across}px across, the header row stays at the top of the box (${pinned.head}px) and the player column at its left (${pinned.name}px)`);
+  await ev(`[...document.querySelectorAll('.vr-scroll')].pop().scrollIntoView({block: 'start'}); true`);
+  await shot('value-report-scrolled');
   check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'it fits a 390px phone (the tables scroll in their own boxes)');
   await shot('value-report');
   await pickLeague('all');
