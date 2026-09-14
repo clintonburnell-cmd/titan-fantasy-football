@@ -218,6 +218,11 @@ const api = {
     const s = await getDoc(doc(db, 'lab', `${season}-${week}`));
     return s.exists() ? s.data() : null;
   },
+  // The weekly value report the owner's PC posts (Value report; the rules let only the owner read lab/).
+  async valueReport() {
+    const s = await getDoc(doc(db, 'lab', 'value-latest'));
+    return s.exists() ? s.data() : null;
+  },
 
   /* A week's frozen record of Titan's calls, saved by the server job at each
      kickoff, or null if there isn't one. */

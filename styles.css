@@ -832,6 +832,26 @@ details.match[open] .mh-score { display: none; }
 .pctable tr.pc-season td { font-weight: 700; background: var(--surface-2); }
 .pc-live { color: var(--ok); font-weight: 800; text-transform: uppercase; font-size: .66rem; }
 
+/* Value report (Titan's owner only): the weekly report from the owner's PC. */
+.vr-h { font-size: 1.05rem; margin-top: 4px; }
+.vr-lg > summary { cursor: pointer; list-style: none; }
+.vr-lg > summary::-webkit-details-marker { display: none; }
+.vr-body { display: grid; gap: 4px; padding: 0 14px 12px; }
+.vr-k { font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; margin-top: 8px; }
+.vr-k.sell { color: var(--stop); }
+.vr-k.buy { color: var(--ok); }
+.vr-k.add { color: var(--accent-2); }
+.vr-moves { list-style: none; margin: 0; padding: 0; display: grid; }
+.vr-moves li { padding: 7px 0; border-top: 1px solid var(--line); }
+.vr-moves li:first-child { border-top: 0; }
+.vr-moves p { color: var(--muted); font-size: .8rem; margin-top: 2px; }
+.vr-x { color: var(--muted); font-weight: 600; }
+.vr-sec { display: grid; gap: 8px; }
+.vr-t td.vr-p small { display: block; color: var(--muted); font-size: .72rem; }
+.vr-t .pill { padding: 2px 7px; margin-right: 6px; font-size: .66rem; }
+.vr-how summary { cursor: pointer; font-weight: 700; }
+.vr-how p { margin-top: 8px; }
+
 /* The Standings tab: the table, your team marked, the playoff line and each team's odds. */
 .stand { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .stand th, .stand td { padding: 9px 12px; text-align: left; border-top: 1px solid var(--line); white-space: nowrap; }

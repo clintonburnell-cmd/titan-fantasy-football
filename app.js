@@ -19,13 +19,13 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'lab', 'settings'];
+  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'lab', 'value', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
-    score: 'Results', news: 'News', ranks: 'Rankings', multi: 'Import multiple sources', lab: 'Compare rankings', trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
+    score: 'Results', news: 'News', ranks: 'Rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
   const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes',
-    score: 'results', news: 'news', ranks: 'rankings', multi: 'multiple', lab: 'compare', trade: 'trade', moves: 'transactions', settings: 'settings'};
+    score: 'results', news: 'news', ranks: 'rankings', multi: 'multiple', lab: 'compare', value: 'value', trade: 'trade', moves: 'transactions', settings: 'settings'};
   const tabFromPath = () => {
     const m = location.pathname.match(/^\/app\/([a-z]+)\/?$/);
     return (m && Object.keys(SLUG).find(t => SLUG[t] === m[1])) || '';
@@ -40,10 +40,11 @@
     {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
     {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes']},
     // Compare (lab) is Titan's owner's only: it shows only on the owner's account.
-    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'multi', 'lab']},
+    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'multi', 'lab', 'value']},
     {id: 'results', name: 'Results', tabs: ['score']}
   ];
-  const SUB_NAMES = {ranks: 'Import', multi: 'Import multiple', lab: 'Compare', score: 'Results'};
+  const SUB_NAMES = {ranks: 'Import', multi: 'Import multiple', lab: 'Compare', value: 'Value', score: 'Results'};
+  const OWNER_TABS = ['lab', 'value']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else)
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
   const LEAGUE_SCREENS = {lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1};
@@ -132,6 +133,7 @@
     season: store.get(KEY.season) || null, seasonBusy: false,
     // Compare rankings (Titan's owner only): each week's test, kept on this device once its games are over (loadLab).
     lab: store.get(KEY.lab) || null, labBusy: false, labAt: 0, labError: '',
+    value: {busy: false, data: null, error: '', at: 0}, // the value report (Titan's owner only), from the owner's PC
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
@@ -431,9 +433,8 @@
       t.setAttribute('aria-current', t.dataset.tab === S.ui.tab ? 'page' : 'false'));
     document.querySelectorAll('#tabs [data-section]').forEach(t =>
       t.setAttribute('aria-current', sec && sec.id === t.dataset.section ? 'page' : 'false'));
-    // Compare rankings is on the menu only for Titan's owner.
-    const labBtn = document.querySelector('#tabs [data-tab="lab"]');
-    if (labBtn) labBtn.hidden = !S.owner.is;
+    // Compare rankings and the value report are on the menu only for Titan's owner.
+    OWNER_TABS.forEach(t => { const b = document.querySelector(`#tabs [data-tab="${t}"]`); if (b) b.hidden = !S.owner.is; });
     // Badges: the lineup changes to make, and a dot on Players for waiver pickups not yet seen on Waivers.
     const changes = S.A ? S.A.changes.length : 0, fresh = newWire();
     const badge = $('badge-lineups'), dot = $('dot-players');
@@ -496,7 +497,7 @@
      (LEAGUE_SCREENS) the one league dropdown that steers them all. */
   function screenBar() {
     const sec = sectionOf(S.ui.tab), leagues = (S.snap && S.snap.leagues) || [], pick = pickedLeague();
-    const subTabs = sec ? sec.tabs.filter(t => t !== 'lab' || S.owner.is) : [];
+    const subTabs = sec ? sec.tabs.filter(t => !OWNER_TABS.includes(t) || S.owner.is) : [];
     const subs = subTabs.length > 1 ? `<nav class="subtabs" aria-label="${esc(sec.name)}">${subTabs.map(t =>
       `<button type="button" data-go="${t}"${t === S.ui.tab ? ' aria-current="page"' : ''}>${esc(SUB_NAMES[t] || TAB_NAMES[t])}</button>`).join('')}</nav>` : '';
     const drop = LEAGUE_SCREENS[S.ui.tab] && leagues.length > 1 ? `<label class="lpick"><span class="sr-only">Which leagues</span><select data-ui="league">
@@ -1917,6 +1918,89 @@
     if (S.ui.tab === 'lab') render();
   }
 
+  /* ---- Value report (Titan's owner only) */
+
+  /* The weekly value report from Titan's owner's PC (D:\Claude\titan-analytics, outside this repo). Each Tuesday a Python
+     job compares every player's projection (nflverse's usage-based expected points, plus the skill he's shown) with
+     FantasyCalc's trade value, finds buy-lows, sell-highs and claims in each of the owner's Sleeper leagues, and posts the
+     report as JSON to lab/value-latest, which only the owner can read (firestore.rules). This screen shows it. */
+  async function loadValue() {
+    if (DEMO || !S.owner.is || !S.sync.api || !S.sync.api.valueReport || S.value.busy) return;
+    S.value.busy = true;
+    S.value.error = '';
+    try {
+      const d = await S.sync.api.valueReport();
+      S.value.data = d && d.json ? JSON.parse(d.json) : null;
+    } catch (e) { S.value.error = `Couldn't load the value report: ${e && e.message ? e.message : e}`; }
+    S.value.busy = false;
+    S.value.at = Date.now();
+    if (S.ui.tab === 'value') render();
+  }
+
+  const VALUE_POS = ['ALL', 'QB', 'RB', 'WR', 'TE'];
+  function valueTable(rows, filtered) {
+    const n = (v, d = 1) => (v === null || v === undefined ? '–' : Number(v).toFixed(d));
+    const share = v => (v === null || v === undefined ? '–' : Math.round(v * 100) + '%');
+    const sgn = (v, d = 1) => (v === null || v === undefined ? '–'
+      : `<span class="${v > 0 ? 'good' : v < 0 ? 'amber' : ''}">${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(d)}</span>`);
+    const rank = (p, r) => (r === null || r === undefined ? '–' : esc(p) + r);
+    const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
+    return `<div class="table-wrap"><table class="season-t vr-t"><thead><tr><th>Player</th><th>Projection</th><th>Points</th><th>Over usage</th>
+      <th>Snaps</th><th>Target share</th><th>Red zone</th><th>By projection</th><th>Market</th><th>Gap</th><th>Rank change</th></tr></thead><tbody>${rows.map(r =>
+      `<tr${filtered ? ` data-vp="${esc(r.p)}"${vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${filtered && (r.buy || r.sell)
+        ? `<span class="pill ${r.buy ? 'p-ok' : 'p-stop'}">${r.buy ? 'buy' : 'sell'}</span>` : ''}<b>${esc(r.n)}</b><small>${esc([r.p, r.t].filter(Boolean).join(' · '))}</small></td>
+      <td>${n(r.proj)}</td><td>${n(r.fp)}</td><td>${sgn(r.fpoe)}</td><td>${share(r.snap)}</td><td>${share(r.tgt)}</td><td>${n(r.rz)}</td>
+      <td>${rank(r.p, r.ur)}</td><td>${rank(r.p, r.mr)}</td><td>${sgn(r.gap, 0)}</td><td>${sgn(r.ch, 0)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  function screenValue() {
+    if (!S.owner.is) return '<div class="empty-note">Only Titan\'s owner sees this screen.</div>';
+    const V = S.value;
+    if (!V.at && !V.busy) loadValue();
+    let h = `<div class="bar match-bar"><p class="lede">Only you see this. Each Tuesday your PC compares every player's projection (his usage from
+      nflverse, plus the skill he's shown) with his trade value, then finds buy-lows, sell-highs and claims in each of your leagues.</p>
+      <button class="btn ghost small" data-action="value-reload"${V.busy ? ' disabled' : ''}>${V.busy ? 'Loading…' : 'Reload'}</button></div>`;
+    if (V.error) h += `<div class="banner stop">${esc(V.error)}</div>`;
+    const R = V.data;
+    if (!R) return h + `<div class="empty-note">${V.busy || !V.at ? 'Loading the value report…' : 'No report yet. Your PC posts one every Tuesday morning.'}</div>`;
+    h += `<p class="fine">Week ${esc(R.week)} · ${esc(R.through)} · made ${esc(when(R.at))}</p>`;
+    (R.notes || []).forEach(t => { h += `<div class="banner swap">${esc(t)}</div>`; });
+    h += `<section class="tiles">${(R.tiles || []).filter(t => t[0] !== 'leagues').map(t => tile(t[1], t[0], 'muted')).join('')}</section>`;
+
+    // League by league: sells from depth, buys where thin, claims that would start.
+    const move = m => `<li><b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
+    const group = (list, title, cls) => (list.length ? `<h4 class="vr-k ${cls}">${title}</h4><ul class="vr-moves">${list.map(move).join('')}</ul>` : '');
+    const cfgOf = id => (((S.snap && S.snap.leagues) || []).find(d => d.cfg.id === id) || {}).cfg;
+    h += `<h3 class="vr-h">Your moves, league by league</h3><div class="league-grid">${(R.leagues || []).map(L => {
+      const count = L.sell.length + L.buy.length + L.add.length, cfg = cfgOf(L.id);
+      return `<details class="card vr-lg"${count ? ' open' : ''}><summary class="card-h"><div><h3>${cfg ? leagueIcon(cfg) : ''}${esc(L.name)}</h3>
+        <p>${esc(L.format)} · ${plural(count, 'move')}</p></div></summary><div class="vr-body"><p class="fine">${esc(L.need)}</p>${
+        L.caveat ? `<p class="fine">${esc(L.caveat)}</p>` : ''}${group(L.sell, 'Sell high from your roster', 'sell')}${
+        group(L.buy, 'Buy low from a rival', 'buy')}${group(L.add, 'Claim', 'add')}${count ? '' : '<p class="fine">Nothing stands out this week.</p>'}</div></details>`;
+    }).join('')}</div>`;
+
+    const section = (title, sub, rows) => `<section class="card pad vr-sec"><h3>${title}</h3><p class="fine">${sub}</p>${
+      rows.length ? valueTable(rows) : '<p class="fine">None this week.</p>'}</section>`;
+    h += section('Buy low', `${esc(R.format)}: the projection well ahead of the market, and not already scoring above his usage.`, R.buys || []);
+    h += section('Sell high', `${esc(R.format)}: the market well ahead of the projection, often on touchdowns that don't last.`, R.sells || []);
+    h += section('Role risers', 'The biggest jumps in snap share over last season, among players with a real role.', R.risers || []);
+    const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
+    h += `<section class="card pad vr-sec"><h3>Every valued player</h3><p class="fine">${esc(R.format)}, by projection.</p>
+      <div class="chips" role="group" aria-label="Position">${VALUE_POS.map(p =>
+        `<button type="button" class="chip" data-vpos="${p}" aria-pressed="${vp === p}">${p === 'ALL' ? 'All' : p}</button>`).join('')}</div>${valueTable(R.all || [], true)}</section>`;
+    h += `<details class="card pad vr-how"><summary>How it works</summary><p class="fine"><b>Projection</b> is expected fantasy points a game from a player's
+      usage (targets, carries, throws, field position and depth, from nflverse's ffopportunity model), blended with last season's while this season's
+      sample is small, plus 40% of what he's scored above or below his usage over the last two seasons. <b>Over usage</b> is this season's points a game
+      minus expected: big positives tend to fall back and big negatives to recover. <b>By projection</b> and <b>market</b> are his place at his position by
+      projection and by FantasyCalc's trade value; a <b>gap</b> of +10 means the market ranks him ten spots lower. No calls on players who missed their
+      team's latest game, rookies before three games, young players as sells before four, or elite starters as sells. Buys start where your roster is
+      thin; sells come only from where you aren't. Claims are free agents whose projection beats one of your starters. <b>Rank change</b> is since last
+      week's report.</p></details>
+      <p class="credit">Stats from <a href="https://github.com/nflverse" target="_blank" rel="noopener">nflverse</a> (CC BY 4.0) and ffopportunity. Values by
+      <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>. Titan isn't affiliated with FantasyCalc.</p>`;
+    return h;
+  }
+
   function screenLab() {
     if (!S.owner.is) return '<div class="empty-note">Only Titan\'s owner sees this screen.</div>';
     if (!S.snap) return emptyState();
@@ -2496,7 +2580,7 @@
       Object.assign(S.yahoo, {busy: false, error: '', data: null});
       if (is) sendLabFormats();
       paintHeader();
-      if (['settings', 'ranks', 'multi', 'lab'].includes(S.ui.tab)) render();
+      if (['settings', 'ranks', 'multi', 'lab', 'value'].includes(S.ui.tab)) render();
     },
     setAlerts(a) {
       S.alerts = a;
@@ -3525,7 +3609,7 @@
 
   const SCREENS = {
     lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
-    score: screenScore, ranks: screenRanks, multi: screenMulti, lab: screenLab, trade: screenTrade, moves: screenMoves, settings: screenSettings
+    score: screenScore, ranks: screenRanks, multi: screenMulti, lab: screenLab, value: screenValue, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
 
   /* ------------------------------------------------------------- events */
@@ -3674,6 +3758,7 @@
     else if (a === 'ranks-save') saveRanks();
     else if (a === 'ranks-del') deleteRanks(Number(t.dataset.week));
     else if (a === 'lab-run') { S.labAt = 0; loadLab(); render(); }
+    else if (a === 'value-reload') { S.value.at = 0; loadValue(); render(); }
     else if (a === 'multi-add') multiAdd();
     else if (a === 'multi-save') multiSave();
     else if (a === 'multi-remove') {
@@ -3712,6 +3797,16 @@
       e.preventDefault();
       openPlayerCard(e.target.dataset.pcard);
     }
+  });
+
+  // The value report's position chips filter its players table in place (no redraw, so open leagues stay open).
+  view.addEventListener('click', e => {
+    const t = e.target.closest('[data-vpos]');
+    if (!t) return;
+    S.ui.valuePos = t.dataset.vpos;
+    saveUi();
+    view.querySelectorAll('[data-vpos]').forEach(b => b.setAttribute('aria-pressed', String(b === t)));
+    view.querySelectorAll('tr[data-vp]').forEach(r => { r.hidden = t.dataset.vpos !== 'ALL' && r.dataset.vp !== t.dataset.vpos; });
   });
 
   // The waiver plan's Done check on each claim.

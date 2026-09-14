@@ -568,7 +568,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`!!document.querySelector('textarea[data-multi="text"]')`, 5000) && await ev(`location.pathname === '/app/multiple'`),
     'Import multiple sources opens under Rankings, at /app/multiple');
   check(await ev(`document.querySelector('#tabs [data-tab="lab"]').hidden && !document.querySelector('.subtabs [data-go="lab"]') &&
-    document.querySelectorAll('.subtabs [data-go]').length === 2`), 'Compare rankings stays hidden from everyone but Titan\'s owner');
+    document.querySelector('#tabs [data-tab="value"]').hidden && !document.querySelector('.subtabs [data-go="value"]') &&
+    document.querySelectorAll('.subtabs [data-go]').length === 2`), 'Compare rankings and the value report stay hidden from everyone but Titan\'s owner');
   // Two sources: the sample rankings, and the same with its top three QBs reordered (A: q0 q1 q2, B: q1 q2 q0).
   const csvA = T.sampleRanks(), linesA = csvA.split(/\r?\n/);
   const qbLines = linesA.map((l, i) => [l.split(','), i]).filter(([c]) => c[1] === 'QB').slice(0, 3);
@@ -784,6 +785,33 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await sleep(400);
   check(await ev(`getComputedStyle(document.querySelector('.league-grid')).gridTemplateColumns.split(' ').length === 1 &&
     !/titan\\.svg/.test(getComputedStyle(document.body, '::before').backgroundImage)`), 'a phone keeps the app look, without the background Titan');
+
+  T.section('the value report (Titan\'s owner only)');
+  // A made-up report, in the shape titan-analytics posts to lab/value-latest, handed over as the sync bridge would.
+  const vrow = (n, p, buy, sell) => ({n, p, t: 'KC', proj: 12.3, val: 12, fp: 10, fpoe: -2.1, snap: 0.8, tgt: 0.2, rz: 1, ur: 12, mr: 30, gap: 18, tr: 5, ch: null, buy, sell});
+  const VR = {v: 1, season: 2026, week: 2, through: 'Through week 1 of 2026 (16 of 16 games)', at: Date.now(), notes: ['Only 1 week of 2026 so far.'],
+    format: 'Redraft, 12 teams, PPR', tiles: [['leagues', 1], ['sell-high moves', 1], ['buy-low targets', 1], ['claims', 1], ['players valued', 3]],
+    leagues: [{id: 'none', name: 'Value Test League', format: 'Redraft, 12 teams, PPR', need: 'Your team by position: QB 1st, RB 11th of 12. Thin at RB.', caveat: '',
+      sell: [{n: 'Sell Guy', why: 'The market says WR10; his projection says WR30.', x: 'WR, KC'}],
+      buy: [{n: 'Buy Guy', why: 'His projection says RB12; the market says RB30.', x: 'RB, KC'}],
+      add: [{n: 'Claim Guy', why: 'He\'d start over Someone.', x: 'TE, KC'}]}],
+    buys: [vrow('Buy Guy', 'RB', true, false)], sells: [vrow('Sell Guy', 'WR', false, true)], risers: [],
+    all: [vrow('Buy Guy', 'RB', true, false), vrow('Sell Guy', 'WR', false, true), vrow('Other Guy', 'QB', false, false)]};
+  check(await ev(`document.querySelector('#tabs [data-tab="value"]').hidden`), 'it isn\'t on the menu for anyone but Titan\'s owner');
+  await ev(`window.TitanApp.syncReady({valueReport: async () => ({json: ${JSON.stringify(JSON.stringify(VR))}})}); window.TitanApp.setOwner(true); true`);
+  await tab('value');
+  check(await waitFor(`location.pathname === '/app/value' && document.querySelectorAll('.vr-lg').length === 1 && document.querySelectorAll('.vr-moves li').length === 3 &&
+    document.querySelectorAll('.subtabs [data-go]').length === 4`, 5000), 'the owner sees it under Rankings, at /app/value: each league\'s sells, buys and claims');
+  await ev(`document.querySelector('[data-vpos="QB"]').click(); true`);
+  check(await ev(`[...document.querySelectorAll('tr[data-vp]')].filter(r => !r.hidden).map(r => r.dataset.vp).join() === 'QB' && !!document.querySelector('tr[data-vp] .pill.p-ok')`),
+    'the position chips filter the players table, and buys and sells are tagged');
+  await ev(`document.querySelector('[data-vpos="ALL"]').click(); true`);
+  check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'it fits a 390px phone (the tables scroll in their own boxes)');
+  await shot('value-report');
+  await ev(`window.TitanApp.setOwner(false); true`);
+  check(await waitFor(`/Only Titan's owner sees this screen/.test(document.getElementById('view').textContent) && document.querySelector('#tabs [data-tab="value"]').hidden`, 3000),
+    'without the owner account it hides again');
+  await tab('lineups');
 
   T.section('who the website sends to the app');
   const go = async url => { await send('Page.navigate', {url: ORIGIN + url}); await sleep(1500); return ev('location.pathname + location.search'); };

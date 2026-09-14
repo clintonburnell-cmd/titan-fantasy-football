@@ -58,7 +58,8 @@ live site, so site changes reach it without a new upload. What's done and what's
   checked on real claims 2026-09-13; daily-waiver, ESPN and Yahoo leagues aren't counted).
 - Navigation: six sections (`SECTIONS` in `app.js`): Lineups, Matchup, League (Standings, Rosters,
   Trade, Transactions), Players (Waivers, News, Exposure, Byes) and Rankings (Import, which is the `ranks`
-  screen, and Import multiple, which is `multi` at `/app/multiple`) and Results (the `score` screen), with Settings behind the gear (`#gear`). Phones, the Android app and home-screen
+  screen, Import multiple, which is `multi` at `/app/multiple`, and for Titan's owner only Compare (`lab`) and Value
+  report (`value`), the screens in `OWNER_TABS`) and Results (the `score` screen), with Settings behind the gear (`#gear`). Phones, the Android app and home-screen
   copies show them as a bar along the bottom (the header is solid there: a see-through `backdrop-filter`
   header would hold the fixed bar inside it); wide windows as a header menu whose sections drop down
   their screens. `screenBar` puts a section's screens as sub-tabs at the top of each screen, and the one
@@ -224,6 +225,13 @@ live site, so site changes reach it without a new upload. What's done and what's
   `valuesKey`). Only the owner can read `lab/` and write `lab/config` (firestore.rules). `SCC.labWeek`
   (pure, tested) scores lineup points (scoreLeague's by-rank per source) and order (rank correlation
   against Sleeper's stats feed, `API.fetchStats`, PPR). Finished weeks are kept on the device (`KEY.lab`).
+- Value report (`screenValue`, tab `value`, `/app/value`) is Titan's owner's only, like Compare. It's made outside this
+  repo, on the owner's PC: `D:\Claude\titan-analytics` (Python, nflverse's usage-based expected points against
+  FantasyCalc's values, buy-lows, sell-highs and claims per Sleeper league) runs every Tuesday at 7 AM and its
+  `upload.js` writes the report as a JSON string to `lab/value-latest` (and `lab/value-<season>-<week>`) through
+  Firestore's REST API with firebase-tools' login. The app reads it with `S.sync.api.valueReport` (`loadValue`);
+  only the owner can read `lab/`. The report's shape is set by titan-analytics' `fantasy_report.py` (`payload`):
+  change both together. Never add FantasyCalc's numbers to anything someone other than the owner can see.
 - Import multiple sources (`screenMulti`): `SCC.combineRanks` (pure, tested) combines each position on
   its own (a source missing a player counts him one below its last there, weights 1x to 3x) and fits RB,
   WR and TE onto one FLEX list from the sources that have an overall list (`opts.curve`, Titan's default
