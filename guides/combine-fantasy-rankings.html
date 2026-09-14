@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>How to Combine Fantasy Football Rankings Into One List | Titan Fantasy Football Manager</title>
+  <meta name="description" content="Average rankings from FantasyPros, Late-Round, The Hall or your own sheet into one list for the week, count the sources you trust more, and get start/sit calls from it.">
+  <link rel="canonical" href="https://titanfantasyfootball.com/guides/combine-fantasy-rankings.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Titan Fantasy Football Manager">
+  <meta property="og:title" content="How to combine fantasy football rankings into one list">
+  <meta property="og:description" content="Several rankings, averaged into one list for the week, with the sources you trust counting more.">
+  <meta property="og:url" content="https://titanfantasyfootball.com/guides/combine-fantasy-rankings.html">
+  <meta property="og:image" content="https://titanfantasyfootball.com/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#f3f6fc">
+  <script>
+    // White and blue by default; dark when chosen on this device (theme.js), set before anything draws.
+    try { if (localStorage.getItem('titan.theme') === 'dark') { document.documentElement.dataset.theme = 'dark'; document.querySelector('meta[name="theme-color"]').content = '#0a0f1a'; } } catch (e) {}
+  </script>
+  <script src="/theme.js" defer></script>
+  <script src="/stats.js" defer></script>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/site.css">
+</head>
+<body>
+  <header class="site-top">
+    <div class="site-in">
+      <a class="site-brand" href="/"><img src="/icon.svg" alt="" width="30" height="30"><b><span class="long">Titan Fantasy Football Manager</span><span class="short">Titan</span></b></a>
+      <nav class="site-nav" aria-label="Guides">
+        <a href="/guides/import-fantasy-rankings.html">Import rankings</a>
+        <a href="/guides/sleeper-start-sit.html">Sleeper</a>
+        <a href="/guides/espn-private-league.html">ESPN</a>
+      </nav>
+      <button type="button" class="theme-btn" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" fill="currentColor"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <a class="btn site-cta" href="/app/">Open Titan</a>
+    </div>
+  </header>
+
+  <main class="site-in guide">
+    <p class="crumbs"><a href="/">Titan</a> › <a href="/guides/">Guides</a></p>
+    <h1>How to combine fantasy football rankings into one list</h1>
+    <p class="lead">Rankings disagree, and no single source gets every week right. Titan's <b>Import multiple sources</b>
+      averages several rankings into one list for the week, then makes every start/sit call in all your leagues from it.</p>
+
+    <h2>Why combine rankings</h2>
+    <p>An average smooths out any one source's misses, the same idea as the consensus rankings some sites publish. The
+      difference is that you pick the sources, so the list is built only from the rankers you actually trust.</p>
+
+    <h2>Step 1: Add your sources</h2>
+    <ol>
+      <li>Open Titan and go to <b>Rankings</b>, then <b>Import multiple</b>.</li>
+      <li>Pick the week.</li>
+      <li>Add each source as a CSV file or a paste straight out of a spreadsheet, and give it a name, like Late-Round or
+        FantasyPros. Every format the regular import reads works here.</li>
+    </ol>
+    <p>A source can be more than one file. FantasyPros, for example, ranks one position per file: add the QB file as a new
+      source, then add the FLEX, K and DST files to it. Each file fills in its own positions.</p>
+
+    <h2>Step 2: Count the ones you trust more</h2>
+    <p>Every source starts at 1x. Set any of them to <b>2x</b> or <b>3x</b> and it pulls the list its way. Titan remembers
+      the weight by the source's name, so next week it's already set.</p>
+    <p>You can also count Titan's default rankings (Sleeper's weekly projections) as one more source, which is handy when
+      you only have one or two lists of your own.</p>
+
+    <h2>How the average works</h2>
+    <ul>
+      <li><b>Position by position.</b> Each player's place at his position is averaged across the sources that rank that
+        position.</li>
+      <li><b>Missing players count low.</b> When a source leaves a player out, he counts just below that source's last
+        player at his position. So a player only one list likes can't jump ahead of the ones everyone ranks.</li>
+      <li><b>One FLEX list.</b> RB, WR and TE are fitted onto one overall list, the way your overall rankings (a FLEX file,
+        or Late-Round's FLEX table) fit them together. That way a file that ranks only running backs still counts, without
+        throwing off your FLEX calls.</li>
+      <li><b>Where they disagree.</b> Every player shows his place in each source, and a <b>split</b> mark flags anyone the
+        sources are 8 or more spots apart on.</li>
+    </ul>
+
+    <h2>Step 3: Save it and follow the calls</h2>
+    <p>Save the combined list as that week's rankings. Lineups, game-day alerts and Results all use it, exactly as they
+      would a single import. The sources are saved with it, so you can add one or change a weight later in the week, and if
+      you sign in with Google it syncs to your other devices.</p>
+    <p class="note-box">Only have one file? The regular import is quicker. See <a href="/guides/import-fantasy-rankings.html">how
+      to import your fantasy football rankings</a> for the formats Titan reads.</p>
+
+    <div class="guide-cta"><a class="btn big" href="/app/">Open Titan</a><a class="btn ghost big" href="/app/?demo">Try a demo</a></div>
+  </main>
+
+  <footer class="site-foot">
+    <div class="site-in">
+      <span>© 2026 Titan Fantasy Football Manager. Not affiliated with or endorsed by the NFL or any NFL team, Sleeper, ESPN or any rankings site.</span>
+      <nav class="foot-links" aria-label="More">
+        <a href="/">Home</a>
+        <a href="/guides/">Guides</a>
+        <a href="/privacy.html">Privacy</a>
+        <a href="/terms.html">Terms</a>
+        <a href="mailto:gainalphatrading@gmail.com">Contact</a>
+      </nav>
+      <a class="tip" href="https://ko-fi.com/titandev" target="_blank" rel="noopener"><span class="tip-cup" aria-hidden="true">☕</span><span class="tip-text"><b>Like my work?</b> <span>Consider a tip!</span></span></a>
+    </div>
+  </footer>
+</body>
+</html>
