@@ -11,6 +11,7 @@
       "firestore.indexes.json",
       "README.md",
       "CLAUDE.md",
+      "RESUME.md",
       "tests/**",
       "**/.git/**",
       "**/node_modules/**",

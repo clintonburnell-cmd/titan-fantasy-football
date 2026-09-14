@@ -7,8 +7,18 @@ The Android app opens titanfantasyfootball.com/app/?source=play since the v1.11.
 (Firebase project `titan-fantasy-football`, Blaze plan);
 code at github.com/clintonburnell-cmd/titan-fantasy-football. The Google Play app is a Trusted Web
 Activity kept outside this repo (`D:\Claude\titan-android`, with `PLAY-LISTING.md`); it loads the
-live site, so site changes reach it without a new upload. What's done and what's next lives in
-`README.md` (Roadmap, Save points), not here.
+live site, so site changes reach it without a new upload. What's done lives in `README.md`
+(Screens, Save points); where things stand and what's next, in the private `RESUME.md`.
+
+## Start here
+
+- **Resuming?** Read `RESUME.md` first: where things stand, the latest save point, what's next and the owner's
+  to-dos. It's private: gitignored, and on `firebase.json`'s ignore list so it's never deployed. Bring it up to date
+  at the end of a session.
+- The rules are grouped by area: Never first, then code and data, navigation and look, the screens, Trade and
+  FantasyCalc, the owner's screens, the server, Yahoo, and the website and Android app.
+- The loop for any change: test, commit, push, deploy, check the live site, send the owner a push notification,
+  then make a save point (Deploying and save points, below).
 
 ## Where things are
 
@@ -30,7 +40,9 @@ live site, so site changes reach it without a new upload. What's done and what's
 | `functions/index.js` | `freezeCalls` (every 15 minutes on game days) and `espnLeague` (reads private ESPN leagues) |
 | `tests/` | `node tests/run.js` |
 
-## Rules
+## Never
+
+The rules that hold whatever the task.
 
 - **Never write the owner's personal Sleeper username or Sleeper user ID into this repo**, a commit
   message, a screenshot or the Play listing. Tests read a real account from the
@@ -40,22 +52,47 @@ live site, so site changes reach it without a new upload. What's done and what's
   password files. Test rankings come from `tests/fixtures/sample-rankings.csv`.
 - Tests must never read a real person's ESPN league: serve ESPN requests with `stubEspn` or
   Chrome's request interception, as the existing tests do.
+- Show new ESPN or Yahoo features in the app and the Play listing only once they work (Google treats
+  promised features in a listing as misleading). The website says Yahoo is coming soon, at the
+  owner's request (2026-09-11): its title, a Yahoo card and the FAQ. Keep that wording honest until
+  Yahoo leagues work.
+
+## Code and data
+
+How the pieces fit, and what keeps them working.
+
 - Keep `engine.js` free of page and network code.
 - A change to `engine.js`, `espn.js` or `sleeper.js` needs the functions redeployed too: the
   predeploy step copies them into `functions/shared/`.
 - Adding a file the app loads: add it to `SHELL` in `sw.js` and bump `CACHE`.
-- The Android app opens `/?source=play`. The website's forward to `/app/` (with the query) must
-  keep working, or the Play app shows the website instead of the app.
-- Titan's owner is the one sign-in account with the `titanOwner` custom claim. `ownerStats`
-  refuses everyone else and returns totals only: never add per-person details to it.
-- Alerts: `SCC.alertsFor` decides (pure, tested), `alertUser` and `deliver` in `functions/index.js`
-  send Firebase Cloud Messaging data messages to the tokens in `users/{uid}/private/alerts`, and
-  `sw.js` shows them. Keep each alert's key stable, or people get repeats: `out|week|league|player|tag`
-  (names the starter's backup when he's a free agent there: depth chart order is index 3 of each
-  trimmed player), `check|week|kickoff` (one alert covering every league), `news|week|story|player`,
-  `waiver|week|date` (`SCC.waiverReminder`, pref `waivers`: at the 8 PM Eastern check the evening before a Sleeper
-  league's waivers run; Sleeper's `waiver_day_of_week` counts from Monday and claims process about 3 AM Eastern,
-  checked on real claims 2026-09-13; daily-waiver, ESPN and Yahoo leagues aren't counted).
+- Screens have addresses under `/app/` (`SLUG` in `app.js`; `firebase.json` rewrites `/app/**` to
+  the app page, and the UI test's server does the same). A new screen needs a slug.
+- The demo (`DEMO` in `app.js`) uses its own storage names and never loads `sync.js`, so it can't
+  overwrite a real account or reach Firestore. Keep new storage, sync and server calls behind it.
+- When a refresh's saved data gains a field the screens rely on, bump the snapshot version
+  (`v` in `collect`, `sleeper.js`) and the matching check at the end of `app.js`, so devices
+  holding an older snapshot refresh on open instead of showing gaps.
+- Live scores refresh without a full refresh (`livePoints`, `loadMatchups`, `scheduleLive`):
+  keep them light. ESPN's box score is ~230 KB, so it's fetched every other tick.
+- Titan's lineup is `optimal` (who starts, by rank) then `flexLate` (latest kickoffs in the flex
+  spots); `spotMoves` turns it into the changes shown. Route new lineup logic through them, and
+  never move a locked player.
+- Default rankings (`defaultRanks`, `rankingsBy` in `engine.js`) are Sleeper's weekly projections
+  in each league's scoring. A week's import wins; the defaults fill positions it leaves out, or
+  everything when nothing is imported. The app (`ranksFor`, `analyze`, Results, `keepStarted`)
+  and the server job (`freezeForUser`) follow the same rule: change them together.
+- Rosters follow Sleeper's order: `L.rows` for starters, then the bench by `POS_ORDER`,
+  then Reserve (IR and taxi, `heldAs`). Keep new roster views in that order.
+- Team names: every fantasy team, on every tab and both platforms, reads "Nickname (account name)"
+  from `SCC.teamLabel` (Sleeper's `team_name` and `display_name`; ESPN's team name and member name),
+  or the account name alone when there's no nickname. Build new team names with it, and don't add
+  the manager again where one is shown. `slimSchedule` keeps the members so private ESPN leagues get them.
+- Folding (Lineups, Rosters, Matchup) goes through `isOpen`, `setFold` and `foldAll` in
+  `app.js`, keyed by `FOLD_KEY`. Only a person's tap on a header is saved (`tapped`); code
+  that opens or closes a league (the Rosters search, jump chips) must not save it.
+
+## Navigation, look and type
+
 - Navigation: six sections (`SECTIONS` in `app.js`): Lineups, Matchup, League (Standings, Rosters,
   Trade, Transactions), Players (Waivers, News, Exposure, Byes) and Rankings (Import, which is the `ranks`
   screen, Import multiple, which is `multi` at `/app/multiple`, and for Titan's owner only Compare (`lab`) and Value
@@ -77,36 +114,96 @@ live site, so site changes reach it without a new upload. What's done and what's
   to `html:not(.in-app)`, so phones, the Android app and home-screen copies keep the app look.
   Check new screens at 390px and at 1280px. On computers Rosters draws tables (`rosterTable`,
   when `wide()`); keep `data-find` on every row so the player search still works.
-- The News tab reads ESPN's public NFL news feed (`ESPN.fetchNews`, site.api.espn.com; unofficial, so
-  keep the link back to each story) through Titan's server (`espnNews` at `/api/news`, one shared read
-  kept 90 seconds, CDN two minutes: ESPN's bot protection turns some browsers away, headless Chrome
-  included, and refuses CORS preflights) every two minutes while open, marking stories that tag players on
-  the person's rosters. News alerts: each alert check saves the person's starters (`SCC.newsWatch`) as
-  `watch` in their alerts doc; `newsAlerts` runs on every 15-minute run all week, reads the feed once (`newsForAlerts`: Titan's own
-  `/api/news` first, ESPN directly only if that fails, since ESPN has turned the game-day job's server
-  away while letting the News tab's in)
-  and only looks at people when a new story tags a player (`SCC.newsAlertsFor`, at most 3 at a time,
-  key `news|week|story|player`). A news alert's tap opens the story (sw.js).
-- ESPN turns Titan's server away at times (403, since 2026-09-12). Don't add a User-Agent naming
-  Titan to ESPN requests: ESPN refused one even from home (checked 2026-09-12). Each ESPN feed the
-  server shares keeps its last good copy in Firestore (`meta/newsFeed`, `meta/scoresFeed`,
-  `meta/gameContext`; `saveCopy` when it changes or every 15 minutes, `fallback` when ESPN refuses),
-  so a new instance serves it instead of a 502: news up to a day old and game context six hours, past
-  which the request fails and the alert fires; scores half an hour, past which `/api/scores` answers
-  `{unavailable: true}` (not an error, so no alert) and the ticker reads ESPN's scoreboard in the
-  browser (`scoresFromEspn`: ESPN sends `Access-Control-Allow-Origin: *`, and on 2026-09-14 it
-  answered Node and curl from home while refusing the server and PowerShell). The News tab notes a copy over
-  15 minutes old (`NEWS_OLD`), and news alerts skip a copy over 10 minutes old (`NEWS_FRESH`) and ask
-  ESPN directly. The "Titan server problems" alert matches warnings containing "could not", so keep
-  those words out of warnings that aren't problems.
-- The scores ticker (`loadScores`, `paintTicker` in `app.js`): this week's NFL games from ESPN's
-  public scoreboard through Titan's server (`nflScores` at `/api/scores`, one shared read kept 20
-  seconds, CDN 20; `ESPN.scoreboardFrom` gives each side's points and the short status; the browser
-  reads ESPN's scoreboard itself when the server answers `unavailable` or fails). It sits under
-  the header, not in it, so the sticky header (and the wide screens' sticky league list below it) keep
-  their place. It reads every 30 seconds while a game is live or kicks off within 10 minutes, every 10
-  minutes otherwise, only while the page is in view, and never in the demo. Each game links to its
-  ESPN page, "Scores: ESPN" credits the source, and a badge counts the person's starters in the game.
+- Two themes: white and blue by default, and dark (`theme.js` sets `data-theme="dark"` on `<html>`,
+  remembered in localStorage `titan.theme`; a moon/sun button in the headers, and Appearance in
+  Settings). Every colour that differs between them is a token in both `:root` blocks of `styles.css`
+  (no raw colours for text or surfaces), and text meets WCAG 4.5:1 in both. Each page's `<head>` has
+  the early snippet that sets a saved dark theme before anything draws, plus `/theme.js`. Check new
+  screens in both themes.
+- Every league name shows `leagueIcon(cfg)`: the league's picture (`cfg.pic`: Sleeper's league avatar,
+  or your team's logo in an ESPN league, kept through `slimLeague`) with a lettered site badge in the
+  corner (not the sites' logos), or the Titan icon (`/icon.svg`, `NO_PIC`) when there's no picture. Give Yahoo a `pic` too.
+  On Matchup, your score in the middle is red when you're behind, or purple (`--fav`) while you're behind but
+  still projected to win (over a 50% chance); the status line says so in words too.
+- Type: the app (`body.app-page`; the website keeps the system font) uses Inter (`fonts/inter-latin-wght.woff2`, fontsource's Latin variable build, SIL Open Font
+  License in `fonts/OFL.txt`; keep the license beside it). Titan serves it itself, so no browser asks Google or anyone
+  else for it: never switch to a font CDN (the privacy policy and Play's Data safety form say the app shares nothing).
+  It's in `SHELL` in `sw.js`. Its type scale sits on `.vr-page` (`display: contents`, so the main view's grid gap still
+  spaces the sections): four sizes (12, 14, 17 and 26px, tables 13px on phones) and three weights (400, 600, 700), same-
+  width numbers only in tables and tile numbers (Inter's tabular setting widens hyphens in running text), small
+  uppercase table headers. App-wide (v1.28.0): Inter for all text, weights capped at 700 by the `@font-face` range (the
+  stylesheet's 800s and 900s draw at 700), report-style headers on the data tables (`.rtable`, `.stand`, `.pstr`,
+  `.season-t`), and `font-size-adjust: 0.5` on `body.app-page` (Inter's x-height is 0.546 of its size, Segoe UI's 0.5:
+  drawn at Segoe UI's, the phone layouts keep the room they were fitted for; `.vr-page` opts out). Each screen keeps its
+  own tuned sizes. Inter's same-width setting (`tabular-nums`) also changes the space, hyphen, colon, period, comma and
+  brackets, so set it on number cells, not on blocks with words; where a block is set same-width, its words go back to
+  normal (`body.app-page :is(...)` in styles.css). Standings sets it on `.tnum` cells only. For any change to the app's look, run the UI test with `TITAN_SHOTS` before and after: its screen
+  tour photographs all 14 screens at 390px and 1280px (`tour-<width>-<screen>.png`) to compare.
+
+## Screens
+
+One note per screen or feature.
+
+- Matchup: where you stand, in words, comes from `SCC.matchStatus` (pure, tested) through `matchState`
+  in `app.js`, which the card and the summary at the top share; the summary's filters are
+  `MATCH_KINDS` (`S.ui.matchFilter`, chips `data-mfilter`). Opened, the scoreboard (`.board`) shows the
+  score, so the header's score row hides.
+- The Standings tab (`SCC.standings`): records, all-play, luck, power and playoff odds from 5,000
+  seeded simulations; schedules from `API.leagueSchedule` (Sleeper matchups, or ESPN via
+  `ESPN.fetchSchedule`; private ESPN leagues through `espnLeague` kind `schedule`).
+- Position strength (`SCC.positionStrength`, pure and tested): each team's best lineup this season
+  by Sleeper's season projections (never FantasyCalc's, so everyone sees it), starters added up by
+  position plus a quarter of the best bench player there, ranked across the league; top third 'deep',
+  bottom third 'thin'. Standings shows every team's ranks (`strengthTable`, table `.pstr`, not
+  `.stand`, which the UI test counts); the Trade tab shows the partner and you once a partner is
+  picked (`tradeFit`, "Where you both stand", with the good fits). Both load the season projections.
+- The Transactions tab (tab id `moves`, address `/app/transactions`): each Sleeper league's last three
+  weeks of completed transactions (`API.leagueTransactions` → `SCC.transactionsFrom`), reloaded every
+  five minutes while the tab is open. A league picker (`S.ui.movesLeague`, remembered) narrows the list; the kind chips'
+  counts follow it. ESPN transactions aren't read yet (their format hasn't been checked on a real league).
+- The Waivers tab: the waiver plan (`planCard`, from `SCC.waiverPlan`, pure and tested: claims from the
+  rankings' wire targets `L.wire`, at most three a league, and a drop for each: the bench player with the
+  lowest season value (`planValue`: Titan's value, then season projected points, so a star on bye is
+  safe) that isn't on IR or the only bench player at a position the lineup starts; a dropdown swaps him;
+  Done and changed drops are `S.ui.wplan`, started over each week; `cfg.bench` counts open roster spots),
+  free backups (`SCC.backupOf`), Sleeper's
+  trending adds (`API.trendingAdds`) with where each is free (`L.takenNorm`), a search, and bids
+  (`SCC.faabBid` from `API.leagueWaivers`: a Sleeper league's last six weeks of winning bids). Each pickup
+  shows a usage line (`usageLine`, `SCC.usageOf` over the last three finished weeks of `API.fetchStats`).
+- The player card (`openPlayerCard`): any element with `data-pcard` (`pcAttr`, players with a Sleeper id)
+  opens a `<dialog>` with the player's last four games and season from `API.fetchPlayerStats` (Sleeper's
+  per-player stats, `grouping=week`; `trimStat` in sleeper.js keeps what Titan shows). Back closes it, like
+  the draft results. Snap counts reach Sleeper's stats some time after a game, so the card hides them until
+  then. The UI test builds the demo a week ahead (it moves Sleeper's `/state/nfl` on one) so the plan has claims
+  on game days too.
+- Draft results (the Trade tab's See the draft, `openDraftResults` in `app.js`): a `<dialog>` outside
+  `#view`, repainted only when its HTML changes (`paintDraftResults`, so an open team and the scroll
+  survive redraws) and closed by Back (opening pushes a history entry; `popstate` closes it). Drafts
+  come from `API.leagueDraft`: Sleeper's `/league/:id/drafts` then `/draft/:id/picks`
+  (`SCC.draftFromSleeper`); ESPN's `ESPN.fetchDraft`, `view=mDraftDetail` plus ESPN's player list
+  filtered to the drafted ids (the draft gives ids only), private leagues through `espnLeague` kind
+  `draft`. ESPN defenses have negative player ids; only -1 is an empty pick. `SCC.draftGrades` weighs
+  each pick against its spot by the value the Trade tab shows (FantasyCalc's only for the owner).
+  When most picks have no Titan value (a dynasty rookie draft), everyone but the owner sees the board
+  ungraded (`plain`).
+- The Results tab's internal id is still `score`; only its label changed. It's its own section now. Won or
+  lost comes from `scoreLeague` (the other team in the same matchup; ESPN's opponent from the box score,
+  `espnWeek`), the bench's misses from `SCC.benchMistakes`, both pure and tested. Season so far scores
+  the earlier weeks one at a time (`loadSeason`, through `scoreFor`) and keeps each finished week on
+  the device (`KEY.season`, tied to the leagues and that week's rankings). Its chart's columns use
+  `--chart-bar`, checked with the dataviz palette checks in both themes; a table sits behind it.
+- Import multiple sources (`screenMulti`): `SCC.combineRanks` (pure, tested) combines each position on
+  its own (a source missing a player counts him one below its last there, weights 1x to 3x) and fits RB,
+  WR and TE onto one FLEX list from the sources that have an overall list (`opts.curve`, Titan's default
+  rankings, when none does). The result is saved as the week's `rows`, so every call, the server job
+  and Results read it unchanged; the sources ride along as the week's `multi` (synced with it), and an
+  unsaved set stays on the device (`KEY.multi`). A plain import over that week drops `multi`.
+- A new rankings format: study the person's file locally, then test with a few made-up rows in
+  the same format (see The Hall's test in `tests/engine.test.js`). Never commit a ranking
+  site's actual file; many are paid. Name known sources in `parseRanks`'s `source`.
+
+## Trade and FantasyCalc
+
 - FantasyCalc's arrangement with Titan (email from FantasyCalc, 2026-09-12): its values stay out of
   Titan's trade calculator for the public. Showing who wins, each team's value change in percent, and
   lines like "Your starters +988 · theirs +518" is fine. Free while Titan stays under about 10k
@@ -140,83 +237,13 @@ live site, so site changes reach it without a new upload. What's done and what's
   Copy and open (`data-trade-copy`): copies "Trade offer: my X for your Y" and opens `lineupUrl`.
   Sleeper can't be pre-filled: its API is read-only, and its web trade page (`/beta/leagues/:id/trade`,
   checked 2026-09-11) takes only the league and sits behind flags that are off. Never ask for Sleeper logins.
-- Game context on Lineups rows (`SCC.gameTags`) comes from the `gameContext` function at
-  `/api/game-context` (kept 30 minutes): ESPN's scoreboard lines (`ESPN.scoreboardFrom`,
-  `SCC.impliedTotals`), NWS forecasts at kickoff for outdoor US games (`STADIUMS` holds each home
-  stadium's spot; NWS needs a User-Agent), and points allowed by position (`SCC.dvpFrom` over
-  nflverse's `stats_player_week_<season>.csv.gz`, CC BY 4.0, credited on Lineups; last season's
-  until three weeks are played; Firestore `meta/dvp`, 12 hours).
-- The Transactions tab (tab id `moves`, address `/app/transactions`): each Sleeper league's last three
-  weeks of completed transactions (`API.leagueTransactions` → `SCC.transactionsFrom`), reloaded every
-  five minutes while the tab is open. A league picker (`S.ui.movesLeague`, remembered) narrows the list; the kind chips'
-  counts follow it. ESPN transactions aren't read yet (their format hasn't been checked on a real league).
-- The Waivers tab: the waiver plan (`planCard`, from `SCC.waiverPlan`, pure and tested: claims from the
-  rankings' wire targets `L.wire`, at most three a league, and a drop for each: the bench player with the
-  lowest season value (`planValue`: Titan's value, then season projected points, so a star on bye is
-  safe) that isn't on IR or the only bench player at a position the lineup starts; a dropdown swaps him;
-  Done and changed drops are `S.ui.wplan`, started over each week; `cfg.bench` counts open roster spots),
-  free backups (`SCC.backupOf`), Sleeper's
-  trending adds (`API.trendingAdds`) with where each is free (`L.takenNorm`), a search, and bids
-  (`SCC.faabBid` from `API.leagueWaivers`: a Sleeper league's last six weeks of winning bids). Each pickup
-  shows a usage line (`usageLine`, `SCC.usageOf` over the last three finished weeks of `API.fetchStats`).
-- The player card (`openPlayerCard`): any element with `data-pcard` (`pcAttr`, players with a Sleeper id)
-  opens a `<dialog>` with the player's last four games and season from `API.fetchPlayerStats` (Sleeper's
-  per-player stats, `grouping=week`; `trimStat` in sleeper.js keeps what Titan shows). Back closes it, like
-  the draft results. Snap counts reach Sleeper's stats some time after a game, so the card hides them until
-  then. The UI test builds the demo a week ahead (it moves Sleeper's `/state/nfl` on one) so the plan has claims
-  on game days too.
-- Position strength (`SCC.positionStrength`, pure and tested): each team's best lineup this season
-  by Sleeper's season projections (never FantasyCalc's, so everyone sees it), starters added up by
-  position plus a quarter of the best bench player there, ranked across the league; top third 'deep',
-  bottom third 'thin'. Standings shows every team's ranks (`strengthTable`, table `.pstr`, not
-  `.stand`, which the UI test counts); the Trade tab shows the partner and you once a partner is
-  picked (`tradeFit`, "Where you both stand", with the good fits). Both load the season projections.
-- Draft results (the Trade tab's See the draft, `openDraftResults` in `app.js`): a `<dialog>` outside
-  `#view`, repainted only when its HTML changes (`paintDraftResults`, so an open team and the scroll
-  survive redraws) and closed by Back (opening pushes a history entry; `popstate` closes it). Drafts
-  come from `API.leagueDraft`: Sleeper's `/league/:id/drafts` then `/draft/:id/picks`
-  (`SCC.draftFromSleeper`); ESPN's `ESPN.fetchDraft`, `view=mDraftDetail` plus ESPN's player list
-  filtered to the drafted ids (the draft gives ids only), private leagues through `espnLeague` kind
-  `draft`. ESPN defenses have negative player ids; only -1 is an empty pick. `SCC.draftGrades` weighs
-  each pick against its spot by the value the Trade tab shows (FantasyCalc's only for the owner).
-  When most picks have no Titan value (a dynasty rookie draft), everyone but the owner sees the board
-  ungraded (`plain`).
-- The Standings tab (`SCC.standings`): records, all-play, luck, power and playoff odds from 5,000
-  seeded simulations; schedules from `API.leagueSchedule` (Sleeper matchups, or ESPN via
-  `ESPN.fetchSchedule`; private ESPN leagues through `espnLeague` kind `schedule`).
-- Two themes: white and blue by default, and dark (`theme.js` sets `data-theme="dark"` on `<html>`,
-  remembered in localStorage `titan.theme`; a moon/sun button in the headers, and Appearance in
-  Settings). Every colour that differs between them is a token in both `:root` blocks of `styles.css`
-  (no raw colours for text or surfaces), and text meets WCAG 4.5:1 in both. Each page's `<head>` has
-  the early snippet that sets a saved dark theme before anything draws, plus `/theme.js`. Check new
-  screens in both themes.
-- Every league name shows `leagueIcon(cfg)`: the league's picture (`cfg.pic`: Sleeper's league avatar,
-  or your team's logo in an ESPN league, kept through `slimLeague`) with a lettered site badge in the
-  corner (not the sites' logos), or the Titan icon (`/icon.svg`, `NO_PIC`) when there's no picture. Give Yahoo a `pic` too.
-  On Matchup, your score in the middle is red when you're behind, or purple (`--fav`) while you're behind but
-  still projected to win (over a 50% chance); the status line says so in words too.
-- Screens have addresses under `/app/` (`SLUG` in `app.js`; `firebase.json` rewrites `/app/**` to
-  the app page, and the UI test's server does the same). A new screen needs a slug.
-- The demo (`DEMO` in `app.js`) uses its own storage names and never loads `sync.js`, so it can't
-  overwrite a real account or reach Firestore. Keep new storage, sync and server calls behind it.
-- When a refresh's saved data gains a field the screens rely on, bump the snapshot version
-  (`v` in `collect`, `sleeper.js`) and the matching check at the end of `app.js`, so devices
-  holding an older snapshot refresh on open instead of showing gaps.
-- Live scores refresh without a full refresh (`livePoints`, `loadMatchups`, `scheduleLive`):
-  keep them light. ESPN's box score is ~230 KB, so it's fetched every other tick.
-- Matchup: where you stand, in words, comes from `SCC.matchStatus` (pure, tested) through `matchState`
-  in `app.js`, which the card and the summary at the top share; the summary's filters are
-  `MATCH_KINDS` (`S.ui.matchFilter`, chips `data-mfilter`). Opened, the scoreboard (`.board`) shows the
-  score, so the header's score row hides.
-- The Results tab's internal id is still `score`; only its label changed. It's its own section now. Won or
-  lost comes from `scoreLeague` (the other team in the same matchup; ESPN's opponent from the box score,
-  `espnWeek`), the bench's misses from `SCC.benchMistakes`, both pure and tested. Season so far scores
-  the earlier weeks one at a time (`loadSeason`, through `scoreFor`) and keeps each finished week on
-  the device (`KEY.season`, tied to the leagues and that week's rankings). Its chart's columns use
-  `--chart-bar`, checked with the dataviz palette checks in both themes; a table sits behind it.
-- Folding (Lineups, Rosters, Matchup) goes through `isOpen`, `setFold` and `foldAll` in
-  `app.js`, keyed by `FOLD_KEY`. Only a person's tap on a header is saved (`tapped`); code
-  that opens or closes a league (the Rosters search, jump chips) must not save it.
+
+## Titan's owner
+
+The owner's account (the `titanOwner` claim) and the screens only it sees.
+
+- Titan's owner is the one sign-in account with the `titanOwner` custom claim. `ownerStats`
+  refuses everyone else and returns totals only: never add per-person details to it.
 - Compare rankings (`screenLab`, tab `lab`, `/app/compare`) is Titan's owner's only: its sub-tab and menu
   button show only with the `titanOwner` claim. The server's `run` saves FantasyCalc's values once a week
   (`labSnapshot` → `lab/{season}-{week}`, every format in `lab/config` plus any cached in `tradeValues`;
@@ -240,42 +267,56 @@ live site, so site changes reach it without a new upload. What's done and what's
   sideways (`.vr-scroll`) with the player column pinned; its header row follows the page down to the table's end
   (`pinValueHeads` moves it on scroll: sticky can't follow the page out of a box that scrolls sideways). Never add
   FantasyCalc's numbers to anything someone other than the owner can see.
-- Type: the app (`body.app-page`; the website keeps the system font) uses Inter (`fonts/inter-latin-wght.woff2`, fontsource's Latin variable build, SIL Open Font
-  License in `fonts/OFL.txt`; keep the license beside it). Titan serves it itself, so no browser asks Google or anyone
-  else for it: never switch to a font CDN (the privacy policy and Play's Data safety form say the app shares nothing).
-  It's in `SHELL` in `sw.js`. Its type scale sits on `.vr-page` (`display: contents`, so the main view's grid gap still
-  spaces the sections): four sizes (12, 14, 17 and 26px, tables 13px on phones) and three weights (400, 600, 700), same-
-  width numbers only in tables and tile numbers (Inter's tabular setting widens hyphens in running text), small
-  uppercase table headers. App-wide (v1.28.0): Inter for all text, weights capped at 700 by the `@font-face` range (the
-  stylesheet's 800s and 900s draw at 700), report-style headers on the data tables (`.rtable`, `.stand`, `.pstr`,
-  `.season-t`), and `font-size-adjust: 0.5` on `body.app-page` (Inter's x-height is 0.546 of its size, Segoe UI's 0.5:
-  drawn at Segoe UI's, the phone layouts keep the room they were fitted for; `.vr-page` opts out). Each screen keeps its
-  own tuned sizes. Inter's same-width setting (`tabular-nums`) also changes the space, hyphen, colon, period, comma and
-  brackets, so set it on number cells, not on blocks with words; where a block is set same-width, its words go back to
-  normal (`body.app-page :is(...)` in styles.css). Standings sets it on `.tnum` cells only. For any change to the app's look, run the UI test with `TITAN_SHOTS` before and after: its screen
-  tour photographs all 14 screens at 390px and 1280px (`tour-<width>-<screen>.png`) to compare.
-- Import multiple sources (`screenMulti`): `SCC.combineRanks` (pure, tested) combines each position on
-  its own (a source missing a player counts him one below its last there, weights 1x to 3x) and fits RB,
-  WR and TE onto one FLEX list from the sources that have an overall list (`opts.curve`, Titan's default
-  rankings, when none does). The result is saved as the week's `rows`, so every call, the server job
-  and Results read it unchanged; the sources ride along as the week's `multi` (synced with it), and an
-  unsaved set stays on the device (`KEY.multi`). A plain import over that week drops `multi`.
-- A new rankings format: study the person's file locally, then test with a few made-up rows in
-  the same format (see The Hall's test in `tests/engine.test.js`). Never commit a ranking
-  site's actual file; many are paid. Name known sources in `parseRanks`'s `source`.
-- Titan's lineup is `optimal` (who starts, by rank) then `flexLate` (latest kickoffs in the flex
-  spots); `spotMoves` turns it into the changes shown. Route new lineup logic through them, and
-  never move a locked player.
-- Default rankings (`defaultRanks`, `rankingsBy` in `engine.js`) are Sleeper's weekly projections
-  in each league's scoring. A week's import wins; the defaults fill positions it leaves out, or
-  everything when nothing is imported. The app (`ranksFor`, `analyze`, Results, `keepStarted`)
-  and the server job (`freezeForUser`) follow the same rule: change them together.
-- Rosters follow Sleeper's order: `L.rows` for starters, then the bench by `POS_ORDER`,
-  then Reserve (IR and taxi, `heldAs`). Keep new roster views in that order.
-- Show new ESPN or Yahoo features in the app and the Play listing only once they work (Google treats
-  promised features in a listing as misleading). The website says Yahoo is coming soon, at the
-  owner's request (2026-09-11): its title, a Yahoo card and the FAQ. Keep that wording honest until
-  Yahoo leagues work.
+
+## Server, ESPN and alerts
+
+- Alerts: `SCC.alertsFor` decides (pure, tested), `alertUser` and `deliver` in `functions/index.js`
+  send Firebase Cloud Messaging data messages to the tokens in `users/{uid}/private/alerts`, and
+  `sw.js` shows them. Keep each alert's key stable, or people get repeats: `out|week|league|player|tag`
+  (names the starter's backup when he's a free agent there: depth chart order is index 3 of each
+  trimmed player), `check|week|kickoff` (one alert covering every league), `news|week|story|player`,
+  `waiver|week|date` (`SCC.waiverReminder`, pref `waivers`: at the 8 PM Eastern check the evening before a Sleeper
+  league's waivers run; Sleeper's `waiver_day_of_week` counts from Monday and claims process about 3 AM Eastern,
+  checked on real claims 2026-09-13; daily-waiver, ESPN and Yahoo leagues aren't counted).
+- ESPN turns Titan's server away at times (403, since 2026-09-12). Don't add a User-Agent naming
+  Titan to ESPN requests: ESPN refused one even from home (checked 2026-09-12). Each ESPN feed the
+  server shares keeps its last good copy in Firestore (`meta/newsFeed`, `meta/scoresFeed`,
+  `meta/gameContext`; `saveCopy` when it changes or every 15 minutes, `fallback` when ESPN refuses),
+  so a new instance serves it instead of a 502: news up to a day old and game context six hours, past
+  which the request fails and the alert fires; scores half an hour, past which `/api/scores` answers
+  `{unavailable: true}` (not an error, so no alert) and the ticker reads ESPN's scoreboard in the
+  browser (`scoresFromEspn`: ESPN sends `Access-Control-Allow-Origin: *`, and on 2026-09-14 it
+  answered Node and curl from home while refusing the server and PowerShell). The News tab notes a copy over
+  15 minutes old (`NEWS_OLD`), and news alerts skip a copy over 10 minutes old (`NEWS_FRESH`) and ask
+  ESPN directly. The "Titan server problems" alert matches warnings containing "could not", so keep
+  those words out of warnings that aren't problems.
+- The News tab reads ESPN's public NFL news feed (`ESPN.fetchNews`, site.api.espn.com; unofficial, so
+  keep the link back to each story) through Titan's server (`espnNews` at `/api/news`, one shared read
+  kept 90 seconds, CDN two minutes: ESPN's bot protection turns some browsers away, headless Chrome
+  included, and refuses CORS preflights) every two minutes while open, marking stories that tag players on
+  the person's rosters. News alerts: each alert check saves the person's starters (`SCC.newsWatch`) as
+  `watch` in their alerts doc; `newsAlerts` runs on every 15-minute run all week, reads the feed once (`newsForAlerts`: Titan's own
+  `/api/news` first, ESPN directly only if that fails, since ESPN has turned the game-day job's server
+  away while letting the News tab's in)
+  and only looks at people when a new story tags a player (`SCC.newsAlertsFor`, at most 3 at a time,
+  key `news|week|story|player`). A news alert's tap opens the story (sw.js).
+- The scores ticker (`loadScores`, `paintTicker` in `app.js`): this week's NFL games from ESPN's
+  public scoreboard through Titan's server (`nflScores` at `/api/scores`, one shared read kept 20
+  seconds, CDN 20; `ESPN.scoreboardFrom` gives each side's points and the short status; the browser
+  reads ESPN's scoreboard itself when the server answers `unavailable` or fails). It sits under
+  the header, not in it, so the sticky header (and the wide screens' sticky league list below it) keep
+  their place. It reads every 30 seconds while a game is live or kicks off within 10 minutes, every 10
+  minutes otherwise, only while the page is in view, and never in the demo. Each game links to its
+  ESPN page, "Scores: ESPN" credits the source, and a badge counts the person's starters in the game.
+- Game context on Lineups rows (`SCC.gameTags`) comes from the `gameContext` function at
+  `/api/game-context` (kept 30 minutes): ESPN's scoreboard lines (`ESPN.scoreboardFrom`,
+  `SCC.impliedTotals`), NWS forecasts at kickoff for outdoor US games (`STADIUMS` holds each home
+  stadium's spot; NWS needs a User-Agent), and points allowed by position (`SCC.dvpFrom` over
+  nflverse's `stats_player_week_<season>.csv.gz`, CC BY 4.0, credited on Lineups; last season's
+  until three weeks are played; Firestore `meta/dvp`, 12 hours).
+
+## Yahoo
+
 - Yahoo is being built, and only Titan's owner can use it until it works end to end (`YAHOO_OPEN` in
   `functions/index.js`, and `yahooLink` in `app.js`). People link their own Yahoo account (OAuth 2.0,
   confidential client, Fantasy Sports read): `yahooStart` makes a one-time state (`yahooStates/{state}`,
@@ -296,10 +337,11 @@ live site, so site changes reach it without a new upload. What's done and what's
   for the website's pages in theme.js; the owner's call). Titan's access request is
   with Yahoo (received 2026-09-11). Before opening it to everyone: Yahoo's approval, the privacy and
   terms pages, the Play listing, and the website's coming-soon wording.
-- Team names: every fantasy team, on every tab and both platforms, reads "Nickname (account name)"
-  from `SCC.teamLabel` (Sleeper's `team_name` and `display_name`; ESPN's team name and member name),
-  or the account name alone when there's no nickname. Build new team names with it, and don't add
-  the manager again where one is shown. `slimSchedule` keeps the members so private ESPN leagues get them.
+
+## Website, Android app and credits
+
+- The Android app opens `/?source=play`. The website's forward to `/app/` (with the query) must
+  keep working, or the Play app shows the website instead of the app.
 - Every page credits Titan Forge, the owner's web development business, at the bottom: "Developed by Titan Forge"
   linking to https://www.titanforgedev.com, in the website's copyright line (home and guides), the app's `foot-note`,
   and the closing line of privacy and terms. A new page gets it too.
@@ -346,7 +388,8 @@ into a new database from the console or `gcloud firestore databases restore`), a
 can't check someone (at most hourly). Keep the service names in its filter when adding functions.
 
 Test, commit, push, then deploy. After a deploy, check the live files, and for the server job
-trigger a run and read its logs. A save point is an annotated tag `vX.Y.Z`, a row in README's
+trigger a run and read its logs, then send the owner a push notification (every deploy, in every project).
+A save point is an annotated tag `vX.Y.Z`, a row in README's
 Save points table, and `git archive` of the tag into `D:\Claude\backups`.
 
 ## Windows notes

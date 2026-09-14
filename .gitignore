@@ -8,3 +8,6 @@ functions/shared/
 
 # Downloads the tests keep between runs (Sleeper's and ESPN's public player lists)
 tests/.cache/
+
+# The owner's private resume notes (status and to-dos); firebase.json keeps it off the website too
+RESUME.md
