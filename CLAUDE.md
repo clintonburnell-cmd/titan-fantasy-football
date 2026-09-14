@@ -90,14 +90,18 @@ live site, so site changes reach it without a new upload. What's done and what's
   Titan to ESPN requests: ESPN refused one even from home (checked 2026-09-12). Each ESPN feed the
   server shares keeps its last good copy in Firestore (`meta/newsFeed`, `meta/scoresFeed`,
   `meta/gameContext`; `saveCopy` when it changes or every 15 minutes, `fallback` when ESPN refuses),
-  so a new instance serves it instead of a 502: news up to a day old, scores half an hour, game
-  context six hours; past that the request fails and the alert fires. The News tab notes a copy over
+  so a new instance serves it instead of a 502: news up to a day old and game context six hours, past
+  which the request fails and the alert fires; scores half an hour, past which `/api/scores` answers
+  `{unavailable: true}` (not an error, so no alert) and the ticker reads ESPN's scoreboard in the
+  browser (`scoresFromEspn`: ESPN sends `Access-Control-Allow-Origin: *`, and on 2026-09-14 it
+  answered Node and curl from home while refusing the server and PowerShell). The News tab notes a copy over
   15 minutes old (`NEWS_OLD`), and news alerts skip a copy over 10 minutes old (`NEWS_FRESH`) and ask
   ESPN directly. The "Titan server problems" alert matches warnings containing "could not", so keep
   those words out of warnings that aren't problems.
 - The scores ticker (`loadScores`, `paintTicker` in `app.js`): this week's NFL games from ESPN's
   public scoreboard through Titan's server (`nflScores` at `/api/scores`, one shared read kept 20
-  seconds, CDN 20; `ESPN.scoreboardFrom` gives each side's points and the short status). It sits under
+  seconds, CDN 20; `ESPN.scoreboardFrom` gives each side's points and the short status; the browser
+  reads ESPN's scoreboard itself when the server answers `unavailable` or fails). It sits under
   the header, not in it, so the sticky header (and the wide screens' sticky league list below it) keep
   their place. It reads every 30 seconds while a game is live or kicks off within 10 minutes, every 10
   minutes otherwise, only while the page is in view, and never in the demo. Each game links to its

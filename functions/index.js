@@ -638,7 +638,7 @@ async function saveCopy(name, doc, copy, sig) {
 async function fallback(name, mem, doc, now, maxAge, err) {
   let saved = null;
   try { saved = (await doc.get()).data() || null; } catch (e) { saved = null; }
-  const copy = [mem, saved].filter(c => c && now - c.at < maxAge).sort((a, b) => b.at - a.at)[0];
+  const copy = [mem, saved].filter(c => c && !c.unavailable && now - c.at < maxAge).sort((a, b) => b.at - a.at)[0];
   if (!copy) throw err;
   logger.warn(`${name}: ESPN unavailable (${err.message}), serving the copy from ${new Date(copy.at).toISOString()}`);
   return copy;
@@ -675,14 +675,23 @@ exports.espnNews = onRequest({region: 'us-central1', memory: '256MiB', maxInstan
 /* Live NFL scores for the app's ticker: ESPN's public scoreboard (unofficial, so the ticker
    links each game to ESPN and credits it), read by Titan's server and shared by everyone:
    kept 20 seconds in memory and by Firebase Hosting's CDN. If ESPN can't be reached, the
-   last copy serves for up to half an hour. */
+   last copy serves for up to half an hour; after that the answer is {unavailable: true} and
+   each browser reads ESPN's scoreboard itself (ESPN lets any site read it, and it answered
+   browsers while refusing this server, 2026-09-14). So ESPN turning the server away isn't an
+   error and doesn't set off the alert; a fault in Titan's own code still answers 502. */
 const SCORES_KEEP = 20 * 1000, SCORES_SERVE = 30 * 60000;
 let scoresCache = null;
 async function latestScores(now = Date.now(), read = () => ESPN.fetchScoreboard(), doc = db.doc('meta/scoresFeed')) {
   if (scoresCache && now - scoresCache.at < SCORES_KEEP) return scoresCache;
   let b;
   try { b = await read(); }
-  catch (e) { return (scoresCache = await fallback('scores', scoresCache, doc, now, SCORES_SERVE, e)); }
+  catch (e) {
+    try { return (scoresCache = await fallback('scores', scoresCache, doc, now, SCORES_SERVE, e)); }
+    catch (old) {
+      logger.warn(`scores: ESPN unavailable (${e.message}) and no copy from the last half hour; browsers read ESPN themselves`);
+      return (scoresCache = {at: now, unavailable: true, games: []});
+    }
+  }
   const games = b.games.map(g => ({id: g.id, kickoff: g.kickoff, home: g.home, away: g.away, state: g.state, hs: g.hs, as: g.as, detail: g.detail}));
   scoresCache = {at: now, season: b.season, week: b.week, games};
   await saveCopy('scores', doc, scoresCache, JSON.stringify(games));

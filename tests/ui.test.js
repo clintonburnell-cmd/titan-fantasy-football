@@ -56,6 +56,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       links: {web: {href: 'https://www.espn.com/nfl/story/_/id/101'}}, categories: [{type: 'athlete', athleteId: 1, description: newsQb}]},
     {id: 102, type: 'Story', headline: 'Another NFL story', description: '', published: newsAt,
       links: {web: {href: 'https://www.espn.com/nfl/story/_/id/102'}}, categories: [{type: 'athlete', athleteId: 2, description: 'Somebody Else'}]}]});
+  // A stand-in for ESPN's scoreboard, for when Titan's server says scores are unavailable (scoresDown) and the browser asks ESPN.
+  let scoresDown = false;
+  const ESPN_BOARD = JSON.stringify({season: {year: 2026}, week: {number: 1}, events: [{id: '403', date: new Date(Date.now() - 1800e3).toISOString(),
+    competitions: [{venue: {}, status: {type: {state: 'in', shortDetail: '3rd - 1:00'}},
+      competitors: [{homeAway: 'home', score: '21', team: {abbreviation: 'NYJ'}}, {homeAway: 'away', score: '17', team: {abbreviation: 'NE'}}]}]}]});
   const server = http.createServer((req, res) => {
     const u = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     // Titan's /api/game-context: every test team expects 28.5 points, with a windy forecast.
@@ -70,9 +75,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       res.writeHead(200, {'content-type': 'application/json'});
       return res.end(JSON.stringify({at: Date.now(), stories: ESPNJS.newsFrom(JSON.parse(NEWS))}));
     }
-    // Titan's /api/scores: one game on, one to come.
+    // Titan's /api/scores: one game on, one to come (or, with scoresDown, the answer when ESPN turns the server away).
     if (u === '/api/scores') {
       res.writeHead(200, {'content-type': 'application/json'});
+      if (scoresDown) return res.end(JSON.stringify({at: Date.now(), unavailable: true, games: []}));
       return res.end(JSON.stringify({at: Date.now(), season: 2026, week: 1, games: [
         {id: '401', kickoff: Date.now() - 3600e3, home: 'KC', away: 'LAC', state: 'in', hs: 14, as: 7, detail: '2nd - 5:12'},
         {id: '402', kickoff: Date.now() + 3600e3, home: 'BUF', away: 'MIA', state: 'pre', hs: 0, as: 0, detail: ''}]}));
@@ -123,6 +129,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
           if (bumpWeek && w >= 1 && w < 18) s = Object.assign({}, s, {week: w + 1, display_week: w + 1, leg: w + 1});
           send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(s)).toString('base64')});
         }, () => send('Fetch.continueRequest', {requestId: m.params.requestId}));
+        return;
+      }
+      // ESPN's scoreboard, which the browser reads itself when Titan's server can't (ESPN allows any site).
+      if (url.includes('site.api.espn.com') && url.includes('/scoreboard')) {
+        send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: 200, body: Buffer.from(ESPN_BOARD).toString('base64'),
+          responseHeaders: [{name: 'access-control-allow-origin', value: '*'}, {name: 'content-type', value: 'application/json'}]});
         return;
       }
       // The browser's CORS check before a request with ESPN's week-filter header.
@@ -665,6 +677,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   } else {
     T.skip('linking a Sleeper account (set TITAN_SLEEPER_USER to run it)');
   }
+
+  T.section('scores when ESPN turns Titan\'s server away');
+  scoresDown = true;
+  await send('Fetch.enable', {patterns: [...ESPN_PATTERNS, {urlPattern: '*site.api.espn.com*scoreboard*'}]});
+  await send('Page.navigate', {url: ORIGIN + '/app/'});
+  const direct = await waitFor(`!document.getElementById('ticker').hidden && [...document.querySelectorAll('#ticker .tk-game')].some(g => /21/.test(g.innerText) && /3rd/.test(g.innerText))`, 20000);
+  check(direct, 'Titan\'s server says scores are unavailable, so the ticker reads ESPN\'s scoreboard itself: ' + (await text('#ticker')).replace(/\s+/g, ' ').slice(0, 80));
+  scoresDown = false;
+  await send('Fetch.enable', {patterns: ESPN_PATTERNS});
 
   T.section('the demo');
   // Built a week ahead, before any of that week's games, so its leagues have waiver upgrades for the plan on any day.

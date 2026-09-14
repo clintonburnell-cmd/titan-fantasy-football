@@ -206,10 +206,12 @@ function fakeUser(db) {
   job.freshInstance();
   const sc5 = await job.latestScores(t0s + 20 * 60000, scDown, scDoc);
   job.freshInstance();
-  let sc6 = null;
-  try { await job.latestScores(t0s + 40 * 60000, scDown, scDoc); } catch (e) { sc6 = e.message; }
-  check(scDoc.sets === 1 && sc5.at === t0s && sc5.games[0].hs === 14 && sc6 === 'down',
-    'scores are saved when they change; a new instance ESPN refuses serves them for up to half an hour, then fails');
+  const sc6 = await job.latestScores(t0s + 40 * 60000, scDown, scDoc), sc7 = await job.latestScores(t0s + 40 * 60000 + 5000, scRead, scDoc);
+  job.freshInstance();
+  const sc8 = await job.latestScores(t0s + 41 * 60000, scRead, scDoc);
+  check(scDoc.sets === 2 && sc5.at === t0s && sc5.games[0].hs === 14 && sc6.unavailable === true && sc6.games.length === 0 && sc7 === sc6 &&
+    !sc8.unavailable && sc8.games[0].hs === 14,
+    'scores are saved when they change; a new instance ESPN refuses serves them for up to half an hour, then answers unavailable (browsers read ESPN themselves) instead of failing, for 20 seconds at a time');
 
   section('the rankings lab\'s weekly FantasyCalc snapshot');
   {

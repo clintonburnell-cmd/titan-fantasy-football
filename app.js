@@ -935,14 +935,23 @@
      view. Each game shows how many of the person's starters play in it, and opens on ESPN. */
   const SCORES_LIVE = 30000, SCORES_IDLE = 10 * 60000;
   let scoresTimer = null;
+  // ESPN's scoreboard read by the browser itself, trimmed the way Titan's server trims it: the ticker's fallback.
+  async function scoresFromEspn() {
+    const b = await ESPN.fetchScoreboard();
+    return {at: Date.now(), season: b.season, week: b.week,
+      games: b.games.map(g => ({id: g.id, kickoff: g.kickoff, home: g.home, away: g.away, state: g.state, hs: g.hs, as: g.as, detail: g.detail}))};
+  }
   async function loadScores() {
     clearTimeout(scoresTimer);
     if (document.visibilityState === 'visible') {
+      let d = null;
       try {
         const res = await fetch('/api/scores');
-        if (!res.ok) throw new Error('answered ' + res.status);
-        S.scores = await res.json();
-      } catch (e) { /* the ticker keeps its last scores, or stays hidden */ }
+        if (res.ok) d = await res.json();
+      } catch (e) { /* Titan's server out of reach: ESPN directly, below */ }
+      // ESPN turns Titan's server away at times but lets any site read its scoreboard, so the browser asks it directly.
+      if (!d || d.unavailable) d = await scoresFromEspn().catch(() => null);
+      if (d) S.scores = d; // else the ticker keeps its last scores, or stays hidden
       paintTicker();
     }
     const games = (S.scores && S.scores.games) || [];
