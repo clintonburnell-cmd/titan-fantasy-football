@@ -300,6 +300,9 @@ live site, so site changes reach it without a new upload. What's done and what's
   from `SCC.teamLabel` (Sleeper's `team_name` and `display_name`; ESPN's team name and member name),
   or the account name alone when there's no nickname. Build new team names with it, and don't add
   the manager again where one is shown. `slimSchedule` keeps the members so private ESPN leagues get them.
+- Every page credits Titan Forge, the owner's web development business, at the bottom: "Developed by Titan Forge"
+  linking to https://www.titanforgedev.com, in the website's copyright line (home and guides), the app's `foot-note`,
+  and the closing line of privacy and terms. A new page gets it too.
 - The Ko-fi tip jar sits at the bottom of every page, never the header: the app's footer (`data-tip`),
   the website's footers (home and guides), and the end of privacy and terms. It hides inside the Play
   app (the app's `IN_PLAY_APP` in `tipJar`; `theme.js` on the website's pages, from `titan.play`,
