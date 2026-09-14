@@ -336,7 +336,7 @@
 
     // v2: rosters carry what live scores need (roster ids, ESPN ids, the game clock).
     // v3: this week's kickoff times.
-    var snap = {v: 3, at: Date.now(), week: week, season: season, available: all, byes: byes, leagues: live, log: log,
+    var snap = {v: 4, at: Date.now(), week: week, season: season, available: all, byes: byes, leagues: live, log: log,
       kickoffs: weekKickoffs(kickMap, week)};
     return finish(snap, {players: players, sched: sched, say: say, progress: progress});
   }
@@ -354,7 +354,7 @@
     var live = built.filter(function (d) { return d.cfg.active; });
     c.say(built.length ? 'Demo: ' + built.length + ' sample leagues built from week ' + c.week + '\'s projections.'
       : 'Demo: this week\'s projections aren\'t out yet, so there are no demo leagues to build.');
-    var snap = {v: 3, at: Date.now(), week: c.week, season: c.season, available: built.map(function (d) { return d.cfg; }),
+    var snap = {v: 4, at: Date.now(), week: c.week, season: c.season, available: built.map(function (d) { return d.cfg; }),
       byes: c.byes, leagues: live, log: c.log, kickoffs: weekKickoffs(c.kickMap, c.week), players: got.players};
     return finish(snap, c);
   }
@@ -752,14 +752,32 @@
     return {cfg: lg, rosters: [{roster_id: rosterId, owner_id: userId, players: ids}], matchups: matchups};
   }
 
-  /* Each player's actual fantasy points for a week, from Sleeper's stats feed (like its
-     projections, not documented): {id: {ppr, half, std}}. For Titan's owner's Compare screen. */
+  /* A player's stat line from Sleeper's stats feed (like its projections, not documented), trimmed to
+     what Titan shows: points (PPR, half, standard), games, his and his offense's snaps, targets,
+     catches, receiving yards, carries, rushing yards, red-zone targets and carries, air yards, and
+     passing for a QB. */
+  function trimStat(s) {
+    s = s || {};
+    var n = function (k) { return Number(s[k]) || 0; };
+    return {ppr: n('pts_ppr'), half: n('pts_half_ppr'), std: n('pts_std'), gp: n('gp'), snp: n('off_snp'), tsnp: n('tm_off_snp'),
+      tgt: n('rec_tgt'), rec: n('rec'), yd: n('rec_yd'), car: n('rush_att'), ryd: n('rush_yd'), rz: n('rec_rz_tgt') + n('rush_rz_att'),
+      ay: n('rec_air_yd'), att: n('pass_att'), cmp: n('pass_cmp'), pyd: n('pass_yd'), ptd: n('pass_td'), int: n('pass_int')};
+  }
+
+  // Every player's stat line for a week: {id: trimStat}. Waivers' usage and the owner's Compare screen.
   async function fetchStats(season, week) {
     var list = await getJson('https://api.sleeper.app/stats/nfl/' + season + '/' + week + '?season_type=regular' + PROJ_POS);
     var out = {};
-    (Array.isArray(list) ? list : []).forEach(function (r) {
-      if (r && r.player_id && r.stats) out[String(r.player_id)] = {ppr: Number(r.stats.pts_ppr) || 0, half: Number(r.stats.pts_half_ppr) || 0, std: Number(r.stats.pts_std) || 0};
-    });
+    (Array.isArray(list) ? list : []).forEach(function (r) { if (r && r.player_id && r.stats) out[String(r.player_id)] = trimStat(r.stats); });
+    return out;
+  }
+
+  // One player's season, week by week ({week: trimStat}), or with `totals` his season's totals (trimStat, or null): the player card.
+  async function fetchPlayerStats(id, season, totals) {
+    var d = await getJson('https://api.sleeper.app/stats/nfl/player/' + encodeURIComponent(id) + '?season_type=regular&season=' + season + (totals ? '' : '&grouping=week'));
+    if (totals) return d && d.stats ? trimStat(d.stats) : null;
+    var out = {};
+    for (var w in d || {}) if (d[w] && d[w].stats) out[w] = trimStat(d[w].stats);
     return out;
   }
 
@@ -803,7 +821,7 @@
     collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule, leagueDraft: leagueDraft,
     trendingAdds: trendingAdds, leagueWaivers: leagueWaivers, leagueTransactions: leagueTransactions,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
-    fetchProjections: fetchProjections, fetchStats: fetchStats, PLAYERS_KEY: PLAYERS_KEY
+    fetchProjections: fetchProjections, fetchStats: fetchStats, fetchPlayerStats: fetchPlayerStats, PLAYERS_KEY: PLAYERS_KEY
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

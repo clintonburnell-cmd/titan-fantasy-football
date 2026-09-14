@@ -89,10 +89,16 @@ team's playoff odds (5,000 simulations of the games left), then Position strengt
 at QB, RB, WR, TE, K and DEF by its best lineup this season (Sleeper's projections, with a little
 credit for bench depth), the league's top third in green and bottom third in red. The Trade tab
 sums that up for you and your trade partner, and points out when one's surplus fills the other's
-hole. The Waivers tab gathers pickups for every
-league: your rankings' waiver targets, free backups for hurt starters, Sleeper's most-added players
-and where each is free in your leagues, a search for where anyone is available, and a suggested bid
-where a Sleeper league bids for players (from its recent winning bids).
+hole. The Waivers tab opens on your waiver plan for the week: in every league, the free agents your
+rankings rate above one of your starters, a drop for each (the bench player Titan values least over
+the season that you can spare, never someone on IR or your only backup at a position you start; a
+list swaps him), a suggested bid where a Sleeper league bids for players (from its recent winning
+bids), and a Done check for each claim. Then free backups for hurt starters, Sleeper's most-added
+players and where each is free in your leagues, and a search for where anyone is available. Each
+pickup shows a line of recent usage (snap share, targets, carries, red-zone looks and points a game
+over the last three weeks), and tapping a player's name on Lineups, Rosters, Matchup or Waivers opens
+his card: his last four games and his season so far, from Sleeper's stats. An alert (on by default)
+reminds you at 8 PM Eastern the evening before your Sleeper leagues' waivers run.
 
 Titan is white and blue by default. A moon and sun button in the header (and Appearance in
 Settings) switches the app and the website to a dark theme, remembered on that device.
@@ -373,6 +379,7 @@ No build step and no dependencies. It runs on any static host.
 | `v1.19.1` | The Players dot works like a notification: it marks waiver pickups you haven't seen on Waivers yet, clears once you open Waivers, and comes back only for a new pickup (remembered on each device) |
 | `v1.19.2` | Trade tab: both rosters sort by value, by position, or by position then value (with position headers when grouped, remembered), and every player shows Titan's colored position tag on the rosters, in the trade and in Who has him? |
 | `v1.19.3` | Position strength: every team's rank at each position by its best lineup this season (Sleeper's projections, a little credit for bench depth), shown on Standings with the top third green and the bottom third red, and on the Trade tab as "Where you both stand" for you and your partner, with the good fits called out; the Trade tab also gets Clear all and a partner picker on the partner's roster card |
+| `v1.25.0` | Waiver day: a waiver plan at the top of Waivers (claims from your rankings, a drop for each that you can swap, bids, a Done check), a line of recent usage on each pickup (snap share, targets, carries, red-zone looks, points), a player card from any name (his last four games and his season from Sleeper's stats), and an alert at 8 PM Eastern the evening before your Sleeper leagues' waivers run |
 | `v1.24.3` | Matchup: your score turns red when you're behind, or purple while you're behind but still projected to win (the status line says so too); a league without a picture shows the Titan icon instead of a football, its site's badge still in the corner |
 | `v1.24.2` | Guides in the account menu at the top right on computers, under Settings |
 | `v1.24.1` | Three new guides for search (combining rankings, draft grades, trade help), linked from the guides page, the import and Sleeper guides, and the sitemap |

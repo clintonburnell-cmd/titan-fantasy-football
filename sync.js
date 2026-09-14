@@ -76,7 +76,7 @@ async function alertsState(uid) {
   const data = snap && snap.exists() ? snap.data() : {};
   const t = localToken();
   return {supported, permission: typeof Notification !== 'undefined' ? Notification.permission : 'default',
-    on: !!(t && data.tokens && data.tokens[t]), prefs: Object.assign({out: true, check: true, news: true}, data.prefs || {})};
+    on: !!(t && data.tokens && data.tokens[t]), prefs: Object.assign({out: true, check: true, news: true, waivers: true}, data.prefs || {})};
 }
 const ESPN = window.EspnAPI;
 const YAHOO = window.YahooAPI;

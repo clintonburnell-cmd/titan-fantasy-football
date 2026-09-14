@@ -114,6 +114,7 @@
       id: id, platform: 'espn', espnId: String(json.id), teamId: teamId,
       key: name, name: name, pic: logo, lineup: lineupOf(s),
       teams: Number(s.size) || (json.teams || []).length, ppr: pprOf(s),
+      bench: Number(((s.rosterSettings || {}).lineupSlotCounts || {})[20]) || 0, // bench spots (Waivers' plan)
       kind: s.draftSettings && Number(s.draftSettings.keeperCount) > 0 ? 'Keeper' : 'Redraft',
       bestBall: false, status: '',
       playoffTeams: Number((s.scheduleSettings || {}).playoffTeamCount) || 0,

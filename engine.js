@@ -192,6 +192,11 @@
         // The playoffs (Standings) and the waiver budget, when the league bids for players (Waivers).
         playoffStart: Number(s.playoff_week_start) || 0, playoffTeams: Number(s.playoff_teams) || 0,
         faab: Number(s.waiver_type) === 2 ? Number(s.waiver_budget) || 0 : 0,
+        // Waivers' plan and reminder: the day waivers run (Sleeper counts from Monday, so 2, its default, is
+        // Wednesday; they process about 3 AM Eastern), whether they run daily, and the bench size (an open spot needs no drop).
+        waiverDay: s.waiver_day_of_week === undefined || s.waiver_day_of_week === null ? 2 : Number(s.waiver_day_of_week),
+        dailyWaivers: !!s.daily_waivers,
+        bench: (l.roster_positions || []).filter(function (p) { return p === 'BN'; }).length,
         status: l.status || '',
         active: pref.active !== undefined ? !!pref.active : !bestBall,
         exposure: true
@@ -1999,6 +2004,103 @@
     return out.sort(function (a, b) { return b.lost - a.lost; });
   }
 
+  /* ------------------------------------------------------------ waiver plan */
+
+  /* The week's waiver plan (Waivers): in each league, who to claim, from the rankings' waiver
+     targets (analyzeLeague's wire: free agents ranked above the starter they'd replace), and who to
+     drop for each claim: the bench player the rankings like least that the team can spare. Never
+     someone on IR or the taxi squad, never a kicker or defense for a claim at another position, and
+     never the only bench player at a position the lineup starts on its own, unless the claim is at
+     that position. Two claims never drop the same player, and each gets the next two as
+     alternatives; a roster with open spots needs no drop for as many claims. A free agent is claimed
+     once even when he'd fill two kinds of spot. At most three claims a league. "Likes least" goes by
+     opts.value(cfg, player), a season-long value (higher is better: the app's is Titan's value, then
+     season projected points), so a star on bye this week is safe, then by this week's rank; `keep`
+     flags a drop worth more than his claim by that value. leagues: analyzeAll's.
+     [{cfg, league, open, claims: [{pos, add, alts, over, drop, dropAlts, thin, keep}]}]. */
+  var PLAN_MAX = 3;
+  function waiverPlan(leagues, opts) {
+    var out = [], val = (opts && opts.value) || null;
+    (leagues || []).forEach(function (L) {
+      if (!L.wire || !L.wire.length) return;
+      var slots = L.cfg.lineup || [], kept = L.roster.filter(function (p) { return !p.held; });
+      var bench = kept.filter(function (p) { return !p.start; });
+      var open = L.cfg.bench ? Math.max(0, slots.length + Number(L.cfg.bench) - kept.length) : 0, spots = open;
+      var own = {}, benchAt = {};
+      slots.forEach(function (s) { if (PLAYER_POS[s]) own[s] = 1; });
+      bench.forEach(function (p) { benchAt[p.pos] = (benchAt[p.pos] || 0) + 1; });
+      var rankOf = function (p) { return p.rank === null || p.rank === undefined ? 1e9 : Number(p.rank); };
+      var worth = function (p) { return val ? Number(val(L.cfg, p)) || 0 : 0; };
+      var worstFirst = bench.slice().sort(function (a, b) { return worth(a) - worth(b) || rankOf(b) - rankOf(a); });
+      var claimed = {}, used = {}, claims = [];
+      L.wire.forEach(function (w) {
+        if (claims.length >= PLAN_MAX) return;
+        var pick = w.list.filter(function (x) { return !claimed[norm(x.name)]; });
+        if (!pick.length) return;
+        var add = pick[0];
+        claimed[norm(add.name)] = 1;
+        var free = worstFirst.filter(function (p) {
+          return !used[p.id] && !((p.pos === 'K' || p.pos === 'DEF') && p.pos !== add.pos);
+        });
+        var can = free.filter(function (p) { return !(own[p.pos] && benchAt[p.pos] === 1 && p.pos !== add.pos); });
+        // Every spare bench player is someone's only backup: Titan still names the one it likes least, flagged `thin`.
+        var thin = !can.length && free.length > 0;
+        if (thin) can = free;
+        var drop = spots > 0 ? null : can[0] || null;
+        if (drop) { used[drop.id] = 1; benchAt[drop.pos]--; } else if (spots > 0) spots--;
+        claims.push({pos: w.pos, add: add, alts: pick.slice(1, 3), over: w.cur || null, drop: drop, thin: !!drop && thin,
+          keep: !!drop && !!val && worth(drop) > worth(add),
+          dropAlts: can.slice(drop ? 1 : 0, (drop ? 1 : 0) + 2)});
+      });
+      if (claims.length) out.push({cfg: L.cfg, league: L, open: open, claims: claims});
+    });
+    return out;
+  }
+
+  /* A player's usage over the weeks given (Sleeper's stats, trimmed by fetchStats): games, his share
+     of the offense's snaps, and targets, carries, red-zone looks and PPR points a game, and whether
+     his snap share is rising or falling (his last game against the ones before, by 10 points or
+     more). weeks: [{id: stats}], oldest first. Null when he hasn't played in them. */
+  function usageOf(weeks, id) {
+    var g = 0, snp = 0, tsnp = 0, tgt = 0, car = 0, rz = 0, pts = 0, shares = [];
+    (weeks || []).forEach(function (m) {
+      var s = m && m[id];
+      if (!s || !(Number(s.gp) || Number(s.snp))) return;
+      g++;
+      snp += s.snp || 0; tsnp += s.tsnp || 0; tgt += s.tgt || 0; car += s.car || 0; rz += s.rz || 0; pts += s.ppr || 0;
+      shares.push(s.tsnp ? s.snp / s.tsnp : null);
+    });
+    if (!g) return null;
+    var one = function (n) { return Math.round(n / g * 10) / 10; };
+    var last = shares[shares.length - 1], before = shares.slice(0, -1).filter(function (x) { return x !== null; });
+    var avg = before.length ? before.reduce(function (t, x) { return t + x; }, 0) / before.length : null;
+    var trend = last === null || last === undefined || avg === null ? '' : last - avg >= 0.1 ? 'up' : avg - last >= 0.1 ? 'down' : '';
+    return {games: g, snapPct: tsnp ? Math.round(snp / tsnp * 100) : null, tgt: one(tgt), car: one(car), rz: one(rz), pts: one(pts), trend: trend};
+  }
+
+  /* The waiver reminder (game-day alerts' 'waivers'): at the 8 PM Eastern alert check on the evening
+     before leagues' waivers run, one alert saying how many of them run tonight. Sleeper's waiver day
+     counts from Monday and waivers process about 3 AM Eastern, so a league whose waiver day is
+     tomorrow runs tonight; leagues with daily waivers aren't counted. opts: {week, etDay (0 is
+     Sunday), etHour, date (Eastern, YYYY-MM-DD), sent}. Sleeper leagues only. [] or [{key, kind, title, body, url}]. */
+  function waiverReminder(leagues, opts) {
+    opts = opts || {};
+    if (Number(opts.etHour) !== 20) return [];
+    var tomorrow = ((Number(opts.etDay) + 1) % 7 + 6) % 7; // tomorrow, counted from Monday as Sleeper does
+    var running = (leagues || []).filter(function (L) {
+      var c = L.cfg || {};
+      // Sleeper's leagues only (they carry no platform): ESPN's and Yahoo's waiver days aren't read.
+      return !c.platform && !c.dailyWaivers && (c.waiverDay === undefined || c.waiverDay === null ? 2 : Number(c.waiverDay)) === tomorrow;
+    });
+    var key = ['waiver', opts.week, opts.date].join('|'), sent = opts.sent || {};
+    if (!running.length || sent[key]) return [];
+    sent[key] = 1;
+    var n = running.length;
+    return [{key: key, kind: 'waivers', url: '/app/waivers', title: 'Waivers run tonight',
+      body: (n === 1 ? 'Waivers run tonight in ' + (running[0].cfg.name || running[0].cfg.key) + '.' : 'Waivers run tonight in ' + n + ' of your leagues.') +
+        ' Titan\'s waiver plan has your claims, drops and bids.'}];
+  }
+
   /* ------------------------------------------------------------ rankings lab */
 
   // Average ranks, 1 the best (desc: the biggest value is best), ties sharing their average.
@@ -2307,7 +2409,7 @@
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks, combineRanks: combineRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,
-    depthCharts: depthCharts, backupOf: backupOf, faabBid: faabBid,
+    depthCharts: depthCharts, backupOf: backupOf, faabBid: faabBid, waiverPlan: waiverPlan, usageOf: usageOf, waiverReminder: waiverReminder,
     gameStates: gameStates, weekProgress: weekProgress,
     rankKey: rankKey, rankLabel: rankLabel, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,

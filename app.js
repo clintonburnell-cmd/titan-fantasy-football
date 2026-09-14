@@ -135,7 +135,8 @@
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
-    waiv: {trend: null, busy: false, error: '', faab: {}, q: ''},
+    waiv: {trend: null, busy: false, error: '', faab: {}, q: '', usage: null, usageBusy: false}, // usage: the last few weeks' stats (loadUsage)
+    pcard: {id: '', cache: {}}, // the player card: who's showing, and each player's season week by week
     ctx: {busy: false, at: 0, data: null}, // game context on Lineups rows (/api/game-context)
     moves: {}, // the Transactions tab: each Sleeper league's recent moves ({busy, error, list, at})
     yahoo: {busy: false, error: '', data: null, note: ''}, // linking Yahoo (Titan's owner only while it's being built)
@@ -170,6 +171,7 @@
   const view = $('view');
   // Draft results' pop-up (made on first use), what it last showed, whether Back closed it, and the teams open in it.
   let DLG = null, dlgHtml = '', dlgBack = false;
+  let PC = null, pcBack = false; // the player card's <dialog>, closed by Back like the draft results'
   const dOpen = new Set();
 
   /* ------------------------------------------------------------ helpers */
@@ -871,10 +873,13 @@
     return teamKick(p.team) || (p.kick ? playDay(p.kick) : '');
   }
 
+  // A player's name opens his card when tapped (openPlayerCard); players without a Sleeper id (unmatched ESPN ones) have none.
+  const pcAttr = p => (p && /^\d+$/.test(String(p.id || '')) ? ` data-pcard="${esc(p.id)}" role="button" tabindex="0"` : '');
+
   // The player's name with his kickoff beside it; a long name shortens, the time never does.
   function nameLine(p) {
     const k = kickText(p);
-    return `<span class="name-line"><b>${esc(p.name)}</b>${k ? `<em class="kick">${esc(k)}</em>` : ''}</span>`;
+    return `<span class="name-line"><b${pcAttr(p)}>${esc(p.name)}</b>${k ? `<em class="kick">${esc(k)}</em>` : ''}</span>`;
   }
   const scoreChip = p => `<span class="score-chip${p.game === 'in_game' ? ' live' : ''}"><b>${fmt(p.pts)}</b><small>${
     p.game === 'in_game' ? 'LIVE' : 'FINAL'}</small></span>`;
@@ -1121,7 +1126,7 @@
       ? `<span class="mstate${g.state === 'in_game' ? ' live' : ''}">${g.state === 'in_game' ? 'LIVE' : 'FINAL'}</span>`
       : `<em class="kick">${esc(teamKick(p.team))}</em>`;
     // Players still to play are greyed.
-    return `<div class="minfo ${side}${g && g.state === 'pre' ? ' yet' : ''}">${headshot(p, true)}<div class="mtext"><b>${esc(shortName(p))}</b>
+    return `<div class="minfo ${side}${g && g.state === 'pre' ? ' yet' : ''}">${headshot(p, true)}<div class="mtext"><b${pcAttr(p)}>${esc(shortName(p))}</b>
       <small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}</small><small>${when}</small></div></div>`;
   }
 
@@ -1268,7 +1273,7 @@
       const proj = projOf(p, L.cfg);
       return `<tr class="${p.start ? 'is-start' : ''}" data-find=" ${esc(find)} "><td><span class="slot${cls ? ' ' + cls : ''}"${
         p.start ? ` data-pos="${esc(p.pos)}"` : ''}>${esc(label)}</span></td>
-        <td class="tplayer"><span class="tp">${headshot(p, true)}<span><b>${esc(p.name)}</b><small>${esc(p.pos)}${statusText(p)}</small></span></span></td>
+        <td class="tplayer"><span class="tp">${headshot(p, true)}<span><b${pcAttr(p)}>${esc(p.name)}</b><small>${esc(p.pos)}${statusText(p)}</small></span></span></td>
         <td>${esc(p.team || '')}</td>${hasOpp ? `<td>${esc(p.opp || '')}</td>` : ''}<td class="tkick">${esc(kickText(p))}</td>
         <td class="tnum">${rankCell(p)}</td><td class="tnum">${proj !== null ? fmt(proj) : ''}</td><td class="tnum">${scored(p) ? scoreChip(p) : ''}</td></tr>`;
     };
@@ -2301,8 +2306,8 @@
   /* Game-day alerts, chosen per device by signed-in people. The server job
      sends them (SCC.alertsFor); sw.js shows them. */
   function alertsCard() {
-    const head = `<h3>Game-day alerts</h3><p class="fine">Titan can tell you when a starter is ruled out or in the news, and check
-      your lineups about 75 minutes before each kickoff, once inactives are out.</p>`;
+    const head = `<h3>Game-day alerts</h3><p class="fine">Titan can tell you when a starter is ruled out or in the news, check
+      your lineups about 75 minutes before each kickoff, once inactives are out, and remind you the evening before waivers run.</p>`;
     const card = inner => `<section class="card pad">${head}${inner}</section>`;
     if (!S.sync.user) return card('<p class="help">Sign in with Google above to turn them on.</p>');
     if (IS_IOS && !STANDALONE) {
@@ -2316,7 +2321,8 @@
       <span><b>${label}</b><small>${sub}</small></span></label></li>`;
     return card(`<ul class="lg-list">${box('out', 'Starter ruled out', 'Someone in your lineup is ruled out, doubtful or on IR, with who Titan would start instead, and his backup when he\'s a free agent')}
         ${box('check', 'Lineup check', 'About 75 minutes before each kickoff, one alert for all your leagues: a starter ruled out or on bye, or an empty spot')}
-        ${box('news', 'News about your starters', 'When ESPN posts a story about someone in your lineup, checked every 15 minutes. Tap the alert to read it')}</ul>
+        ${box('news', 'News about your starters', 'When ESPN posts a story about someone in your lineup, checked every 15 minutes. Tap the alert to read it')}
+        ${box('waivers', 'Waiver reminder', 'At 8 PM Eastern the evening before your Sleeper leagues\' waivers run, a reminder to go over Titan\'s waiver plan')}</ul>
       ${S.alertsError ? `<div class="banner stop">${esc(S.alertsError)}</div>` : ''}
       ${a.permission === 'denied' && !a.on ? '<p class="fine">Notifications are blocked for Titan in this browser. Allow them in the site settings, then try again.</p>' : ''}
       <div class="bar"><button class="btn${a.on ? ' ghost' : ''}" data-action="${a.on ? 'alerts-off' : 'alerts-on'}" ${S.alertsBusy ? 'disabled' : ''}>${
@@ -2325,7 +2331,7 @@
       ${a.on ? '<p class="fine">Alerts are on for this device. Send a test to check it shows them.</p>' : ''}`);
   }
 
-  const alertPrefs = () => Object.assign({out: true, check: true, news: true}, S.alerts && S.alerts.prefs);
+  const alertPrefs = () => Object.assign({out: true, check: true, news: true, waivers: true}, S.alerts && S.alerts.prefs);
 
   async function alertsToggle(on) {
     if (!S.sync.api || S.alertsBusy) return;
@@ -2661,15 +2667,104 @@
     found.sort((a, b) => proj(b) - proj(a) || a.name.localeCompare(b.name));
     return `<ul class="wlist">${found.slice(0, 6).map(p => {
       const st = leagues.map(L => ({L, s: wStatus(L, p)})), free = st.filter(x => x.s === 'free').length;
-      return `<li class="wrow">${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${esc(p.pos + ' · ' + p.team)} · free in ${free} of ${leagues.length}</small>
+      return `<li class="wrow">${headshot(p, true)}<span class="who"><b${pcAttr(p)}>${esc(p.name)}</b><small>${esc(p.pos + ' · ' + p.team)} · free in ${free} of ${leagues.length}</small>${usageLine(p.id, p.pos)}
         <span class="wchips">${st.map(x => `<span class="wst ${x.s}">${esc(x.L.cfg.key)}${x.s === 'mine' ? ' · yours' : x.s === 'taken' ? ' · taken' : ''}</span>`).join('')}</span></span></li>`;
     }).join('')}</ul>`;
+  }
+
+  // The last three finished weeks of Sleeper's stats, for each pickup's usage (SCC.usageOf). Loaded once a week per visit.
+  const USAGE_WEEKS = 3;
+  async function loadUsage() {
+    const W = S.waiv, wk = S.snap.week, weeks = [];
+    W.usageBusy = true;
+    for (let w = Math.max(1, wk - USAGE_WEEKS); w < wk; w++) weeks.push(w);
+    try { W.usage = {week: wk, list: await Promise.all(weeks.map(w => API.fetchStats(S.snap.season, w)))}; }
+    catch (e) { W.usage = {week: wk, list: [], error: true}; }
+    W.usageBusy = false;
+    if (S.ui.tab === 'waivers') render();
+  }
+
+  // One line of a player's recent usage: his share of the snaps (and whether it's rising), then per game what matters at his position.
+  function usageLine(id, pos) {
+    const U = S.waiv.usage;
+    if (!id || !U || !U.list.length || pos === 'K' || pos === 'DEF') return '';
+    const u = SCC.usageOf(U.list, id);
+    if (!u) return `<small class="wuse">No games in the last ${plural(U.list.length, 'week')}.</small>`;
+    const trend = u.trend === 'up' ? ' <span class="good" title="His snap share is rising">▲</span>'
+      : u.trend === 'down' ? ' <span class="amber" title="His snap share is falling">▼</span>' : '';
+    const bits = [u.snapPct !== null && `${u.snapPct}% snaps${trend}`, pos === 'RB' && `${u.car} car/g`, pos !== 'QB' && `${u.tgt} tgt/g`,
+      pos !== 'QB' && u.rz && `${u.rz} red zone/g`, `${u.pts} pts/g`].filter(Boolean);
+    return `<small class="wuse"><b>Last ${u.games === 1 ? 'game' : u.games + ' games'}:</b> ${bits.join(' · ')}</small>`;
+  }
+
+  // A season-long value for the plan's drops (SCC.waiverPlan): Titan's value (points above a replacement starter), then season projected points.
+  function planValue(cfg, p) {
+    const sp = S.trade.season && S.trade.season.map;
+    if (!sp || !Object.keys(sp).length) return 0;
+    const id = p.id || idByName(playerList(), p.name);
+    return id ? (titanValueFor(cfg)({id, pos: p.pos}) || 0) * 1000 + (SCC.projFor(sp, id, cfg.ppr) || 0) : 0;
+  }
+
+  // This week's plan choices: claims marked done and drops changed (S.ui.wplan, started over when the week turns).
+  function wPlan() {
+    const wk = S.snap ? S.snap.week : 0;
+    if (!S.ui.wplan || S.ui.wplan.week !== wk) S.ui.wplan = {week: wk, done: {}, drop: {}};
+    return S.ui.wplan;
+  }
+
+  // When a Sleeper league's waivers run: they process about 3 AM Eastern on its waiver day (Sleeper counts from Monday).
+  const WAIVER_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const waiverWhen = cfg => (cfg.platform || cfg.waiverDay === undefined ? '' : cfg.dailyWaivers ? 'waivers run daily'
+    : `waivers run early ${WAIVER_DAYS[cfg.waiverDay] || 'Wednesday'} morning`);
+
+  /* The week's waiver plan (SCC.waiverPlan): each league's claims with their usage and a bid, the drop Titan picks
+     for each (a dropdown to swap him), and a Done check per claim. */
+  function planCard(leagues, players, bid, budget) {
+    const plan = SCC.waiverPlan(leagues, {value: planValue}), P = wPlan();
+    if (!plan.length) {
+      return '<section class="card pad wsec"><h3>Your waiver plan</h3><p class="fine">No free agent your rankings rate above one of your starters right now.</p></section>';
+    }
+    let total = 0, ticked = 0;
+    const cards = plan.map(x => {
+      const cfg = x.cfg, bench = x.league.roster.filter(p => !p.start && !p.held);
+      const rows = x.claims.map(c => {
+        const key = cfg.id + '|' + SCC.norm(c.add.name), done = !!P.done[key];
+        total++;
+        if (done) ticked++;
+        const id = c.add.pos === 'DEF' ? '' : idByName(players, c.add.name), add = {id, name: c.add.name, pos: c.add.pos, team: c.add.team};
+        const opts = [c.drop, ...c.dropAlts].filter(Boolean);
+        bench.forEach(p => { if (!opts.includes(p)) opts.push(p); });
+        const picked = key in P.drop ? P.drop[key] : c.drop ? c.drop.id : '';
+        const nobody = x.open > 0 || !opts.length;
+        const sel = `<select data-wdrop="${esc(key)}" aria-label="Who to drop for ${esc(c.add.name)}">${nobody
+          ? `<option value=""${picked === '' ? ' selected' : ''}>Nobody (you have an open spot)</option>` : ''}${opts.map(p =>
+          `<option value="${esc(p.id)}"${p.id === picked ? ' selected' : ''}>${esc(p.name)} (${esc(rl(p) || p.pos)})${p === c.drop ? ', Titan\'s pick' : ''}</option>`).join('')}</select>`;
+        const notes = [c.thin && `${c.drop.name} is your only backup ${c.drop.pos}, but so is everyone else you could spare.`,
+          c.keep && `Titan values ${c.drop.name} more over the season than ${c.add.name}. Worth a second look.`].filter(Boolean);
+        const alts = c.alts.length ? ` · or ${c.alts.map(a => `${esc(a.name)} <small>${esc(rl(a))}</small>`).join(', ')}` : '';
+        return `<li class="wclaim${done ? ' done' : ''}">${headshot(add, true)}<div class="wc-main">
+          <div class="wc-add"><b${pcAttr(add)}>${esc(c.add.name)}</b> <small>${esc([c.add.pos, c.add.team, rl(c.add)].filter(Boolean).join(' · '))}</small>${bid(x.league, c.add.name)}</div>
+          ${usageLine(id, c.add.pos)}
+          <small class="wmeta">${c.over ? `For ${esc(c.over.name)} (${esc(rl(c.over))}) at ${esc(c.pos)}` : `At ${esc(c.pos)}`}${alts}</small>
+          <label class="wc-drop"><span>Drop</span>${sel}</label>${notes.map(n => `<small class="wnote">${esc(n)}</small>`).join('')}</div>
+          <button type="button" class="chip wc-done" data-wdone="${esc(key)}" aria-pressed="${done}">${done ? '✓ Done' : 'Done'}</button></li>`;
+      }).join('');
+      const whenRun = waiverWhen(cfg);
+      return `<li class="wlg"><div class="wlg-h">${leagueIcon(cfg, 'xs')}<b>${esc(cfg.key)}</b>${budget(x.league)}${
+        whenRun ? `<span class="wmeta">· ${esc(whenRun)}</span>` : ''}<span class="wlg-open">${openSite(cfg)}</span></div><ol class="wclaims">${rows}</ol></li>`;
+    });
+    return `<section class="card pad wsec wplan"><div class="wplan-h"><h3>Your waiver plan</h3><span class="wmeta">${ticked} of ${plural(total, 'claim')} done</span></div>
+      <p class="fine">Each claim is a free agent your rankings rate above one of your starters. The drop is the bench player Titan values least over the
+        season that you can spare: never someone on IR, and never your only backup at a position you start. Change it if you like, and tick Done once
+        the claim is in. Tap a name for his stats.</p><ul class="wlist">${cards.join('')}</ul></section>`;
   }
 
   function screenWaivers() {
     if (!S.snap || !S.A) return emptyState();
     const W = S.waiv, players = playerList(), leagues = S.A.leagues;
     if (!W.trend && !W.busy && !W.error) loadTrending();
+    if (!W.usageBusy && (!W.usage || W.usage.week !== S.snap.week)) loadUsage();
+    if (!S.trade.season) loadSeasonProj(); // season values, for the plan's drops
     leagues.forEach(L => {
       if (!L.cfg.faab || !onSleeper(L.cfg) || W.faab[L.cfg.id]) return;
       const d = (S.snap.leagues || []).find(x => x.cfg.id === L.cfg.id);
@@ -2687,10 +2782,6 @@
     };
     const budget = L => { const F = W.faab[L.cfg.id]; return F && F.data ? ` <span class="wmeta">$${F.data.left} of $${F.data.budget} left</span>` : ''; };
 
-    const targets = leagues.filter(L => L.wire && L.wire.length).map(L => `<li class="wlg"><div class="wlg-h">${leagueIcon(L.cfg, 'xs')}<b>${esc(L.cfg.key)}</b>${budget(L)}</div>
-      ${L.wire.map(w => `<div class="wline"><b>${esc(w.pos)}:</b> ${w.list.map(x => `${esc(x.name)} <small>${esc(rl(x))}</small>`).join(', ')}${
-        w.cur ? ` <small class="wmeta">for ${esc(w.cur.name)}</small>` : ''}${bid(L, w.list[0].name)}</div>`).join('')}</li>`);
-
     const charts = SCC.depthCharts(players), cuffs = [];
     leagues.forEach(L => L.roster.filter(p => p.start && p.inj).forEach(p => {
       const b = SCC.backupOf(players, p, charts);
@@ -2700,28 +2791,121 @@
     const trend = (W.trend || []).slice(0, 25).map(t => {
       const info = SCC.playerInfo(players, t.id), p = {id: t.id, name: info.name, pos: info.pos, team: info.team};
       const st = leagues.map(L => ({L, s: wStatus(L, p)})), free = st.filter(x => x.s === 'free'), mine = st.filter(x => x.s === 'mine').length;
-      return `<li class="wrow">${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))} · ${thousands(t.count)} adds in the last day</small>
+      return `<li class="wrow">${headshot(p, true)}<span class="who"><b${pcAttr(p)}>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))} · ${thousands(t.count)} adds in the last day</small>${usageLine(p.id, p.pos)}
         ${free.length ? `<details class="wfree"><summary>Free in ${free.length} of ${leagues.length}</summary><span class="wchips">${
           free.map(x => `<span class="wst free">${esc(x.L.cfg.key)}${bid(x.L, p.name)}</span>`).join('')}</span></details>`
           : `<small class="wmeta">Not free in any of your leagues${mine ? ` (yours in ${mine})` : ''}.</small>`}</span></li>`;
     });
 
     const anyFaab = leagues.some(L => L.cfg.faab && onSleeper(L.cfg));
-    let h = `<p class="lede">Pickups for every league: your rankings' waiver targets, backups for hurt starters, what Sleeper players are
-      adding, and where anyone is available.${anyFaab ? ' Where a league bids for players, Titan suggests a bid from its recent winning bids.' : ''}</p>
+    let h = `<p class="lede">Your waiver plan for every league, then backups for hurt starters, what Sleeper players are adding, and where anyone
+      is available.${anyFaab ? ' Where a league bids for players, Titan suggests a bid from its recent winning bids.' : ''}</p>
+      ${planCard(leagues, players, bid, budget)}
       <section class="card pad wsec"><h3>Where is he available?</h3>
         <label class="field"><span>A player's name</span><input type="search" data-waiver-search placeholder="At least three letters" value="${esc(W.q)}"
-          autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="wsearch">${waiverSearchResults()}</div></section>
-      <section class="card pad wsec"><h3>Your waiver targets</h3>${targets.length ? `<ul class="wlist">${targets.join('')}</ul>`
-        : '<p class="fine">No free agent your rankings rate above one of your starters right now.</p>'}</section>`;
+          autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="wsearch">${waiverSearchResults()}</div></section>`;
     if (cuffs.length) {
       h += `<section class="card pad wsec"><h3>Backups for your hurt starters</h3><ul class="wlist">${cuffs.map(c => `<li class="wline wcuff">
-        ${leagueIcon(c.L.cfg, 'xs')}<span><b>${esc(c.p.name)}</b> <span class="bad-text">(${esc(c.p.inj)})</span>: his backup <b>${esc(c.b.name)}</b> is free in
-        ${esc(c.L.cfg.key)}.${bid(c.L, c.b.name)}</span></li>`).join('')}</ul></section>`;
+        ${leagueIcon(c.L.cfg, 'xs')}<span><b>${esc(c.p.name)}</b> <span class="bad-text">(${esc(c.p.inj)})</span>: his backup <b${pcAttr(c.b)}>${esc(c.b.name)}</b> is free in
+        ${esc(c.L.cfg.key)}.${bid(c.L, c.b.name)}${usageLine(c.b.id, c.p.pos)}</span></li>`).join('')}</ul></section>`;
     }
     h += `<section class="card pad wsec"><h3>Trending pickups</h3><p class="fine">Sleeper's most-added players in the last day, and where each is free in your leagues.</p>${
       W.error ? `<div class="banner stop">${esc(W.error)}</div>` : !W.trend ? '<p class="fine">Loading…</p>' : `<ul class="wlist">${trend.join('')}</ul>`}</section>`;
     return h;
+  }
+
+  /* ---- The player card */
+
+  /* Tap a player's name (Lineups, Rosters, Matchup, Waivers) for his card: this week's game, his last four weeks and his
+     season so far from Sleeper's stats (API.fetchPlayerStats: snaps, targets, catches, carries, red-zone looks, air yards,
+     PPR points), and where he's free in your leagues. A <dialog> like the draft results': Back closes it. */
+  function playerDialog() {
+    if (PC) return PC;
+    PC = document.createElement('dialog');
+    PC.className = 'dlg pcard';
+    PC.setAttribute('aria-labelledby', 'pc-title');
+    document.body.appendChild(PC);
+    PC.addEventListener('click', e => {
+      if (e.target === PC || e.target.closest('[data-action="pcard-close"]')) PC.close(); // the ✕, or a tap outside the panel
+      else if (e.target.closest('[data-action="pcard-retry"]')) loadPlayerCard(S.pcard.id);
+    });
+    // Closing takes back the history entry opening added, unless Back is what closed it.
+    PC.addEventListener('close', () => {
+      if (!pcBack && history.state && history.state.pcard) history.back();
+      pcBack = false;
+    });
+    return PC;
+  }
+
+  function openPlayerCard(id) {
+    if (!id || !S.snap) return;
+    playerDialog();
+    S.pcard.id = id;
+    const C = S.pcard.cache[id];
+    if (!C || C.error) loadPlayerCard(id);
+    PC.innerHTML = playerCardHtml();
+    if (PC.open) return;
+    PC.showModal();
+    if (location.protocol !== 'file:') history.pushState(Object.assign({}, history.state, {pcard: 1}), '', location.href);
+  }
+
+  async function loadPlayerCard(id) {
+    S.pcard.cache[id] = {busy: true};
+    if (PC && PC.open && S.pcard.id === id) PC.innerHTML = playerCardHtml();
+    try { S.pcard.cache[id] = {data: await API.fetchPlayerStats(id, S.snap.season)}; }
+    catch (e) { S.pcard.cache[id] = {error: true}; }
+    if (PC && PC.open && S.pcard.id === id) PC.innerHTML = playerCardHtml();
+  }
+
+  // The card's columns by position; every table ends with PPR points. A kicker or defense shows points only.
+  const snapShare = s => (s.tsnp ? Math.round(s.snp / s.tsnp * 100) + '%' : '–');
+  const PC_REC = [['Snaps', snapShare], ['Tgt', 'tgt'], ['Rec', 'rec'], ['Yds', 'yd'], ['Air yds', 'ay'], ['RZ', 'rz']];
+  const PC_COLS = {
+    QB: [['Snaps', snapShare], ['Comp', s => s.cmp + '/' + s.att], ['Yds', 'pyd'], ['TD', 'ptd'], ['INT', 'int'], ['Rush yds', 'ryd']],
+    RB: [['Snaps', snapShare], ['Car', 'car'], ['Yds', 'ryd'], ['Tgt', 'tgt'], ['Rec', 'rec'], ['Rec yds', 'yd'], ['RZ', 'rz']],
+    WR: PC_REC, TE: PC_REC
+  };
+  const PC_SUM = ['gp', 'snp', 'tsnp', 'tgt', 'rec', 'yd', 'car', 'ryd', 'rz', 'ay', 'att', 'cmp', 'pyd', 'ptd', 'int', 'ppr'];
+
+  function playerCardHtml() {
+    const id = S.pcard.id, info = SCC.playerInfo(playerList(), id);
+    const mine = S.A ? S.A.leagues.map(L => L.roster.find(r => String(r.id) === id)).find(Boolean) : null;
+    const p = {id, name: info.name || (mine && mine.name) || 'Player', pos: info.pos || (mine && mine.pos) || '', team: info.team || (mine && mine.team) || ''};
+    const sub = [p.pos, p.team, mine && mine.inj].filter(Boolean).join(' · ');
+    const head = `<header class="dlg-h"><div class="dlg-t">${headshot(p)}<div><h2 id="pc-title">${esc(p.name)}</h2><p>${esc(sub)}</p></div></div>
+      <button type="button" class="dlg-x" data-action="pcard-close" aria-label="Close">✕</button></header>`;
+    // This week: his game and projection, and where he stands in each of your leagues.
+    const proj = SCC.projFor(S.proj, id, 1), opp = mine && mine.opp;
+    const week = [opp && 'vs ' + opp, teamKick(p.team), proj !== null && `projected ${fmt(proj)} PPR`].filter(Boolean).join(' · ');
+    let h = week ? `<p class="pc-week"><b>Week ${esc(S.snap.week)}:</b> ${esc(week)}</p>` : '';
+    if (S.A && S.A.leagues.length) {
+      h += `<div class="wchips pc-where">${S.A.leagues.map(L => { const s = wStatus(L, p); return `<span class="wst ${s}">${esc(L.cfg.key)}${
+        s === 'mine' ? ' · yours' : s === 'taken' ? ' · taken' : ' · free'}</span>`; }).join('')}</div>`;
+    }
+    const C = S.pcard.cache[id] || {busy: true};
+    if (C.busy) return `${head}<div class="dlg-body">${h}<p class="empty-note">Loading his stats…</p></div>`;
+    if (C.error) return `${head}<div class="dlg-body">${h}<div class="banner stop">Titan couldn't load his stats. <button class="link" data-action="pcard-retry">Try again</button></div></div>`;
+    const weeks = Object.keys(C.data).map(Number).filter(w => w <= S.snap.week && (C.data[w].gp || C.data[w].snp || C.data[w].ppr)).sort((a, b) => b - a);
+    if (!weeks.length) return `${head}<div class="dlg-body">${h}<p class="empty-note">No games for him yet this season.</p><p class="credit">Stats via Sleeper.</p></div>`;
+    const tot = {};
+    PC_SUM.forEach(k => { tot[k] = weeks.reduce((t, w) => t + (C.data[w][k] || 0), 0); });
+    const g = weeks.filter(w => C.data[w].gp || C.data[w].snp).length || weeks.length, per = n => fmt(n / g);
+    // Snap counts reach Sleeper's stats a while after the games; until they do, the snaps column and tile stay out.
+    const pcols = PC_COLS[p.pos] || [], snaps = tot.tsnp > 0, cols = pcols.filter(c => snaps || c[0] !== 'Snaps');
+    const main = p.pos === 'QB' ? [per(tot.pyd), 'pass yds a game'] : p.pos === 'RB' ? [per(tot.car + tot.tgt), 'carries and targets a game']
+      : pcols.length ? [per(tot.tgt), 'targets a game'] : null;
+    const tiles = [tile(g, g === 1 ? 'game' : 'games', 'muted'), snaps && pcols.length && tile(snapShare(tot), 'of the snaps', 'muted'),
+      main && tile(main[0], main[1], 'muted'), tile(per(tot.ppr), 'PPR points a game', 'muted')].filter(Boolean);
+    h += `<section class="tiles${tiles.length === 3 ? ' three' : tiles.length === 2 ? ' two' : ''}" aria-label="Season so far">${tiles.join('')}</section>`;
+    const cell = (c, s) => esc(typeof c[1] === 'function' ? c[1](s) : String(Math.round(s[c[1]] || 0)));
+    const live = w => w === Number(S.snap.week) && (gameOf(p.team) || {}).state === 'in_game' ? ' <small class="pc-live">live</small>' : '';
+    const row = (label, s, cls) => `<tr${cls ? ` class="${cls}"` : ''}><td>${label}</td>${cols.map(c => `<td class="tnum">${cell(c, s)}</td>`).join('')}<td class="tnum"><b>${fmt(s.ppr)}</b></td></tr>`;
+    h += `<div class="card table-wrap"><table class="rtable pctable"><thead><tr><th>Week</th>${cols.map(c => `<th class="tnum">${c[0]}</th>`).join('')}<th class="tnum">PPR</th></tr></thead>
+      <tbody>${weeks.slice(0, 4).map(w => row(`Week ${w}${live(w)}`, C.data[w])).join('')}${weeks.length > 1 ? row('Season', tot, 'pc-season') : ''}</tbody></table></div>`;
+    const n = weeks.length, notes = [n === 1 ? 'His only game so far.' : `His last ${n < 4 ? n + ' games' : 'four games'}, and the season so far.`,
+      cols.some(c => c[0] === 'RZ') && 'RZ counts targets and carries inside the 20.', !snaps && pcols.length && 'Sleeper hasn\'t posted snap counts for these games yet.'];
+    h += `<p class="fine">${notes.filter(Boolean).join(' ')}</p><p class="credit">Stats via Sleeper.</p>`;
+    return `${head}<div class="dlg-body">${h}</div>`;
   }
 
   /* ---- Standings */
@@ -2820,7 +3004,7 @@
     try { S.trade.season = {map: await API.fetchSeasonProjections(S.snap.season)}; }
     catch (e) { S.trade.season = {map: {}}; }
     S.trade.tv = {};
-    if (S.ui.tab === 'trade' || S.ui.tab === 'standings') render();
+    if (['trade', 'standings', 'waivers'].includes(S.ui.tab)) render();
   }
   function titanValueFor(cfg) {
     const sp = S.trade.season && S.trade.season.map;
@@ -3352,7 +3536,8 @@
 
   // Back and Forward move between screens, as on any website.
   window.addEventListener('popstate', () => {
-    // Back with draft results open closes them and stays on the screen.
+    // Back with a player's card or the draft results open closes them and stays on the screen.
+    if (PC && PC.open) { pcBack = true; PC.close(); return; }
     if (DLG && DLG.open) { dlgBack = true; DLG.close(); return; }
     const t = tabFromPath();
     if (t && t !== S.ui.tab) go(t, true);
@@ -3508,8 +3693,32 @@
     }
   });
 
+  // A player's name opens his card, from any screen (a tap, or Enter or Space on the keyboard).
+  document.addEventListener('click', e => {
+    const t = e.target.closest && e.target.closest('[data-pcard]');
+    if (t && !t.closest('dialog')) openPlayerCard(t.dataset.pcard);
+  });
+  document.addEventListener('keydown', e => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset && e.target.dataset.pcard && !e.target.closest('dialog')) {
+      e.preventDefault();
+      openPlayerCard(e.target.dataset.pcard);
+    }
+  });
+
+  // The waiver plan's Done check on each claim.
+  view.addEventListener('click', e => {
+    const t = e.target.closest('[data-wdone]');
+    if (!t) return;
+    const P = wPlan(), k = t.dataset.wdone;
+    if (P.done[k]) delete P.done[k];
+    else P.done[k] = 1;
+    saveUi();
+    render();
+  });
+
   view.addEventListener('change', e => {
     const t = e.target;
+    if (t.dataset.wdrop) { wPlan().drop[t.dataset.wdrop] = t.value; saveUi(); return; }
     if (t.dataset.ui === 'league') { S.ui.league = t.value; saveUi(); render(); }
     else if (t.dataset.ui === 'standLeague') { S.ui.standLeague = t.value; saveUi(); render(); }
     else if (t.dataset.ui === 'movesLeague') { S.ui.movesLeague = t.value; saveUi(); render(); }
@@ -3658,7 +3867,7 @@
   analyze();
   render();
   // A snapshot saved by an older version lacks what live scores and kickoff times need, so it's refreshed.
-  if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS || (S.snap.v || 0) < 3)) refresh();
+  if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS || (S.snap.v || 0) < 4)) refresh();
   else { loadProj(); scheduleLive(); }
   // Opened straight onto Results (its address, or the last screen used): score the week, as switching to it does.
   if (S.account && S.snap && S.ui.tab === 'score' && !S.score.busy && !S.score.data) loadScore(S.snap.week);

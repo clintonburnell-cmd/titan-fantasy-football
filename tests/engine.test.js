@@ -193,6 +193,46 @@ section('the rankings lab (Compare rankings, Titan\'s owner only)');
   check(SCC.rankCorrelation([1, 2, 3], [1, 2, 3]) === 1 && SCC.rankCorrelation([1, 2], [2, 1]) === null, 'a rank correlation needs three players');
 }
 
+section('the waiver plan, usage and the waiver reminder');
+{
+  const P = (id, name, pos, rank, x) => Object.assign({id, name, pos, team: 'KC', rank, start: false, held: false}, x);
+  const roster = [P('1', 'Q One', 'QB', 5, {start: true}), P('2', 'R A', 'RB', 10, {start: true}), P('3', 'R Start', 'RB', 40, {start: true}),
+    P('4', 'W A', 'WR', 12, {start: true}), P('5', 'W B', 'WR', 30, {start: true}), P('6', 'K One', 'K', 3, {start: true}),
+    P('7', 'Q Two', 'QB', 20), P('8', 'R C', 'RB', 90), P('9', 'W C', 'WR', 150), P('12', 'W D', 'WR', 120), P('10', 'K Two', 'K', 12),
+    P('11', 'R Hurt', 'RB', null, {held: true})];
+  const fa = (name, pos, rank) => ({name, pos, team: 'BUF', rank});
+  const wire = [{pos: 'RB', cur: roster[2], list: [fa('FA One', 'RB', 20), fa('FA Two', 'RB', 25)]},
+    {pos: 'FLEX', cur: roster[4], list: [fa('FA One', 'RB', 20), fa('FA Three', 'WR', 28)]}];
+  const cfg = {id: 'L', key: 'L', lineup: ['QB', 'RB', 'RB', 'WR', 'FLEX', 'K'], bench: 5};
+  const plan = SCC.waiverPlan([{cfg, roster, wire}]);
+  const c = plan[0].claims;
+  check(plan.length === 1 && plan[0].open === 0 && c.length === 2 && c[0].add.name === 'FA One' && c[0].over.name === 'R Start' && c[0].alts[0].name === 'FA Two',
+    'each league\'s claims come from its waiver targets, with the starter each beats and the next free agents as alternatives');
+  check(c[0].drop.name === 'W C' && c[0].dropAlts.map(p => p.name).join() === 'W D,R C' && !c[0].thin && c[1].add.name === 'FA Three' && c[1].drop.name === 'W D',
+    'drops: the bench player the rankings like least, never the only backup QB, a kicker for a running back or someone on IR; two claims never drop the same player, and a free agent is claimed once');
+  const roomy = SCC.waiverPlan([{cfg: Object.assign({}, cfg, {bench: 6}), roster, wire}])[0];
+  check(roomy.open === 1 && roomy.claims[0].drop === null && roomy.claims[0].dropAlts.length === 2 && roomy.claims[1].drop.name === 'W C',
+    'an open roster spot means the first claim needs no drop');
+  const lean = roster.filter(p => ['7', '10'].includes(p.id) || p.start);
+  const thin = SCC.waiverPlan([{cfg: Object.assign({}, cfg, {bench: 2}), roster: lean, wire: wire.slice(0, 1)}])[0].claims[0];
+  check(thin.drop.name === 'Q Two' && thin.thin, 'when every spare bench player is an only backup, Titan still names one and says so');
+  const byVal = SCC.waiverPlan([{cfg, roster, wire}], {value: (c, p) => ({'W C': 50, 'W D': 5})[p.name] || 0})[0].claims;
+  check(byVal[0].drop.name === 'R C' && byVal[0].dropAlts.map(p => p.name).join() === 'W D,W C' && !byVal[0].keep && byVal[1].drop.name === 'W D' && byVal[1].keep,
+    'with season values, the least valuable goes first (W C, ranked low this week, is safe), and a drop worth more than his claim is flagged');
+  check(SCC.waiverPlan([{cfg, roster, wire: []}]).length === 0, 'no waiver targets, nothing to plan');
+  const u = SCC.usageOf([{9: {gp: 1, snp: 40, tsnp: 60, tgt: 5, car: 2, rz: 1, ppr: 10}}, {}, {9: {gp: 1, snp: 54, tsnp: 60, tgt: 9, car: 0, rz: 2, ppr: 20}}], '9');
+  check(u.games === 2 && u.snapPct === 78 && u.tgt === 7 && u.car === 1 && u.rz === 1.5 && u.pts === 15 && u.trend === 'up' && SCC.usageOf([{}], '9') === null,
+    'usage: snap share, targets, carries and red-zone looks a game, and his snaps rising (67% to 90%)');
+  const lg = (waiverDay, x) => ({cfg: Object.assign({key: 'Lg ' + waiverDay, waiverDay}, x)});
+  const sentW = {};
+  const tue8 = SCC.waiverReminder([lg(2), lg(2), lg(2, {dailyWaivers: true}), lg(4), lg(undefined, {platform: 'espn'})], {week: 2, etDay: 2, etHour: 20, date: '2026-09-15', sent: sentW});
+  check(tue8.length === 1 && tue8[0].key === 'waiver|2|2026-09-15' && /2 of your leagues/.test(tue8[0].body) && tue8[0].url === '/app/waivers',
+    'Tuesday at 8 PM Eastern: one reminder for the leagues whose waivers run Wednesday (daily ones aside): ' + (tue8[0] || {}).body);
+  check(SCC.waiverReminder([lg(2)], {week: 2, etDay: 2, etHour: 20, date: '2026-09-15', sent: sentW}).length === 0 &&
+    SCC.waiverReminder([lg(2)], {week: 2, etDay: 2, etHour: 16, date: '2026-09-15', sent: {}}).length === 0 &&
+    SCC.waiverReminder([lg(2)], {week: 2, etDay: 1, etHour: 20, date: '2026-09-14', sent: {}}).length === 0, 'once a night, only at 8 PM, only the evening before');
+}
+
 section('bye-week needs');
 const P = (name, pos, bye, x) => Object.assign({id: name, name, pos, bye, inj: '', held: false}, x);
 const lg = {cfg: {key: 'T', name: 'Test', lineup: ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF']}, roster: [

@@ -118,11 +118,12 @@ async function alertUser(userRef, analysis, ctx) {
   const sent = {};
   for (const k in doc.sent || {}) if (k.split('|')[1] === String(ctx.week)) sent[k] = 1;
   const kicks = ctx.kickoffs || {};
+  const want = Object.assign({out: true, check: true, waivers: true}, doc.prefs || {});
   const list = SCC.alertsFor(analysis, {week: ctx.week, now: Date.now(), sent,
     kickoffs: [...new Set(Object.values(kicks).map(k => Number(k[0])))],
     kickAt: p => { const k = kicks[SCC.teamAbbr(p.team)]; return k ? Number(k[0]) : 0; },
     players: ctx.players, // depth charts, to name a ruled-out starter's free backup
-    want: Object.assign({out: true, check: true}, doc.prefs || {})});
+    want}).concat(want.waivers ? SCC.waiverReminder(analysis.leagues, {week: ctx.week, etDay: ctx.etDay, etHour: ctx.etHour, date: ctx.etDate, sent}) : []);
   // The starters the news check watches until the next alert check (newsAlerts).
   const watch = SCC.newsWatch(analysis);
   if (list.length) return deliver(ref, list, sent, {watch});
@@ -242,7 +243,8 @@ async function run() {
   const kicks = await ESPN.fetchKickoffs(season).catch(() => null);
   const kickoffs = {};
   for (const t in kicks || {}) if (kicks[t][week]) kickoffs[t] = kicks[t][week];
-  const ctx = {season, week, proj, players, kickoffs, freeze: gameDay};
+  // The day and hour in Eastern time, for the waiver reminder (8 PM the evening before waivers run).
+  const ctx = {season, week, proj, players, kickoffs, freeze: gameDay, etDay: et.getDay(), etHour: et.getHours(), etDate: today};
 
   const users = await db.collection('users').get();
   let done = 0, failed = 0, sent = 0;

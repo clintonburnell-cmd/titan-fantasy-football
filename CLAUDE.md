@@ -52,7 +52,10 @@ live site, so site changes reach it without a new upload. What's done and what's
   send Firebase Cloud Messaging data messages to the tokens in `users/{uid}/private/alerts`, and
   `sw.js` shows them. Keep each alert's key stable, or people get repeats: `out|week|league|player|tag`
   (names the starter's backup when he's a free agent there: depth chart order is index 3 of each
-  trimmed player), `check|week|kickoff` (one alert covering every league), `news|week|story|player`.
+  trimmed player), `check|week|kickoff` (one alert covering every league), `news|week|story|player`,
+  `waiver|week|date` (`SCC.waiverReminder`, pref `waivers`: at the 8 PM Eastern check the evening before a Sleeper
+  league's waivers run; Sleeper's `waiver_day_of_week` counts from Monday and claims process about 3 AM Eastern,
+  checked on real claims 2026-09-13; daily-waiver, ESPN and Yahoo leagues aren't counted).
 - Navigation: six sections (`SECTIONS` in `app.js`): Lineups, Matchup, League (Standings, Rosters,
   Trade, Transactions), Players (Waivers, News, Exposure, Byes) and Rankings (Import, which is the `ranks`
   screen, and Import multiple, which is `multi` at `/app/multiple`) and Results (the `score` screen), with Settings behind the gear (`#gear`). Phones, the Android app and home-screen
@@ -142,9 +145,21 @@ live site, so site changes reach it without a new upload. What's done and what's
   weeks of completed transactions (`API.leagueTransactions` → `SCC.transactionsFrom`), reloaded every
   five minutes while the tab is open. A league picker (`S.ui.movesLeague`, remembered) narrows the list; the kind chips'
   counts follow it. ESPN transactions aren't read yet (their format hasn't been checked on a real league).
-- The Waivers tab: rankings' wire targets (`L.wire`), free backups (`SCC.backupOf`), Sleeper's
+- The Waivers tab: the waiver plan (`planCard`, from `SCC.waiverPlan`, pure and tested: claims from the
+  rankings' wire targets `L.wire`, at most three a league, and a drop for each: the bench player with the
+  lowest season value (`planValue`: Titan's value, then season projected points, so a star on bye is
+  safe) that isn't on IR or the only bench player at a position the lineup starts; a dropdown swaps him;
+  Done and changed drops are `S.ui.wplan`, started over each week; `cfg.bench` counts open roster spots),
+  free backups (`SCC.backupOf`), Sleeper's
   trending adds (`API.trendingAdds`) with where each is free (`L.takenNorm`), a search, and bids
-  (`SCC.faabBid` from `API.leagueWaivers`: a Sleeper league's last six weeks of winning bids).
+  (`SCC.faabBid` from `API.leagueWaivers`: a Sleeper league's last six weeks of winning bids). Each pickup
+  shows a usage line (`usageLine`, `SCC.usageOf` over the last three finished weeks of `API.fetchStats`).
+- The player card (`openPlayerCard`): any element with `data-pcard` (`pcAttr`, players with a Sleeper id)
+  opens a `<dialog>` with the player's last four games and season from `API.fetchPlayerStats` (Sleeper's
+  per-player stats, `grouping=week`; `trimStat` in sleeper.js keeps what Titan shows). Back closes it, like
+  the draft results. Snap counts reach Sleeper's stats some time after a game, so the card hides them until
+  then. The UI test builds the demo a week ahead (it moves Sleeper's `/state/nfl` on one) so the plan has claims
+  on game days too.
 - Position strength (`SCC.positionStrength`, pure and tested): each team's best lineup this season
   by Sleeper's season projections (never FantasyCalc's, so everyone sees it), starters added up by
   position plus a quarter of the best bench player there, ranked across the league; top third 'deep',

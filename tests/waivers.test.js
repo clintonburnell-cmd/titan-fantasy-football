@@ -49,5 +49,15 @@ section('Sleeper: trending adds and a league\'s waiver budget');
   const late = await API.leagueWaivers({id: '9', faab: 100}, 1, 12);
   check(asked.filter(u => /transactions\/\d+$/.test(u)).map(u => u.split('/').pop()).slice(-6).join() === '7,8,9,10,11,12' && late.left === 73,
     'only the last six weeks of claims');
+
+  section('Sleeper: stats for usage and the player card');
+  replies['stats/nfl/player/'] = {'1': {stats: {pts_ppr: 12.5, off_snp: 40, tm_off_snp: 60, rec_tgt: 6, rec: 4, rec_yd: 55, rec_rz_tgt: 1, rush_rz_att: 1,
+    rec_air_yd: 70, gp: 1}}, '2': null};
+  replies['stats/nfl/2026/'] = [{player_id: 9, stats: {pts_ppr: 20, off_snp: 54, tm_off_snp: 60, rush_att: 15, gp: 1}}, {player_id: 10}];
+  const pw = await API.fetchPlayerStats('9', '2026');
+  check(pw['1'].snp === 40 && pw['1'].tsnp === 60 && pw['1'].tgt === 6 && pw['1'].rz === 2 && pw['1'].ay === 70 && pw['1'].ppr === 12.5 && !('2' in pw) &&
+    asked.some(u => /stats\/nfl\/player\/9\?.*season=2026.*grouping=week/.test(u)), 'a player\'s season week by week: snaps, targets, red-zone looks, air yards, points; a bye week left out');
+  const wk = await API.fetchStats('2026', 1);
+  check(wk['9'].car === 15 && wk['9'].snp === 54 && wk['9'].ppr === 20 && !wk['10'], 'a week\'s stats for everyone, trimmed the same way');
   T.done();
 })().catch(T.crash);

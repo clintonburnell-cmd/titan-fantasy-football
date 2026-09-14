@@ -104,8 +104,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   if (!page) throw new Error('Chrome did not start');
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise(r => ws.addEventListener('open', r));
-  let seq = 0;
+  let seq = 0, bumpWeek = false; // bumpWeek: the demo's section moves Sleeper's NFL week on one, so no game has started
   const pending = {}, problems = [];
+  const ESPN_PATTERNS = [{urlPattern: '*fantasy.espn.com*leagues*'}, {urlPattern: '*fantasy.espn.com*players*'}];
   const send = (method, params = {}) => new Promise(r => { const id = ++seq; pending[id] = r; ws.send(JSON.stringify({id, method, params})); });
   ws.addEventListener('message', e => {
     const m = JSON.parse(e.data);
@@ -115,6 +116,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     if (m.method === 'Fetch.requestPaused') {
       const url = m.params.request.url;
       const headers = [{name: 'access-control-allow-origin', value: ORIGIN}, {name: 'content-type', value: 'application/json'}];
+      // Sleeper's NFL week, a week on (bumpWeek) when there's one to move to: Sleeper's real answer otherwise.
+      if (url.includes('api.sleeper.app/v1/state/nfl')) {
+        fetch(url).then(r => r.json()).then(s => {
+          const w = Number(s.week);
+          if (bumpWeek && w >= 1 && w < 18) s = Object.assign({}, s, {week: w + 1, display_week: w + 1, leg: w + 1});
+          send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(s)).toString('base64')});
+        }, () => send('Fetch.continueRequest', {requestId: m.params.requestId}));
+        return;
+      }
       // The browser's CORS check before a request with ESPN's week-filter header.
       if (m.params.request.method === 'OPTIONS') {
         send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: 204, body: '', responseHeaders: [
@@ -139,7 +149,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   await send('Page.enable');
   await send('Runtime.enable');
-  await send('Fetch.enable', {patterns: [{urlPattern: '*fantasy.espn.com*leagues*'}, {urlPattern: '*fantasy.espn.com*players*'}]});
+  await send('Fetch.enable', {patterns: ESPN_PATTERNS});
   // TITAN_SHOTS=<folder> saves screenshots of new screens there (phone and computer widths, both themes).
   const shot = async name => {
     if (!process.env.TITAN_SHOTS) return;
@@ -506,6 +516,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await tab('lineups');
   check(await ev(`document.getElementById('dot-players').hidden`), 'and it stays out on other screens until a new pickup turns up');
 
+  T.section('the waiver plan and the player card');
+  await tab('waivers');
+  check(await waitFor(`/Your waiver plan/.test(document.getElementById('view').textContent)`, 5000), 'the waiver plan leads the Waivers tab (its claims are checked in the demo)');
+  await tab('lineups');
+  await ev(`document.querySelector('.lineup [data-pcard]').click(); true`);
+  check(await waitFor(`!!document.querySelector('dialog.pcard[open]') && location.pathname === '/app/lineups'`, 3000), 'tapping a starter\'s name opens his card');
+  check(await waitFor(`!!document.querySelector('dialog.pcard .pctable') || /No games for him/.test(document.querySelector('dialog.pcard').textContent)`, 20000),
+    'his stats load from Sleeper: ' + await ev(`(document.querySelector('dialog.pcard .dlg-body') || {}).textContent.replace(/\\s+/g, ' ').trim().slice(0, 120)`));
+  await shot('player-card');
+  await ev(`history.back(); true`);
+  check(await waitFor(`!document.querySelector('dialog.pcard[open]') && location.pathname === '/app/lineups'`, 3000), 'Back closes the card and stays on Lineups');
+
   T.section('the Standings tab');
   await tab('standings');
   check(await waitFor(`document.querySelectorAll('table.stand tbody tr').length === 10`, 30000), 'every team in the league is listed');
@@ -645,14 +667,30 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   }
 
   T.section('the demo');
+  // Built a week ahead, before any of that week's games, so its leagues have waiver upgrades for the plan on any day.
+  bumpWeek = true;
+  await send('Fetch.enable', {patterns: [...ESPN_PATTERNS, {urlPattern: '*api.sleeper.app/v1/state/nfl*'}]});
   await send('Page.navigate', {url: ORIGIN + '/app/?demo'});
   check(await waitFor(`document.querySelectorAll('.card.league').length === 2`, 90000), 'Try a demo builds two sample leagues');
   const demo = await ev(`({note: !!document.querySelector('.demo-note'), names: [...document.querySelectorAll('.card.league h3')].map(h => h.innerText).join(', '),
     sync: [...document.scripts].some(s => /sync\\.js/.test(s.src)), open: document.querySelectorAll('.card.league a.open-site').length})`);
   check(demo.note && /Demo League/.test(demo.names) && !demo.sync && demo.open === 0,
     `${demo.names}, with the demo note, no sign-in and no Open in Sleeper button`);
+  // The demo's leagues have waiver upgrades, so its Waivers tab shows the plan's claims.
+  await tab('waivers');
+  check(await waitFor(`document.querySelectorAll('.wclaim').length > 0`, 20000), 'the waiver plan lists claims: ' +
+    await ev(`[...document.querySelectorAll('.wclaim .wc-add b')].map(b => b.textContent).join(', ')`));
+  const pick = await ev(`(() => { const s = document.querySelector('[data-wdrop]'); return s && s.selectedOptions[0] ? s.selectedOptions[0].textContent : ''; })()`);
+  check(/Titan's pick|Nobody/.test(pick), 'each claim names the drop Titan picks, in a list to change him: ' + pick);
+  await ev(`document.querySelector('[data-wdone]').click(); true`);
+  check(await waitFor(`document.querySelector('[data-wdone]').getAttribute('aria-pressed') === 'true' && /1 of \\d+ claims? done/.test(document.querySelector('.wplan').textContent)`, 3000),
+    'Done ticks a claim off: ' + await ev(`document.querySelector('.wplan-h .wmeta').textContent`));
+  await shot('waivers-plan');
+  await ev(`document.querySelector('[data-wdone]').click(); true`);
   await tab('matchup');
   check(/need your real leagues/.test(await text('#view')), 'Matchup explains it needs real leagues');
+  bumpWeek = false;
+  await send('Fetch.enable', {patterns: ESPN_PATTERNS});
   await send('Page.navigate', {url: ORIGIN + '/app/'});
   // The real app reopens on the tab it was last on there, so go to Lineups first.
   await waitFor(`!!document.querySelector('#tabs:not([hidden])')`, 30000);
