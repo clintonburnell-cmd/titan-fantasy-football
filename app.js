@@ -1966,7 +1966,27 @@
     });
     const none = view.querySelector('[data-value-none]');
     if (none) none.hidden = any;
+    pinValueHeads();
   }
+
+  /* The value report's header rows follow the page. Each table sits in a box that scrolls sideways (phones), so
+     position: sticky can't pin its header to the page; instead, as the page scrolls past a table, its header row is
+     moved down (translateY) to sit just under Titan's header, and stops at the table's end. */
+  let pinFrame = 0;
+  function pinValueHeads() {
+    pinFrame = 0;
+    if (S.ui.tab !== 'value') return;
+    const bar = document.querySelector('.top'), top = bar ? bar.getBoundingClientRect().bottom : 0;
+    view.querySelectorAll('.vr-scroll').forEach(box => {
+      const cells = box.querySelectorAll('thead th');
+      if (!cells.length) return;
+      const shift = Math.max(0, Math.min(top - box.getBoundingClientRect().top, box.clientHeight - cells[0].offsetHeight));
+      cells.forEach(th => { th.style.transform = shift > 0 ? `translateY(${Math.round(shift)}px)` : ''; });
+    });
+  }
+  const pinSoon = () => { if (!pinFrame) pinFrame = requestAnimationFrame(pinValueHeads); };
+  window.addEventListener('scroll', pinSoon, {passive: true});
+  window.addEventListener('resize', pinSoon);
 
   // where(row): who has him in the picked league (a Where column), or null under All leagues.
   function valueTable(rows, filtered, where) {

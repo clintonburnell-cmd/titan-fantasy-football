@@ -844,17 +844,21 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await vsearch('zzzz');
   check(await ev(`!document.querySelector('[data-value-none]').hidden`), 'when nobody matches, it says so');
   await vsearch('');
-  const sticky = await ev(`(() => { const th = document.querySelector('.vr-t thead th'), td = document.querySelector('.vr-t tbody td'), box = document.querySelector('.vr-scroll');
-    return [getComputedStyle(th).position, getComputedStyle(td).position, getComputedStyle(box).overflowY].join(' '); })()`);
-  check(sticky === 'sticky sticky auto', 'each table scrolls in its own box, its header row and player column pinned: ' + sticky);
-  // Scrolled down and across, the long table's header row stays at the top of its box and the player column at its left.
-  const pinned = await ev(`(() => { const box = [...document.querySelectorAll('.vr-scroll')].pop(); box.scrollTop = 400; box.scrollLeft = 200;
-    const b = box.getBoundingClientRect(), th = box.querySelector('thead th:nth-child(5)').getBoundingClientRect(), td = box.querySelector('tbody tr:nth-child(20) td').getBoundingClientRect();
-    return {down: box.scrollTop, across: box.scrollLeft, head: Math.round(th.top - b.top), name: Math.round(td.left - b.left)}; })()`);
-  check(pinned.down > 0 && pinned.across > 0 && Math.abs(pinned.head) <= 2 && Math.abs(pinned.name) <= 2,
-    `scrolled ${pinned.down}px down and ${pinned.across}px across, the header row stays at the top of the box (${pinned.head}px) and the player column at its left (${pinned.name}px)`);
-  await ev(`[...document.querySelectorAll('.vr-scroll')].pop().scrollIntoView({block: 'start'}); true`);
+  // Scrolling the page down the long table keeps its header row just under Titan's header, and scrolling the table
+  // across keeps the player column at its left; past the table's end, the header row stays inside it.
+  const scrollPage = y => ev(`(() => { window.scrollTo(0, ${y}); return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))); })()`);
+  const lastBox = `[...document.querySelectorAll('.vr-scroll')].pop()`;
+  await scrollPage(Math.round(await ev(`${lastBox}.getBoundingClientRect().top + scrollY + 600`)));
+  const pinned = await ev(`(() => { const box = ${lastBox}; box.scrollLeft = 200;
+    const bar = document.querySelector('.top').getBoundingClientRect().bottom, b = box.getBoundingClientRect(),
+      th = box.querySelector('thead th:nth-child(5)').getBoundingClientRect(), td = box.querySelector('tbody tr:nth-child(20) td').getBoundingClientRect();
+    return {into: Math.round(bar - b.top), across: box.scrollLeft, head: Math.round(th.top - bar), name: Math.round(td.left - b.left)}; })()`);
+  check(pinned.into > 300 && pinned.across > 0 && Math.abs(pinned.head) <= 2 && Math.abs(pinned.name) <= 2,
+    `${pinned.into}px down the table, its header row sits right under Titan's header (${pinned.head}px); ${pinned.across}px across, the player column stays at its left (${pinned.name}px)`);
   await shot('value-report-scrolled');
+  await scrollPage(Math.round(await ev(`${lastBox}.getBoundingClientRect().bottom + scrollY + 200`)));
+  check(await ev(`(() => { const box = ${lastBox}; return box.querySelector('thead th').getBoundingClientRect().bottom <= box.getBoundingClientRect().bottom + 1; })()`),
+    'past the table\'s end, its header row stays inside the table');
   check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'it fits a 390px phone (the tables scroll in their own boxes)');
   await shot('value-report');
   await pickLeague('all');

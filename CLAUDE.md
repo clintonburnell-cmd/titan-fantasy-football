@@ -236,9 +236,10 @@ live site, so site changes reach it without a new upload. What's done and what's
   dropdown (`value` is in `LEAGUE_SCREENS`): a league picked there shows only its moves, the lists in its own format and
   a Where column (Yours, the team, or Free agent); under All leagues, format chips (`S.ui.valueFmt`) pick the lists and
   put that format's leagues first. A player search (`data-value-search`, `S.value.q`) and the position chips filter
-  the moves and tables in place (`applyValueFilter`, which `render` re-applies). Each table scrolls in its own box
-  (`.vr-scroll`) with its header row and player column pinned (sticky can't follow the page out of a box that scrolls
-  sideways). Never add FantasyCalc's numbers to anything someone other than the owner can see.
+  the moves and tables in place (`applyValueFilter`, which `render` re-applies). Each table sits in a box that scrolls
+  sideways (`.vr-scroll`) with the player column pinned; its header row follows the page down to the table's end
+  (`pinValueHeads` moves it on scroll: sticky can't follow the page out of a box that scrolls sideways). Never add
+  FantasyCalc's numbers to anything someone other than the owner can see.
 - Import multiple sources (`screenMulti`): `SCC.combineRanks` (pure, tested) combines each position on
   its own (a source missing a player counts him one below its last there, weights 1x to 3x) and fits RB,
   WR and TE onto one FLEX list from the sources that have an overall list (`opts.curve`, Titan's default
