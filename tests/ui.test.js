@@ -879,6 +879,24 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'without the owner account it hides again');
   await tab('lineups');
 
+  // Screenshots of every screen at phone and computer widths (TITAN_SHOTS only), to compare a change to the whole app's look.
+  if (process.env.TITAN_SHOTS) {
+    T.section('a tour of every screen (screenshots only)');
+    const TOUR = ['lineups', 'matchup', 'standings', 'rosters', 'trade', 'moves', 'waivers', 'news', 'exposure', 'byes', 'score', 'ranks', 'multi', 'settings'];
+    for (const [w, h, dpr, mobile] of [[390, 844, 2, true], [1280, 900, 1, false]]) {
+      await send('Emulation.setDeviceMetricsOverride', {width: w, height: h, deviceScaleFactor: dpr, mobile});
+      for (const t of TOUR) {
+        await tab(t);
+        await sleep(1500);
+        await ev('window.scrollTo(0, 0); true');
+        await shot(`tour-${w}-${t}`);
+      }
+    }
+    await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 2, mobile: true});
+    await tab('lineups');
+    check(true, `${TOUR.length} screens photographed at 390px and 1280px`);
+  }
+
   T.section('who the website sends to the app');
   const go = async url => { await send('Page.navigate', {url: ORIGIN + url}); await sleep(1500); return ev('location.pathname + location.search'); };
   check(await go('/') === '/' && await ev('!!document.querySelector(".hero h1")'), 'someone already using Titan who opens / still sees the website');

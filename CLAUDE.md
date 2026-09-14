@@ -240,14 +240,20 @@ live site, so site changes reach it without a new upload. What's done and what's
   sideways (`.vr-scroll`) with the player column pinned; its header row follows the page down to the table's end
   (`pinValueHeads` moves it on scroll: sticky can't follow the page out of a box that scrolls sideways). Never add
   FantasyCalc's numbers to anything someone other than the owner can see.
-- Type: the Value report uses Inter (`fonts/inter-latin-wght.woff2`, fontsource's Latin variable build, SIL Open Font
+- Type: the app (`body.app-page`; the website keeps the system font) uses Inter (`fonts/inter-latin-wght.woff2`, fontsource's Latin variable build, SIL Open Font
   License in `fonts/OFL.txt`; keep the license beside it). Titan serves it itself, so no browser asks Google or anyone
   else for it: never switch to a font CDN (the privacy policy and Play's Data safety form say the app shares nothing).
   It's in `SHELL` in `sw.js`. Its type scale sits on `.vr-page` (`display: contents`, so the main view's grid gap still
   spaces the sections): four sizes (12, 14, 17 and 26px, tables 13px on phones) and three weights (400, 600, 700), same-
   width numbers only in tables and tile numbers (Inter's tabular setting widens hyphens in running text), small
-  uppercase table headers. The rest of the app still uses the system font; rolling Inter out app-wide means moving these
-  rules from `.vr-page` to the app and checking every screen at 390px and 1280px.
+  uppercase table headers. App-wide (v1.28.0): Inter for all text, weights capped at 700 by the `@font-face` range (the
+  stylesheet's 800s and 900s draw at 700), report-style headers on the data tables (`.rtable`, `.stand`, `.pstr`,
+  `.season-t`), and `font-size-adjust: 0.5` on `body.app-page` (Inter's x-height is 0.546 of its size, Segoe UI's 0.5:
+  drawn at Segoe UI's, the phone layouts keep the room they were fitted for; `.vr-page` opts out). Each screen keeps its
+  own tuned sizes. Inter's same-width setting (`tabular-nums`) also changes the space, hyphen, colon, period, comma and
+  brackets, so set it on number cells, not on blocks with words; where a block is set same-width, its words go back to
+  normal (`body.app-page :is(...)` in styles.css). Standings sets it on `.tnum` cells only. For any change to the app's look, run the UI test with `TITAN_SHOTS` before and after: its screen
+  tour photographs all 14 screens at 390px and 1280px (`tour-<width>-<screen>.png`) to compare.
 - Import multiple sources (`screenMulti`): `SCC.combineRanks` (pure, tested) combines each position on
   its own (a source missing a player counts him one below its last there, weights 1x to 3x) and fits RB,
   WR and TE onto one FLEX list from the sources that have an overall list (`opts.curve`, Titan's default

@@ -833,18 +833,33 @@ details.match[open] .mh-score { display: none; }
 .pc-live { color: var(--ok); font-weight: 800; text-transform: uppercase; font-size: .66rem; }
 
 /* Inter (rsms/inter, via fontsource; SIL Open Font License, fonts/OFL.txt), Latin only, served from Titan's own site
-   so no visitor's browser asks Google or anyone else for it. For now only the Value report uses it (.vr-page). */
+   so no visitor's browser asks Google or anyone else for it. The app uses it (body.app-page); the website keeps the
+   system font. Declared up to 700 only, so the stylesheet's 800s and 900s draw at Inter's bold (700), not heavier. */
 @font-face {
-  font-family: "Inter Titan"; src: url("/fonts/inter-latin-wght.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap;
+  font-family: "Inter Titan"; src: url("/fonts/inter-latin-wght.woff2") format("woff2"); font-weight: 100 700; font-style: normal; font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
     U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+
+/* The whole app in Inter (buttons and fields follow: they inherit the font). Inter's lowercase stands taller than the
+   system fonts the screens were fitted to (x-height 0.546 of its size against Segoe UI's 0.5), so font-size-adjust
+   draws it at Segoe UI's x-height: every phone layout keeps the room it was tuned for. The Value report opts out. */
+body.app-page { font-family: "Inter Titan", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; font-size-adjust: 0.5; }
+/* The app's data tables get the report look: small uppercase semibold headers. The draft board's headers are team
+   names, so they stay as they are. */
+body.app-page :is(.rtable, .stand, .pstr, .season-t) th { text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+/* Inter's same-width setting changes more than digits: the space, hyphen, colon, period, comma and brackets too, so
+   words inside it get gappy ("0 - 0", "sell - high"). Where a whole block is set same-width, its words go back to
+   normal; Standings keeps same-width numbers only in its number cells (records like 3-1 read better proportional). */
+body.app-page :is(.season-t td:first-child, .season-t th:first-child, .season-t small, .byes th, .byes td:first-child, .vr-t .vr-p, .vr-t .vr-w,
+  .tlineup, .sres, .tval small, .dval small, .stand) { font-variant-numeric: normal; }
+body.app-page :is(.stand .tnum, .stand .st-odds b) { font-variant-numeric: tabular-nums; }
 
 /* The Value report's type: Inter with same-width numbers; four sizes (12px labels and secondary lines, 14px text and
    tables, 17px titles, 26px tile numbers) and three weights (400 text, 600 names and emphasis, 700 titles). The search
    box keeps its 16px text (iPhones zoom into smaller inputs). */
 /* display: contents keeps the page's sections spaced by the main view's grid gap; the wrapper only passes the type down. */
-.vr-page { display: contents; --vr-xs: 12px; --vr-sm: 14px; --vr-md: 17px; --vr-lg: 26px;
+.vr-page { display: contents; font-size-adjust: none; --vr-xs: 12px; --vr-sm: 14px; --vr-md: 17px; --vr-lg: 26px;
   font-family: "Inter Titan", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   font-size: var(--vr-sm); line-height: 1.5; }
 /* Same-width numbers only where numbers line up (Inter's tabular setting also widens hyphens in running text). */
