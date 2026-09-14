@@ -283,8 +283,9 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
 .acct-menu p { color: var(--muted); font-size: .78rem; padding: 6px 10px 8px; border-bottom: 1px solid var(--line); margin-bottom: 4px;
   overflow: hidden; text-overflow: ellipsis; }
-.acct-menu button { text-align: left; border: 0; background: none; color: var(--text); padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: .88rem; }
-.acct-menu button:hover { background: var(--surface-2); }
+.acct-menu button, .acct-menu a { display: block; text-align: left; border: 0; background: none; color: var(--text); padding: 8px 10px; border-radius: 8px;
+  cursor: pointer; font-size: .88rem; text-decoration: none; }
+.acct-menu button:hover, .acct-menu a:hover { background: var(--surface-2); }
 
 /* ----------------------------------------------------- the website look
    Wide browser windows (computers and tablets) get the website's look: a

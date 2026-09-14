@@ -673,6 +673,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     `a computer gets the website look: a menu with the section underlined, one league per row (${desk.width}px), a three-column footer, the Titan beside the page, the tip jar at the bottom`);
   check(await waitFor(`!document.getElementById('acct').hidden && getComputedStyle(document.getElementById('acct')).display === 'block' &&
     /Sign in/.test(document.getElementById('acct').innerText)`, 20000), 'the header offers Sign in at the top right');
+  // Signed in (a stand-in account, shown only): the menu at the top right has Settings, then Guides, then Sign out.
+  await ev(`window.TitanApp.setSync({user: {name: 'Test Person', email: 'test@example.com', photo: ''}}); true`);
+  await ev(`document.querySelector('#acct [data-acct="menu"]').click(); true`);
+  const acctItems = await ev(`[...document.querySelectorAll('#acct .acct-menu [role="menuitem"]')].map(x => x.textContent.trim() + (x.getAttribute('href') ? ' ' + x.getAttribute('href') : '')).join(' | ')`);
+  check(acctItems === 'Settings | Guides /guides/ | Sign out', `the account menu at the top right: ${acctItems}`);
+  await ev(`window.TitanApp.setSync({user: null}); true`);
   // Themes: white and blue by default; the header switch turns on dark mode, remembered on the device.
   const bodyBg = () => ev(`getComputedStyle(document.body).backgroundColor`);
   check(await ev(`!document.documentElement.dataset.theme`) && /243, 246, 252/.test(await bodyBg()), 'white and blue by default: ' + await bodyBg());

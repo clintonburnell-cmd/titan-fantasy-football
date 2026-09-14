@@ -2429,7 +2429,7 @@
   }
 
   /* Computers: the signed-in person at the top right with a small menu
-     (Settings, Sign out), or a Sign in button. Phones use Settings. */
+     (Settings, Guides, Sign out), or a Sign in button. Phones use Settings. */
   function paintAccount() {
     const el = $('acct');
     if (!el) return;
@@ -2441,6 +2441,7 @@
           ? `<img src="${esc(u.photo)}" alt="" width="28" height="28" referrerpolicy="no-referrer">` : avatar('', 28)}<span>${esc(u.name || 'Account')}</span></button>
         <div class="acct-menu" role="menu" hidden><p>${esc(u.email || '')}</p>
           <button type="button" role="menuitem" data-acct="settings">Settings</button>
+          <a role="menuitem" href="/guides/">Guides</a>
           <button type="button" role="menuitem" data-acct="signout">Sign out</button></div>`
       : '<button type="button" class="btn ghost small" data-acct="signin">Sign in</button>';
   }

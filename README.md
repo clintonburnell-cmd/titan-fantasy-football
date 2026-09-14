@@ -143,7 +143,7 @@ league chips wrap instead of scrolling (on wider windows the page grows to 1280p
 Matchup, Rosters and Results list the leagues down the left side, like Sleeper's website, with the filters
 still on top), Settings sits
 in two columns, Rosters show as tables, the footer has three columns of links above the tip
-jar, the Google account sits at the top right with Settings and Sign out, rows light up under the
+jar, the Google account sits at the top right with Settings, Guides and Sign out, rows light up under the
 pointer, and on wide windows the Titan art sits faded to the right. Phones, the Android app and
 home-screen copies keep the app look.
 
@@ -373,6 +373,7 @@ No build step and no dependencies. It runs on any static host.
 | `v1.19.1` | The Players dot works like a notification: it marks waiver pickups you haven't seen on Waivers yet, clears once you open Waivers, and comes back only for a new pickup (remembered on each device) |
 | `v1.19.2` | Trade tab: both rosters sort by value, by position, or by position then value (with position headers when grouped, remembered), and every player shows Titan's colored position tag on the rosters, in the trade and in Who has him? |
 | `v1.19.3` | Position strength: every team's rank at each position by its best lineup this season (Sleeper's projections, a little credit for bench depth), shown on Standings with the top third green and the bottom third red, and on the Trade tab as "Where you both stand" for you and your partner, with the good fits called out; the Trade tab also gets Clear all and a partner picker on the partner's roster card |
+| `v1.24.2` | Guides in the account menu at the top right on computers, under Settings |
 | `v1.24.1` | Three new guides for search (combining rankings, draft grades, trade help), linked from the guides page, the import and Sleeper guides, and the sitemap |
 | `v1.24.0` | Compare rankings for Titan's owner (Sleeper's projections, FantasyCalc and the owner's imports tested each week by lineup points and order, from a FantasyCalc snapshot the server saves before each week's games); the website, import guide, FAQ, sitemap and Play listing brought up to date (draft results, combining rankings, news, alerts, waivers, won or lost on Results) |
 | `v1.23.0` | Results becomes its own section (a sixth button on phones, a menu tab on computers) and a cleaner screen: week arrows that load on their own, a week summary (points, record, what your rankings would have scored, points left on the bench, close calls), the bench's biggest misses, Season so far with a column chart and its table, won or lost with both scores in every league (ESPN too), and the explanations in one fold |
