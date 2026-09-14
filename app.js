@@ -133,7 +133,7 @@
     season: store.get(KEY.season) || null, seasonBusy: false,
     // Compare rankings (Titan's owner only): each week's test, kept on this device once its games are over (loadLab).
     lab: store.get(KEY.lab) || null, labBusy: false, labAt: 0, labError: '',
-    value: {busy: false, data: null, error: '', at: 0}, // the value report (Titan's owner only), from the owner's PC
+    value: {busy: false, data: null, error: '', at: 0, q: ''}, // the value report (Titan's owner only), from the owner's PC; q: its player search
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
@@ -470,6 +470,7 @@
     // On a wide computer window Lineups, Matchup, Rosters and Results put their leagues down the left side.
     view.innerHTML = sideItems ? `<div class="with-side">${sideNav(sideItems)}<div class="side-main">${body + yahooCredit()}</div></div>` : body + yahooCredit();
     if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
+    if (S.ui.tab === 'value') applyValueFilter();
     spySide();
     syncUrl(false);
     // Values or teams that arrive while draft results are open show there too.
@@ -1938,6 +1939,35 @@
   }
 
   const VALUE_POS = ['ALL', 'QB', 'RB', 'WR', 'TE'];
+  /* The value report's filters, applied in place (no redraw, so the search box keeps its cursor and open leagues stay
+     open; render re-applies them): the player search (name, team or position) over the leagues' moves and every table,
+     and the position chips over the table of every player. A league or table with nothing matching hides. */
+  function applyValueFilter() {
+    const q = SCC.norm(S.value.q || '').trim(), vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
+    const hit = el => !q || el.dataset.find.indexOf(q) >= 0;
+    let any = !q;
+    view.querySelectorAll('.vr-lg').forEach(card => {
+      let n = 0;
+      card.querySelectorAll('li[data-find]').forEach(li => { li.hidden = !hit(li); if (!li.hidden) n++; });
+      card.querySelectorAll('.vr-moves').forEach(ul => {
+        const show = [...ul.children].some(li => !li.hidden);
+        ul.hidden = !show;
+        if (ul.previousElementSibling) ul.previousElementSibling.hidden = !show;
+      });
+      card.hidden = !!q && !n;
+      if (q && n) any = true;
+    });
+    view.querySelectorAll('.vr-sec').forEach(sec => {
+      const rows = sec.querySelectorAll('tr[data-find]');
+      let n = 0;
+      rows.forEach(r => { r.hidden = !(hit(r) && (!r.dataset.vp || vp === 'ALL' || r.dataset.vp === vp)); if (!r.hidden) n++; });
+      sec.hidden = !!q && !n;
+      if (q && n) any = true;
+    });
+    const none = view.querySelector('[data-value-none]');
+    if (none) none.hidden = any;
+  }
+
   // where(row): who has him in the picked league (a Where column), or null under All leagues.
   function valueTable(rows, filtered, where) {
     const n = (v, d = 1) => (v === null || v === undefined ? '–' : Number(v).toFixed(d));
@@ -1946,9 +1976,9 @@
       : `<span class="${v > 0 ? 'good' : v < 0 ? 'amber' : ''}">${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(d)}</span>`);
     const rank = (p, r) => (r === null || r === undefined ? '–' : esc(p) + r);
     const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
-    return `<div class="table-wrap"><table class="season-t vr-t"><thead><tr><th>Player</th>${where ? '<th>Where</th>' : ''}<th>Projection</th><th>Points</th><th>Over usage</th>
+    return `<div class="table-wrap vr-scroll"><table class="season-t vr-t"><thead><tr><th>Player</th>${where ? '<th>Where</th>' : ''}<th>Projection</th><th>Points</th><th>Over usage</th>
       <th>Snaps</th><th>Target share</th><th>Red zone</th><th>By projection</th><th>Market</th><th>Gap</th><th>Rank change</th></tr></thead><tbody>${rows.map(r =>
-      `<tr${filtered ? ` data-vp="${esc(r.p)}"${vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${filtered && (r.buy || r.sell)
+      `<tr data-find=" ${esc(SCC.norm(r.n))} ${esc(String(r.t || '').toLowerCase())} ${esc(String(r.p || '').toLowerCase())} "${filtered ? ` data-vp="${esc(r.p)}"${vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${filtered && (r.buy || r.sell)
         ? `<span class="pill ${r.buy ? 'p-ok' : 'p-stop'}">${r.buy ? 'buy' : 'sell'}</span>` : ''}<b>${esc(r.n)}</b><small>${esc([r.p, r.t].filter(Boolean).join(' · '))}</small></td>
       ${where ? `<td>${where(r)}</td>` : ''}<td>${n(r.proj)}</td><td>${n(r.fp)}</td><td>${sgn(r.fpoe)}</td><td>${share(r.snap)}</td><td>${share(r.tgt)}</td><td>${n(r.rz)}</td>
       <td>${rank(r.p, r.ur)}</td><td>${rank(r.p, r.mr)}</td><td>${sgn(r.gap, 0)}</td><td>${sgn(r.ch, 0)}</td></tr>`).join('')}</tbody></table></div>`;
@@ -1984,9 +2014,13 @@
     }
 
     // League by league: sells from depth, buys where thin, claims that would start.
-    const move = m => `<li><b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
+    const move = m => `<li data-find=" ${esc(SCC.norm(m.n))} "><b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
     const group = (list, title, cls) => (list.length ? `<h4 class="vr-k ${cls}">${title}</h4><ul class="vr-moves">${list.map(move).join('')}</ul>` : '');
     const cfgOf = id => (((S.snap && S.snap.leagues) || []).find(d => d.cfg.id === id) || {}).cfg;
+    // The player search filters the leagues' moves and every table in place (applyValueFilter), so the box keeps its cursor.
+    h += `<div class="bar"><label class="field grow vr-search"><span>Find a player</span><input type="search" data-value-search
+        placeholder="Name, team or position" value="${esc(V.q || '')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label></div>
+      <p class="empty-note" data-value-none hidden>No player in this report matches that.</p>`;
     // The chosen format's leagues first.
     const shown = one ? [one] : [...(R.leagues || [])].sort((a, b) => (a.fmt !== fkey) - (b.fmt !== fkey) || String(a.name).localeCompare(String(b.name)));
     h += `<h3 class="vr-h">${one ? 'Your moves' : 'Your moves, league by league'}</h3><div class="league-grid">${shown.map(L => {
@@ -3833,7 +3867,7 @@
     S.ui.valuePos = t.dataset.vpos;
     saveUi();
     view.querySelectorAll('[data-vpos]').forEach(b => b.setAttribute('aria-pressed', String(b === t)));
-    view.querySelectorAll('tr[data-vp]').forEach(r => { r.hidden = t.dataset.vpos !== 'ALL' && r.dataset.vp !== t.dataset.vpos; });
+    applyValueFilter();
   });
 
   // The waiver plan's Done check on each claim.
@@ -3932,6 +3966,9 @@
       S.waiv.q = t.value;
       const box = view.querySelector('#wsearch');
       if (box) box.innerHTML = waiverSearchResults();
+    } else if ('valueSearch' in t.dataset) {
+      S.value.q = t.value;
+      applyValueFilter();
     } else if ('rosterSearch' in t.dataset) {
       S.rosterQuery = t.value;
       applyRosterSearch();

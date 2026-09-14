@@ -829,6 +829,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     /\\(Value Test League\\)/.test(${vsec(0)})`, 3000), 'picking a league shows just its moves, and the lists in its own format');
   const wh = await ev(`[...document.querySelectorAll('tr[data-vp]')].map(r => r.cells[0].querySelector('b').textContent + ': ' + r.cells[1].textContent).join(' | ')`);
   check(wh === 'Buy Guy: Yours | Sell Guy: Rival Team (rival) | Dynasty Guy: Free agent', 'and a Where column says who has each player there: ' + wh);
+  const vsearch = q => ev(`(() => { const i = document.querySelector('[data-value-search]'); i.focus(); i.value = ${JSON.stringify(q)};
+    i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
+  const shownNames = `[...document.querySelectorAll('tr[data-find]')].filter(r => !r.hidden && !r.closest('[hidden]')).map(r => r.cells[0].querySelector('b').textContent)`;
+  await vsearch('dynasty');
+  check(await ev(`${shownNames}.length > 0 && ${shownNames}.every(n => n === 'Dynasty Guy') && document.querySelector('.vr-lg').hidden &&
+    document.activeElement === document.querySelector('[data-value-search]')`),
+    'the player search narrows every list to the players who match, hides a league with no move for them, and keeps its cursor');
+  await vsearch('buy guy');
+  check(await ev(`!document.querySelector('.vr-lg').hidden && [...document.querySelectorAll('.vr-lg li[data-find]')].filter(li => !li.hidden).length === 1`),
+    'and shows the moves that name him');
+  await vsearch('zzzz');
+  check(await ev(`!document.querySelector('[data-value-none]').hidden`), 'when nobody matches, it says so');
+  await vsearch('');
+  const sticky = await ev(`(() => { const th = document.querySelector('.vr-t thead th'), td = document.querySelector('.vr-t tbody td'), box = document.querySelector('.vr-scroll');
+    return [getComputedStyle(th).position, getComputedStyle(td).position, getComputedStyle(box).overflowY].join(' '); })()`);
+  check(sticky === 'sticky sticky auto', 'each table scrolls in its own box, its header row and player column pinned: ' + sticky);
   check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'it fits a 390px phone (the tables scroll in their own boxes)');
   await shot('value-report');
   await pickLeague('all');
