@@ -240,6 +240,14 @@ live site, so site changes reach it without a new upload. What's done and what's
   sideways (`.vr-scroll`) with the player column pinned; its header row follows the page down to the table's end
   (`pinValueHeads` moves it on scroll: sticky can't follow the page out of a box that scrolls sideways). Never add
   FantasyCalc's numbers to anything someone other than the owner can see.
+- Type: the Value report uses Inter (`fonts/inter-latin-wght.woff2`, fontsource's Latin variable build, SIL Open Font
+  License in `fonts/OFL.txt`; keep the license beside it). Titan serves it itself, so no browser asks Google or anyone
+  else for it: never switch to a font CDN (the privacy policy and Play's Data safety form say the app shares nothing).
+  It's in `SHELL` in `sw.js`. Its type scale sits on `.vr-page` (`display: contents`, so the main view's grid gap still
+  spaces the sections): four sizes (12, 14, 17 and 26px, tables 13px on phones) and three weights (400, 600, 700), same-
+  width numbers only in tables and tile numbers (Inter's tabular setting widens hyphens in running text), small
+  uppercase table headers. The rest of the app still uses the system font; rolling Inter out app-wide means moving these
+  rules from `.vr-page` to the app and checking every screen at 390px and 1280px.
 - Import multiple sources (`screenMulti`): `SCC.combineRanks` (pure, tested) combines each position on
   its own (a source missing a player counts him one below its last there, weights 1x to 3x) and fits RB,
   WR and TE onto one FLEX list from the sources that have an overall list (`opts.curve`, Titan's default

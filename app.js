@@ -1996,11 +1996,11 @@
       : `<span class="${v > 0 ? 'good' : v < 0 ? 'amber' : ''}">${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(d)}</span>`);
     const rank = (p, r) => (r === null || r === undefined ? '–' : esc(p) + r);
     const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
-    return `<div class="table-wrap vr-scroll"><table class="season-t vr-t"><thead><tr><th>Player</th>${where ? '<th>Where</th>' : ''}<th>Projection</th><th>Points</th><th>Over usage</th>
+    return `<div class="table-wrap vr-scroll"><table class="season-t vr-t"><thead><tr><th>Player</th>${where ? '<th class="vr-w">Where</th>' : ''}<th>Projection</th><th>Points</th><th>Over usage</th>
       <th>Snaps</th><th>Target share</th><th>Red zone</th><th>By projection</th><th>Market</th><th>Gap</th><th>Rank change</th></tr></thead><tbody>${rows.map(r =>
       `<tr data-find=" ${esc(SCC.norm(r.n))} ${esc(String(r.t || '').toLowerCase())} ${esc(String(r.p || '').toLowerCase())} "${filtered ? ` data-vp="${esc(r.p)}"${vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${filtered && (r.buy || r.sell)
         ? `<span class="pill ${r.buy ? 'p-ok' : 'p-stop'}">${r.buy ? 'buy' : 'sell'}</span>` : ''}<b>${esc(r.n)}</b><small>${esc([r.p, r.t].filter(Boolean).join(' · '))}</small></td>
-      ${where ? `<td>${where(r)}</td>` : ''}<td>${n(r.proj)}</td><td>${n(r.fp)}</td><td>${sgn(r.fpoe)}</td><td>${share(r.snap)}</td><td>${share(r.tgt)}</td><td>${n(r.rz)}</td>
+      ${where ? `<td class="vr-w">${where(r)}</td>` : ''}<td>${n(r.proj)}</td><td>${n(r.fp)}</td><td>${sgn(r.fpoe)}</td><td>${share(r.snap)}</td><td>${share(r.tgt)}</td><td>${n(r.rz)}</td>
       <td>${rank(r.p, r.ur)}</td><td>${rank(r.p, r.mr)}</td><td>${sgn(r.gap, 0)}</td><td>${sgn(r.ch, 0)}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
@@ -3687,7 +3687,7 @@
 
   const SCREENS = {
     lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
-    score: screenScore, ranks: screenRanks, multi: screenMulti, lab: screenLab, value: screenValue, trade: screenTrade, moves: screenMoves, settings: screenSettings
+    score: screenScore, ranks: screenRanks, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
 
   /* ------------------------------------------------------------- events */

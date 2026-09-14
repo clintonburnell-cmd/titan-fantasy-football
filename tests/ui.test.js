@@ -14,7 +14,7 @@ const {check} = T;
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 if (!fs.existsSync(CHROME)) { T.skip('Chrome not found (set CHROME to its path)'); process.exit(0); }
 const TYPES = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
-  '.png': 'image/png', '.webmanifest': 'application/manifest+json'};
+  '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2'};
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 (async () => {
@@ -860,7 +860,19 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await ev(`(() => { const box = ${lastBox}; return box.querySelector('thead th').getBoundingClientRect().bottom <= box.getBoundingClientRect().bottom + 1; })()`),
     'past the table\'s end, its header row stays inside the table');
   check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'it fits a 390px phone (the tables scroll in their own boxes)');
+  await scrollPage(0);
   await shot('value-report');
+  // On a computer too (screenshots only): the top of the page, and the first table.
+  if (process.env.TITAN_SHOTS) {
+    await send('Emulation.setDeviceMetricsOverride', {width: 1280, height: 900, deviceScaleFactor: 1, mobile: false});
+    await sleep(500);
+    await scrollPage(0);
+    await shot('value-report-1280');
+    await scrollPage(Math.round(await ev(`document.querySelector('.vr-sec').getBoundingClientRect().top + scrollY - 140`)));
+    await shot('value-report-1280-table');
+    await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 2, mobile: true});
+    await sleep(500);
+  }
   await pickLeague('all');
   await ev(`window.TitanApp.setOwner(false); true`);
   check(await waitFor(`/Only Titan's owner sees this screen/.test(document.getElementById('view').textContent) && document.querySelector('#tabs [data-tab="value"]').hidden`, 3000),

@@ -4,10 +4,11 @@
  * time the app opens, with the cached copy as the offline fallback. Sleeper's
  * API is never touched here: live data always comes straight from Sleeper.
  */
-const CACHE = 'titan-v14';
+const CACHE = 'titan-v15';
 // The website (the root page) and the app (/app/), with everything the app loads.
 const SHELL = ['./', 'index.html', 'site.css', 'theme.js', 'stats.js', 'titan.svg', 'app/', 'app/index.html', 'styles.css', 'engine.js', 'demo.js', 'espn.js', 'yahoo.js', 'sleeper.js',
-  'syncplan.js', 'app.js', 'sync.js', 'icon.svg', 'icon-192.png', 'apple-touch-icon.png', 'manifest.webmanifest', 'privacy.html'];
+  'syncplan.js', 'app.js', 'sync.js', 'icon.svg', 'icon-192.png', 'apple-touch-icon.png', 'manifest.webmanifest', 'privacy.html',
+  'fonts/inter-latin-wght.woff2'];
 
 /* Each file is cached on its own with put(). cache.addAll() failed intermittently
    in Chrome with "Entry already exists", and any single failure there rejects

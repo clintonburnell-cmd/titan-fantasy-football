@@ -832,6 +832,52 @@ details.match[open] .mh-score { display: none; }
 .pctable tr.pc-season td { font-weight: 700; background: var(--surface-2); }
 .pc-live { color: var(--ok); font-weight: 800; text-transform: uppercase; font-size: .66rem; }
 
+/* Inter (rsms/inter, via fontsource; SIL Open Font License, fonts/OFL.txt), Latin only, served from Titan's own site
+   so no visitor's browser asks Google or anyone else for it. For now only the Value report uses it (.vr-page). */
+@font-face {
+  font-family: "Inter Titan"; src: url("/fonts/inter-latin-wght.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* The Value report's type: Inter with same-width numbers; four sizes (12px labels and secondary lines, 14px text and
+   tables, 17px titles, 26px tile numbers) and three weights (400 text, 600 names and emphasis, 700 titles). The search
+   box keeps its 16px text (iPhones zoom into smaller inputs). */
+/* display: contents keeps the page's sections spaced by the main view's grid gap; the wrapper only passes the type down. */
+.vr-page { display: contents; --vr-xs: 12px; --vr-sm: 14px; --vr-md: 17px; --vr-lg: 26px;
+  font-family: "Inter Titan", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font-size: var(--vr-sm); line-height: 1.5; }
+/* Same-width numbers only where numbers line up (Inter's tabular setting also widens hyphens in running text). */
+.vr-page .vr-t, .vr-page .tile b { font-variant-numeric: tabular-nums; }
+.vr-page b, .vr-page strong { font-weight: 600; }
+.vr-page .lede { font-size: var(--vr-sm); line-height: 1.55; max-width: 68ch; }
+.vr-page .fine, .vr-page .credit, .vr-page .card-h p { font-size: var(--vr-xs); }
+.vr-page .credit a { font-weight: 600; }
+.vr-page h3, .vr-page .vr-h { font-size: var(--vr-md); font-weight: 700; letter-spacing: -.01em; line-height: 1.3; }
+.vr-page .tile b { font-size: var(--vr-lg); font-weight: 700; letter-spacing: -.02em; }
+.vr-page .tile span { font-size: var(--vr-xs); }
+.vr-page .banner { font-size: var(--vr-sm); }
+.vr-page .btn, .vr-page .chip { font-size: var(--vr-xs); font-weight: 600; }
+.vr-page .field span { font-size: var(--vr-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.vr-page .vr-k { font-size: var(--vr-xs); font-weight: 600; letter-spacing: .06em; }
+.vr-page .vr-moves b { font-size: var(--vr-sm); font-weight: 600; }
+.vr-page .vr-moves p { font-size: var(--vr-sm); line-height: 1.5; }
+.vr-page .vr-x { font-size: var(--vr-xs); font-weight: 400; }
+.vr-page .vr-how summary { font-size: var(--vr-sm); font-weight: 600; }
+/* Tables like a financial report: small uppercase headers, right-aligned numbers, names heavier than the stats. */
+.vr-page .vr-t { font-size: var(--vr-sm); }
+.vr-page .vr-t th { font-size: var(--vr-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.vr-page .vr-t td { font-weight: 400; }
+.vr-page .vr-t td.vr-p b { font-weight: 600; }
+.vr-page .vr-t td.vr-p small { font-size: var(--vr-xs); }
+.vr-page .vr-t .vr-w { text-align: left; }
+.vr-page .vr-t .pill { font-size: var(--vr-xs); font-weight: 600; letter-spacing: 0; }
+/* Phones: tables a step smaller and their headers a little tighter, so more columns fit before scrolling sideways. */
+@media (max-width: 600px) {
+  .vr-page .vr-t { font-size: 13px; }
+  .vr-page .vr-t th { letter-spacing: .03em; }
+}
+
 /* Value report (Titan's owner only): the weekly report from the owner's PC. */
 .vr-h { font-size: 1.05rem; margin-top: 4px; }
 .vr-lg > summary { cursor: pointer; list-style: none; }
