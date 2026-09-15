@@ -488,5 +488,15 @@ section('floor and ceiling, and the close calls in a lineup');
   const pairs = SCC.closeCallPairs(opt, roster);
   check(pairs.length === 1 && pairs[0].starter.id === 'r2' && pairs[0].bench.id === 'r3',
     'a close call is a bench player at the starter\'s position within 12 ranks who could play: not one ruled out, locked or on bye, and not a 30-rank gap');
+  // The matchup tilt: two RB spots, RB8 starting, RB12 on the bench; with the matchups counted the bench back projects 3 more.
+  const d = () => ({cfg: {key: 'T', lineup: ['RB', 'RB']}, roster: [P('r1', 'RB', 5, {start: true, slot: 'RB'}), P('r2', 'RB', 8, {start: true, slot: 'RB'}), P('r3', 'RB', 12)],
+    takenNorm: {}, takenAbbr: {}, started: {}});
+  const tilted = SCC.analyzeLeague(d(), {x: 1}, 2, {tilt: (p, cfg) => ({r1: 18, r2: 12, r3: 15})[p.id] * (cfg.key === 'T' ? 1 : 0)});
+  check(tilted.tilts.length === 1 && tilted.tilts[0].inn.id === 'r3' && tilted.tilts[0].out.id === 'r2' && tilted.tilts[0].by === 3 &&
+    tilted.opt.map(o => o.p.id).sort().join() === 'r1,r3' && tilted.moves.length === 1,
+    'on a close call the bench player with the better tilted projection (by 1.5 or more) takes the spot, and the card is told why');
+  const flat = SCC.analyzeLeague(d(), {x: 1}, 2, {tilt: p => ({r1: 18, r2: 12, r3: 13})[p.id]});
+  check(flat.tilts.length === 0 && flat.moves.length === 0 && SCC.analyzeLeague(d(), {x: 1}, 2).tilts.length === 0,
+    'a smaller tilt, or none, leaves the rankings\' call alone');
 }
 T.done();

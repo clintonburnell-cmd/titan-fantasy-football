@@ -18,6 +18,17 @@ check(SCC.faabBid({budget: 100, left: 80, bids: [3], heat: 'hot'}).bid === 12 &&
 check(SCC.faabBid({budget: 100, left: 6, bids: history, heat: 'hot'}).bid === 6 && SCC.faabBid({budget: 100, left: 0, heat: 'hot'}).bid === 0 &&
   SCC.faabBid({budget: 1000, bids: [], heat: 'cold'}).bid === 10 && SCC.faabBid({budget: 20, bids: [], heat: 'cold'}).bid === 1,
   'never more than what\'s left, nothing when nothing\'s left, and at least $1');
+// What he's worth to you (points a game over the starter he replaces) and to the league (how many rivals would start him).
+const base = {budget: 100, left: 80, bids: history, heat: 'warm'};
+const big = SCC.faabBid(Object.assign({gain: 6}, base)), none = SCC.faabBid(Object.assign({gain: 0}, base)), mid = SCC.faabBid(Object.assign({gain: 2.4}, base));
+check(big.bid === 10 && mid.bid === 7 && none.bid === 4 && /worth 6 more a game/.test(big.why[0]) && /no more a game/.test(none.why[0]),
+  `the bid scales with the points he adds: 6 a game $${big.bid}, 2.4 a game $${mid.bid}, nothing $${none.bid}`);
+const wanted = SCC.faabBid(Object.assign({gain: 2.4, rivals: 9, teams: 10}, base)), alone = SCC.faabBid(Object.assign({gain: 2.4, rivals: 0, teams: 10}, base));
+check(wanted.bid === 8 && alone.bid === 7 && /9 other teams would start him/.test(wanted.why[1]) && alone.why.length === 1,
+  `and with how many other teams would start him: every rival $${wanted.bid}, nobody $${alone.bid}`);
+const rivals = SCC.rivalsFor([{id: 1, roster: [{id: 'a', pos: 'RB'}, {id: 'b', pos: 'RB'}]}, {id: 2, roster: [{id: 'c', pos: 'RB'}, {id: 'd', pos: 'RB'}]},
+  {id: 3, roster: [{id: 'e', pos: 'RB'}]}], ['RB', 'FLEX'], p => ({a: 20, b: 15, c: 8, d: 6, e: 9, fa: 10})[p.id] || 0, {id: 'fa', pos: 'RB'}, 3);
+check(rivals === 1, 'rivals: the teams whose best lineup he\'d make (team 2, not team 1; team 3, mine, skipped): ' + rivals);
 
 section('backups');
 const players = {'1': ['Starter Back', 'RB', 'KC', 1], '2': ['Backup Back', 'RB', 'KC', 2], '3': ['Third Back', 'RB', 'KC', 3],

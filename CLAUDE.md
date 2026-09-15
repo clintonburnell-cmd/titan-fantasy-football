@@ -202,9 +202,15 @@ One note per screen or feature.
   projection give or take the player's usual swing, his PPR points over the last three finished weeks from
   `loadUsage`, `statWeeks`, blended with his position's usual `SPREAD_CV`), who has the softer matchup (`dvpRank`
   from the game context) and a lean from the win chance (`winChance`, from the Matchup data, loaded quietly): the
-  higher floor when you're the favorite (60%+), the higher ceiling as the underdog (40% or less). The recommended
-  lineup itself still follows the rankings: never let the note change a call. Matchup's card shows each side's range
-  (`rangeLine`: points so far plus the floors, and plus the ceilings, of the starters yet to play).
+  higher floor when you're the favorite (60%+), the higher ceiling as the underdog (40% or less). The note never
+  changes a call. Matchup's card shows each side's range (`rangeLine`: points so far plus the floors, and plus the
+  ceilings, of the starters yet to play).
+- The matchup tilt (v1.42.0): `analyze` hands `SCC.analyzeAll` a `tilt(p, cfg)` (`tiltFor`: the projection in the
+  league's scoring, +8% against the eight softest defenses to his position, -8% against the eight toughest, from the
+  game context) and `analyzeLeague` lets a bench player take a close call's spot when his tilted projection beats
+  the starter's by `TILT_MARGIN` (1.5); the card says so (`L.tilts`, "Matchup tilt"). Only close calls (within
+  `CLOSE` ranks) can flip; everything else follows the rankings. The server's frozen record has no tilt, so Results
+  can differ from the app on those spots. `loadContext` re-runs `analyze` once the context is in.
 - Matchup: where you stand, in words, comes from `SCC.matchStatus` (pure, tested) through `matchState`
   in `app.js`, which the card and the summary at the top share; the summary's filters are
   `MATCH_KINDS` (`S.ui.matchFilter`, chips `data-mfilter`). Opened, the scoreboard (`.board`) shows the
@@ -231,11 +237,18 @@ One note per screen or feature.
   Done and changed drops are `S.ui.wplan`, started over each week; `cfg.bench` counts open roster spots),
   free backups (`SCC.backupOf`), Sleeper's
   trending adds (`API.trendingAdds`) with where each is free (`L.takenNorm`), a search, and bids
-  (`SCC.faabBid` from `API.leagueWaivers`: a Sleeper league's last six weeks of winning bids). Each pickup
+  (`SCC.faabBid` from `API.leagueWaivers`: a Sleeper league's last six weeks of winning bids, scaled by the points a
+  game the claim adds over the starter he replaces, `gain`, and by how many other teams would start him,
+  `SCC.rivalsFor` over the league's teams, which Waivers loads quietly for FAAB leagues; the reasons show under the
+  bid). Each pickup
   shows a usage line (`usageLine`, `SCC.usageOf` over the last three finished weeks of `API.fetchStats`).
 - The player card (`openPlayerCard`): any element with `data-pcard` (`pcAttr`, players with a Sleeper id)
   opens a `<dialog>` with the player's last four games and season from `API.fetchPlayerStats` (Sleeper's
-  per-player stats, `grouping=week`; `trimStat` in sleeper.js keeps what Titan shows). Back closes it, like
+  per-player stats, `grouping=week`; `trimStat` in sleeper.js keeps what Titan shows), under "Titan's read"
+  (`playerRead`): this week's floor and ceiling, Titan's rest-of-season value, the matchup, and for the owner the
+  Value report's usage rank against the market with its call, all for the league picked (or the first), so a
+  player reads the same on every screen. Exposure lists the players you lean on most first (by lineups started
+  in, then teams owned), the meter's darker bar being the starts. Back closes it, like
   the draft results. Snap counts reach Sleeper's stats some time after a game, so the card hides them until
   then. The UI test builds the demo a week ahead (it moves Sleeper's `/state/nfl` on one) so the plan has claims
   on game days too.

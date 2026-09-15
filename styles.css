@@ -568,7 +568,17 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .note { padding: 8px 14px; border-top: 1px solid var(--line); font-size: .82rem; color: var(--muted); }
 .note.wire b { color: var(--accent-2); }
 .note.hurt, .note.hurt b { color: var(--bad); }
-.note.close-call b { color: var(--accent-2); }
+.note.close-call b, .note.tilt b { color: var(--accent-2); }
+.wbid-why { display: block; color: var(--muted); font-size: .74rem; }
+.xrow .meter { position: relative; }
+.xrow .meter b { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-2); opacity: .55; border-radius: inherit; }
+.pc-read { margin: 8px 0 4px; }
+.pc-read h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; }
+.pc-read h3 small { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.pc-bits { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.pc-bits span { display: grid; gap: 2px; padding: 8px 10px; background: var(--chip); border-radius: 10px; }
+.pc-bits span b { font-size: .95rem; }
+.pc-bits span small { color: var(--muted); font-size: .74rem; }
 .note.close-call em { font-style: normal; font-weight: 600; }
 .mrange { margin: 2px 0 0; }
 .mrange small { color: var(--muted); }

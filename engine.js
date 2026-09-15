@@ -1654,17 +1654,21 @@
   }
 
   /* The close calls in a lineup: a starter (from `opt`, the recommended lineup) and a bench player at
-     his position ranked within CLOSE spots of him, neither locked, hurt or on bye. One pair per
-     starter (the nearest bench player), each bench player once. [{starter, bench}]. */
+     his position ranked within CLOSE spots of him, neither locked, hurt or on bye. The weakest
+     starters pair first (a bench player's real rival is the lowest-ranked starter at his position),
+     one pair per starter (the nearest bench player), each bench player once. [{starter, bench}]. */
   function closeCallPairs(opt, roster) {
     var starting = {}, out = [], taken = {};
     (opt || []).forEach(function (o) { if (o.p) starting[o.p.id] = 1; });
     var bench = (roster || []).filter(function (p) {
       return !starting[p.id] && !p.held && !p.locked && !p.outish && !p.onBye && p.rank !== null && p.rank !== undefined;
     });
-    (opt || []).forEach(function (o) {
+    var starters = (opt || []).filter(function (o) {
       var s = o.p;
-      if (!s || s.locked || s.outish || s.onBye || s.rank === null || s.rank === undefined) return;
+      return s && !s.locked && !s.outish && !s.onBye && s.rank !== null && s.rank !== undefined;
+    }).sort(function (a, b) { return b.p.rank - a.p.rank; });
+    starters.forEach(function (o) {
+      var s = o.p;
       var best = null;
       bench.forEach(function (b) {
         if (taken[b.id] || b.pos !== s.pos || Math.abs(b.rank - s.rank) > CLOSE) return;
@@ -1806,7 +1810,13 @@
 
   /* ------------------------------------------------------------ analysis */
 
-  function analyzeLeague(d, weekly, week) {
+  /* opts.tilt(p, cfg): a player's matchup-tilted projection in the league's scoring (the app: Sleeper's
+     projection moved by how soft his opponent is to his position). On a close call (closeCallPairs: a bench player within CLOSE
+     ranks of a starter at his position) the bench player takes the spot when his tilted projection
+     beats the starter's by TILT_MARGIN or more; the swap is recorded in `tilts` so the card can say
+     why. The rankings still decide everything that isn't close. */
+  var TILT_MARGIN = 1.5;
+  function analyzeLeague(d, weekly, week, opts) {
     var slots = d.cfg.lineup;
     // A player whose team is on bye this week can't score: he's benched like an Out player.
     d.roster.forEach(function (p) { p.onBye = !!week && !!p.bye && Number(p.bye) === Number(week); });
@@ -1815,6 +1825,16 @@
     var ranked = Object.keys(weekly).length > 0;
     var act = actualLineup(d.roster, slots);
     var opt = flexLate(optimal(d.roster, slots), act, d.kickAt || function () { return 0; });
+    var tilt = opts && typeof opts.tilt === 'function' ? opts.tilt : null, tilts = [];
+    if (tilt && ranked) {
+      closeCallPairs(opt, d.roster).forEach(function (pair) {
+        var a = Number(tilt(pair.starter, d.cfg)), b = Number(tilt(pair.bench, d.cfg));
+        if (!isFinite(a) || !isFinite(b) || b - a < TILT_MARGIN) return;
+        opt.forEach(function (o) { if (o.p && o.p.id === pair.starter.id) o.p = pair.bench; });
+        tilts.push({inn: pair.bench, out: pair.starter, by: round1(b - a)});
+      });
+      if (tilts.length) opt = flexLate(opt, act, d.kickAt || function () { return 0; });
+    }
     var optIds = {}, actIds = {};
     opt.forEach(function (o) { if (o.p) optIds[o.p.id] = 1; });
     act.forEach(function (o) { if (o.p) actIds[o.p.id] = 1; });
@@ -1860,13 +1880,13 @@
 
     // Only starters who can still be benched are worth a warning.
     var hurt = d.roster.filter(function (p) { return p.start && p.inj && !p.locked; });
-    return {cfg: d.cfg, roster: d.roster, rows: rows, moves: moves, wire: wire, hurt: hurt, stops: stops, opt: opt,
+    return {cfg: d.cfg, roster: d.roster, rows: rows, moves: moves, wire: wire, hurt: hurt, stops: stops, opt: opt, tilts: tilts,
       takenNorm: d.takenNorm, takenAbbr: d.takenAbbr}; // who's rostered in the league (Waivers)
   }
 
   /* `weekly` is one rankings map for every league, or a function of a league's
-     settings that returns its map (rankingsBy). */
-  function analyzeAll(snap, weekly) {
+     settings that returns its map (rankingsBy). opts: analyzeLeague's (tilt). */
+  function analyzeAll(snap, weekly, opts) {
     var rankingsFor = typeof weekly === 'function' ? weekly : function () { return weekly; };
     // Teams whose game has kicked off this week: their free agents are no use now.
     var started = {}, games = (snap && snap.games) || {};
@@ -1885,7 +1905,7 @@
       return analyzeLeague({
         cfg: d.cfg, roster: attachRanks(d.roster, wk),
         takenNorm: d.takenNorm || {}, takenAbbr: d.takenAbbr || {}, started: started, kickAt: kickAt
-      }, wk, snap && snap.week);
+      }, wk, snap && snap.week, opts);
     });
 
     var changes = [], hurtStarters = [], wireLines = [], stops = 0, locked = 0;
@@ -1938,8 +1958,9 @@
         if (p.start) starts[p.name]++;
       });
     });
+    // The players you lean on most first: by how many of your lineups start him, then how many teams own him.
     var rows = Object.keys(own).filter(function (n) { return own[n].length >= 2; })
-      .sort(function (a, b) { return own[b].length - own[a].length || a.localeCompare(b); })
+      .sort(function (a, b) { return starts[b] - starts[a] || own[b].length - own[a].length || a.localeCompare(b); })
       .map(function (n) {
         var p = meta[n];
         return {name: n, pos: p.pos, team: p.team, bye: p.bye, count: own[n].length,
@@ -2590,8 +2611,12 @@
   /* A waiver bid to suggest where a league bids for players (FAAB). With at least five of
      the league's own winning bids to go on: a hot pickup (among the most added) gets the
      75th percentile, a warm one the median, anyone else a quarter of the median. With
-     fewer: 12%, 5% or 1% of the budget. Whole dollars, at least $1, never more than what's
-     left. o: {budget, left, bids, heat: 'hot'|'warm'|'cold'}. */
+     fewer: 12%, 5% or 1% of the budget. Then what he's worth to you and to the league:
+     `gain`, the points a game he adds over the starter he'd replace, scales the bid from
+     0.6x (nothing) through 1x (about 2.5 points) to 1.6x (6 points or more), and `rivals`,
+     how many other teams he'd start for (of `teams` - 1), adds up to a quarter more when
+     the whole league wants him. Whole dollars, at least $1, never more than what's left.
+     o: {budget, left, bids, heat: 'hot'|'warm'|'cold', gain, rivals, teams}. */
   function faabBid(o) {
     var budget = Number(o.budget) || 0, left = o.left === undefined ? budget : Math.max(0, Number(o.left) || 0);
     if (!budget || !left) return {bid: 0, basis: 'none'};
@@ -2600,7 +2625,32 @@
     var heat = o.heat || 'cold', league = bids.length >= 5;
     var bid = league ? (heat === 'hot' ? q(0.75) : heat === 'warm' ? q(0.5) : q(0.5) / 4)
       : budget * (heat === 'hot' ? 0.12 : heat === 'warm' ? 0.05 : 0.01);
-    return {bid: Math.max(1, Math.min(left, Math.round(bid))), basis: league ? 'league' : 'budget'};
+    var why = [];
+    if (o.gain !== undefined && o.gain !== null && isFinite(Number(o.gain))) {
+      var g = Math.max(0, Number(o.gain)), f = Math.min(1.6, 0.6 + g / 6);
+      bid *= f;
+      why.push(g >= 2.5 ? 'worth ' + round1(g) + ' more a game than who he replaces' : g > 0 ? 'only ' + round1(g) + ' more a game than who he replaces' : 'no more a game than who he replaces');
+    }
+    var others = Math.max(1, (Number(o.teams) || 0) - 1);
+    if (o.rivals !== undefined && o.rivals !== null && Number(o.teams) > 1) {
+      var r = Math.max(0, Math.min(others, Number(o.rivals) || 0));
+      bid *= 1 + 0.25 * r / others;
+      if (r) why.push(r + ' other ' + (r === 1 ? 'team' : 'teams') + ' would start him');
+    }
+    return {bid: Math.max(1, Math.min(left, Math.round(bid))), basis: league ? 'league' : 'budget', why: why};
+  }
+
+  /* How many teams a free agent would start for: each team's best lineup by `pts` with him added
+     against without him (draft picks and held players aside), excluding the team `skip`. */
+  function rivalsFor(teams, slots, pts, player, skip) {
+    var n = 0;
+    (teams || []).forEach(function (t) {
+      if (skip !== undefined && String(t.id) === String(skip)) return;
+      var roster = (t.roster || []).filter(function (p) { return !p.held && p.pos !== 'PICK'; });
+      var before = lineupPoints(roster, slots, pts), after = lineupPoints(roster.concat([player]), slots, pts);
+      if (after > before + 0.05) n++;
+    });
+    return n;
   }
 
   /* The players whose news people want to hear about: everyone in their lineups, each
@@ -2698,7 +2748,7 @@
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks, combineRanks: combineRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,
-    depthCharts: depthCharts, backupOf: backupOf, faabBid: faabBid, waiverPlan: waiverPlan, usageOf: usageOf, waiverReminder: waiverReminder,
+    depthCharts: depthCharts, backupOf: backupOf, faabBid: faabBid, rivalsFor: rivalsFor, waiverPlan: waiverPlan, usageOf: usageOf, waiverReminder: waiverReminder,
     gameStates: gameStates, weekProgress: weekProgress,
     rankKey: rankKey, rankLabel: rankLabel, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,

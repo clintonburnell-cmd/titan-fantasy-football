@@ -260,11 +260,26 @@
     return playersMemo.map;
   }
 
+  /* The matchup tilt on close calls (SCC.analyzeLeague's opts.tilt): a player's projection in the league's scoring
+     moved by how soft his opponent is to his position (the game context's points-allowed ranks: the softest eight
+     up to +8%, the toughest eight down to -8%). Null until the projections and the context are in, so the
+     server's frozen record (no tilt) and the app agree except on these close calls. */
+  const TILT = 0.08;
+  function tiltFor() {
+    if (!S.ctx.data || !S.ctx.data.dvp || !Object.keys(S.proj).length) return null;
+    return cfg => p => {
+      const proj = SCC.projFor(S.proj, p.id, cfg);
+      if (proj === null || proj === undefined) return null;
+      const r = dvpRank(p);
+      return proj * (1 + (r && r <= 8 ? TILT : r && r >= 25 ? -TILT : 0));
+    };
+  }
+
   function analyze() {
     S.look.A = null; // a planned later week is worked out again when next drawn (lookAnalysis)
     if (!S.snap) { S.A = null; return; }
-    const r = ranksFor(S.snap.week, S.proj);
-    S.A = SCC.analyzeAll(S.snap, rankingsOf(r, S.proj, playerList()));
+    const r = ranksFor(S.snap.week, S.proj), tilt = tiltFor();
+    S.A = SCC.analyzeAll(S.snap, rankingsOf(r, S.proj, playerList()), tilt ? {tilt: (p, cfg) => tilt(cfg)(p)} : undefined);
     S.A.ranks = r;
   }
 
@@ -994,6 +1009,10 @@
     const rec = recLineup(L);
     h += `<h4 class="lu-h">${LV ? `Recommended lineup for week ${LV.week}` : 'Recommended lineup'}</h4><ol class="lineup lineup-rec">${
       rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg)).join('')}</ol>${compareLineups(L, rec)}${LV ? '' : closeNotes(L)}`;
+    (L.tilts || []).forEach(t => {
+      h += `<p class="note tilt"><b>Matchup tilt:</b> ${esc(t.inn.name)} starts over ${esc(t.out.name)}, who ranks higher (${esc(rl(t.out))} vs ${esc(rl(t.inn))}):
+        with the matchups counted, ${esc(t.inn.name)} projects ${fmt(t.by)} more.</p>`;
+    });
     L.wire.forEach(w => {
       const tail = w.cur ? `, better than ${esc(w.cur.name)} (${esc(rl(w.cur))})`
         : w.anyUnranked ? ', and you are starting someone unranked here' : '';
@@ -1116,6 +1135,7 @@
     } catch (e) { /* no context this time: the rows just go without it */ }
     S.ctx.at = Date.now();
     S.ctx.busy = false;
+    if (S.ctx.data && S.snap) analyze(); // the matchup tilt on close calls reads it
     if (S.ui.tab === 'lineups') render();
   }
 
@@ -1600,15 +1620,17 @@
   function screenExposure() {
     if (!S.snap) return emptyState();
     const E = SCC.exposure(S.A.leagues);
-    let h = `<p class="lede">How many of your ${E.active} teams own each player (anyone on two or more).</p>`;
+    let h = `<p class="lede">How many of your ${E.active} teams own each player (anyone on two or more), the players you lean on most first: by
+      how many of your lineups start him, then how many teams own him.</p>`;
     if (!E.rows.length) return h + '<div class="empty-note">No player is on more than one of your teams.</div>';
     h += `<ul class="card list">${E.rows.map(r => `
-      <li class="row xrow${r.count >= 5 ? ' x-hi' : r.count === 4 ? ' x-mid' : ''}">${pos(r.pos)}
+      <li class="row xrow${r.starts >= 4 || r.count >= 5 ? ' x-hi' : r.starts === 3 || r.count === 4 ? ' x-mid' : ''}">${pos(r.pos)}
         <span class="who"><b>${esc(r.name)}</b>
-          <small>${esc([r.team, r.bye && 'bye ' + r.bye, 'starting in ' + r.starts].filter(Boolean).join(' · '))}</small>
+          <small>${esc([r.team, r.bye && 'bye ' + r.bye, `starting in ${r.starts} of ${r.count}`].filter(Boolean).join(' · '))}</small>
           <small class="leagues">${esc(r.leagues.join(', '))}</small></span>
         <span class="right"><span class="count">${r.count}<small>/${E.active}</small></span>
-          <span class="meter"><i style="width:${Math.round(100 * r.count / Math.max(E.active, 1))}%"></i></span></span>
+          <span class="meter" title="${r.starts} starting"><i style="width:${Math.round(100 * r.count / Math.max(E.active, 1))}%"></i><b style="width:${
+            Math.round(100 * r.starts / Math.max(E.active, 1))}%"></b></span></span>
       </li>`).join('')}</ul>`;
     return h;
   }
@@ -3369,7 +3391,7 @@
           c.keep && `Titan values ${c.drop.name} more over the season than ${c.add.name}. Worth a second look.`].filter(Boolean);
         const alts = c.alts.length ? ` · or ${c.alts.map(a => `${esc(a.name)} <small>${esc(rl(a))}</small>`).join(', ')}` : '';
         return `<li class="wclaim${done ? ' done' : ''}">${headshot(add, true)}<div class="wc-main">
-          <div class="wc-add"><b${pcAttr(add)}>${esc(c.add.name)}</b> <small>${esc([c.add.pos, c.add.team, rl(c.add)].filter(Boolean).join(' · '))}</small>${bid(x.league, c.add.name)}</div>
+          <div class="wc-add"><b${pcAttr(add)}>${esc(c.add.name)}</b> <small>${esc([c.add.pos, c.add.team, rl(c.add)].filter(Boolean).join(' · '))}</small>${bid(x.league, c.add.name, add, c.over)}</div>
           ${usageLine(id, c.add.pos)}
           <small class="wmeta">${c.over ? `For ${esc(c.over.name)} (${esc(rl(c.over))}) at ${esc(c.pos)}` : `At ${esc(c.pos)}`}${alts}</small>
           <label class="wc-drop"><span>Drop</span>${sel}</label>${notes.map(n => `<small class="wnote">${esc(n)}</small>`).join('')}</div>
@@ -3400,11 +3422,26 @@
     const trendAt = {};
     (W.trend || []).forEach((t, i) => { trendAt[SCC.norm(SCC.playerInfo(players, t.id).name)] = i; });
     const heat = name => { const r = trendAt[SCC.norm(name)]; return r === undefined ? 'cold' : r < 10 ? 'hot' : r < 25 ? 'warm' : 'cold'; };
-    const bid = (L, name) => {
+    // Every league's teams, quietly, so a bid can count how many rivals would start the pickup (SCC.rivalsFor).
+    leagues.forEach(L => {
+      const d = (S.snap.leagues || []).find(x => x.cfg.id === L.cfg.id);
+      if (d && L.cfg.faab && !S.trade.teams[L.cfg.id] && d.cfg.platform !== 'yahoo') loadTradeTeams(d, true);
+    });
+    /* A bid: the league's own bids or a share of the budget by how hot the pickup is, then scaled by what he adds
+       over the starter he'd replace (`over`, the plan's claim) and how many other teams would start him. */
+    const bid = (L, name, add, over) => {
       const F = W.faab[L.cfg.id];
       if (!L.cfg.faab || !F || !F.data) return '';
-      const b = SCC.faabBid({budget: F.data.budget, left: F.data.left, bids: F.data.bids, heat: heat(name)});
-      return b.bid ? ` <span class="wbid" title="${b.basis === 'league' ? 'From this league\'s recent winning bids' : 'A share of the budget, until this league has more bids to go on'}">bid about $${b.bid}</span>` : '';
+      const cfg = L.cfg, pts = p => SCC.projFor(S.proj, p.id, cfg) || 0, o = {budget: F.data.budget, left: F.data.left, bids: F.data.bids, heat: heat(name)};
+      if (add && add.id && over && Object.keys(S.proj).length) o.gain = Math.round((pts(add) - pts(over)) * 10) / 10;
+      const Tm = S.trade.teams[cfg.id];
+      if (add && add.id && Tm && Tm.list && Object.keys(S.proj).length) {
+        o.rivals = SCC.rivalsFor(Tm.list, cfg.lineup, pts, add, (Tm.list.find(t => t.mine) || {}).id);
+        o.teams = Tm.list.length;
+      }
+      const b = SCC.faabBid(o);
+      const why = [b.basis === 'league' ? 'From this league\'s recent winning bids' : 'A share of the budget, until this league has more bids to go on'].concat(b.why || []);
+      return b.bid ? ` <span class="wbid" title="${esc(why.join('; '))}">bid about $${b.bid}</span>${(b.why || []).length ? `<small class="wbid-why">${esc(b.why.join(' · '))}</small>` : ''}` : '';
     };
     const budget = L => { const F = W.faab[L.cfg.id]; return F && F.data ? ` <span class="wmeta">$${F.data.left} of $${F.data.budget} left</span>` : ''; };
 
@@ -3485,6 +3522,28 @@
     if (PC && PC.open && S.pcard.id === id) PC.innerHTML = playerCardHtml();
   }
 
+  /* Titan's read on a player, one block on his card, so he reads the same on every screen: this week's floor and
+     ceiling, his season value (Titan's own, the league picked or your first), the matchup, and for the owner the
+     Value report's projection rank against the market with its buy/sell/keep call. */
+  function playerRead(p) {
+    if (!p.pos || p.pos === 'PICK') return '';
+    const d = (S.snap.leagues || []).find(x => x.cfg.id === pickedLeague()) || (S.snap.leagues || [])[0];
+    if (!d) return '';
+    const cfg = d.cfg, bits = [];
+    const sp = spreadFor(p, cfg);
+    if (sp) bits.push(`<span><b>${fmt(sp.floor)} to ${fmt(sp.ceiling)}</b><small>floor to ceiling this week</small></span>`);
+    const tv = titanValueFor(cfg)(p);
+    if (tv !== null) bits.push(`<span><b>${thousands(tv)}</b><small>points above a replacement starter, rest of season</small></span>`);
+    const r = dvpRank(p);
+    if (r) bits.push(`<span><b>${r <= 8 ? 'Soft' : r >= 25 ? 'Tough' : 'Middling'}</b><small>matchup: ${nth(r)} most given up to ${esc(p.pos)}s</small></span>`);
+    const row = (valueRowsFor(cfg) || {})[p.id];
+    if (row && row.ur && row.mr) {
+      bits.push(`<span><b>${esc(p.pos)}${row.ur} by usage, ${esc(p.pos)}${row.mr} by the market</b><small>${
+        row.buy ? 'buy low' : row.sell ? (row.keep ? 'sell high, or keep' : 'sell high') : 'no call'}${row.vgap ? ` · value gap ${row.vgap > 0 ? '+' : ''}${Math.round(row.vgap * 100)}%` : ''}</small></span>`);
+    }
+    return bits.length ? `<div class="pc-read"><h3>Titan's read <small>${esc(cfg.key)}</small></h3><div class="pc-bits">${bits.join('')}</div></div>` : '';
+  }
+
   // The card's columns by position; every table ends with PPR points. A kicker or defense shows points only.
   const snapShare = s => (s.tsnp ? Math.round(s.snp / s.tsnp * 100) + '%' : '–');
   const PC_REC = [['Snaps', snapShare], ['Tgt', 'tgt'], ['Rec', 'rec'], ['Yds', 'yd'], ['Air yds', 'ay'], ['RZ', 'rz']];
@@ -3506,6 +3565,7 @@
     const proj = SCC.projFor(S.proj, id, 1), opp = mine && mine.opp;
     const week = [opp && 'vs ' + opp, teamKick(p.team), proj !== null && `projected ${fmt(proj)} PPR`].filter(Boolean).join(' · ');
     let h = week ? `<p class="pc-week"><b>Week ${esc(S.snap.week)}:</b> ${esc(week)}</p>` : '';
+    h += playerRead(p);
     if (S.A && S.A.leagues.length) {
       h += `<div class="wchips pc-where">${S.A.leagues.map(L => { const s = wStatus(L, p); return `<span class="wst ${s}">${esc(L.cfg.key)}${
         s === 'mine' ? ' · yours' : s === 'taken' ? ' · taken' : ' · free'}</span>`; }).join('')}</div>`;
