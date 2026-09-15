@@ -392,8 +392,9 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   owner's leagues or anyone's data. The privacy page's "If you join the
   weekly email" section and the Play Data safety form (email address, collected when someone signs up) must stay true.
   The email itself is drafted by titan-analytics each Tuesday (`reports/newsletter-latest.html`, from nflverse usage
-  only: never FantasyCalc's values, never the owner's leagues). The owner reads it, pastes it into a Kit broadcast and
-  sends it; nothing sends on its own.
+  only: never FantasyCalc's values, never the owner's leagues). Its `newsletter_send.py` then puts the issue into Kit as a
+  draft broadcast (Kit's API; the key stays in titan-analytics' config.json, never in this repo); the owner looks it over
+  in Kit and sends it there. Nothing sends on its own, and a sent week is never sent again.
 
 ## Writing (app text, README, store listing)
 
