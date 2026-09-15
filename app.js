@@ -99,6 +99,10 @@
       <b>Add to Home Screen</b>.</span><button class="link" data-action="ios-hint-close">Got it</button></div>`;
   }
 
+  // Lineups' later week while Lineups draws it (screenLineups), and the regular season's last week.
+  let LV = null;
+  const LAST_WEEK = 18;
+
   const S = {
     account: store.get(KEY.account),
     ranks: store.get(KEY.ranks) || {weeks: {}},
@@ -129,6 +133,8 @@
     multi: store.get(KEY.multi) || {week: 0, sources: [], defaults: false, dirty: false},
     mdraft: {text: '', file: '', pos: '', parsed: null, name: '', into: ''},
     mproj: null,
+    // Lineups' week dropdown: a later week to plan (0: this week), Sleeper's schedule, each later week's projections, and the plan worked out.
+    look: {week: 0, season: '', sched: null, proj: {}, A: null, busy: false, error: ''},
     // Results' season so far: each week's totals, kept on this device once its games are all played (loadSeason).
     season: store.get(KEY.season) || null, seasonBusy: false,
     // Compare rankings (Titan's owner only): each week's test, kept on this device once its games are over (loadLab).
@@ -251,6 +257,7 @@
   }
 
   function analyze() {
+    S.look.A = null; // a planned later week is worked out again when next drawn (lookAnalysis)
     if (!S.snap) { S.A = null; return; }
     const r = ranksFor(S.snap.week, S.proj);
     S.A = SCC.analyzeAll(S.snap, rankingsOf(r, S.proj, playerList()));
@@ -279,6 +286,7 @@
       store.set(KEY.snap, snap);
       S.proj = await API.fetchProjections(snap.season, snap.week);
       S.projAt = Date.now();
+      S.look.proj = {}; // later weeks' projections are fetched again when shown (loadLook)
       if (S.score.week === snap.week) S.score.data = null; // live points have moved
       S.trade.teams = {}; // rosters may have changed too, and with them the trade ideas
       S.trade.ideas = {};
@@ -504,7 +512,11 @@
     const drop = LEAGUE_SCREENS[S.ui.tab] && leagues.length > 1 ? `<label class="lpick"><span class="sr-only">Which leagues</span><select data-ui="league">
       <option value="all">All leagues</option>${leagues.map(d => `<option value="${esc(d.cfg.id)}"${d.cfg.id === pick ? ' selected' : ''}>${esc(d.cfg.key)}</option>`).join('')}
       </select></label>` : '';
-    return subs || drop ? `<div class="screenbar">${subs}${drop}</div>` : '';
+    // Lineups: which week, this one or a later one to plan (lookWeek).
+    const wk = S.ui.tab === 'lineups' && S.snap && S.snap.week < LAST_WEEK ? `<label class="lpick wpick"><span class="sr-only">Which week</span><select data-ui="lineWeek">
+      <option value="0">This week (${esc(S.snap.week)})</option>${Array.from({length: LAST_WEEK - S.snap.week}, (_, i) => S.snap.week + 1 + i)
+        .map(n => `<option value="${n}"${n === lookWeek() ? ' selected' : ''}>Week ${n}</option>`).join('')}</select></label>` : '';
+    return subs || drop || wk ? `<div class="screenbar">${subs}${wk}${drop}</div>` : '';
   }
 
   // A section opens on the screen used there last.
@@ -528,7 +540,7 @@
   function ranksBanner(r, week) {
     if (r.defaults) {
       return `<div class="banner ok">Using Titan's <b>default rankings</b> for week ${week}: Sleeper's projections, in each league's own scoring. Import your own and they take over.
-        <button class="link" data-go="ranks">Import week ${week} →</button></div>`;
+        <button class="link" data-go="ranks" data-rweek="${week}">Import week ${week} →</button></div>`;
     }
     if (r.exact && r.filled.length) {
       const many = r.filled.length > 1;
@@ -541,7 +553,7 @@
     }
     if (!r.exact) {
       return `<div class="banner swap">Using your <b>week ${r.week}</b> rankings, since nothing is imported for week ${week} yet.
-        <button class="link" data-go="ranks">Import week ${week} →</button></div>`;
+        <button class="link" data-go="ranks" data-rweek="${week}">Import week ${week} →</button></div>`;
     }
     return '';
   }
@@ -707,16 +719,61 @@
   }
   window.addEventListener('scroll', () => { if (!spyQueued) { spyQueued = true; requestAnimationFrame(spySide); } }, {passive: true});
 
+  /* Lineups' week dropdown (screenBar): this week, or a later one to plan. A later week is worked out from
+     Sleeper's schedule (SCC.planWeek: that week's game days, opponents and byes, nothing locked) and that
+     week's rankings: imported for it, else Sleeper's projections for it (ranksFor). S.A stays this week's for
+     everything else (the nav dot, Waivers, alerts). While Lineups draws a later week, LV holds it, and
+     kickText, teamKick, projOf and ctxLine read it. */
+  const lookWeek = () => (S.snap && S.look.week > S.snap.week && S.look.week <= LAST_WEEK ? S.look.week : 0);
+  const lookReady = w => !!(S.look.sched && S.look.season === S.snap.season && S.look.proj[w]);
+  async function loadLook(w) {
+    if (S.look.busy || !S.snap) return;
+    const season = S.snap.season;
+    S.look.busy = true;
+    try {
+      const [sched, proj] = await Promise.all([
+        S.look.sched && S.look.season === season ? S.look.sched : API.nflSchedule(season),
+        S.look.proj[w] || API.fetchProjections(season, w)]);
+      if (!sched || !sched.length) throw new Error('Sleeper\'s NFL schedule didn\'t load');
+      Object.assign(S.look, {sched, season});
+      S.look.proj[w] = proj || {};
+    } catch (e) {
+      S.look.error = `Week ${w} couldn't be loaded (${e && e.message ? e.message : e}). Pick it again to retry.`;
+    }
+    S.look.busy = false;
+    if (S.ui.tab === 'lineups') render();
+  }
+  function lookAnalysis(w) {
+    if (S.look.A && S.look.A.week === w) return S.look.A;
+    const proj = S.look.proj[w], r = ranksFor(w, proj), snap = SCC.planWeek(S.snap, S.look.sched, w);
+    const A = SCC.analyzeAll(snap, rankingsOf(r, proj, playerList()));
+    return (S.look.A = Object.assign(A, {ranks: r, week: w, snap, proj}));
+  }
+  const planNote = w => `<div class="banner ok plan-note"><b>Planning week ${w}.</b> Your lineups as they're set now, checked against
+    week ${w}'s byes, matchups and rankings.</div>`;
+
   function screenLineups() {
     if (!S.snap) return emptyState();
-    const A = S.A;
+    const w = lookWeek();
+    if (!w) return lineupsFor(S.A, 0);
+    if (!lookReady(w)) {
+      if (!S.look.busy && !S.look.error) loadLook(w);
+      return planNote(w) + (S.look.error ? `<div class="banner stop">${esc(S.look.error)}</div>` : `<p class="fine">Loading week ${w}…</p>`);
+    }
+    const A = lookAnalysis(w);
+    LV = {week: w, games: A.snap.games, proj: A.proj};
+    try { return lineupsFor(A, w); } finally { LV = null; }
+  }
+
+  // Lineups for this week (w 0, S.A) or a later week being planned (w, lookAnalysis).
+  function lineupsFor(A, w) {
     // The league dropdown narrows the leagues first; the filters then count and pick within them.
     const mine = A.leagues.filter(L => inPick(L.cfg));
     const filters = LEAGUE_FILTERS.map(f => Object.assign({n: mine.filter(f.test).length}, f));
     const pickF = filters.find(f => f.id === S.ui.filter) || filters[0];
     const list = mine.filter(pickF.test);
-    let h = ranksBanner(A.ranks, S.snap.week);
-    if (gamesLive()) {
+    let h = (w ? planNote(w) : '') + ranksBanner(A.ranks, w || S.snap.week);
+    if (!w && gamesLive()) {
       h += `<p class="fine live-note">Games are on: scores update about every minute while Lineups is open${
         S.snap.pointsAt ? ` (last ${esc(when(S.snap.pointsAt))})` : ''}.</p>`;
     }
@@ -725,13 +782,13 @@
       ${tile(A.changes.length, A.changes.length === 1 ? 'lineup change' : 'lineup changes', A.changes.length ? 'swap' : 'ok')}
       ${tile(A.hurtStarters.length, A.hurtStarters.length === 1 ? 'injured starter' : 'injured starters', A.hurtStarters.length ? 'stop' : 'ok')}
       ${tile(A.wireLines.length, A.wireLines.length === 1 ? 'wire upgrade' : 'wire upgrades', A.wireLines.length ? 'wire' : 'ok')}
-    </section>
+    </section>${w ? '' : `
     <section class="tiles tiles-games" aria-label="This week's games">
       ${tile(G.startLocked, 'starters locked', 'muted')}
       ${tile(G.startLeft, 'starters yet to play', G.startLeft ? 'ok' : 'muted')}
       ${tile(G.benchLocked, 'bench locked', 'muted')}
       ${tile(G.benchLeft, 'bench yet to play', 'muted')}
-    </section>`;
+    </section>`}`;
     h += `<div class="chips" role="group" aria-label="Filter leagues">${filters
       .filter(f => f.id === 'all' || f.id === 'action' || f.n > 0 || f.id === pickF.id)
       .map(f => `<button class="chip" data-filter="${f.id}" aria-pressed="${f.id === pickF.id}">${esc(f.label)} ${f.n}</button>`).join('')}</div>`;
@@ -746,15 +803,18 @@
       h += `<div class="empty-note">${pickF.id === 'action' ? 'Nothing to do. Every lineup matches your rankings.'
         : `No leagues with ${esc(pickF.label.toLowerCase())} right now.`}</div>`;
     }
-    if (!S.ctx.busy && Date.now() - S.ctx.at > CONTEXT_EVERY) loadContext();
-    const C = S.ctx.data, credit = Object.keys(S.proj).length || C ? `<p class="fine">${Object.keys(S.proj).length ? 'Projections via Sleeper. ' : ''}${C
+    if (!w && !S.ctx.busy && Date.now() - S.ctx.at > CONTEXT_EVERY) loadContext();
+    // A later week: its own projections, and no game lines or weather (those are this week's).
+    const projN = Object.keys(w ? A.proj : S.proj).length, C = w ? null : S.ctx.data;
+    const credit = (w ? '<p class="fine">Injury tags are as they stand today. For a later week, only IR, PUP and suspensions bench a player.</p>' : '') +
+      (projN || C ? `<p class="fine">${projN ? 'Projections via Sleeper. ' : ''}${C
       ? `Game lines from ESPN, forecasts from the <a href="https://www.weather.gov" target="_blank" rel="noopener">National Weather Service</a>, and points
-        allowed by position from <a href="https://github.com/nflverse" target="_blank" rel="noopener">nflverse</a> (CC BY 4.0${C.dvpSeason ? ', ' + esc(C.dvpSeason) + ' season' : ''}).` : ''}</p>` : '';
+        allowed by position from <a href="https://github.com/nflverse" target="_blank" rel="noopener">nflverse</a> (CC BY 4.0${C.dvpSeason ? ', ' + esc(C.dvpSeason) + ' season' : ''}).` : ''}</p>` : '');
     // Leagues sit two across on wide screens (.league-grid).
     return h + (list.length ? `<div class="league-grid">${list.map(leagueCard).join('')}</div>` : '') + credit;
   }
 
-  const projOf = (p, cfg) => SCC.projFor(S.proj, p.id, cfg.ppr);
+  const projOf = (p, cfg) => SCC.projFor(LV ? LV.proj : S.proj, p.id, cfg.ppr);
 
   /* This week's games across every lineup: starters and bench players whose
      game has started (locked) or is still to come. Players on IR or a taxi
@@ -827,7 +887,7 @@
       <summary class="card-h"><div><h3>${leagueIcon(L.cfg)}${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg)) + projLine(L)}</p></div><span class="pill p-${st[0]}">${st[1]}</span></summary>`;
     if (L.moves.length) {
       // A starter changing spots shows where he goes or comes from, and when he plays.
-      h += `<div class="moves"><div class="moves-h"><h4>Make these changes in ${siteName(L.cfg)}</h4>${openSite(L.cfg)}</div>${L.moves.map(m => `
+      h += `<div class="moves"><div class="moves-h"><h4>${LV ? `For week ${LV.week}, make these changes in ${siteName(L.cfg)}` : `Make these changes in ${siteName(L.cfg)}`}</h4>${openSite(L.cfg)}</div>${L.moves.map(m => `
         <div class="move"><span class="slot">${esc(slotName(m.slot))}</span>
           <span class="mv out${m.to ? ' to' : ''}">${m.out ? `${esc(m.out.name)} <em>${m.to ? `to ${esc(slotName(m.to))}${esc(kickOf(m.out))}` : esc(rl(m.out))}</em>` : '<em>nobody</em>'}</span>
           <span class="mv in">${esc(m.inn.name)} <em>${m.from ? `from ${esc(slotName(m.from))}${esc(kickOf(m.inn))}` : esc(rl(m.inn)) + (m.inn.opp ? ' vs ' + esc(m.inn.opp) : '')}</em></span>
@@ -859,8 +919,9 @@
   // ESPN's kickoff time, else the day from Sleeper's schedule, else "Bye".
   function teamKick(team) {
     if (!S.snap) return '';
-    const t = SCC.teamAbbr(team), games = S.snap.games || {};
-    const k = S.snap.kickoffs && S.snap.kickoffs[t];
+    // A later week on Lineups (LV): that week's game days (ESPN's kickoff times are this week's).
+    const t = SCC.teamAbbr(team), games = (LV ? LV.games : S.snap.games) || {};
+    const k = !LV && S.snap.kickoffs && S.snap.kickoffs[t];
     if (k) {
       const d = new Date(k[0]), day = d.toLocaleDateString([], {weekday: 'short'});
       return k[1] ? day + ', time TBD' : day + ' ' + d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
@@ -871,7 +932,7 @@
 
   function kickText(p) {
     if (!S.snap) return '';
-    if (p.bye && Number(p.bye) === Number(S.snap.week)) return 'Bye';
+    if (p.bye && Number(p.bye) === Number(LV ? LV.week : S.snap.week)) return 'Bye';
     return teamKick(p.team) || (p.kick ? playDay(p.kick) : '');
   }
 
@@ -909,6 +970,7 @@
 
   // A player's game context under his name (SCC.gameTags); who he plays only when his rankings don't say.
   function ctxLine(p) {
+    if (LV) return ''; // game lines and weather are this week's
     const tags = SCC.gameTags(S.ctx.data, p, {opp: !p.opp});
     return tags.length ? `<small class="gctx">${tags.map(t => `<span class="${t.tone}">${esc(t.text)}</span>`).join(' · ')}</small>` : '';
   }
@@ -3764,7 +3826,11 @@
     if (head) { tapped = head.parentElement; return; }
     const t = e.target.closest('[data-go],[data-filter],[data-mfilter],[data-sweek],[data-tsort],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-moves],[data-tsearch],[data-action]');
     if (!t) return;
-    if (t.dataset.go) return go(t.dataset.go);
+    if (t.dataset.go) {
+      // "Import week N": the import opens on that week (a later week planned on Lineups, say).
+      if (t.dataset.rweek) S.draft.week = Number(t.dataset.rweek) || S.draft.week;
+      return go(t.dataset.go);
+    }
     if (t.dataset.sweek) {
       const w = Number(t.dataset.sweek);
       if (w >= 1 && S.snap && w <= S.snap.week) loadScore(w);
@@ -3924,6 +3990,7 @@
     else if (t.dataset.ui === 'movesLeague') { S.ui.movesLeague = t.value; saveUi(); render(); }
     else if (t.dataset.ui === 'tradeLeague') { S.ui.tradeLeague = t.value; S.ui.tradePartner = ''; saveUi(); render(); }
     else if (t.dataset.ui === 'tradePartner') { S.ui.tradePartner = t.value; saveUi(); render(); }
+    else if (t.dataset.ui === 'lineWeek') { S.look.week = Number(t.value) || 0; S.look.error = ''; render(); }
     else if (t.dataset.alert) {
       if (S.alerts) S.alerts.prefs[t.dataset.alert] = t.checked;
       if (S.sync.api && S.sync.user) S.sync.api.alertPrefs(alertPrefs()).catch(() => toast('Could not save that choice. Try again.'));

@@ -320,6 +320,23 @@ check(onBye.rows[0].verdict === 'ON BYE' && onBye.stops === 1 && onBye.moves.len
 const notBye = SCC.analyzeAll({week: 6, leagues: [{cfg: byeLg, roster: byeRos, takenNorm: {}, takenAbbr: {}}]}, byeRanks).leagues[0];
 check(notBye.rows[0].verdict === 'OK' && !notBye.moves.length && !notBye.stops, 'any other week he starts as normal');
 
+section('planning a later week (Lineups\' week dropdown)');
+const planSched = [{week: 3, date: '2026-09-27', status: 'pre_game', home: 'KC', away: 'BUF'},
+  {week: 3, date: '2026-09-28', status: 'pre_game', home: 'NYJ', away: 'MIA'}, {week: 1, date: '2026-09-13', status: 'complete', home: 'KC', away: 'SEA'}];
+const planLg = {id: 'P', key: 'P', name: 'P', lineup: ['QB', 'RB']};
+const planRos = [pl('pq', 'Plan Qb', 'QB', 'KC', {locked: true, game: 'complete', pts: 20, inj: 'Out (ankle)', outish: true}),
+  pl('pr', 'Plan Rb', 'RB', 'SEA', {bye: 3}), pl('ps', 'Spare Rb', 'RB', 'MIA', {start: false, slot: '', inj: 'IR (knee)', outish: true})];
+const planSnap = {week: 1, games: {KC: {state: 'complete'}}, kickoffs: {KC: [1]}, leagues: [{cfg: planLg, roster: planRos, takenNorm: {}, takenAbbr: {}}]};
+const plan = SCC.planWeek(planSnap, planSched, 3), pq = plan.leagues[0].roster[0];
+check(plan.week === 3 && !pq.locked && pq.game === 'pre' && pq.kick === '2026-09-27' && pq.pts === null && pq.opp === 'BUF' && !Object.keys(plan.kickoffs).length,
+  'a later week: nothing locked or scored, each player with that week\'s game day and opponent');
+check(!pq.outish && plan.leagues[0].roster[2].outish, 'today\'s Out tag doesn\'t bench him weeks ahead; IR still does');
+check(planRos[0].locked && planRos[0].pts === 20 && planSnap.week === 1 && planSnap.games.KC.state === 'complete', 'this week\'s snapshot is left as it was');
+const planL = SCC.analyzeAll(plan, SCC.weeklyMap([{name: 'Plan Qb', pos: 'QB', team: 'KC', rank: 1}, {name: 'Plan Rb', pos: 'RB', team: 'SEA', rank: 1},
+  {name: 'Spare Rb', pos: 'RB', team: 'MIA', rank: 2}])).leagues[0];
+check(planL.rows[0].verdict === 'OK' && planL.rows[0].p.opp === 'BUF' && planL.rows[1].verdict === 'ON BYE' && !planL.rows[1].p.opp,
+  'the plan starts the QB against BUF, and the RB whose team is off that week shows ON BYE, with no opponent');
+
 section('chance to win a matchup');
 const team = (projs, state, pts) => projs.map((proj, i) => ({proj, state: state || 'pre', pts: pts ? pts[i] : 0}));
 const even = SCC.winProbability(team([15, 15, 15]), team([15, 15, 15]));

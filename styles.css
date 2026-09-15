@@ -180,6 +180,7 @@ main#view { min-height: 100vh; }
 .subtabs button:hover { color: var(--text); }
 .subtabs button[aria-current="page"] { background: var(--text); border-color: var(--text); color: var(--bg); }
 .lpick { margin-left: auto; }
+.wpick + .lpick { margin-left: 0; } /* Lineups' week dropdown leads; the league dropdown sits beside it */
 .lpick select { appearance: none; max-width: 15rem; border: 1px solid var(--line); border-radius: 999px; padding: 7px 30px 7px 12px;
   color: var(--text); font-size: .85rem; font-weight: 650; cursor: pointer; background-color: var(--surface);
   background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);

@@ -716,6 +716,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'Done ticks a claim off: ' + await ev(`document.querySelector('.wplan-h .wmeta').textContent`));
   await shot('waivers-plan');
   await ev(`document.querySelector('[data-wdone]').click(); true`);
+  // Lineups' week dropdown: this week, then every week to come, each a plan.
+  await tab('lineups');
+  const weeks = await ev(`[...document.querySelectorAll('select[data-ui="lineWeek"] option')].map(o => o.value)`);
+  check(weeks.length >= 2 && weeks[0] === '0' && weeks[weeks.length - 1] === '18', `Lineups has a week dropdown: this week, then every week to 18 (${weeks.length} choices)`);
+  const later = weeks[Math.min(2, weeks.length - 1)];
+  const pickWeek = v => ev(`(() => { const s = document.querySelector('select[data-ui="lineWeek"]'); s.value = '${v}'; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
+  await pickWeek(later);
+  check(await waitFor(`!!document.querySelector('.plan-note') && document.querySelector('.plan-note').innerText.includes('Planning week ${later}') &&
+    document.querySelectorAll('.card.league').length === 2`, 30000), `picking week ${later} plans both leagues for that week`);
+  const planned = await ev(`({vs: [...document.querySelectorAll('.card.league .row .who small')].filter(s => / vs [A-Z]{2,3}\\b/.test(s.textContent)).length,
+    games: !!document.querySelector('.tiles-games'), picked: document.querySelector('select[data-ui="lineWeek"]').value})`);
+  check(planned.vs > 0 && !planned.games && planned.picked === later, `each player shows that week's opponent (${planned.vs} rows), without this week's game tiles`);
+  await shot('lineups-plan');
+  await ev(`document.querySelector('.banner [data-rweek]').click(); true`);
+  check(await waitFor(`(document.querySelector('input[data-draft="week"]') || {}).value === '${later}'`, 5000),
+    `its "Import week ${later}" link opens the import on week ${later}`);
+  await tab('lineups');
+  check(await waitFor(`!!document.querySelector('.plan-note')`, 10000), 'and back on Lineups the planned week is still picked');
+  await pickWeek('0');
+  check(await waitFor(`!document.querySelector('.plan-note') && !!document.querySelector('.tiles-games')`, 5000), 'This week goes back to this week\'s lineups');
   await tab('matchup');
   check(/need your real leagues/.test(await text('#view')), 'Matchup explains it needs real leagues');
   bumpWeek = false;

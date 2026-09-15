@@ -144,6 +144,13 @@ How the pieces fit, and what keeps them working.
 
 One note per screen or feature.
 
+- Lineups' week dropdown (`screenBar`, `select[data-ui="lineWeek"]`, `S.look`, not remembered): this week, then
+  every week to 18 (`LAST_WEEK`). A later week is a plan: `SCC.planWeek` (pure, tested) copies the snapshot with
+  that week's game days and opponents from Sleeper's schedule (`API.nflSchedule`), nothing locked or scored, and
+  only lasting injury tags (IR, PUP, Sus, NA, DNR) benching; `lookAnalysis` runs it through `ranksFor` with that
+  week's projections, so rankings imported for that week win. `S.A` stays this week's (nav dot, Waivers, alerts).
+  While a later week draws, `LV` holds it and `kickText`, `teamKick`, `projOf` and `ctxLine` read it; game lines,
+  weather, live notes and the game tiles are this week's only.
 - Matchup: where you stand, in words, comes from `SCC.matchStatus` (pure, tested) through `matchState`
   in `app.js`, which the card and the summary at the top share; the summary's filters are
   `MATCH_KINDS` (`S.ui.matchFilter`, chips `data-mfilter`). Opened, the scoreboard (`.board`) shows the

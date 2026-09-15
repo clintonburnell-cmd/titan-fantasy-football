@@ -1183,6 +1183,44 @@
     return today >= tuesday ? week + 1 : week;
   }
 
+  /* A later week's lineups, for planning (Lineups' week dropdown): a copy of the snapshot as that week
+     will start, from Sleeper's schedule. No game has started, so nothing is locked or scored; each player
+     gets his team's game day and opponent (none on bye); and only injury tags that outlast a game (IR,
+     PUP, suspended and the like) still bench him, since today's Out or Doubtful is about this week.
+     The snapshot itself is left as it was. */
+  var LASTING = {IR: 1, PUP: 1, Sus: 1, NA: 1, DNR: 1};
+  function planWeek(snap, schedule, week) {
+    var games = {}, opp = {};
+    (schedule || []).forEach(function (g) {
+      if (Number(g.week) !== Number(week) || !g.home || !g.away) return;
+      var h = teamAbbr(g.home), a = teamAbbr(g.away);
+      games[h] = {state: 'pre', kick: g.date || ''};
+      games[a] = {state: 'pre', kick: g.date || ''};
+      opp[h] = a;
+      opp[a] = h;
+    });
+    var copy = function (o) { var c = {}; for (var k in o) c[k] = o[k]; return c; };
+    var out = copy(snap || {});
+    out.week = Number(week);
+    out.games = games;
+    out.kickoffs = {};
+    out.leagues = ((snap && snap.leagues) || []).map(function (d) {
+      var l = copy(d);
+      l.roster = d.roster.map(function (p) {
+        var q = copy(p), t = teamAbbr(p.team), g = games[t];
+        q.locked = false;
+        q.game = g ? 'pre' : '';
+        q.kick = g ? g.kick : '';
+        q.pts = null;
+        q.opp = opp[t] || '';
+        q.outish = !!(p.inj && LASTING[p.inj.split(' ')[0]]);
+        return q;
+      });
+      return l;
+    });
+    return out;
+  }
+
   /* Each side's chance to win a matchup, from points so far and what's still to
      come. A player whose game is over counts his points; one still playing, his
      points plus half of whatever his projection still expects; one yet to play,
@@ -1571,7 +1609,7 @@
       var q = {};
       for (var k in p) q[k] = p[k];
       q.rank = w && w.rank !== null ? w.rank : null;
-      q.opp = w ? w.opp : '';
+      q.opp = w && w.opp ? w.opp : (p.opp || ''); // a planned week's opponent (planWeek) when the rankings don't say
       q.implied = w ? w.implied : '';
       q.tier = w ? w.tier : '';
       return q;
@@ -2418,7 +2456,7 @@
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
     trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
-    openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, applyPoints: applyPoints,
+    openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, planWeek: planWeek, applyPoints: applyPoints,
     keepStartedRanks: keepStartedRanks, winProbability: winProbability, matchStatus: matchStatus, benchMistakes: benchMistakes,
     labWeek: labWeek, rankCorrelation: rankCorrelation
   };

@@ -814,8 +814,11 @@
     }
   }
 
+  // Sleeper's NFL schedule for a season: each game's week, date, teams and status (Lineups' later weeks).
+  function nflSchedule(season) { return getJson(SCHEDULE + season); }
+
   var api = {
-    fetchSeasonProjections: fetchSeasonProjections,
+    fetchSeasonProjections: fetchSeasonProjections, nflSchedule: nflSchedule,
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
     collect: collect, collectScores: collectScores, livePoints: livePoints,
     collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule, leagueDraft: leagueDraft,
