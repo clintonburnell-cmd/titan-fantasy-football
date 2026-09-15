@@ -1815,7 +1815,7 @@
      can't fill, and who's off. Players on IR or the taxi squad, or out long-term,
      don't count as available. A spot that's already empty without any byes
      (the Lineups tab flags those) isn't blamed on the bye. */
-  var LONG_OUT = {IR: 1, PUP: 1, Sus: 1, NA: 1, DNR: 1};
+  var LONG_OUT = LASTING; // the same idea as planWeek's: an injury that outlasts a week
   function byeNeeds(leagues, fromWeek) {
     var from = Number(fromWeek) || 1;
     return leagues.map(function (d) {

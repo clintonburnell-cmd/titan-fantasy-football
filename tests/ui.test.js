@@ -390,9 +390,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(scoreOpen && await ev(`[...document.querySelectorAll('details.score')].every(d => !d.open)`),
     'Results has Expand all and Collapse all, like the other tabs');
   const rs = await ev(`({pts: !!document.querySelector('.wsum-pts b'), res: [...document.querySelectorAll('details.score .sres')].map(s => s.innerText),
-    // This week: no arrow ahead. The week before (Tuesday until the first kickoff): the arrow goes to this week.
+    // This week: no arrow ahead. The week before (Tuesday until the first kickoff): the arrow to this week opens only once a game has started.
     ahead: (() => { const b = document.querySelectorAll('.wstep [data-sweek]')[1], now = !!document.querySelector('.wstep h3 small');
-      return now ? b.disabled : !b.disabled; })(), help: !!document.querySelector('.results-help'),
+      return now ? b.disabled : true; })(), help: !!document.querySelector('.results-help'),
     fits: document.documentElement.scrollWidth <= innerWidth, sec: document.querySelector('#tabs .sec-btn[data-tab="score"]').getAttribute('aria-current')})`);
   check(rs.pts && rs.res.length === 1 && /^(W|L|T|Winning|Losing|Tied) \d/.test(rs.res[0]) && rs.ahead && rs.help && rs.fits && rs.sec === 'page',
     `Results is its own section: the week's points up top, won or lost in each league (${rs.res.join(', ')}), no arrow past this week, the explanations in one fold`);
@@ -450,7 +450,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`(() => { const i = document.querySelector('[data-trade-search]'); i.value = ${JSON.stringify(team3Player)}; i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
   check(await waitFor(`[...document.querySelectorAll('#tsearch .wrow')].some(r => r.querySelector('b').textContent === ${JSON.stringify(team3Player)} && /on Team 3/.test(r.textContent))`, 3000),
     'searching a player shows who has him in each league: ' + team3Player + ', on Team 3 (' + (await text('#tsearch')).replace(/\s+/g, ' ').slice(0, 80) + ')');
-  check(await ev(`(() => { const n = document.querySelectorAll('[data-ui="tradeLeague"] option').length, rows = [...document.querySelectorAll('#tsearch .wrow')];
+  check(await ev(`(() => { const n = (JSON.parse(localStorage.getItem('titan.snapshot.v1') || '{}').leagues || []).length, rows = [...document.querySelectorAll('#tsearch .wrow')];
     return n > 0 && rows.length > 0 && rows.every(r => r.querySelectorAll('.wst').length === n); })()`),
     'every player found has a line for every league: the team that has him, yours, or free agent');
   await shot('trade-search');
@@ -554,13 +554,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await tab('waivers');
   check(await waitFor(`/Your waiver plan/.test(document.getElementById('view').textContent)`, 5000), 'the waiver plan leads the Waivers tab (its claims are checked in the demo)');
   await tab('lineups');
-  await ev(`document.querySelector('.lineup [data-pcard]').click(); true`);
+  await ev(`(() => { const b = document.querySelector('.lineup [data-pcard]'); b.focus(); b.click(); return true; })()`);
   check(await waitFor(`!!document.querySelector('dialog.pcard[open]') && location.pathname === '/app/lineups'`, 3000), 'tapping a starter\'s name opens his card');
   check(await waitFor(`!!document.querySelector('dialog.pcard .pctable') || /No games for him/.test(document.querySelector('dialog.pcard').textContent)`, 20000),
     'his stats load from Sleeper: ' + await ev(`(document.querySelector('dialog.pcard .dlg-body') || {}).textContent.replace(/\\s+/g, ' ').trim().slice(0, 120)`));
   await shot('player-card');
   await ev(`history.back(); true`);
   check(await waitFor(`!document.querySelector('dialog.pcard[open]') && location.pathname === '/app/lineups'`, 3000), 'Back closes the card and stays on Lineups');
+  check(await ev(`document.activeElement === document.querySelector('.lineup [data-pcard]')`), 'and keyboard focus returns to the name that opened it');
 
   T.section('the Standings tab');
   await tab('standings');
@@ -731,8 +732,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'Done ticks a claim off: ' + await ev(`document.querySelector('.wplan-h .wmeta').textContent`));
   await shot('waivers-plan');
   await ev(`document.querySelector('[data-wdone]').click(); true`);
-  // Each league card: the recommended lineup first, then yours beside it (or one line when they match).
+  // A repaint patches the page in place: a filter chip keeps keyboard focus after its click redraws the screen, and the
+  // same league card element is still there afterwards.
   await tab('lineups');
+  const kept = await ev(`(() => { const chip = document.querySelector('.chips [data-filter="action"]') || document.querySelector('.chips [data-filter]');
+    const card = document.querySelector('.card.league'); chip.focus(); chip.click();
+    return {focus: document.activeElement === document.querySelector('.chips [data-filter="' + chip.dataset.filter + '"]'), same: card.isConnected,
+      pressed: document.querySelector('.chips [data-filter="' + chip.dataset.filter + '"]').getAttribute('aria-pressed')}; })()`);
+  check(kept.focus && kept.pressed === 'true', `a repaint keeps keyboard focus on the chip just pressed (same card element kept: ${kept.same})`);
+  await ev(`document.querySelector('.chips [data-filter="all"]').click(); true`);
+  // Each league card: the recommended lineup first, then yours beside it (or one line when they match).
   const cmp = await ev(`(() => { const c = document.querySelector('.card.league'), t = c.querySelector('.lu-cmp');
     return {rec: c.querySelectorAll('.lineup-rec .row').length, head: (c.querySelector('.lu-h') || {}).textContent || '', rows: t ? t.querySelectorAll('tbody tr').length : 0,
       diff: t ? t.querySelectorAll('tr.lu-diff').length : 0, fresh: c.querySelectorAll('.lineup-rec .r-new').length, same: !!c.querySelector('.lu-same'),
@@ -1011,9 +1020,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const homeForms = homeHtml.match(/<form[^>]*data-newsletter=[^>]*>/g) || [];
   check(homeForms.length === 2 && homeForms.every(f => /action="https:\/\/app\.kit\.com\/forms\/9921118\/subscriptions"/.test(f) && /method="post"/.test(f)),
     'each box\'s form carries Kit\'s address in the HTML itself, so a signup works even without newsletter.js');
-  check(await ev(`(() => { const s = document.querySelector('.site-menu'), d = getComputedStyle(s).display !== 'none', n = getComputedStyle(document.querySelector('.site-nav')).display === 'none';
-    return d && n && s.querySelectorAll('nav a[href="/guides/"], nav a[href="/newsletter/"]').length === 2 && document.querySelector('.skip').getAttribute('href') === '#main' && !!document.getElementById('main'); })()`),
-    'on a phone the header shows a Menu with Guides and the weekly email in place of the nav, and every page starts with a skip link');
+  // The boxes ship visible, so the wait above can pass before the stylesheet applies: wait for it.
+  await waitFor(`getComputedStyle(document.querySelector('.site-nav')).display === 'none'`, 5000);
+  const menu = await ev(`(() => { const s = document.querySelector('.site-menu'), skip = document.querySelector('.skip');
+    return {menu: !!s && getComputedStyle(s).display !== 'none', navHidden: getComputedStyle(document.querySelector('.site-nav')).display === 'none',
+      links: s ? s.querySelectorAll('nav a[href="/guides/"], nav a[href="/newsletter/"]').length : 0, skip: skip ? skip.getAttribute('href') : 'none',
+      main: !!document.getElementById('main'), width: innerWidth}; })()`);
+  check(menu.menu && menu.navHidden && menu.links === 2 && menu.skip === '#main' && menu.main,
+    `on a phone the header shows a Menu with Guides and the weekly email in place of the nav, and every page starts with a skip link (${JSON.stringify(menu)})`);
   await shot('home-newsletter');
   await ev(`document.querySelector('#newsletter').scrollIntoView({block: 'start', behavior: 'instant'}); true`);
   await sleep(300);

@@ -137,7 +137,7 @@
     mdraft: {text: '', file: '', pos: '', parsed: null, name: '', into: ''},
     mproj: null,
     // Lineups' week dropdown: a later week to plan (0: this week), Sleeper's schedule, each later week's projections, and the plan worked out.
-    look: {week: 0, season: '', sched: null, proj: {}, A: null, busy: false, error: ''},
+    look: {week: 0, season: '', sched: null, proj: {}, none: {}, A: null, busy: false, error: ''},
     // Results' season so far: each week's totals, kept on this device once its games are all played (loadSeason).
     season: store.get(KEY.season) || null, seasonBusy: false,
     // Compare rankings (Titan's owner only): each week's test, kept on this device once its games are over (loadLab).
@@ -166,7 +166,7 @@
     q.delete('yahoo');
     if (location.protocol !== 'file:') history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
   }
-  if (S.snap && S.account && S.snap.userId !== S.account.userId) S.snap = null;
+  if (S.snap && S.account && S.snap.userId !== S.account.userId) { S.snap = null; store.del(KEY.snap); }
   // Yahoo's terms: its data is kept a day at most, so an older saved refresh loses its Yahoo
   // leagues (the next refresh brings them back).
   if (S.snap && Date.now() - (S.snap.at || 0) > 24 * 3600 * 1000 && (S.snap.available || []).some(l => l.platform === 'yahoo')) {
@@ -182,8 +182,8 @@
   const $ = id => document.getElementById(id);
   const view = $('view');
   // Draft results' pop-up (made on first use), what it last showed, whether Back closed it, and the teams open in it.
-  let DLG = null, dlgHtml = '', dlgBack = false;
-  let PC = null, pcBack = false; // the player card's <dialog>, closed by Back like the draft results'
+  let DLG = null, dlgHtml = '', dlgBack = false, dlgOpener = null;
+  let PC = null, pcBack = false, pcOpener = null; // the player card's <dialog>, closed by Back like the draft results'; focus returns to what opened each
   const dOpen = new Set();
 
   /* ------------------------------------------------------------ helpers */
@@ -276,6 +276,32 @@
     el.hidden = !msg;
   }
 
+  /* The saved refresh (KEY.snap): every full refresh, and at most every five minutes from the live tick (it's the
+     whole snapshot, serialised). A device with full or blocked storage is told once, rather than opening on old
+     data next time with no explanation. */
+  const STORAGE_FULL = 'Titan couldn\'t save your leagues on this device: browser storage is full or blocked, so the next open may show old data. Deleting old rankings on the Rankings screen frees room.';
+  let snapSavedAt = 0;
+  function saveSnap(always) {
+    if (!always && Date.now() - snapSavedAt < 5 * 60000) return true;
+    const ok = store.set(KEY.snap, S.snap);
+    if (ok) { snapSavedAt = Date.now(); if (S.error === STORAGE_FULL) S.error = ''; }
+    else if (!S.error) S.error = STORAGE_FULL;
+    return ok;
+  }
+
+  // Storage that outlives its use: projections and kickoffs for other seasons, and projections for weeks well past.
+  function pruneStorage() {
+    let s;
+    try { s = window.localStorage; } catch (e) { return; }
+    if (!s || !S.snap) return;
+    const season = String(S.snap.season), week = Number(S.snap.week) || 1, gone = [];
+    for (let i = 0; i < s.length; i++) {
+      const m = /^titan\.(proj|kickoffs|sproj)\.v1\.(\d{4})(?:\.(\d+))?$/.exec(s.key(i) || '');
+      if (m && (m[2] !== season || (m[1] === 'proj' && Number(m[3]) < week - 2))) gone.push(m[0]);
+    }
+    gone.forEach(k => store.del(k));
+  }
+
   async function refresh() {
     if (S.busy || !S.account) return;
     S.busy = true;
@@ -287,10 +313,12 @@
       const snap = await API.collect(S.account, setProgress, S.snap && S.snap.available);
       snap.userId = S.account.userId;
       S.snap = snap;
-      store.set(KEY.snap, snap);
+      saveSnap(true);
       S.proj = await API.fetchProjections(snap.season, snap.week);
       S.projAt = Date.now();
       S.look.proj = {}; // later weeks' projections are fetched again when shown (loadLook)
+      S.look.none = {};
+      pruneStorage();
       if (S.score.week === snap.week) S.score.data = null; // live points have moved
       S.trade.teams = {}; // rosters may have changed too, and with them the trade ideas
       S.trade.ideas = {};
@@ -347,7 +375,7 @@
           // other minute). On Matchup, both lineups reload every other minute.
           const second = gamesLive() && liveTick % 2 === 0;
           await API.livePoints(S.snap, tab === 'lineups' && second);
-          store.set(KEY.snap, S.snap);
+          saveSnap();
           analyze();
           if (tab === 'matchup' && second) await loadMatchups(true);
           else if (S.ui.tab === tab && !S.busy) render();
@@ -382,17 +410,21 @@
   // `latest`: no week picked, so a week that hasn't kicked off yet (Tuesday until its first game) opens the week before.
   async function loadScore(week, latest) {
     if (DEMO) return;
+    if (S.score.busy && S.score.week === week) return;
+    const prev = S.score;
     S.score = {week, busy: true, data: null, error: ''};
     if (S.ui.tab === 'score') render();
     try {
       const D = await scoreFor(week);
       if (S.score.week !== week) return; // another week was picked meanwhile
-      if (!D && latest && week > 1) return loadScore(week - 1);
-      if (!D) S.score.error = `Week ${week} has not kicked off yet, so there's nothing to score.`;
+      if (!D && latest && week > 1) return loadScore(week - 1, true);
+      // A week that hasn't kicked off: the week that was showing stays, with a note.
+      if (!D) S.score = Object.assign({}, prev, {busy: false, error: `Week ${week} hasn't kicked off yet, so there's nothing to score.`, errorAt: Date.now()});
       else { S.score.data = D; keepWeek(D); }
     } catch (e) {
       if (S.score.week !== week) return;
       S.score.error = `Could not load week ${week}: ${e && e.message ? e.message : e}`;
+      S.score.errorAt = Date.now();
     }
     S.score.busy = false;
     if (S.ui.tab === 'score') render();
@@ -472,6 +504,45 @@
     if (keys.join() !== (S.ui.seenWire || []).join()) { S.ui.seenWire = keys; saveUi(); }
   }
 
+  /* Repaints a screen by patching the page in place rather than replacing it wholesale, so what the person
+     has (keyboard focus, a table scrolled sideways, an open menu, decoded photos, a half-typed search) survives
+     each repaint: the live tick repaints every minute during games. Elements pair up by position, or by id when
+     both sides have one; attributes and text are set only where they differ. A field being typed in keeps its
+     value. */
+  const tpl = document.createElement('template');
+  function paint(root, html) {
+    tpl.innerHTML = html;
+    morphChildren(root, tpl.content);
+  }
+  function morph(from, to) {
+    for (const a of [...from.attributes]) if (!to.hasAttribute(a.name)) from.removeAttribute(a.name);
+    for (const a of [...to.attributes]) if (from.getAttribute(a.name) !== a.value) from.setAttribute(a.name, a.value);
+    const tag = from.tagName;
+    if ((tag === 'INPUT' && from.type !== 'file') || tag === 'TEXTAREA' || tag === 'SELECT') {
+      if (document.activeElement !== from && from.value !== to.value) from.value = to.value;
+    }
+    morphChildren(from, to);
+  }
+  function morphChildren(from, to) {
+    const want = [...to.childNodes];
+    for (let i = 0; i < want.length; i++) {
+      const w = want[i];
+      let have = from.childNodes[i];
+      if (w.nodeType === 1 && w.id) {
+        // The same element by id, wherever it is now, moves into place (a league card, say, when one before it went).
+        for (let j = i + 1; j < from.childNodes.length; j++) {
+          const c = from.childNodes[j];
+          if (c.nodeType === 1 && c.id === w.id) { from.insertBefore(c, have || null); have = c; break; }
+        }
+      }
+      if (!have) { from.appendChild(w); continue; }
+      if (have.nodeType !== w.nodeType || (w.nodeType === 1 && have.tagName !== w.tagName)) { from.replaceChild(w, have); continue; }
+      if (w.nodeType === 1) morph(have, w);
+      else if (have.nodeValue !== w.nodeValue) have.nodeValue = w.nodeValue;
+    }
+    while (from.childNodes.length > want.length) from.removeChild(from.lastChild);
+  }
+
   function render() {
     // On Waivers, what's there counts as seen (only once the leagues are analysed, so nothing is lost before then).
     if (S.ui.tab === 'waivers' && S.A) markWireSeen();
@@ -480,9 +551,9 @@
     if (!S.account) { document.title = 'Titan Fantasy Football Manager'; view.innerHTML = iosHint() + screenWelcome(); return; }
     const err = S.error ? `<div class="banner stop">${esc(S.error)}</div>` : '';
     sideItems = null;
-    const body = `<h2 class="sr-only">${TAB_NAMES[S.ui.tab]}</h2>` + iosHint() + demoBanner() + err + screenBar() + SCREENS[S.ui.tab]();
+    const body = `<h2 class="sr-only">${SUB_NAMES[S.ui.tab] || TAB_NAMES[S.ui.tab]}</h2>` + iosHint() + demoBanner() + err + screenBar() + SCREENS[S.ui.tab]();
     // On a wide computer window Lineups, Matchup, Rosters and Results put their leagues down the left side.
-    view.innerHTML = sideItems ? `<div class="with-side">${sideNav(sideItems)}<div class="side-main">${body + yahooCredit()}</div></div>` : body + yahooCredit();
+    paint(view, sideItems ? `<div class="with-side">${sideNav(sideItems)}<div class="side-main">${body + yahooCredit()}</div></div>` : body + yahooCredit());
     if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
     if (S.ui.tab === 'value' || S.ui.tab === 'dump') applyValueFilter();
     // A sub-tab row too wide for a phone (the owner's Rankings) scrolls sideways to show the screen that's open.
@@ -514,8 +585,13 @@
   }
   const inPick = cfg => { const p = pickedLeague(); return p === 'all' || cfg.id === p; };
 
+  // Standings and Trade show one league at a time: under All leagues, the one shown is named, and the dropdown at the top picks another.
+  const onePick = (d, leagues) => (pickedLeague() === 'all' && leagues.length > 1
+    ? `<p class="fine one-pick">Showing <b>${esc(d.cfg.key)}</b>. Pick another league at the top.</p>` : '');
+
   /* The top of each screen: its section's screens as sub-tabs, and on the screens that show leagues
-     (LEAGUE_SCREENS) the one league dropdown that steers them all. */
+     (LEAGUE_SCREENS) the one league dropdown that steers them all. A screen that always shows every league
+     says so in the dropdown's place while a league is picked, so the filter never seems to vanish. */
   function screenBar() {
     const sec = sectionOf(S.ui.tab), leagues = (S.snap && S.snap.leagues) || [], pick = pickedLeague();
     const subTabs = sec ? sec.tabs.filter(t => !OWNER_TABS.includes(t) || S.owner.is) : [];
@@ -523,7 +599,8 @@
       `<button type="button" data-go="${t}"${t === S.ui.tab ? ' aria-current="page"' : ''}>${esc(SUB_NAMES[t] || TAB_NAMES[t])}</button>`).join('')}</nav>` : '';
     const drop = LEAGUE_SCREENS[S.ui.tab] && leagues.length > 1 ? `<label class="lpick"><span class="sr-only">Which leagues</span><select data-ui="league">
       <option value="all">All leagues</option>${leagues.map(d => `<option value="${esc(d.cfg.id)}"${d.cfg.id === pick ? ' selected' : ''}>${esc(d.cfg.key)}</option>`).join('')}
-      </select></label>` : '';
+      </select></label>` : leagues.length > 1 && pick !== 'all' && S.account && !S.account.demo
+      ? '<span class="lpick lpick-off" title="This screen shows every league">All leagues</span>' : '';
     // Lineups: which week, this one or a later one to plan (lookWeek).
     const wk = S.ui.tab === 'lineups' && S.snap && S.snap.week < LAST_WEEK ? `<label class="lpick wpick"><span class="sr-only">Which week</span><select data-ui="lineWeek">
       <option value="0">This week (${esc(S.snap.week)})</option>${Array.from({length: LAST_WEEK - S.snap.week}, (_, i) => S.snap.week + 1 + i)
@@ -706,13 +783,13 @@
     if (side()) { sideItems = items; return ''; }
     if (!chips || items.length < 2) return '';
     return `<nav class="jump" aria-label="Jump to a league">${items.map(x => `<button type="button" class="jump-chip" data-jump="${anchor(x.cfg)}">${
-      x.flag ? '<i class="dot" title="Needs action"></i>' : ''}${leagueIcon(x.cfg, 'xs')}${esc(x.cfg.key)}</button>`).join('')}</nav>`;
+      x.flag ? '<i class="dot" role="img" aria-label="Needs action" title="Needs action"></i>' : ''}${leagueIcon(x.cfg, 'xs')}${esc(x.cfg.key)}</button>`).join('')}</nav>`;
   }
   function sideNav(items) {
     // When some leagues have a needs-action dot, the others keep an empty slot so the names line up.
     const dots = items.some(x => x.flag);
     return `<nav class="side" aria-label="Your leagues"><p class="side-h">${plural(items.length, 'league')}</p>${items.map(x =>
-      `<button type="button" class="side-link" data-jump="${anchor(x.cfg)}">${x.flag ? '<i class="dot" title="Needs action"></i>'
+      `<button type="button" class="side-link" data-jump="${anchor(x.cfg)}">${x.flag ? '<i class="dot" role="img" aria-label="Needs action" title="Needs action"></i>'
         : dots ? '<i class="dot off" aria-hidden="true"></i>' : ''}${leagueIcon(x.cfg)}<span class="sl-name">${
         esc(x.cfg.key)}<small>${siteName(x.cfg)}</small></span></button>`).join('')}</nav>`;
   }
@@ -749,6 +826,7 @@
       if (!sched || !sched.length) throw new Error('Sleeper\'s NFL schedule didn\'t load');
       Object.assign(S.look, {sched, season});
       S.look.proj[w] = proj || {};
+      S.look.none[w] = !Object.keys(proj || {}).length; // Sleeper hasn't published that week's projections yet
     } catch (e) {
       S.look.error = `Week ${w} couldn't be loaded (${e && e.message ? e.message : e}). Pick it again to retry.`;
     }
@@ -784,7 +862,8 @@
     const filters = LEAGUE_FILTERS.map(f => Object.assign({n: mine.filter(f.test).length}, f));
     const pickF = filters.find(f => f.id === S.ui.filter) || filters[0];
     const list = mine.filter(pickF.test);
-    let h = (w ? planNote(w) : '') + ranksBanner(A.ranks, w || S.snap.week);
+    let h = (w ? planNote(w) : '') + (w && S.look.none[w] ? `<div class="banner swap">Sleeper hasn't published week ${w}'s projections yet, so this plan
+      checks byes, injuries and opponents against your latest rankings.</div>` : '') + ranksBanner(A.ranks, w || S.snap.week);
     if (!w && gamesLive()) {
       h += `<p class="fine live-note">Games are on: scores update about every minute while Lineups is open${
         S.snap.pointsAt ? ` (last ${esc(when(S.snap.pointsAt))})` : ''}.</p>`;
@@ -1279,7 +1358,7 @@
     // The scoreboard when a league is open, like Sleeper's: picture, full name, record, players left, the score and the projection.
     const side = (s, t, cls, x) => `<div class="sb-side ${cls}">${pic(s, 44)}<b class="bname">${esc(s.name)}</b>
       <small>${esc([s.record, toPlay(t)].filter(Boolean).join(' · '))}</small>
-      <span class="sb-pts${tone(x)}">${fmt(t.pts)}</span><small>projected ${fmt(t.proj)}</small></div>`;
+      <span class="sb-pts${tone(x)}">${fmt(t.pts)}</span><small>${t.started && !final ? 'projected final ' + fmt(t.final) : 'projected ' + fmt(t.proj)}</small></div>`;
     const say = `<p class="mh-status ${st.phase === 'pre' ? 'pre' : st.lead > 0 ? 'ahead' : st.lead < 0 ? (favored ? 'fav' : 'behind') : ''}">${esc(st.text)}${
       favored ? ', still projected to win' : ''}${
       st.phase === 'live' ? ` <small>· ${a.left} of yours to play, ${b.left} of theirs</small>` : ''}</p>`;
@@ -1305,7 +1384,9 @@
   // A matchup's totals, where you stand (SCC.matchStatus) and your chance to win, for its card and the summary.
   function matchState(m) {
     const a = sideTotals(m.me, m.cfg), b = sideTotals(m.opp, m.cfg);
-    return {a, b, st: SCC.matchStatus(a, b), pa: Math.round(SCC.winProbability(winList(m.me, m.cfg), winList(m.opp, m.cfg)).a * 100)};
+    const wp = SCC.winProbability(winList(m.me, m.cfg), winList(m.opp, m.cfg));
+    // Once games start, each side's projected final (points so far plus what's left) is the number the win chance rests on.
+    return {a: Object.assign(a, {final: wp.expA}), b: Object.assign(b, {final: wp.expB}), st: SCC.matchStatus(a, b), pa: Math.round(wp.a * 100)};
   }
   // The summary's filters: winning, losing, and close (a chance to win between 35% and 65%, until it's final).
   const MATCH_KINDS = {win: x => x.s.st.lead > 0, lose: x => x.s.st.lead < 0, close: x => x.s.st.phase !== 'final' && x.s.pa >= 35 && x.s.pa <= 65};
@@ -1477,8 +1558,10 @@
 
   function screenByes() {
     if (!S.snap) return emptyState();
-    const B = SCC.byeMap(S.A.leagues, S.snap.byes);
-    const N = SCC.byeNeeds(S.A.leagues, S.snap.week);
+    // The league dropdown narrows everything here: the table, the banners and the totals.
+    const mine = S.A.leagues.filter(L => inPick(L.cfg));
+    const B = SCC.byeMap(mine, S.snap.byes);
+    const N = SCC.byeNeeds(mine, S.snap.week);
     const short = N.filter(n => n.needs.length).length;
     const cell = n => (n ? `<td style="--heat:${(Math.min(n, 6) / 6).toFixed(2)}">${n}</td>` : '<td class="zero">·</td>');
     let h = `<p class="lede">Players on your current rosters who are off each week. Under a league, each upcoming week where byes
@@ -1506,6 +1589,8 @@
      on the bench), then the bench's biggest misses (SCC.benchMistakes), the season so far with a
      chart, and every league with won or lost and its lineup. The explanations sit in one fold. */
   const gap = n => (n > 0 ? '+' : n < 0 ? '−' : '') + fmt(Math.abs(n));
+  // Whether any of this week's games has kicked off (before that there's nothing to score).
+  const weekStarted = () => Object.values((S.snap && S.snap.games) || {}).some(g => g && g.state !== 'pre');
   function screenScore() {
     if (DEMO) return demoOnly('Results', 'Results score your real teams week by week, against what your rankings would have started.');
     if (!S.snap) return emptyState();
@@ -1513,7 +1598,7 @@
     let h = `<div class="wstep">
       <button type="button" class="btn ghost small" data-sweek="${wk - 1}"${wk <= 1 || busy ? ' disabled' : ''} aria-label="Week ${wk - 1}">‹</button>
       <h3>Week ${wk}${wk === cur ? ' <small>this week</small>' : ''}</h3>
-      <button type="button" class="btn ghost small" data-sweek="${wk + 1}"${wk >= cur || busy ? ' disabled' : ''} aria-label="Week ${wk + 1}">›</button>
+      <button type="button" class="btn ghost small" data-sweek="${wk + 1}"${wk >= cur || busy || (wk + 1 === cur && !weekStarted()) ? ' disabled' : ''} aria-label="Week ${wk + 1}">›</button>
       ${busy ? '<span class="fine">Loading…</span>' : '<button type="button" class="link" data-action="score">Reload</button>'}</div>`;
     if (S.score.error) h += `<div class="banner swap">${esc(S.score.error)}</div>`;
     // The leagues down the left side on a wide computer window, as on Lineups (Results has no chips).
@@ -1828,7 +1913,8 @@
   // Opens a week: its saved sources if it was combined before, else none.
   function multiWeek(w) {
     const saved = S.ranks.weeks[w] && S.ranks.weeks[w].multi;
-    S.multi = {week: w, sources: saved ? JSON.parse(JSON.stringify(saved.sources || [])) : [], defaults: !!(saved && saved.defaults), dirty: false};
+    // A source whose rows were pruned (an old week) can't be recombined: it's left out, to add again from its file.
+    S.multi = {week: w, sources: saved ? JSON.parse(JSON.stringify((saved.sources || []).filter(s => s.rows))) : [], defaults: !!(saved && saved.defaults), dirty: false};
     S.mdraft = noMdraft();
     saveMulti();
   }
@@ -1959,6 +2045,12 @@
     const label = C.sources.map(n => { const s = M.sources.find(x => x.name === n); return n + (s && s.weight > 1 ? ' ' + s.weight + 'x' : ''); }).join(' + ');
     S.ranks.weeks[w] = {rows: C.rows.concat(kept), savedAt: Date.now(), source: 'combined: ' + label,
       multi: {sources: M.sources.map(s => ({name: s.name, weight: Number(s.weight) || 1, files: s.files || [], rows: s.rows})), defaults: !!M.defaults}};
+    // Only the last few combined weeks keep their sources' full rows (they're the biggest thing stored): older
+    // weeks keep the names and weights, and would need their files again to be recombined.
+    Object.keys(S.ranks.weeks).forEach(k => {
+      const e = S.ranks.weeks[k];
+      if (Number(k) < w - 2 && e && e.multi && e.multi.sources) e.multi.sources.forEach(src => { delete src.rows; });
+    });
     if (!store.set(KEY.ranks, S.ranks)) { toast('Could not save. Browser storage is full or blocked.'); return; }
     pushWeek(w);
     M.dirty = false;
@@ -2382,10 +2474,10 @@
     const tab = LINK_TABS.some(t => t.id === S.ui.linkTab) ? S.ui.linkTab : S.account.userId ? 'espn' : 'sleeper';
     return `<h3>Link more leagues?</h3>
       <p class="fine">Every league you link is managed together: one set of rankings, one lineup check.</p>
-      <div class="chips" role="tablist" aria-label="Fantasy sites">${LINK_TABS.map(t =>
-        `<button class="chip" role="tab" data-link-tab="${t.id}" aria-selected="${t.id === tab}" aria-pressed="${t.id === tab}">${t.name}${
+      <div class="chips" role="group" aria-label="Fantasy sites">${LINK_TABS.map(t =>
+        `<button class="chip" data-link-tab="${t.id}" aria-pressed="${t.id === tab}">${t.name}${
           status[t.id] ? ` <small>${esc(status[t.id])}</small>` : ''}</button>`).join('')}</div>
-      <div class="link-pane" role="tabpanel">${tab === 'sleeper' ? sleeperHtml : tab === 'espn' ? espnSettings() : yahooLink()}</div>`;
+      <div class="link-pane">${tab === 'sleeper' ? sleeperHtml : tab === 'espn' ? espnSettings() : yahooLink()}</div>`;
   }
 
   /* Yahoo leagues are being built: Titan's owner can link Yahoo to try it (the
@@ -2860,7 +2952,7 @@
     const u = S.sync.user;
     el.hidden = DEMO || !S.account || !S.sync.ready;
     if (el.hidden) return;
-    el.innerHTML = u
+    const html = u
       ? `<button type="button" class="acct-btn" data-acct="menu" aria-haspopup="menu" aria-expanded="false">${u.photo
           ? `<img src="${esc(u.photo)}" alt="" width="28" height="28" referrerpolicy="no-referrer">` : avatar('', 28)}<span>${esc(u.name || 'Account')}</span></button>
         <div class="acct-menu" role="menu" hidden><p>${esc(u.email || '')}</p>
@@ -2868,7 +2960,10 @@
           <a role="menuitem" href="/guides/">Guides</a>
           <button type="button" role="menuitem" data-acct="signout">Sign out</button></div>`
       : '<button type="button" class="btn ghost small" data-acct="signin">Sign in</button>';
+    // Only when it changed: a repaint mid-game would otherwise close the open menu.
+    if (html !== acctHtml) el.innerHTML = acctHtml = html;
   }
+  let acctHtml = '';
 
   function acctMenu(open) {
     const btn = document.querySelector('#acct [data-acct="menu"]'), menu = document.querySelector('#acct .acct-menu');
@@ -3056,27 +3151,40 @@
   }
 
   // Sleeper ids by name, for headshots of players the rankings name (built once per player list).
-  let nameIdx = {for: null, map: {}};
-  function idByName(players, name) {
+  /* The player list indexed once per list: each name normalised (SCC.norm is a few regexes, too slow to run over
+     every player on every keystroke), by name for lookups and as a list of players on a team for the searches. */
+  let nameIdx = {for: null, map: {}, list: []};
+  function indexOf(players) {
     if (nameIdx.for !== players) {
-      const map = {};
-      for (const id in players) { const n = SCC.norm(players[id][0]); if (!(n in map)) map[n] = id; }
-      nameIdx = {for: players, map};
+      const map = {}, list = [];
+      for (const id in players) {
+        const e = players[id];
+        if (!e) continue;
+        const n = SCC.norm(e[0]);
+        if (!(n in map)) map[n] = id;
+        if (e[2]) list.push({id, n, name: e[0], pos: e[1], team: e[2]});
+      }
+      nameIdx = {for: players, map, list};
     }
-    return nameIdx.map[SCC.norm(name)] || '';
+    return nameIdx;
+  }
+  const idByName = (players, name) => indexOf(players).map[SCC.norm(name)] || '';
+  // Players whose name contains the (normalised) search, at most `max`.
+  function searchPlayers(players, q, max) {
+    const found = [];
+    for (const e of indexOf(players).list) {
+      if (e.n.indexOf(q) < 0) continue;
+      found.push({id: e.id, name: e.name, pos: e.pos, team: e.team});
+      if (found.length >= max) break;
+    }
+    return found;
   }
 
   // Up to six players matching the search, and where each stands in every league.
   function waiverSearchResults() {
     const q = SCC.norm(S.waiv.q || '').trim();
     if (q.length < 3 || !S.A) return '';
-    const players = playerList(), leagues = S.A.leagues, found = [];
-    for (const id in players) {
-      const e = players[id];
-      if (!e || !e[2] || SCC.norm(e[0]).indexOf(q) < 0) continue;
-      found.push({id, name: e[0], pos: e[1], team: e[2]});
-      if (found.length >= 40) break;
-    }
+    const leagues = S.A.leagues, found = searchPlayers(playerList(), q, 40);
     if (!found.length) return '<p class="fine">No player on an NFL team by that name.</p>';
     const proj = p => SCC.projFor(S.proj, p.id, 1) || 0;
     found.sort((a, b) => proj(b) - proj(a) || a.name.localeCompare(b.name));
@@ -3263,6 +3371,7 @@
     PC.addEventListener('close', () => {
       if (!pcBack && history.state && history.state.pcard) history.back();
       pcBack = false;
+      if (pcOpener && pcOpener.isConnected) pcOpener.focus(); // back to the name that opened it
     });
     return PC;
   }
@@ -3275,6 +3384,7 @@
     if (!C || C.error) loadPlayerCard(id);
     PC.innerHTML = playerCardHtml();
     if (PC.open) return;
+    pcOpener = document.activeElement;
     PC.showModal();
     if (location.protocol !== 'file:') history.pushState(Object.assign({}, history.state, {pcard: 1}), '', location.href);
   }
@@ -3372,8 +3482,7 @@
     if (!S.trade.teams[cfg.id]) loadTradeTeams(d);
     if (!S.trade.season) loadSeasonProj(); // for Position strength
     const St = S.stand[cfg.id], Tm = S.trade.teams[cfg.id];
-    let h = pickedLeague() !== 'all' ? '' : `<div class="bar"><label class="field"><span>League</span><select data-ui="standLeague">${leagues.map(x =>
-      `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('')}</select></label></div>`;
+    let h = onePick(d, leagues);
     const err = (St && St.error) || (Tm && Tm.error);
     if (err) return h + `<div class="banner stop">${esc(err)} <button class="link" data-action="stand-retry">Try again</button></div>`;
     if (!St || St.busy || !Tm || Tm.busy) return h + '<div class="empty-note">Loading the schedule and every team\'s roster…</div>';
@@ -3548,9 +3657,8 @@
     const canReset = !!(partner || P.give.length || P.get.length || S.trade.ideas[d.cfg.id] || S.trade.q);
     let h = `<p class="credit">${fcShown() ? 'Trade values' : 'Who wins is weighed with trade values'} by <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>${
       V && V.at ? `, updated ${esc(when(V.at))}` : ''}. Titan isn't affiliated with FantasyCalc.</p>
+      ${onePick(d, leagues)}
       <div class="bar">
-        ${pickedLeague() !== 'all' ? '' : `<label class="field"><span>League</span><select data-ui="tradeLeague">${leagues.map(x =>
-          `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('')}</select></label>`}
         <label class="field"><span>Trade partner</span><select data-ui="tradePartner"${teams.length ? '' : ' disabled'}>${partnerOptions}</select></label>
         <button type="button" class="btn ghost small treset" data-action="trade-reset"${canReset ? '' : ' disabled'}>Clear all</button>
       </div>
@@ -3637,10 +3745,10 @@
       const n = SCC.norm(p.name);
       if (n.includes(q) && !seen.has(n)) { found.push({p, held: true}); seen.add(n); }
     })));
-    for (const id in players) {
+    for (const p of searchPlayers(players, q, 60)) {
       if (found.length >= 30) break;
-      const e = players[id], n = SCC.norm(e[0]);
-      if (e[2] && n.includes(q) && !seen.has(n)) { found.push({p: {id, name: e[0], pos: e[1], team: e[2]}, held: false}); seen.add(n); }
+      const n = SCC.norm(p.name);
+      if (!seen.has(n)) { found.push({p, held: false}); seen.add(n); }
     }
     if (!found.length) return '<p class="fine">Nobody by that name in your leagues or on an NFL team.</p>';
     found.sort((a, b) => (b.held - a.held) || worth(b.p) - worth(a.p) || a.p.name.localeCompare(b.p.name));
@@ -3829,6 +3937,7 @@
     DLG.addEventListener('close', () => {
       if (!dlgBack && history.state && history.state.draft) history.back();
       dlgBack = false;
+      if (dlgOpener && dlgOpener.isConnected) dlgOpener.focus();
     });
     return DLG;
   }
@@ -3843,6 +3952,7 @@
     if (!R || R.error) loadDraftResults(d);
     else paintDraftResults();
     if (DLG.open) return;
+    dlgOpener = document.activeElement;
     DLG.showModal();
     if (location.protocol !== 'file:') history.pushState(Object.assign({}, history.state, {draft: 1}), '', location.href);
   }
@@ -3983,6 +4093,8 @@
     if (!fromHistory) syncUrl(true);
     render();
     window.scrollTo(0, 0);
+    // A Results failure isn't for good: after a minute, coming back to the screen tries again.
+    if (tab === 'score' && S.score.error && !S.score.data && Date.now() - (S.score.errorAt || 0) > 60000) S.score.error = '';
     if (tab === 'score' && S.snap && !S.score.data && !S.score.busy && !S.score.error) loadScore(S.score.week || S.snap.week, !S.score.week);
     if (tab === 'matchup' && S.snap && (!S.match.data || S.match.week !== S.snap.week)) loadMatchups();
   }
@@ -4198,9 +4310,6 @@
     const t = e.target;
     if (t.dataset.wdrop) { wPlan().drop[t.dataset.wdrop] = t.value; saveUi(); return; }
     if (t.dataset.ui === 'league') { S.ui.league = t.value; saveUi(); render(); }
-    else if (t.dataset.ui === 'standLeague') { S.ui.standLeague = t.value; saveUi(); render(); }
-    else if (t.dataset.ui === 'movesLeague') { S.ui.movesLeague = t.value; saveUi(); render(); }
-    else if (t.dataset.ui === 'tradeLeague') { S.ui.tradeLeague = t.value; S.ui.tradePartner = ''; saveUi(); render(); }
     else if (t.dataset.ui === 'tradePartner') { S.ui.tradePartner = t.value; saveUi(); render(); }
     else if (t.dataset.ui === 'lineWeek') { S.look.week = Number(t.value) || 0; S.look.error = ''; render(); }
     else if (t.dataset.alert) {
@@ -4236,7 +4345,6 @@
         render();
       });
     }
-    else if (t.dataset.ui === 'scoreWeek') loadScore(Number(t.value));
     else if (t.dataset.draft === 'file' && t.files && t.files[0]) {
       const f = t.files[0];
       f.text().then(txt => {
@@ -4306,10 +4414,21 @@
     }
   });
 
-  // Coming back to the app on game day should never show stale lineups.
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && S.account && S.snap && Date.now() - S.snap.at > STALE_MS) refresh();
-    if (document.visibilityState === 'visible' && !DEMO && Date.now() - ((S.scores && S.scores.at) || 0) > SCORES_LIVE) loadScores();
+  /* Coming back to the app on game day should never show stale lineups. After a few minutes away, the cheap
+     update (the game clock and points, one read per league) is enough; a full refresh (rosters, injuries and one
+     read per rostered player) waits for half an hour, a failed cheap update, or the Refresh button. */
+  const FULL_STALE = 30 * 60 * 1000;
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return;
+    if (S.account && S.snap && !S.busy) {
+      const age = Date.now() - (S.snap.at || 0);
+      if (age > FULL_STALE || DEMO) { if (age > STALE_MS) refresh(); }
+      else if (age > STALE_MS) {
+        try { await API.livePoints(S.snap, true); saveSnap(); analyze(); render(); scheduleLive(); }
+        catch (e) { refresh(); }
+      }
+    }
+    if (!DEMO && Date.now() - ((S.scores && S.scores.at) || 0) > SCORES_LIVE) loadScores();
   });
   if (!DEMO) loadScores();
 

@@ -1,14 +1,19 @@
 /* Titan Fantasy Football Manager — service worker.
  *
- * Network first for the app's own files, so an update is picked up the next
- * time the app opens, with the cached copy as the offline fallback. Sleeper's
- * API is never touched here: live data always comes straight from Sleeper.
+ * The app's own files (scripts, styles, fonts, images) come from the saved copy at once, and the
+ * network's answer is saved for next time (stale-while-revalidate): a slow connection on game day
+ * never keeps the app from drawing. Pages go to the network first, but only for a moment: past
+ * PAGE_WAIT with a saved copy at hand, the saved page serves and the fresh one lands for the next
+ * open. Sleeper's API is never touched here: live data always comes straight from Sleeper.
  */
-const CACHE = 'titan-v16';
+const CACHE = 'titan-v17';
+const PAGE_WAIT = 2500;
 // The website (the root page) and the app (/app/), with everything the app loads.
 const SHELL = ['./', 'index.html', 'site.css', 'theme.js', 'stats.js', 'titan.svg', 'app/', 'app/index.html', 'styles.css', 'engine.js', 'demo.js', 'espn.js', 'yahoo.js', 'sleeper.js',
-  'syncplan.js', 'app.js', 'sync.js', 'icon.svg', 'icon-192.png', 'apple-touch-icon.png', 'manifest.webmanifest', 'privacy.html',
-  'fonts/inter-latin-wght.woff2', 'newsletter.js'];
+  'syncplan.js', 'app.js', 'sync.js', 'icon.svg', 'icon-192.png', 'apple-touch-icon.png', 'manifest.webmanifest', 'privacy.html', 'terms.html', '404.html',
+  'fonts/inter-latin-wght.woff2', 'newsletter.js', 'newsletter/', 'guides/', 'guides/import-fantasy-rankings.html', 'guides/combine-fantasy-rankings.html',
+  'guides/sleeper-start-sit.html', 'guides/espn-private-league.html', 'guides/fantasy-draft-grades.html', 'guides/fantasy-trade-help.html'];
+const ASSET = /\.(js|css|woff2|png|jpg|svg|webmanifest)$/;
 
 /* Each file is cached on its own with put(). cache.addAll() failed intermittently
    in Chrome with "Entry already exists", and any single failure there rejects
@@ -59,19 +64,27 @@ self.addEventListener('fetch', event => {
   // and Yahoo's sign-in comes back through one that answers with a redirect, which a
   // service worker can't hand to a page load (Chrome shows ERR_FAILED).
   if (req.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
-  // A navigation request can't be re-issued with extra options, so page loads
-  // fetch the URL itself.
-  const fresh = req.mode === 'navigate'
-    ? fetch(req.url, {cache: 'no-cache', credentials: 'same-origin'})
-    : fetch(req, {cache: 'no-cache'});
-  event.respondWith(
-    fresh
-      .then(res => {
-        // Refreshing the offline copy is best effort; a failed write must not surface as an error.
-        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); }
-        return res;
-      })
-      .catch(() => caches.match(req, {ignoreSearch: true})
-        .then(hit => hit || caches.match(new URL(req.url).pathname.startsWith('/app') ? 'app/index.html' : 'index.html')))
-  );
+  const isPage = req.mode === 'navigate';
+  // A navigation request can't be re-issued with extra options, so page loads fetch the URL itself.
+  const fresh = (isPage ? fetch(req.url, {cache: 'no-cache', credentials: 'same-origin'}) : fetch(req, {cache: 'no-cache'}))
+    .then(res => {
+      // Refreshing the saved copy is best effort; a failed write must not surface as an error.
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {}); }
+      return res;
+    });
+  const saved = () => caches.match(req, {ignoreSearch: true});
+  const shell = () => caches.match(url.pathname.startsWith('/app') ? 'app/index.html' : 'index.html');
+  if (!isPage && ASSET.test(url.pathname)) {
+    // The saved copy at once; the network only when there's none. (fresh keeps running, to update the copy.)
+    event.respondWith(saved().then(hit => {
+      if (hit) { fresh.catch(() => {}); return hit; }
+      return fresh.catch(() => shell());
+    }));
+    return;
+  }
+  event.respondWith(saved().then(hit => {
+    if (!hit) return fresh.catch(() => shell());
+    const wait = new Promise(resolve => setTimeout(() => resolve(hit), PAGE_WAIT));
+    return Promise.race([fresh.catch(() => hit), wait]);
+  }));
 });

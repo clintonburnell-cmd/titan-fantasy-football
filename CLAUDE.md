@@ -70,7 +70,20 @@ How the pieces fit, and what keeps them working.
 - Keep `engine.js` free of page and network code.
 - A change to `engine.js`, `espn.js` or `sleeper.js` needs the functions redeployed too: the
   predeploy step copies them into `functions/shared/`.
-- Adding a file the app loads: add it to `SHELL` in `sw.js` and bump `CACHE`.
+- Adding a file the app loads: add it to `SHELL` in `sw.js` and bump `CACHE`. The service worker serves
+  scripts, styles, fonts and images from the saved copy at once and refreshes it in the background
+  (stale-while-revalidate); pages go to the network but fall back to the saved copy after `PAGE_WAIT`
+  (2.5 s). So a deployed change reaches a device on its second open, not its first.
+- `render()` repaints in place (`paint` → `morph`: attributes and text set only where they differ,
+  children paired by position or by id), so focus, sideways scroll, open menus and decoded photos
+  survive the live tick. Consequences: never rely on a repaint resetting a field or a scroll
+  position; a field being typed in keeps its value; give a list item an `id` if its position can
+  change. `paintAccount` rebuilds `#acct` only when its HTML changed.
+- Storage: `saveSnap` writes the refresh (`KEY.snap`) on every full refresh and at most every five
+  minutes from the live tick, and tells the person once when storage is full (`STORAGE_FULL`).
+  `pruneStorage` drops projection and kickoff keys for other seasons and weeks well past. A combined
+  week keeps its sources' rows only for the last three weeks. Coming back to the app after five
+  minutes does the cheap update (`API.livePoints`); a full refresh waits for half an hour (`FULL_STALE`).
 - Screens have addresses under `/app/` (`SLUG` in `app.js`; `firebase.json` rewrites `/app/**` to
   the app page, and the UI test's server does the same). A new screen needs a slug.
 - The demo (`DEMO` in `app.js`) uses its own storage names and never loads `sync.js`, so it can't
@@ -150,6 +163,18 @@ How the pieces fit, and what keeps them working.
 
 One note per screen or feature.
 
+- The league dropdown (`LEAGUE_SCREENS`) steers Lineups, Matchup, Standings, Rosters, Trade,
+  Transactions, Byes, Value and Data dump. Standings and Trade show one league at a time: under All
+  leagues the first league shows with a line naming it (`onePick`); there is no second picker. On a
+  screen that always shows every league (Waivers, Results, Exposure, News) the dropdown's place says
+  "All leagues" (`.lpick-off`) while a league is picked, so the filter never seems to vanish.
+- Results (`loadScore`): a week that hasn't kicked off leaves the week that was showing in place with a
+  note; the forward arrow to this week opens only once a game has started (`weekStarted`); a failure
+  is retried when the screen is reopened a minute later (`errorAt`). Matchup's "projected final" once
+  games start is `winProbability`'s expected total (`matchState`), the number the win chance rests on.
+- Dialogs (`openPlayerCard`, `openDraftResults`) return focus to what opened them (`pcOpener`,
+  `dlgOpener`). The player searches share `indexOf(players)` (names normalised once per player list)
+  through `searchPlayers`.
 - Lineups' league cards (`leagueCard`): the changes to make, then the recommended lineup (`recLineup`: the engine's
   `L.opt` when there are moves, else the lineup as set, so it never shows a change the steps don't; `recRow`, NEW where
   it differs) and yours beside it (`compareLineups`, table `.lu-cmp`, the differing spots highlighted, your players'

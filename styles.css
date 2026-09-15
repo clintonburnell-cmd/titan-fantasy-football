@@ -196,6 +196,13 @@ main#view { min-height: 100vh; }
 .subtabs button:hover { color: var(--text); }
 .subtabs button[aria-current="page"] { background: var(--text); border-color: var(--text); color: var(--bg); }
 .lpick { margin-left: auto; }
+/* On a screen that always shows every league, the dropdown's place says so while a league is picked elsewhere. */
+.lpick-off { border: 1px dashed var(--line); border-radius: 999px; padding: 7px 12px; font-size: .85rem; color: var(--muted); }
+.one-pick { margin-bottom: 8px; }
+/* Skip to content: the first link on the page, shown only when it has keyboard focus. */
+.skip { position: absolute; left: -9999px; top: 0; z-index: 100; padding: 10px 14px; border-radius: 0 0 10px 0;
+  background: var(--accent); color: #fff; font-weight: 700; text-decoration: none; }
+.skip:focus { left: 0; outline: 2px solid var(--text); outline-offset: 2px; }
 .wpick + .lpick { margin-left: 0; } /* Lineups' week dropdown leads; the league dropdown sits beside it */
 .lpick select { appearance: none; max-width: 15rem; border: 1px solid var(--line); border-radius: 999px; padding: 7px 30px 7px 12px;
   color: var(--text); font-size: .85rem; font-weight: 650; cursor: pointer; background-color: var(--surface);

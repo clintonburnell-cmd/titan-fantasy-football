@@ -30,6 +30,7 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="app-page">
+  <a class="skip" href="#view">Skip to content</a>
   <header class="top">
     <div class="top-in">
       <div class="brand">
@@ -96,14 +97,15 @@
   </footer>
   <div id="toast" class="toast" role="status" hidden></div>
 
-  <script src="/engine.js"></script>
-  <script src="/demo.js"></script>
-  <script src="/espn.js"></script>
-  <script src="/yahoo.js"></script>
-  <script src="/sleeper.js"></script>
-  <script src="/syncplan.js"></script>
+  <!-- deferred: they run in this order once the page is parsed, and don't hold up drawing it. -->
+  <script src="/engine.js" defer></script>
+  <script src="/demo.js" defer></script>
+  <script src="/espn.js" defer></script>
+  <script src="/yahoo.js" defer></script>
+  <script src="/sleeper.js" defer></script>
+  <script src="/syncplan.js" defer></script>
   <!-- app.js loads sync.js (Google sign-in) itself, except in the demo. -->
-  <script src="/newsletter.js"></script>
-  <script src="/app.js"></script>
+  <script src="/newsletter.js" defer></script>
+  <script src="/app.js" defer></script>
 </body>
 </html>

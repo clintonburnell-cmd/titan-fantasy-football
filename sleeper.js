@@ -666,8 +666,17 @@
   /* Fresh scores for a week in progress, without a full refresh: the game
      clock, then each league's points. Updates `snap` in place. `withEspn`
      false skips ESPN's larger box scores this time. */
+  // The season's schedule, kept in memory for a minute and a half: the live tick asks every minute.
+  var schedMem = {season: '', at: 0, sched: null}, SCHED_KEEP = 90 * 1000;
+  async function schedule(season) {
+    if (schedMem.sched && schedMem.season === season && Date.now() - schedMem.at < SCHED_KEEP) return schedMem.sched;
+    var sched = await getJson(SCHEDULE + season);
+    if (sched && sched.length) schedMem = {season: season, at: Date.now(), sched: sched};
+    return sched;
+  }
+
   async function livePoints(snap, withEspn) {
-    var sched = await getJson(SCHEDULE + snap.season);
+    var sched = await schedule(snap.season);
     if (!sched || !sched.length) return 0;
     snap.games = SCC.gameStates(sched, snap.week);
     SCC.applyLocks(snap.leagues, snap.games);
