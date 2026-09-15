@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const root = path.join(__dirname, '..');
+const root = path.join(__dirname, '..', 'site'); // the app's files live in site/ (what Hosting publishes)
 const out = path.join(__dirname, 'shared');
 const FILES = ['engine.js', 'espn.js', 'sleeper.js', 'yahoo.js'];
 fs.mkdirSync(out, {recursive: true});

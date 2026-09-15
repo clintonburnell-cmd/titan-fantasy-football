@@ -304,18 +304,19 @@ saved on.
 ## Files
 
 ```
-index.html             Page shell
-styles.css             All styling
-engine.js              Start/sit, wire, exposure, bye, scoring and win-chance rules (pure; no page or network code)
-sleeper.js             Sleeper API calls, league discovery, refresh and browser storage
-espn.js                ESPN leagues: reading them and matching their players to Sleeper's
-app.js                 Screens and interactions
-sw.js                  Service worker: offline shell, installable app
-stats.js               Website visit counts (Cloudflare Web Analytics; never in the app)
-manifest.webmanifest   App name and icons for installing
-icon*.svg / icon*.png  App icons (the PNGs are rendered from the SVGs)
-privacy.html           Privacy policy
-functions/             Server: freezes each week's calls at kickoff; reads private ESPN leagues
+site/                  Everything the browser loads (Firebase Hosting publishes this folder and nothing else):
+  index.html             The website; app/index.html is the app's page at /app/
+  styles.css, site.css   The app's and the website's styling
+  engine.js              Start/sit, wire, exposure, bye, scoring and win-chance rules (pure; no page or network code)
+  sleeper.js             Sleeper API calls, league discovery, refresh and browser storage
+  espn.js                ESPN leagues: reading them and matching their players to Sleeper's
+  app.js                 Screens and interactions
+  sw.js                  Service worker: offline shell, installable app
+  stats.js               Website visit counts (Cloudflare Web Analytics; never in the app)
+  manifest.webmanifest   App name and icons for installing
+  icon*.svg / icon*.png  App icons (the PNGs are rendered from the SVGs)
+  privacy.html           Privacy policy
+functions/             Server: freezes each week's calls at kickoff; reads private ESPN leagues; the /api feeds
 tests/                 node tests/run.js (see Testing)
 CLAUDE.md              Working notes for Claude Code: rules, commands, Windows quirks
 ```
@@ -383,6 +384,7 @@ No build step and no dependencies. It runs on any static host.
 | `v1.19.1` | The Players dot works like a notification: it marks waiver pickups you haven't seen on Waivers yet, clears once you open Waivers, and comes back only for a new pickup (remembered on each device) |
 | `v1.19.2` | Trade tab: both rosters sort by value, by position, or by position then value (with position headers when grouped, remembered), and every player shows Titan's colored position tag on the rosters, in the trade and in Who has him? |
 | `v1.19.3` | Position strength: every team's rank at each position by its best lineup this season (Sleeper's projections, a little credit for bench depth), shown on Standings with the top third green and the bottom third red, and on the Trade tab as "Where you both stand" for you and your partner, with the good fits called out; the Trade tab also gets Clear all and a partner picker on the partner's roster card |
+| `v1.44.0` | The website and app move into `site/`, the only folder Hosting publishes (URLs unchanged), so the repo root, the server and the tests are never served; a Content-Security-Policy in report-only mode on every page, with reports to `/api/csp`, to be enforced once the logs stay clean |
 | `v1.43.0` | Find a player from any screen (the magnifier in the header: every NFL player, where he is in each league, his card a tap away); Schedule strength under Players (each NFL team's remaining opponents ranked by the points they give up to a position, over the next four weeks, the rest of the season and the fantasy playoffs, with your players on each team); Standings' playoff picture (your game's win-or-lose odds, then who to root for in every other game this week by the swing in your playoff chance); Copy changes on Lineups (the moves as text); the player card ends with his latest ESPN news; the Value report and Data dump tables share one builder |
 | `v1.42.0` | Sharper calls: on a close call (a bench player within 12 ranks of a starter at his position) the matchup tilt can flip the spot when the bench player projects 1.5 more with the matchups counted (+8% against the softest defenses, -8% against the toughest), and the card says why; waiver bids scale with the points a claim adds over the starter he replaces and how many other teams would start him, with the reasons under the bid; Exposure lists the players you lean on most first (by lineups started in); the player card gets "Titan's read": this week's floor and ceiling, his rest-of-season value, the matchup, and (owner) the Value report's usage rank against the market with its call. titan-analytics gains `score_calls.py`, which grades past calls against what happened once two finished weeks follow a report |
 | `v1.41.0` | Floor and ceiling: on Lineups, each close call (a bench player within 12 ranks of a starter at his position) gets a note with both players' floor and ceiling (the projection give or take the player's usual swing, from his recent weeks steadied by his position's), who has the softer matchup, and a lean: the higher floor when you're the favorite this week, the higher ceiling as the underdog; the recommended lineup still follows the rankings. Matchup shows each side's range (floors to ceilings of the starters yet to play). Playoff odds use each team's own swing, steadied by the league's. Position strength grades deep and thin against the league's average (0.6 standard deviations), not by thirds |

@@ -685,6 +685,21 @@ function plainGet(req, res, allowed) {
   return true;
 }
 
+/* Content-Security-Policy-Report-Only reports (firebase.json sends the policy on every page, report-uri /api/csp):
+   browsers post what the policy would have blocked. Each report is logged at info, never as an error (the "Titan
+   server problems" alert watches errors), so the policy can be tightened from the logs before it's ever enforced. */
+exports.cspReport = onRequest({region: 'us-central1', memory: '256MiB', maxInstances: 2, timeoutSeconds: 10, invoker: 'public'}, (req, res) => {
+  if (req.method !== 'POST') { res.status(405).end(); return; }
+  let body = req.body;
+  if (!body || typeof body !== 'object' || Buffer.isBuffer(body)) {
+    try { body = JSON.parse((req.rawBody || body || '').toString('utf8')); } catch (e) { body = null; }
+  }
+  const r = (body && (body['csp-report'] || body)) || {};
+  logger.info('CSP report', {document: r['document-uri'], violated: r['violated-directive'] || r['effective-directive'],
+    blocked: r['blocked-uri'], source: r['source-file'], line: r['line-number']});
+  res.status(204).end();
+});
+
 exports.tradeValues = onRequest({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 30, invoker: 'public'}, async (req, res) => {
   if (!plainGet(req, res, ['dynasty', 'qbs', 'teams', 'ppr'])) return;
   const f = valuesFormat(req.query);

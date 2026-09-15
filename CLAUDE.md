@@ -13,7 +13,7 @@ live site, so site changes reach it without a new upload. What's done lives in `
 ## Start here
 
 - **Resuming?** Read `RESUME.md` first: where things stand, the latest save point, what's next and the owner's
-  to-dos. It's private: gitignored, and on `firebase.json`'s ignore list so it's never deployed. Bring it up to date
+  to-dos. It's private: gitignored, and outside `site/` (the only folder Hosting publishes) so it's never deployed. Bring it up to date
   at the end of a session.
 - The rules are grouped by area: Never first, then code and data, navigation and look, the screens, Trade and
   FantasyCalc, the owner's screens, the server, Yahoo, and the website and Android app.
@@ -24,6 +24,9 @@ live site, so site changes reach it without a new upload. What's done lives in `
 
 | File | What it does |
 |---|---|
+Everything the browser loads lives in `site/` (firebase.json's `public` folder since v1.44.0): the repo root, `functions/`
+and `tests/` are never published. The paths below are inside `site/`; URLs are unchanged (`/app.js`, `/app/`).
+
 | `index.html`, `site.css` | The website at the root: what Titan is, features, FAQ. In a browser it always shows the website (the owner's call: never forward browser visitors, even with a saved account). Only the Android app's `/?source=play` and home-screen copies go to the app, keeping the query; `/?home` shows the website even there |
 | `titan.svg` | The Titan banner art (hand-drawn vector). The Play feature graphic (`titan-android/store/feature-graphic.html`) and the share image `og-image.jpg` (`titan-android/store/og-image.html`) use it too: re-render both after changing it |
 | `robots.txt`, `sitemap.xml` | For search engines. `/app/` stays out of results through its noindex tag, not robots.txt (a block would hide the tag). Add new website pages to the sitemap, and keep the home page's structured data (JSON-LD) FAQ identical to the visible FAQ |
@@ -427,8 +430,12 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
 - The public `/api` addresses take plain GETs with known parameters only (`plainGet`): a made-up
   parameter would skip the CDN cache and reach the function every time.
 - Hosting sends security headers on every response (`firebase.json`: nosniff, frame denial, referrer
-  policy, permissions policy, HSTS). No Content-Security-Policy yet: the inline scripts and Firebase's
-  hosts would need hashing and listing, and a wrong one breaks sign-in; do it report-only first.
+  policy, permissions policy, HSTS) and, since v1.44.0, a Content-Security-Policy in **report-only** mode:
+  nothing is blocked, browsers post what the policy would have blocked to `/api/csp` (`cspReport`, logged at
+  info). The policy lists Firebase's and Sleeper's, ESPN's, Kit's and Cloudflare's hosts and a sha256 hash for
+  each inline script (the theme snippet on every page, the website's forward, the app's boot script). Changing an
+  inline script changes its hash: recompute (the hashes are the base64 sha256 of the text between the script
+  tags) and update the header, or the logs fill with reports. Enforce it only after a few weeks of clean logs.
 - Alerts: `SCC.alertsFor` decides (pure, tested), `alertUser` and `deliver` in `functions/index.js`
   send Firebase Cloud Messaging data messages to the tokens in `users/{uid}/private/alerts`, and
   `sw.js` shows them. Keep each alert's key stable, or people get repeats: `out|week|league|player|tag`

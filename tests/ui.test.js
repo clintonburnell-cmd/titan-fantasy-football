@@ -1068,7 +1068,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`!!document.querySelector('.nl-hero') && !document.querySelector('.nl-hero').hidden && !document.querySelector('#newsletter').hidden`, 10000),
     'with it set up, the home page shows its signup boxes: under the main buttons, and a section of their own');
   // In the HTML as served (newsletter.js rewrites the action to the test's stand-in form once it runs).
-  const homeHtml = require('fs').readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
+  const homeHtml = require('fs').readFileSync(require('path').join(T.ROOT, 'index.html'), 'utf8');
   const homeForms = homeHtml.match(/<form[^>]*data-newsletter=[^>]*>/g) || [];
   check(homeForms.length === 2 && homeForms.every(f => /action="https:\/\/app\.kit\.com\/forms\/9921118\/subscriptions"/.test(f) && /method="post"/.test(f)),
     'each box\'s form carries Kit\'s address in the HTML itself, so a signup works even without newsletter.js');

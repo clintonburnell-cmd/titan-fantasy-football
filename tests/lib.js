@@ -8,7 +8,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = path.join(__dirname, '..');
+// The website and app live in site/ (firebase.json's public folder), so the repo root itself is never published.
+const ROOT = path.join(__dirname, '..', 'site');
 const CACHE = path.join(__dirname, '.cache');
 const FIXTURES = path.join(__dirname, 'fixtures');
 const HOUR = 3600 * 1000;
