@@ -2155,7 +2155,7 @@
       <th>Expected</th><th>Over expected</th><th>Targets</th><th>Carries</th><th class="vr-w">Next</th><th>Matchup</th><th>Adjusted</th><th>Next 4</th><th>Playoffs</th>
       </tr></thead><tbody>${rows.map(r =>
       `<tr data-find=" ${esc(SCC.norm(r.n))} ${esc(String(r.t || '').toLowerCase())} ${esc(String(r.p || '').toLowerCase())} "${filtered ? ` data-vp="${esc(r.p)}"${
-        vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${r.buy || r.sell ? `<span class="pill ${r.buy ? 'p-ok' : 'p-stop'}">${r.buy ? 'buy' : 'sell'}</span>` : ''}<b>${
+        vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${callPill(r, filtered)}<b>${
         esc(r.n)}</b><small>${esc([(r.p || '') + (r.xr || ''), r.t].filter(Boolean).join(' · '))}</small></td>${where ? `<td class="vr-w">${where(r)}</td>` : ''}
       <td>${n(r.fp)}</td><td>${n(r.x)}</td><td>${sgn(r.oe)}</td><td>${share(r.sh)}</td><td>${share(r.rs)}</td><td class="vr-w">${next(r)}</td><td>${easeRank(r.mu)}</td>
       <td>${n(r.adj)}</td><td>${easeRank(r.n4)}</td><td>${easeRank(r.po)}</td></tr>`).join('')}</tbody></table></div>`;
@@ -2182,7 +2182,7 @@
 
   // Each league's ideas, in the order they're acted on: this week's lineup, then the wire, trades and the playoffs.
   const DUMP_KINDS = [['start', 'Start this week', 'add'], ['add', 'Pick up', 'add'], ['buy', 'Buy from a rival', 'buy'],
-    ['sell', 'Sell from your roster', 'sell'], ['watch', 'Playoff schedule', 'watch']];
+    ['sell', 'Sell high or keep', 'sell'], ['watch', 'Playoff schedule', 'watch']];
 
   function screenDump() {
     if (!S.owner.is) return '<div class="empty-note">Only Titan\'s owner sees this screen.</div>';
@@ -2208,7 +2208,7 @@
         placeholder="Name, team or position" value="${esc(S.value.q || '')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label></div>
       <p class="empty-note" data-value-none hidden>Nothing in the data dump matches that.</p>`;
 
-    const move = m => `<li data-find=" ${esc(SCC.norm(m.n))} "><b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
+    const move = m => `<li data-find=" ${esc(SCC.norm(m.n))} ">${moveTag(m)}<b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
     const group = (list, title, cls) => (list && list.length ? `<h4 class="vr-k ${cls}">${title}</h4><ul class="vr-moves">${list.map(move).join('')}</ul>` : '');
     const cfgOf = id => (((S.snap && S.snap.leagues) || []).find(d => d.cfg.id === id) || {}).cfg;
     h += `<h3 class="vr-h">${one ? 'Your ideas' : 'Your ideas, league by league'}</h3><div class="league-grid">${(one ? [one] : snapOrder(R.leagues || [])).map(L => {
@@ -2228,7 +2228,7 @@
       rows && rows.length ? dumpTable(rows, false, where) : '<p class="fine">None this week.</p>'}</section>`;
     h += '<h3 class="vr-h">Buy and sell from expected points</h3>';
     h += section('Buy low: the work without the points', 'A real role by expected points, scoring 3 or more a game under it. That usually evens out.', Ls.buys);
-    h += section('Sell high: points above the work', 'Scoring 5 or more a game over expected without a top role, often on touchdowns that don\'t last.', Ls.sells);
+    h += section('Sell high or keep: points above the work', 'Scoring 5 or more a game over expected. <b>Sell</b> when the role behind it is thin; <b>keep</b> when it\'s a real starter\'s: the points settle, the work stays.', Ls.sells);
     h += '<h3 class="vr-h">This week\'s matchups</h3>';
     h += section(`Soft matchups in week ${wk}`, 'Real roles facing one of the 8 softest defenses at their position: start them with confidence.', Ls.soft);
     h += section(`Tough matchups in week ${wk}`, 'Real roles facing one of the 8 toughest defenses at their position: temper expectations.', Ls.tough);
@@ -2247,7 +2247,7 @@
       where on the field) usually scores a game, and <b>over expected</b> is his points a game minus that: big positives tend to fall back and big negatives to
       recover. <b>Matchup</b> ranks next week's opponent by the adjusted points it allows a game at his position (1 is the softest). <b>Adjusted</b> starts from
       his expected points, steadied by your value report's projection while the season is young, and moves toward the matchup, less while the defense's sample
-      is small. <b>Next 4</b> and <b>playoffs</b> rank his schedule ahead at his position (1 is the easiest; the fantasy playoffs are weeks 15 to 17). A real role
+      is small, and by position: a defense's record against running backs moves the number most, against quarterbacks and tight ends least. <b>Next 4</b> and <b>playoffs</b> rank his schedule ahead at his position (1 is the easiest; the fantasy playoffs are weeks 15 to 17). A real role
       is a top-24 QB, top-40 RB, top-60 WR or top-20 TE by expected points. Start ideas swap in a bench player 2 or more adjusted points ahead of a starter,
       and pickups are free agents 1 or more ahead of the weakest starter they could replace, with a bigger margin while the season is young (4 and 3
       after one game). Players Sleeper lists as out, doubtful or on IR get no start or pickup
@@ -2325,6 +2325,17 @@
   window.addEventListener('scroll', pinSoon, {passive: true});
   window.addEventListener('resize', pinSoon);
 
+  /* A row's call as a pill: buy, or for a sell-high, keep (a real role: sell only for a strong offer) or sell. In the
+     lists that are all one call (the buys, the sells) only the keep/sell verdict shows; the table of everyone shows all. */
+  function callPill(r, all) {
+    if (r.sell && r.keep) return '<span class="pill p-swap" title="Sell high, or keep: his role is real">keep</span>';
+    if (r.sell) return '<span class="pill p-stop">sell</span>';
+    if (r.buy && all) return '<span class="pill p-ok">buy</span>';
+    return '';
+  }
+  // A league move's verdict (k: keep, or sell), when it has one.
+  const moveTag = m => ('k' in m ? `<span class="pill ${m.k ? 'p-swap' : 'p-stop'}">${m.k ? 'keep' : 'sell'}</span> ` : '');
+
   // where(row): who has him in the picked league (a Where column), or null under All leagues.
   function valueTable(rows, filtered, where) {
     const n = (v, d = 1) => (v === null || v === undefined ? '–' : Number(v).toFixed(d));
@@ -2335,8 +2346,7 @@
     const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
     return `<div class="table-wrap vr-scroll"><table class="season-t vr-t"><thead><tr><th>Player</th>${where ? '<th class="vr-w">Where</th>' : ''}<th>Projection</th><th>Points</th><th>Over usage</th>
       <th>Snaps</th><th>Target share</th><th>Red zone</th><th>By projection</th><th>Market</th><th>Gap</th><th>Rank change</th></tr></thead><tbody>${rows.map(r =>
-      `<tr data-find=" ${esc(SCC.norm(r.n))} ${esc(String(r.t || '').toLowerCase())} ${esc(String(r.p || '').toLowerCase())} "${filtered ? ` data-vp="${esc(r.p)}"${vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${filtered && (r.buy || r.sell)
-        ? `<span class="pill ${r.buy ? 'p-ok' : 'p-stop'}">${r.buy ? 'buy' : 'sell'}</span>` : ''}<b>${esc(r.n)}</b><small>${esc([r.p, r.t].filter(Boolean).join(' · '))}</small></td>
+      `<tr data-find=" ${esc(SCC.norm(r.n))} ${esc(String(r.t || '').toLowerCase())} ${esc(String(r.p || '').toLowerCase())} "${filtered ? ` data-vp="${esc(r.p)}"${vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${callPill(r, filtered)}<b>${esc(r.n)}</b><small>${esc([r.p, r.t].filter(Boolean).join(' · '))}</small></td>
       ${where ? `<td class="vr-w">${where(r)}</td>` : ''}<td>${n(r.proj)}</td><td>${n(r.fp)}</td><td>${sgn(r.fpoe)}</td><td>${share(r.snap)}</td><td>${share(r.tgt)}</td><td>${n(r.rz)}</td>
       <td>${rank(r.p, r.ur)}</td><td>${rank(r.p, r.mr)}</td><td>${sgn(r.gap, 0)}</td><td>${sgn(r.ch, 0)}</td></tr>`).join('')}</tbody></table></div>`;
   }
@@ -2361,8 +2371,8 @@
     h += `<p class="fine">Week ${esc(R.week)} · ${esc(R.through)} · made ${esc(when(R.at))}</p>`;
     if (pick !== 'all' && !one) h += '<div class="banner swap">That league isn\'t in this report, which covers your Sleeper leagues. Here are all of them.</div>';
     (R.notes || []).forEach(t => { h += `<div class="banner swap">${esc(t)}</div>`; });
-    const tiles = one ? [['sell-high moves', one.sell.length], ['buy-low targets', one.buy.length], ['claims', one.add.length], ['players valued', (F.all || []).length]]
-      : (R.tiles || []).filter(t => t[0] !== 'leagues');
+    const tiles = one ? [['sell high or keep', one.sell.length], ['buy-low targets', one.buy.length], ['claims', one.add.length], ['players valued', (F.all || []).length]]
+      : (R.tiles || []).filter(t => t[0] !== 'leagues').map(t => [t[0] === 'sell-high moves' ? 'sell high or keep' : t[0], t[1]]);
     h += `<section class="tiles">${tiles.map(t => tile(t[1], t[0], 'muted')).join('')}</section>`;
     const inFmt = k => (R.leagues || []).filter(L => L.fmt === k).length;
     if (!one && keys.length > 1) {
@@ -2371,7 +2381,7 @@
     }
 
     // League by league: sells from depth, buys where thin, claims that would start.
-    const move = m => `<li data-find=" ${esc(SCC.norm(m.n))} "><b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
+    const move = m => `<li data-find=" ${esc(SCC.norm(m.n))} ">${moveTag(m)}<b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
     const group = (list, title, cls) => (list.length ? `<h4 class="vr-k ${cls}">${title}</h4><ul class="vr-moves">${list.map(move).join('')}</ul>` : '');
     const cfgOf = id => (((S.snap && S.snap.leagues) || []).find(d => d.cfg.id === id) || {}).cfg;
     // The player search filters the leagues' moves and every table in place (applyValueFilter), so the box keeps its cursor.
@@ -2384,7 +2394,7 @@
       const count = L.sell.length + L.buy.length + L.add.length, cfg = cfgOf(L.id);
       return `<details class="card vr-lg"${count ? ' open' : ''}><summary class="card-h"><div><h3>${cfg ? leagueIcon(cfg) : ''}${esc(L.name)}</h3>
         <p>${esc(L.format)} · ${plural(count, 'move')}</p></div></summary><div class="vr-body"><p class="fine">${esc(L.need)}</p>${
-        L.caveat ? `<p class="fine">${esc(L.caveat)}</p>` : ''}${group(L.sell, 'Sell high from your roster', 'sell')}${
+        L.caveat ? `<p class="fine">${esc(L.caveat)}</p>` : ''}${group(L.sell, 'Sell high or keep, from your roster', 'sell')}${
         group(L.buy, 'Buy low from a rival', 'buy')}${group(L.add, 'Claim', 'add')}${count ? '' : '<p class="fine">Nothing stands out this week.</p>'}</div></details>`;
     }).join('')}</div>`;
 
@@ -2397,7 +2407,8 @@
     const section = (title, sub, rows) => `<section class="card pad vr-sec"><h3>${title}</h3><p class="fine">${sub}</p>${
       rows.length ? valueTable(rows, false, where) : '<p class="fine">None this week.</p>'}</section>`;
     h += section('Buy low', `${fname}: the projection well ahead of the market, and not already scoring above his usage.`, F.buys || []);
-    h += section('Sell high', `${fname}: the market well ahead of the projection, often on touchdowns that don't last.`, F.sells || []);
+    h += section('Sell high or keep', `${fname}: the market well ahead of the projection, often on touchdowns that don't last. <b>Sell</b> when the role
+      behind the points is thin; <b>keep</b> when it's a solid starter's, unless the offer is strong.`, F.sells || []);
     h += section('Role risers', 'The biggest jumps in snap share over last season, among players with a real role.', F.risers || []);
     const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
     h += `<section class="card pad vr-sec"><h3>Every valued player</h3><p class="fine">${fname}, by projection.</p>
@@ -2407,10 +2418,14 @@
       usage (targets, carries, throws, field position and depth, from nflverse's ffopportunity model), blended with last season's while this season's
       sample is small, plus 40% of what he's scored above or below his usage over the last two seasons. <b>Over usage</b> is this season's points a game
       minus expected: big positives tend to fall back and big negatives to recover. <b>By projection</b> and <b>market</b> are his place at his position by
-      projection and by FantasyCalc's trade value; a <b>gap</b> of +10 means the market ranks him ten spots lower. No calls on players who missed their
-      team's latest game, rookies before three games, young players as sells before four, or elite starters as sells. Buys start where your roster is
-      thin; sells come only from where you aren't. Claims are free agents whose projection beats one of your starters. <b>Rank change</b> is since last
-      week's report.</p></details>
+      projection and by FantasyCalc's trade value; a <b>gap</b> of +10 means the market ranks him ten spots lower. A call needs that gap in value
+      terms too (what the market pays at his projected rank against what it pays for him, a quarter apart at least), so a few spots at the top of a
+      position, worth far more, count for more than the same spots deep in it. Last season's usage weighs more for positions whose roles settle
+      slowly (tight ends most) and less the more a player's snap share has moved; past scoring above usage carries over more when it came from yards
+      and catches than from touchdowns. No calls on players who missed their team's latest game, rookies before three games, young players as
+      sells before four, or elite starters as sells. A sell-high with a solid starter's role, or with points from yards on a proven skill, reads
+      <b>keep</b>. Buys start where your roster is thin; sells come only from where you aren't. Claims are free agents whose projection beats one of
+      your starters. <b>Rank change</b> is since last week's report.</p></details>
       <p class="credit">Stats from <a href="https://github.com/nflverse" target="_blank" rel="noopener">nflverse</a> (CC BY 4.0) and ffopportunity. Values by
       <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>. Titan isn't affiliated with FantasyCalc.</p>`;
     return h;

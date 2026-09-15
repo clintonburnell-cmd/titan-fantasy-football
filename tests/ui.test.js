@@ -849,19 +849,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // A made-up report, in the shape titan-analytics posts to lab/value-latest (version 2), handed over as the sync bridge
   // would. Its first league is the test league (so the league dropdown can pick it), in a dynasty superflex format.
   const lid = await ev(`((JSON.parse(localStorage.getItem('titan.snapshot.v1') || '{}').leagues || [])[0] || {cfg: {}}).cfg.id || ''`);
-  const vrow = (s, n, p, buy, sell) => ({s, n, p, t: 'KC', proj: 12.3, val: 12, fp: 10, fpoe: -2.1, snap: 0.8, tgt: 0.2, rz: 1, ur: 12, mr: 30, gap: 18, tr: 5, ch: null, buy, sell});
+  const vrow = (s, n, p, buy, sell, keep) => ({s, n, p, t: 'KC', proj: 12.3, val: 12, fp: 10, fpoe: -2.1, snap: 0.8, tgt: 0.2, rz: 1, ur: 12, mr: 30, gap: 18, tr: 5, ch: null, buy, sell,
+    keep: !!keep});
   const RD = 'redraft-1qb-12teams-1ppr', DY = 'dynasty-2qb-10teams-1ppr';
   const vlg = (id, name, fmt, own) => ({id, fmt, name, own, teams: ['Rival Team (rival)', 'My Team (me)'], caveat: '',
     format: fmt === RD ? 'Redraft, 12 teams, PPR' : 'Dynasty, 10 teams, PPR, superflex', need: 'Your team by position: QB 1st, RB 11th of 12. Thin at RB.',
-    sell: [{n: 'Sell Guy', why: 'The market says WR10; his projection says WR30.', x: 'WR, KC'}],
+    sell: [{n: 'Sell Guy', why: 'The market says WR10; his projection says WR30.', x: 'WR, KC', k: fmt === RD}],
     buy: [{n: 'Buy Guy', why: 'His projection says RB12; the market says RB30.', x: 'RB, KC'}],
     add: [{n: 'Claim Guy', why: 'He\'d start over Someone.', x: 'TE, KC'}]});
   const VR = {v: 2, season: 2026, week: 2, through: 'Through week 1 of 2026 (16 of 16 games)', at: Date.now(), notes: ['Only 1 week of 2026 so far.'],
     format: 'Redraft, 12 teams, PPR', main: RD, tiles: [['leagues', 2], ['sell-high moves', 2], ['buy-low targets', 2], ['claims', 2], ['players valued', 3]],
     leagues: [vlg(lid, 'Value Test League', DY, {1: 'me', 2: 0}), vlg('other', 'Another League', RD, {})],
     formats: {
-      [RD]: {name: 'Redraft, 12 teams, PPR', buys: [vrow('1', 'Buy Guy', 'RB', true, false)], sells: [vrow('2', 'Sell Guy', 'WR', false, true)], risers: [],
-        all: [vrow('1', 'Buy Guy', 'RB', true, false), vrow('2', 'Sell Guy', 'WR', false, true), vrow('3', 'Other Guy', 'QB', false, false)]},
+      [RD]: {name: 'Redraft, 12 teams, PPR', buys: [vrow('1', 'Buy Guy', 'RB', true, false)], sells: [vrow('2', 'Sell Guy', 'WR', false, true, true)], risers: [],
+        all: [vrow('1', 'Buy Guy', 'RB', true, false), vrow('2', 'Sell Guy', 'WR', false, true, true), vrow('3', 'Other Guy', 'QB', false, false)]},
       [DY]: {name: 'Dynasty, 10 teams, PPR, superflex', buys: [vrow('4', 'Dynasty Guy', 'QB', true, false)], sells: [], risers: [],
         // Forty more players, so the table's box has to scroll (its header row and player column stay in view).
         all: [vrow('1', 'Buy Guy', 'RB', false, false), vrow('2', 'Sell Guy', 'WR', false, false), vrow('4', 'Dynasty Guy', 'QB', true, false),
@@ -873,17 +874,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await ev(`document.querySelector('#tabs [data-tab="value"]').hidden`), 'it isn\'t on the menu for anyone but Titan\'s owner');
   // A made-up data dump too, in the shape titan-analytics' data_dump.py posts to lab/dump-latest (version 1).
   const drow = (s, n, p, x) => Object.assign({s, n, p, t: 'KC', g: 1, fp: 10, x: 14, oe: -4, xr: 5, sh: 0.2, rs: null, o: 'DAL', h: true, mu: 3, n4: 5, ros: 10,
-    po: 30, adj: 15, buy: true, sell: false}, x);
+    po: 30, adj: 15, buy: true, sell: false, keep: false}, x);
   const dlg = (id, name) => ({id, name, format: 'Redraft, 12 teams, PPR', teams: ['Rival Team (rival)'], own: {d1: 'me', d2: 0},
     start: [{n: 'Start Guy over Bench Guy', why: 'Start Guy (vs DAL, the 3rd-softest for WRs) has 15.0; Bench Guy has 9.0.', x: 'WR, KC · FLEX'}],
-    buy: [{n: 'Buy Guy', why: 'His usage is worth 14.0 a game but he\'s scored 10.0.', x: 'RB, KC'}], sell: [],
+    buy: [{n: 'Buy Guy', why: 'His usage is worth 14.0 a game but he\'s scored 10.0.', x: 'RB, KC'}],
+    sell: [{n: 'Sell Guy', why: 'He\'s scored 18.0 a game on usage worth 10.0. But the work is real (WR5), so keep him.', x: 'WR, KC', k: true}],
     add: [{n: 'Add Guy', why: 'Usage worth 12.0 a game.', x: 'TE, KC'}], watch: []});
   const DR = {v: 1, season: 2026, week: 2, fileWeek: 1, file: 'week1-data-dump.xlsx', updated: '2026-09-15 09:36', at: Date.now(),
     notes: ['1 game of data so far.'], tiles: [['ideas', 6], ['leagues', 2], ['players', 3], ['teams', 1]],
     // Listed by name, as data_dump.py writes them: the screen puts them in the app's own league order instead.
     leagues: [dlg('other-dump', 'Another Dump League'), dlg(lid, 'Dump Test League')],
-    players: [drow('d1', 'Buy Guy', 'RB'), drow('d2', 'Sell Guy', 'WR', {buy: false, sell: true, oe: 8}), drow('d3', 'Other Guy', 'QB', {buy: false})],
-    lists: {buys: [drow('d1', 'Buy Guy', 'RB')], sells: [drow('d2', 'Sell Guy', 'WR', {buy: false, sell: true, oe: 8})], soft: [drow('d3', 'Other Guy', 'QB', {buy: false})],
+    players: [drow('d1', 'Buy Guy', 'RB'), drow('d2', 'Sell Guy', 'WR', {buy: false, sell: true, keep: true, oe: 8}), drow('d3', 'Other Guy', 'QB', {buy: false})],
+    lists: {buys: [drow('d1', 'Buy Guy', 'RB')], sells: [drow('d2', 'Sell Guy', 'WR', {buy: false, sell: true, keep: true, oe: 8})], soft: [drow('d3', 'Other Guy', 'QB', {buy: false})],
       tough: [], next4easy: [], next4hard: [], playoffEasy: [], playoffHard: []},
     teams: [{t: 'KC', pr: 0.6, npr: 0.58, i10: 0.5, i5: 0.4, tpg: 34, rbt: 0.15, wrt: 0.6, tet: 0.25, rbx: 20, wrx: 30, tex: 15, ptd: 2, rtd: 1}],
     highlights: ['KC throws the most when the game is close.']};
@@ -894,6 +896,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     document.querySelectorAll('.subtabs [data-go]').length === 5`, 5000), 'the owner sees it under Rankings, at /app/value: each league\'s sells, buys and claims');
   check(await ev(`document.querySelectorAll('[data-vfmt]').length === 2 && /Buy Guy/.test(${vsec(0)}) &&
     [...document.querySelectorAll('.vr-t th')].every(th => th.textContent !== 'Where')`), 'under All leagues, the lists are in the format most leagues play, with a chip for each format');
+  check(await ev(`/Sell high or keep/.test(document.getElementById('view').textContent) && document.querySelectorAll('.vr-moves .pill.p-swap').length === 1 &&
+    document.querySelectorAll('.vr-t .pill.p-swap').length === 2`),
+    'the sell-high list is "Sell high or keep": a sell with a real role is tagged keep, in the league\'s moves and in the tables');
   await ev(`document.querySelector('[data-vpos="QB"]').click(); true`);
   check(await ev(`[...document.querySelectorAll('tr[data-vp]')].filter(r => !r.hidden).map(r => r.dataset.vp).join() === 'QB' && !!document.querySelector('tr[data-vp] .pill.p-ok')`),
     'the position chips filter the players table, and buys and sells are tagged');
@@ -953,8 +958,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   T.section('the data dump (Titan\'s owner only)');
   await tab('dump');
-  check(await waitFor(`location.pathname === '/app/data-dump' && document.querySelectorAll('.vr-lg').length === 2 && document.querySelectorAll('.vr-lg .vr-moves li').length === 6`, 5000),
-    'the owner sees it at /app/data-dump: each league\'s ideas (start, pick up, buy)');
+  check(await waitFor(`location.pathname === '/app/data-dump' && document.querySelectorAll('.vr-lg').length === 2 && document.querySelectorAll('.vr-lg .vr-moves li').length === 8`, 5000),
+    'the owner sees it at /app/data-dump: each league\'s ideas (start, pick up, buy, sell or keep)');
   // Each heading's own text, without its league icon's site badge (the "E" on an ESPN league).
   const ddOrder = await ev(`[...document.querySelectorAll('.vr-lg h3')].map(h => [...h.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim()).join(' | ')`);
   check(ddOrder === 'Dump Test League | Another Dump League',
@@ -966,6 +971,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const ddText = await text('#view');
   check(/Buy low/.test(ddText) && /This week's matchups/.test(ddText) && /Schedule outlook/.test(ddText) && /Team tendencies/.test(ddText) && /KC throws/.test(ddText),
     'it has buy and sell from expected points, this week\'s matchups, the schedule outlook and team tendencies');
+  check(/Sell high or keep/.test(ddText) && await ev(`document.querySelectorAll('.vr-moves .pill.p-swap').length === 2 && !!document.querySelector('tr[data-vp] .pill.p-swap')`),
+    'its sells read "Sell high or keep" too, with a keep tag on a real role in each league\'s ideas and the tables');
   await pickLeague(lid);
   check(await waitFor(`document.querySelectorAll('.vr-lg').length === 1 && [...document.querySelectorAll('.vr-t th')].some(th => th.textContent === 'Where')`, 3000),
     'picking a league shows just its ideas, and who has each player there');

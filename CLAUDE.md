@@ -334,7 +334,11 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   dropdown (`value` is in `LEAGUE_SCREENS`): a league picked there shows only its moves, the lists in its own format and
   a Where column (Yours, the team, or Free agent); under All leagues, format chips (`S.ui.valueFmt`) pick the lists and
   put that format's leagues first. A player search (`data-value-search`, `S.value.q`) and the position chips filter
-  the moves and tables in place (`applyValueFilter`, which `render` re-applies). Each table sits in a box that scrolls
+  the moves and tables in place (`applyValueFilter`, which `render` re-applies). The sell-high lists are "Sell high or
+  keep" (the owner's name for them, 2026-09-15): every sell-high row and move carries a verdict (`keep` on rows, `k` on
+  moves; `callPill`, `moveTag`), keep (`.p-swap`) when the role is a real starter's or the points come from yards on a
+  proven skill, sell otherwise; the Data dump's ideas and tables use the same tags, and a schedule-only sell lean has
+  no verdict. The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
   sideways (`.vr-scroll`) with the player column pinned; its header row follows the page down to the table's end
   (`pinValueHeads` moves it on scroll: sticky can't follow the page out of a box that scrolls sideways). Never add
   FantasyCalc's numbers to anything someone other than the owner can see.
