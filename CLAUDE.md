@@ -262,6 +262,16 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   `valuesKey`). Only the owner can read `lab/` and write `lab/config` (firestore.rules). `SCC.labWeek`
   (pure, tested) scores lineup points (scoreLeague's by-rank per source) and order (rank correlation
   against Sleeper's stats feed, `API.fetchStats`, PPR). Finished weeks are kept on the device (`KEY.lab`).
+- Data dump (`screenDump`, tab `dump`, `/app/data-dump`, right after Value under Rankings) is Titan's owner's only too,
+  and separate from Value. Each Tuesday the owner downloads a spreadsheet (`week<N>-data-dump.xlsx`: player usage and
+  expected points, defense by position, schedule strength, team tendencies) to Downloads; on the owner's PC the
+  "Titan data dump" Windows task (hourly and at sign-in) runs titan-analytics' `run-dump.ps1`, which posts each new file
+  once: `data_dump.py` turns it into ideas per Sleeper league (start, pick up, buy, sell, playoff schedule) and
+  league-wide lists, and `upload.js dump` writes `lab/dump-latest` (only the owner can read `lab/`). The app reads it
+  with `S.sync.api.dumpReport` (`loadDump`). It reuses the value report's look (`.vr-page`), search and position chips
+  (`applyValueFilter`, `S.value.q`) and follows the league dropdown (Where column). The file and its numbers are the
+  owner's and private: never in this repo, `public/`, the Waiver Wire or any screen but this one. Its payload shape is
+  set by `data_dump.py` (version 1): change both together.
 - Value report (`screenValue`, tab `value`, `/app/value`) is Titan's owner's only, like Compare. It's made outside this
   repo, on the owner's PC: `D:\Claude\titan-analytics` (Python, nflverse's usage-based expected points against
   FantasyCalc's values, buy-lows, sell-highs and claims per Sleeper league) runs every Tuesday at 7 AM and its

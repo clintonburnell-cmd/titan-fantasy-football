@@ -853,10 +853,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     s.options[0].value = ${JSON.stringify(id)}; document.getElementById('view').appendChild(s); s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
   const vsec = i => `(document.querySelectorAll('.vr-sec')[${i}] || {}).textContent || ''`;
   check(await ev(`document.querySelector('#tabs [data-tab="value"]').hidden`), 'it isn\'t on the menu for anyone but Titan\'s owner');
-  await ev(`window.TitanApp.syncReady({valueReport: async () => ({json: ${JSON.stringify(JSON.stringify(VR))}})}); window.TitanApp.setOwner(true); true`);
+  // A made-up data dump too, in the shape titan-analytics' data_dump.py posts to lab/dump-latest (version 1).
+  const drow = (s, n, p, x) => Object.assign({s, n, p, t: 'KC', g: 1, fp: 10, x: 14, oe: -4, xr: 5, sh: 0.2, rs: null, o: 'DAL', h: true, mu: 3, n4: 5, ros: 10,
+    po: 30, adj: 15, buy: true, sell: false}, x);
+  const dlg = (id, name) => ({id, name, format: 'Redraft, 12 teams, PPR', teams: ['Rival Team (rival)'], own: {d1: 'me', d2: 0},
+    start: [{n: 'Start Guy over Bench Guy', why: 'Start Guy (vs DAL, the 3rd-softest for WRs) has 15.0; Bench Guy has 9.0.', x: 'WR, KC · FLEX'}],
+    buy: [{n: 'Buy Guy', why: 'His usage is worth 14.0 a game but he\'s scored 10.0.', x: 'RB, KC'}], sell: [],
+    add: [{n: 'Add Guy', why: 'Usage worth 12.0 a game.', x: 'TE, KC'}], watch: []});
+  const DR = {v: 1, season: 2026, week: 2, fileWeek: 1, file: 'week1-data-dump.xlsx', updated: '2026-09-15 09:36', at: Date.now(),
+    notes: ['1 game of data so far.'], tiles: [['ideas', 6], ['leagues', 2], ['players', 3], ['teams', 1]],
+    leagues: [dlg(lid, 'Dump Test League'), dlg('other-dump', 'Another Dump League')],
+    players: [drow('d1', 'Buy Guy', 'RB'), drow('d2', 'Sell Guy', 'WR', {buy: false, sell: true, oe: 8}), drow('d3', 'Other Guy', 'QB', {buy: false})],
+    lists: {buys: [drow('d1', 'Buy Guy', 'RB')], sells: [drow('d2', 'Sell Guy', 'WR', {buy: false, sell: true, oe: 8})], soft: [drow('d3', 'Other Guy', 'QB', {buy: false})],
+      tough: [], next4easy: [], next4hard: [], playoffEasy: [], playoffHard: []},
+    teams: [{t: 'KC', pr: 0.6, npr: 0.58, i10: 0.5, i5: 0.4, tpg: 34, rbt: 0.15, wrt: 0.6, tet: 0.25, rbx: 20, wrx: 30, tex: 15, ptd: 2, rtd: 1}],
+    highlights: ['KC throws the most when the game is close.']};
+  await ev(`window.TitanApp.syncReady({valueReport: async () => ({json: ${JSON.stringify(JSON.stringify(VR))}})
+    , dumpReport: async () => ({json: ${JSON.stringify(JSON.stringify(DR))}})}); window.TitanApp.setOwner(true); true`);
   await tab('value');
   check(await waitFor(`location.pathname === '/app/value' && document.querySelectorAll('.vr-lg').length === 2 && document.querySelectorAll('.vr-moves li').length === 6 &&
-    document.querySelectorAll('.subtabs [data-go]').length === 4`, 5000), 'the owner sees it under Rankings, at /app/value: each league\'s sells, buys and claims');
+    document.querySelectorAll('.subtabs [data-go]').length === 5`, 5000), 'the owner sees it under Rankings, at /app/value: each league\'s sells, buys and claims');
   check(await ev(`document.querySelectorAll('[data-vfmt]').length === 2 && /Buy Guy/.test(${vsec(0)}) &&
     [...document.querySelectorAll('.vr-t th')].every(th => th.textContent !== 'Where')`), 'under All leagues, the lists are in the format most leagues play, with a chip for each format');
   await ev(`document.querySelector('[data-vpos="QB"]').click(); true`);
@@ -915,9 +931,32 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     await sleep(500);
   }
   await pickLeague('all');
+
+  T.section('the data dump (Titan\'s owner only)');
+  await tab('dump');
+  check(await waitFor(`location.pathname === '/app/data-dump' && document.querySelectorAll('.vr-lg').length === 2 && document.querySelectorAll('.vr-lg .vr-moves li').length === 6`, 5000),
+    'the owner sees it at /app/data-dump: each league\'s ideas (start, pick up, buy)');
+  check(await ev(`[...document.querySelectorAll('.subtabs [data-go]')].map(b => b.textContent).join('|') === 'Import|Import multiple|Compare|Value|Data dump'`),
+    'Data dump is its own screen under Rankings, right after Value');
+  check(await ev(`(() => { const nav = document.querySelector('.subtabs'), n = nav.getBoundingClientRect(), b = nav.querySelector('[aria-current="page"]').getBoundingClientRect();
+    return b.left >= n.left - 1 && b.right <= n.right + 1; })()`), 'on a phone the sub-tab row scrolls so Data dump shows in full');
+  const ddText = await text('#view');
+  check(/Buy low/.test(ddText) && /This week's matchups/.test(ddText) && /Schedule outlook/.test(ddText) && /Team tendencies/.test(ddText) && /KC throws/.test(ddText),
+    'it has buy and sell from expected points, this week\'s matchups, the schedule outlook and team tendencies');
+  await pickLeague(lid);
+  check(await waitFor(`document.querySelectorAll('.vr-lg').length === 1 && [...document.querySelectorAll('.vr-t th')].some(th => th.textContent === 'Where')`, 3000),
+    'picking a league shows just its ideas, and who has each player there');
+  const dwho = await ev(`(() => { const r = [...document.querySelectorAll('tr[data-vp]')].find(x => /buy guy/.test(x.dataset.find)); return r ? r.cells[1].textContent : ''; })()`);
+  check(dwho === 'Yours', 'the Where column says Yours for a player on your team: ' + dwho);
+  await vsearch('sell guy');
+  check(await ev(`${shownNames}.length > 0 && ${shownNames}.every(n => n === 'Sell Guy')`), 'the player search narrows the tables here too');
+  await vsearch('');
+  check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'it fits a 390px phone');
+  await shot('data-dump');
+  await pickLeague('all');
   await ev(`window.TitanApp.setOwner(false); true`);
-  check(await waitFor(`/Only Titan's owner sees this screen/.test(document.getElementById('view').textContent) && document.querySelector('#tabs [data-tab="value"]').hidden`, 3000),
-    'without the owner account it hides again');
+  check(await waitFor(`/Only Titan's owner sees this screen/.test(document.getElementById('view').textContent) && document.querySelector('#tabs [data-tab="value"]').hidden &&
+    document.querySelector('#tabs [data-tab="dump"]').hidden`, 3000), 'without the owner account Value and Data dump hide again');
   await tab('lineups');
 
   // Screenshots of every screen at phone and computer widths (TITAN_SHOTS only), to compare a change to the whole app's look.

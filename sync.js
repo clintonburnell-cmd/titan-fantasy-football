@@ -223,6 +223,11 @@ const api = {
     const s = await getDoc(doc(db, 'lab', 'value-latest'));
     return s.exists() ? s.data() : null;
   },
+  // The weekly data dump the owner's PC posts (Data dump; owner-only lab/ too).
+  async dumpReport() {
+    const s = await getDoc(doc(db, 'lab', 'dump-latest'));
+    return s.exists() ? s.data() : null;
+  },
 
   /* A week's frozen record of Titan's calls, saved by the server job at each
      kickoff, or null if there isn't one. */

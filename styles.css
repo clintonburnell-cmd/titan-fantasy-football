@@ -940,6 +940,10 @@ body.app-page :is(.stand .tnum, .stand .st-odds b) { font-variant-numeric: tabul
 .vr-search input { width: 100%; }
 .vr-t .pill { padding: 2px 7px; margin-right: 6px; font-size: .66rem; }
 .vr-how summary { cursor: pointer; font-weight: 700; }
+/* The data dump's team highlights, above its team table. */
+.dd-hl { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); }
+.vr-page .dd-hl { font-size: var(--vr-sm); line-height: 1.5; }
+.vr-k.watch { color: var(--muted); }
 .vr-how p { margin-top: 8px; }
 
 /* The Standings tab: the table, your team marked, the playoff line and each team's odds. */

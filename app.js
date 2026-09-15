@@ -19,15 +19,16 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'lab', 'value', 'settings'];
+  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'lab', 'value', 'dump', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
-    score: 'Results', news: 'News', ranks: 'Rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
+    score: 'Results', news: 'News', ranks: 'Rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump', trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
   const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes',
-    score: 'results', news: 'news', ranks: 'rankings', multi: 'multiple', lab: 'compare', value: 'value', trade: 'trade', moves: 'transactions', settings: 'settings'};
+    score: 'results', news: 'news', ranks: 'rankings', multi: 'multiple', lab: 'compare', value: 'value', dump: 'data-dump', trade: 'trade', moves: 'transactions',
+    settings: 'settings'};
   const tabFromPath = () => {
-    const m = location.pathname.match(/^\/app\/([a-z]+)\/?$/);
+    const m = location.pathname.match(/^\/app\/([a-z-]+)\/?$/);
     return (m && Object.keys(SLUG).find(t => SLUG[t] === m[1])) || '';
   };
   /* Titan's five sections: a bar along the bottom on phones and in the apps, a menu with dropdowns
@@ -39,15 +40,15 @@
     {id: 'matchup', name: 'Matchup', tabs: ['matchup']},
     {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
     {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes']},
-    // Compare (lab) is Titan's owner's only: it shows only on the owner's account.
-    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'multi', 'lab', 'value']},
+    // Compare (lab), Value and Data dump are Titan's owner's only: they show only on the owner's account.
+    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'multi', 'lab', 'value', 'dump']},
     {id: 'results', name: 'Results', tabs: ['score']}
   ];
-  const SUB_NAMES = {ranks: 'Import', multi: 'Import multiple', lab: 'Compare', value: 'Value', score: 'Results'};
-  const OWNER_TABS = ['lab', 'value']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else)
+  const SUB_NAMES = {ranks: 'Import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', score: 'Results'};
+  const OWNER_TABS = ['lab', 'value', 'dump']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else)
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
-  const LEAGUE_SCREENS = {lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1, value: 1};
+  const LEAGUE_SCREENS = {lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1, value: 1, dump: 1};
   const AVATAR = 'https://sleepercdn.com/avatars/thumbs/';
   // News-only accounts on the News tab. X doesn't let apps read posts without a
   // paid plan, so each one opens on X.
@@ -140,6 +141,7 @@
     // Compare rankings (Titan's owner only): each week's test, kept on this device once its games are over (loadLab).
     lab: store.get(KEY.lab) || null, labBusy: false, labAt: 0, labError: '',
     value: {busy: false, data: null, error: '', at: 0, q: ''}, // the value report (Titan's owner only), from the owner's PC; q: its player search
+    dump: {busy: false, data: null, error: '', at: 0}, // the data dump (Titan's owner only), from the owner's PC; it shares the value report's search
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
@@ -480,7 +482,13 @@
     // On a wide computer window Lineups, Matchup, Rosters and Results put their leagues down the left side.
     view.innerHTML = sideItems ? `<div class="with-side">${sideNav(sideItems)}<div class="side-main">${body + yahooCredit()}</div></div>` : body + yahooCredit();
     if (S.ui.tab === 'rosters' && S.rosterQuery) applyRosterSearch();
-    if (S.ui.tab === 'value') applyValueFilter();
+    if (S.ui.tab === 'value' || S.ui.tab === 'dump') applyValueFilter();
+    // A sub-tab row too wide for a phone (the owner's Rankings) scrolls sideways to show the screen that's open.
+    const subNav = view.querySelector('.subtabs'), subCur = subNav && subNav.querySelector('[aria-current="page"]');
+    if (subCur) {
+      const n = subNav.getBoundingClientRect(), b = subCur.getBoundingClientRect();
+      if (b.right > n.right || b.left < n.left) subNav.scrollLeft += b.left - n.left - (n.width - b.width) / 2;
+    }
     spySide();
     syncUrl(false);
     // Values or teams that arrive while draft results are open show there too.
@@ -1983,6 +1991,134 @@
     if (S.ui.tab === 'lab') render();
   }
 
+  /* ---- Data dump (Titan's owner only) */
+
+  /* The weekly data dump from Titan's owner's PC (titan-analytics' data_dump.py, outside this repo): the spreadsheet of
+     usage, matchup and schedule numbers the owner downloads each Tuesday, turned into ideas for each Sleeper league
+     (start/sit leans, pickups, buys, sells, playoff schedules) and league-wide lists, posted to lab/dump-latest, which
+     only the owner can read. It shares the value report's look, player search and position chips (applyValueFilter),
+     and follows the league dropdown. */
+  async function loadDump() {
+    if (DEMO || !S.owner.is || !S.sync.api || !S.sync.api.dumpReport || S.dump.busy) return;
+    S.dump.busy = true;
+    S.dump.error = '';
+    try {
+      const d = await S.sync.api.dumpReport();
+      S.dump.data = d && d.json ? JSON.parse(d.json) : null;
+    } catch (e) { S.dump.error = `Couldn't load the data dump: ${e && e.message ? e.message : e}`; }
+    S.dump.busy = false;
+    S.dump.at = Date.now();
+    if (S.ui.tab === 'dump') render();
+  }
+
+  // A rank where 1 is the easiest (a matchup, a schedule): green in the easiest quarter, amber in the toughest.
+  const easeRank = r => (r === null || r === undefined ? '–' : `<span class="${r <= 8 ? 'good' : r >= 25 ? 'amber' : ''}">${r}</span>`);
+
+  // where(row): who has him in the picked league (a Where column), or null under All leagues.
+  function dumpTable(rows, filtered, where) {
+    const n = (v, d = 1) => (v === null || v === undefined ? '–' : Number(v).toFixed(d));
+    const share = v => (v === null || v === undefined ? '–' : Math.round(v * 100) + '%');
+    const sgn = v => (v === null || v === undefined ? '–'
+      : `<span class="${v > 0 ? 'good' : v < 0 ? 'amber' : ''}">${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(1)}</span>`);
+    const next = r => (r.o === 'BYE' ? 'Bye' : `${r.h ? 'vs' : 'at'} ${esc(r.o || '')}`);
+    const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
+    return `<div class="table-wrap vr-scroll"><table class="season-t vr-t"><thead><tr><th>Player</th>${where ? '<th class="vr-w">Where</th>' : ''}<th>Points</th>
+      <th>Expected</th><th>Over expected</th><th>Targets</th><th>Carries</th><th class="vr-w">Next</th><th>Matchup</th><th>Adjusted</th><th>Next 4</th><th>Playoffs</th>
+      </tr></thead><tbody>${rows.map(r =>
+      `<tr data-find=" ${esc(SCC.norm(r.n))} ${esc(String(r.t || '').toLowerCase())} ${esc(String(r.p || '').toLowerCase())} "${filtered ? ` data-vp="${esc(r.p)}"${
+        vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${r.buy || r.sell ? `<span class="pill ${r.buy ? 'p-ok' : 'p-stop'}">${r.buy ? 'buy' : 'sell'}</span>` : ''}<b>${
+        esc(r.n)}</b><small>${esc([(r.p || '') + (r.xr || ''), r.t].filter(Boolean).join(' · '))}</small></td>${where ? `<td class="vr-w">${where(r)}</td>` : ''}
+      <td>${n(r.fp)}</td><td>${n(r.x)}</td><td>${sgn(r.oe)}</td><td>${share(r.sh)}</td><td>${share(r.rs)}</td><td class="vr-w">${next(r)}</td><td>${easeRank(r.mu)}</td>
+      <td>${n(r.adj)}</td><td>${easeRank(r.n4)}</td><td>${easeRank(r.po)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  function dumpTeams(teams) {
+    const pct = v => (v === null || v === undefined ? '–' : Math.round(v * 100) + '%');
+    const n = v => (v === null || v === undefined ? '–' : Number(v).toFixed(1));
+    const whole = v => (v === null || v === undefined ? '–' : String(Math.round(v)));
+    return `<div class="table-wrap vr-scroll"><table class="season-t vr-t"><thead><tr><th>Team</th><th>Pass rate</th><th>Neutral</th><th>Inside 10</th>
+      <th>Inside 5</th><th>Targets a game</th><th>RB targets</th><th>WR targets</th><th>TE targets</th><th>RB expected</th><th>WR expected</th><th>TE expected</th>
+      <th>Pass TD</th><th>Rush TD</th></tr></thead><tbody>${teams.map(t => `<tr data-find=" ${esc(String(t.t).toLowerCase())} "><td class="vr-p"><b>${esc(t.t)}</b></td>
+      <td>${pct(t.pr)}</td><td>${pct(t.npr)}</td><td>${pct(t.i10)}</td><td>${pct(t.i5)}</td><td>${n(t.tpg)}</td><td>${pct(t.rbt)}</td><td>${pct(t.wrt)}</td>
+      <td>${pct(t.tet)}</td><td>${n(t.rbx)}</td><td>${n(t.wrx)}</td><td>${n(t.tex)}</td><td>${whole(t.ptd)}</td><td>${whole(t.rtd)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  // Each league's ideas, in the order they're acted on: this week's lineup, then the wire, trades and the playoffs.
+  const DUMP_KINDS = [['start', 'Start this week', 'add'], ['add', 'Pick up', 'add'], ['buy', 'Buy from a rival', 'buy'],
+    ['sell', 'Sell from your roster', 'sell'], ['watch', 'Playoff schedule', 'watch']];
+
+  function screenDump() {
+    if (!S.owner.is) return '<div class="empty-note">Only Titan\'s owner sees this screen.</div>';
+    const D = S.dump;
+    if (!D.at && !D.busy) loadDump();
+    let h = `<div class="bar match-bar"><p class="lede">Only you see this. The data dump you download each Tuesday (usage, matchups, schedules and team
+      tendencies) turned into ideas for each of your leagues: who to start, who to pick up, who to buy and who to sell.</p>
+      <button class="btn ghost small" data-action="dump-reload"${D.busy ? ' disabled' : ''}>${D.busy ? 'Loading…' : 'Reload'}</button></div>`;
+    if (D.error) h += `<div class="banner stop">${esc(D.error)}</div>`;
+    const R = D.data;
+    if (!R) {
+      return h + `<div class="empty-note">${D.busy || !D.at ? 'Loading the data dump…'
+        : 'No data dump yet. Save this week\'s file to Downloads and your PC posts it here within the hour.'}</div>`;
+    }
+    const pick = pickedLeague(), one = (R.leagues || []).find(L => L.id === pick) || null;
+    h += `<p class="fine">Ideas for week ${esc(R.week)} · from ${esc(R.file || 'the data dump')}${R.updated ? `, its data updated ${esc(R.updated)}` : ''} · posted ${esc(when(R.at))}</p>`;
+    if (pick !== 'all' && !one) h += '<div class="banner swap">That league isn\'t in the data dump, which covers your Sleeper leagues. Here are all of them.</div>';
+    (R.notes || []).forEach(t => { h += `<div class="banner swap">${esc(t)}</div>`; });
+    const count = L => DUMP_KINDS.reduce((s, [k]) => s + (L[k] || []).length, 0);
+    const tiles = one ? DUMP_KINDS.slice(0, 4).map(([k, t]) => [t.toLowerCase(), (one[k] || []).length]) : R.tiles || [];
+    h += `<section class="tiles">${tiles.map(t => tile(t[1], t[0], 'muted')).join('')}</section>`;
+    h += `<div class="bar"><label class="field grow vr-search"><span>Find a player or team</span><input type="search" data-value-search
+        placeholder="Name, team or position" value="${esc(S.value.q || '')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label></div>
+      <p class="empty-note" data-value-none hidden>Nothing in the data dump matches that.</p>`;
+
+    const move = m => `<li data-find=" ${esc(SCC.norm(m.n))} "><b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
+    const group = (list, title, cls) => (list && list.length ? `<h4 class="vr-k ${cls}">${title}</h4><ul class="vr-moves">${list.map(move).join('')}</ul>` : '');
+    const cfgOf = id => (((S.snap && S.snap.leagues) || []).find(d => d.cfg.id === id) || {}).cfg;
+    h += `<h3 class="vr-h">${one ? 'Your ideas' : 'Your ideas, league by league'}</h3><div class="league-grid">${(one ? [one] : R.leagues || []).map(L => {
+      const c = count(L), cfg = cfgOf(L.id);
+      return `<details class="card vr-lg"${c ? ' open' : ''}><summary class="card-h"><div><h3>${cfg ? leagueIcon(cfg) : ''}${esc(L.name)}</h3>
+        <p>${esc(L.format)} · ${plural(c, 'idea')}</p></div></summary><div class="vr-body">${DUMP_KINDS.map(([k, t, cls]) => group(L[k], t, cls)).join('')}${
+        c ? '' : '<p class="fine">Nothing stands out this week.</p>'}</div></details>`;
+    }).join('')}</div>`;
+
+    // With a league picked, who has each player there.
+    const where = one && one.own ? r => {
+      const o = r.s ? one.own[r.s] : undefined;
+      return !r.s ? '–' : o === undefined ? '<span class="good">Free agent</span>' : o === 'me' ? '<b>Yours</b>' : esc((one.teams || [])[o] || 'Taken');
+    } : null;
+    const Ls = R.lists || {}, wk = esc(R.week);
+    const section = (title, sub, rows) => `<section class="card pad vr-sec"><h3>${title}</h3><p class="fine">${sub}</p>${
+      rows && rows.length ? dumpTable(rows, false, where) : '<p class="fine">None this week.</p>'}</section>`;
+    h += '<h3 class="vr-h">Buy and sell from expected points</h3>';
+    h += section('Buy low: the work without the points', 'A real role by expected points, scoring 3 or more a game under it. That usually evens out.', Ls.buys);
+    h += section('Sell high: points above the work', 'Scoring 5 or more a game over expected without a top role, often on touchdowns that don\'t last.', Ls.sells);
+    h += '<h3 class="vr-h">This week\'s matchups</h3>';
+    h += section(`Soft matchups in week ${wk}`, 'Real roles facing one of the 8 softest defenses at their position: start them with confidence.', Ls.soft);
+    h += section(`Tough matchups in week ${wk}`, 'Real roles facing one of the 8 toughest defenses at their position: temper expectations.', Ls.tough);
+    h += '<h3 class="vr-h">Schedule outlook</h3>';
+    h += section('Easiest next four weeks', 'Real roles whose next four games are among the 6 easiest at their position: buy or hold.', Ls.next4easy);
+    h += section('Toughest next four weeks', 'Real roles whose next four games are among the 6 toughest at their position: sell or plan around them.', Ls.next4hard);
+    h += section('Easiest fantasy playoffs', 'Weeks 15 to 17 among the 6 easiest at their position.', Ls.playoffEasy);
+    h += section('Toughest fantasy playoffs', 'Weeks 15 to 17 among the 6 toughest at their position.', Ls.playoffHard);
+    const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
+    h += `<section class="card pad vr-sec"><h3>Every player, by expected points</h3><p class="fine">Everyone in the file${one ? `, and who has him in ${esc(one.name)}` : ''}.</p>
+      <div class="chips" role="group" aria-label="Position">${VALUE_POS.map(p =>
+        `<button type="button" class="chip" data-vpos="${p}" aria-pressed="${vp === p}">${p === 'ALL' ? 'All' : p}</button>`).join('')}</div>${dumpTable(R.players || [], true, where)}</section>`;
+    h += `<h3 class="vr-h">Team tendencies</h3><section class="card pad vr-sec"><ul class="dd-hl">${(R.highlights || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>${
+      dumpTeams(R.teams || [])}</section>`;
+    h += `<details class="card pad vr-how"><summary>How it works</summary><p class="fine"><b>Expected</b> is what a player's usage (targets, carries, throws and
+      where on the field) usually scores a game, and <b>over expected</b> is his points a game minus that: big positives tend to fall back and big negatives to
+      recover. <b>Matchup</b> ranks next week's opponent by the adjusted points it allows a game at his position (1 is the softest). <b>Adjusted</b> starts from
+      his expected points, steadied by your value report's projection while the season is young, and moves toward the matchup, less while the defense's sample
+      is small. <b>Next 4</b> and <b>playoffs</b> rank his schedule ahead at his position (1 is the easiest; the fantasy playoffs are weeks 15 to 17). A real role
+      is a top-24 QB, top-40 RB, top-60 WR or top-20 TE by expected points. Start ideas swap in a bench player 2 or more adjusted points ahead of a starter,
+      and pickups are free agents 1 or more ahead of the weakest starter they could replace, with a bigger margin while the season is young (4 and 3
+      after one game). Players Sleeper lists as out, doubtful or on IR get no start or pickup
+      calls.</p></details>
+      <p class="credit">Numbers from your weekly data dump. Schedules, rosters and injuries from Sleeper.</p>`;
+    return h;
+  }
+
   /* ---- Value report (Titan's owner only) */
 
   /* The weekly value report from Titan's owner's PC (D:\Claude\titan-analytics, outside this repo). Each Tuesday a Python
@@ -2039,7 +2175,7 @@
   let pinFrame = 0;
   function pinValueHeads() {
     pinFrame = 0;
-    if (S.ui.tab !== 'value') return;
+    if (S.ui.tab !== 'value' && S.ui.tab !== 'dump') return;
     const bar = document.querySelector('.top'), top = bar ? bar.getBoundingClientRect().bottom : 0;
     view.querySelectorAll('.vr-scroll').forEach(box => {
       const cells = box.querySelectorAll('thead th');
@@ -2722,7 +2858,7 @@
       Object.assign(S.yahoo, {busy: false, error: '', data: null});
       if (is) sendLabFormats();
       paintHeader();
-      if (['settings', 'ranks', 'multi', 'lab', 'value'].includes(S.ui.tab)) render();
+      if (['settings', 'ranks', 'multi', 'lab', 'value', 'dump'].includes(S.ui.tab)) render();
     },
     setAlerts(a) {
       S.alerts = a;
@@ -3788,7 +3924,8 @@
 
   const SCREENS = {
     lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
-    score: screenScore, ranks: screenRanks, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`, trade: screenTrade, moves: screenMoves, settings: screenSettings
+    score: screenScore, ranks: screenRanks, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`,
+    dump: () => `<div class="vr-page">${screenDump()}</div>`, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
 
   /* ------------------------------------------------------------- events */
@@ -3948,6 +4085,7 @@
     else if (a === 'ranks-del') deleteRanks(Number(t.dataset.week));
     else if (a === 'lab-run') { S.labAt = 0; loadLab(); render(); }
     else if (a === 'value-reload') { S.value.at = 0; loadValue(); render(); }
+    else if (a === 'dump-reload') { S.dump.at = 0; loadDump(); render(); }
     else if (a === 'multi-add') multiAdd();
     else if (a === 'multi-save') multiSave();
     else if (a === 'multi-remove') {
