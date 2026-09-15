@@ -794,6 +794,9 @@ details.match[open] .mh-score { display: none; }
   background: var(--surface-2); color: var(--muted); }
 .wst.free { background: var(--ok-soft); color: var(--ok); }
 .wst.mine { background: rgb(58 103 234 / .14); color: var(--accent-2); }
+/* Trade's "Who has him?": another team's chip opens that trade. */
+.wst.tfor { border: 0; font-family: inherit; color: var(--accent-2); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.wst.tfor:hover { background: rgb(58 103 234 / .14); }
 .wfree summary { cursor: pointer; font-size: .8rem; color: var(--accent-2); font-weight: 700; margin-top: 2px; }
 .wuse { display: block; color: var(--muted); font-size: .76rem; margin-top: 1px; white-space: normal; }
 .wuse b { display: inline; color: var(--text); font-weight: 700; }

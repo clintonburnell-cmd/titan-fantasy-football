@@ -302,7 +302,7 @@
       render();
       scheduleLive();
       if (S.ui.tab === 'matchup' && S.snap) loadMatchups(true);
-      if (S.ui.tab === 'score' && S.snap && !S.score.data && !S.score.busy) loadScore(S.score.week || S.snap.week);
+      if (S.ui.tab === 'score' && S.snap && !S.score.data && !S.score.busy) loadScore(S.score.week || S.snap.week, !S.score.week);
       sendLabFormats(); // the owner's league formats, for the server's weekly FantasyCalc snapshot
       paintTicker(); // the person's starters in each game may have changed
       if (S.again) { S.again = false; refresh(); }
@@ -375,13 +375,15 @@
     return D;
   }
 
-  async function loadScore(week) {
+  // `latest`: no week picked, so a week that hasn't kicked off yet (Tuesday until its first game) opens the week before.
+  async function loadScore(week, latest) {
     if (DEMO) return;
     S.score = {week, busy: true, data: null, error: ''};
     if (S.ui.tab === 'score') render();
     try {
       const D = await scoreFor(week);
       if (S.score.week !== week) return; // another week was picked meanwhile
+      if (!D && latest && week > 1) return loadScore(week - 1);
       if (!D) S.score.error = `Week ${week} has not kicked off yet, so there's nothing to score.`;
       else { S.score.data = D; keepWeek(D); }
     } catch (e) {
@@ -3329,7 +3331,8 @@
     if (S.ui.tab === 'trade') render();
   }
 
-  async function loadTradeTeams(d) {
+  // `quiet`: loaded for "Who has him?", so on the Trade tab only its results redraw and the search box keeps its cursor.
+  async function loadTradeTeams(d, quiet) {
     const id = d.cfg.id;
     S.trade.teams[id] = {busy: true};
     try {
@@ -3337,7 +3340,9 @@
     } catch (e) {
       S.trade.teams[id] = {error: `Could not load the teams in ${d.cfg.key}: ${e && e.message ? e.message : e}.`};
     }
-    if (S.ui.tab === 'trade' || S.ui.tab === 'standings') render();
+    const box = quiet && S.ui.tab === 'trade' && id !== S.trade.pick.league ? view.querySelector('#tsearch') : null;
+    if (box) box.innerHTML = tradeSearchResults();
+    else if (S.ui.tab === 'trade' || S.ui.tab === 'standings') render();
   }
 
   function screenTrade() {
@@ -3389,7 +3394,7 @@
     const get = partner ? P.get.map(id => assets(partner).find(p => p.id === id)).filter(Boolean) : [];
     const PS = partner ? strengthOf(d.cfg, teams) : null;
     if (PS && PS.positions.length) h += tradeFit(PS, me, partner);
-    h += `<section class="card pad tsearch"><label class="field"><span>Who has him? Search for a player in ${esc(d.cfg.key)}</span>
+    h += `<section class="card pad tsearch"><label class="field"><span>Who has him? Search for a player in every league</span>
         <input type="search" data-trade-search placeholder="At least three letters" value="${esc(S.trade.q || '')}" autocomplete="off"
           autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="tsearch">${tradeSearchResults()}</div></section>`;
     h += tradeIdeasCard(d.cfg, disp) + draftCard(d.cfg);
@@ -3435,32 +3440,51 @@
         <button type="button" class="btn small ghost" data-idea="${i}">Open</button></li>`).join('')}</ol></section>`;
   }
 
-  /* Who has him? Players in the league on screen whose name matches the search (at least
-     three letters): rostered players first, most valuable first, then free agents from the
-     player list. Another team's player can go straight into a trade. */
+  /* Who has him? Players whose name matches the search (at least three letters), and where each is in every
+     league: the team that has him, yours, or a free agent. Each league's teams load for the search
+     (loadTradeTeams, quietly: only these results redraw); until they have (or where they can't: Yahoo), a
+     league says free or taken from the snapshot (takenNorm). Players someone in your leagues has come first,
+     most valuable first. Tapping another team opens that trade: its league, that team, him on the get side. */
   function tradeSearchResults() {
-    const q = SCC.norm(S.trade.q || '').trim();
-    const d = ((S.snap && S.snap.leagues) || []).find(x => x.cfg.id === S.trade.pick.league);
-    const Tm = d && S.trade.teams[d.cfg.id];
-    if (q.length < 3 || !Tm || !Tm.list) return '';
-    const V = S.trade.values[tradeKey(SCC.tradeFormat(d.cfg))];
-    const worth = p => (V && V.idx ? (SCC.playerValue(V.idx, p) || {}).v : 0) || 0, disp = tradeDisplay(d.cfg, V);
+    const q = SCC.norm(S.trade.q || '').trim(), leagues = (S.snap && S.snap.leagues) || [];
+    if (q.length < 3 || !leagues.length) return '';
+    leagues.forEach(d => { if (!S.trade.teams[d.cfg.id] && d.cfg.platform !== 'yahoo') loadTradeTeams(d, true); });
+    const d0 = leagues.find(x => x.cfg.id === S.trade.pick.league) || leagues[0];
+    const V = S.trade.values[tradeKey(SCC.tradeFormat(d0.cfg))];
+    const worth = p => (V && V.idx ? (SCC.playerValue(V.idx, p) || {}).v : 0) || 0;
     const found = [], seen = new Set(), players = playerList();
-    Tm.list.forEach(t => t.roster.forEach(p => {
+    leagues.forEach(d => ((S.trade.teams[d.cfg.id] || {}).list || []).forEach(t => t.roster.forEach(p => {
       const n = SCC.norm(p.name);
-      if (n.includes(q)) { found.push({p, team: t}); seen.add(n); }
-    }));
+      if (n.includes(q) && !seen.has(n)) { found.push({p, held: true}); seen.add(n); }
+    })));
     for (const id in players) {
-      if (found.length >= 16) break;
+      if (found.length >= 30) break;
       const e = players[id], n = SCC.norm(e[0]);
-      if (e[2] && n.includes(q) && !seen.has(n)) { found.push({p: {id, name: e[0], pos: e[1], team: e[2]}, team: null}); seen.add(n); }
+      if (e[2] && n.includes(q) && !seen.has(n)) { found.push({p: {id, name: e[0], pos: e[1], team: e[2]}, held: false}); seen.add(n); }
     }
-    if (!found.length) return '<p class="fine">Nobody by that name in this league or on an NFL team.</p>';
-    found.sort((a, b) => (!!b.team - !!a.team) || worth(b.p) - worth(a.p) || a.p.name.localeCompare(b.p.name));
-    return `<ul class="wlist">${found.slice(0, 8).map(({p, team}) => `<li class="wrow">${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b>
-      <small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.team || '')}${disp.num(p) ? ' · value ' + disp.num(p) : ''}</small>
-      <span class="wchips">${!team ? '<span class="wst free">free agent</span>' : team.mine ? '<span class="wst mine">on your team</span>'
-        : `<span class="wst">on ${esc(team.name)}</span><button type="button" class="btn small ghost" data-tsearch="${esc(team.id)}|${esc(p.id)}">Trade for him</button>`}</span></span></li>`).join('')}</ul>`;
+    if (!found.length) return '<p class="fine">Nobody by that name in your leagues or on an NFL team.</p>';
+    found.sort((a, b) => (b.held - a.held) || worth(b.p) - worth(a.p) || a.p.name.localeCompare(b.p.name));
+    // Where he is in one league: {kind: 'mine' | 'taken' | 'free', team, r (his entry on that team), pending}.
+    const where = (d, p) => {
+      const n = SCC.norm(p.name), T = S.trade.teams[d.cfg.id], is = r => (p.id && r.id === p.id) || SCC.norm(r.name) === n;
+      if (T && T.list) {
+        for (const t of T.list) { const r = t.roster.find(is); if (r) return {kind: t.mine ? 'mine' : 'taken', team: t, r}; }
+        return {kind: 'free'};
+      }
+      if (d.roster.some(is)) return {kind: 'mine'};
+      return {kind: d.takenNorm && d.takenNorm[n] ? 'taken' : 'free', pending: !!(T && T.busy)};
+    };
+    const chip = (d, s) => s.team && s.kind === 'taken'
+      ? `<button type="button" class="wst tfor" data-tsearch="${esc(d.cfg.id)}|${esc(s.team.id)}|${esc(s.r.id)}" title="Trade for him in ${esc(d.cfg.key)}">${
+        esc(d.cfg.key)} · on ${esc(s.team.name)}</button>`
+      : `<span class="wst${s.kind === 'taken' ? '' : ' ' + s.kind}">${esc(d.cfg.key)} · ${s.kind === 'free' ? 'free agent' : s.kind === 'mine' ? 'yours'
+        : s.pending ? 'taken (finding who)' : 'taken'}</span>`;
+    return `<p class="fine">Where each player is in every league. Tap a team to trade for him there.</p><ul class="wlist">${found.slice(0, 6).map(({p}) => {
+      const st = leagues.map(d => ({d, s: where(d, p)})), free = st.filter(x => x.s.kind === 'free').length;
+      return `<li class="wrow">${headshot(p, true)}<span class="who"><b${pcAttr(p)}>${esc(p.name)}</b>
+        <small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.team || '')} · free agent in ${free} of ${leagues.length}</small>
+        <span class="wchips">${st.map(x => chip(x.d, x.s)).join('')}</span></span></li>`;
+    }).join('')}</ul>`;
   }
 
   // A team's draft picks in a dynasty league: Sleeper says who owns which, ESPN doesn't.
@@ -3778,7 +3802,7 @@
     if (!fromHistory) syncUrl(true);
     render();
     window.scrollTo(0, 0);
-    if (tab === 'score' && S.snap && !S.score.data && !S.score.busy && !S.score.error) loadScore(S.score.week || S.snap.week);
+    if (tab === 'score' && S.snap && !S.score.data && !S.score.busy && !S.score.error) loadScore(S.score.week || S.snap.week, !S.score.week);
     if (tab === 'matchup' && S.snap && (!S.match.data || S.match.week !== S.snap.week)) loadMatchups();
   }
 
@@ -3837,8 +3861,14 @@
       return;
     }
     if (t.dataset.tsearch) {
-      // A searched-for player goes into the trade: his team becomes the partner, he goes on the get side.
-      const [team, pid] = t.dataset.tsearch.split('|'), P = S.trade.pick;
+      // A searched-for player goes into the trade: his league and team, he goes on the get side.
+      const [lg, team, pid] = t.dataset.tsearch.split('|'), P = S.trade.pick;
+      if (lg !== P.league) {
+        // Another league: the Trade tab moves there (the league dropdown too, when it names one).
+        S.ui.tradeLeague = lg;
+        if (pickedLeague() !== 'all') S.ui.league = lg;
+        Object.assign(P, {league: lg, partner: team, give: [], get: []});
+      }
       if (P.partner !== team) Object.assign(P, {partner: team, give: [], get: []});
       if (!P.get.includes(pid)) P.get.push(pid);
       S.ui.tradePartner = team;
@@ -4140,5 +4170,5 @@
   if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS || (S.snap.v || 0) < 4)) refresh();
   else { loadProj(); scheduleLive(); }
   // Opened straight onto Results (its address, or the last screen used): score the week, as switching to it does.
-  if (S.account && S.snap && S.ui.tab === 'score' && !S.score.busy && !S.score.data) loadScore(S.snap.week);
+  if (S.account && S.snap && S.ui.tab === 'score' && !S.score.busy && !S.score.data) loadScore(S.snap.week, true);
 })();

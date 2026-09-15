@@ -240,7 +240,10 @@ One note per screen or feature.
   ideas (`SCC.tradeIdeas`): fair 1-2 player trades that raise the value of your best starters
   (`lineupPoints` with values, not one week's projections), at most two per partner. The ideas card
   is one line until Find trades, and Clear folds it back. "Who has him?" (`tradeSearchResults`)
-  searches the league's rosters, then free agents; Trade for him sets the partner and the get side.
+  searches every league: each league's teams load for it (`loadTradeTeams(d, true)`, which redraws only the results so
+  the box keeps its cursor), and every league gets a chip: the team that has him, yours, or free agent (a league not
+  loaded yet, or Yahoo, falls back to the snapshot's `takenNorm`: free or taken). Tapping another team's chip
+  (`data-tsearch` league|team|player) moves the Trade tab to that league with that team as partner, him on the get side.
   Copy and open (`data-trade-copy`): copies "Trade offer: my X for your Y" and opens `lineupUrl`.
   Sleeper can't be pre-filled: its API is read-only, and its web trade page (`/beta/leagues/:id/trade`,
   checked 2026-09-11) takes only the league and sits behind flags that are off. Never ask for Sleeper logins.
@@ -367,8 +370,9 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   `#newsletter` section, the `/newsletter/` page, every guide, and the app's `newsletterCard` on Waivers and Settings. It
   posts the email to Kit's form endpoint (`https://app.kit.com/forms/<FORM_ID>/subscriptions`, field `email_address`;
   no key, so no server code) in the background, and remembers a device that joined (`titan.newsletter`), which hides the
-  boxes marked `data-hide-joined` and the app's cards. `FORM_ID` in newsletter.js is Kit's form number (public); while
-  it's empty every box stays hidden. A new website page gets a signup box too. The privacy page's "If you join the
+  boxes marked `data-hide-joined` and the app's cards. `FORM_ID` in newsletter.js is Kit's form number (public; the
+  "Titan Waiver Wire" form, 9921118, set 2026-09-15); while it's empty every box stays hidden. The UI test overrides it
+  with `window.TitanNewsletterForm` ('' for none) and answers Kit's address itself: tests never post to the real form. A new website page gets a signup box too. The privacy page's "If you join the
   weekly email" section and the Play Data safety form (email address, collected when someone signs up) must stay true.
   The email itself is drafted by titan-analytics each Tuesday (`reports/newsletter-latest.html`, from nflverse usage
   only: never FantasyCalc's values, never the owner's leagues). The owner reads it, pastes it into a Kit broadcast and

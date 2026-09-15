@@ -381,7 +381,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(scoreOpen && await ev(`[...document.querySelectorAll('details.score')].every(d => !d.open)`),
     'Results has Expand all and Collapse all, like the other tabs');
   const rs = await ev(`({pts: !!document.querySelector('.wsum-pts b'), res: [...document.querySelectorAll('details.score .sres')].map(s => s.innerText),
-    ahead: document.querySelectorAll('.wstep [data-sweek]')[1].disabled, help: !!document.querySelector('.results-help'),
+    // This week: no arrow ahead. The week before (Tuesday until the first kickoff): the arrow goes to this week.
+    ahead: (() => { const b = document.querySelectorAll('.wstep [data-sweek]')[1], now = !!document.querySelector('.wstep h3 small');
+      return now ? b.disabled : !b.disabled; })(), help: !!document.querySelector('.results-help'),
     fits: document.documentElement.scrollWidth <= innerWidth, sec: document.querySelector('#tabs .sec-btn[data-tab="score"]').getAttribute('aria-current')})`);
   check(rs.pts && rs.res.length === 1 && /^(W|L|T|Winning|Losing|Tied) \d/.test(rs.res[0]) && rs.ahead && rs.help && rs.fits && rs.sec === 'page',
     `Results is its own section: the week's points up top, won or lost in each league (${rs.res.join(', ')}), no arrow past this week, the explanations in one fold`);
@@ -438,7 +440,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const team3Player = ESPNJS.buildLeague(ESPNJS.leagueCfg(L1, {id: L1.id, teamId: 3}, {}), L1, tradePlayers).roster[0].name;
   await ev(`(() => { const i = document.querySelector('[data-trade-search]'); i.value = ${JSON.stringify(team3Player)}; i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
   check(await waitFor(`[...document.querySelectorAll('#tsearch .wrow')].some(r => r.querySelector('b').textContent === ${JSON.stringify(team3Player)} && /on Team 3/.test(r.textContent))`, 3000),
-    'searching a player in the league shows who has him: ' + team3Player + ', on Team 3 (' + (await text('#tsearch')).replace(/\s+/g, ' ').slice(0, 80) + ')');
+    'searching a player shows who has him in each league: ' + team3Player + ', on Team 3 (' + (await text('#tsearch')).replace(/\s+/g, ' ').slice(0, 80) + ')');
+  check(await ev(`(() => { const n = document.querySelectorAll('[data-ui="tradeLeague"] option').length, rows = [...document.querySelectorAll('#tsearch .wrow')];
+    return n > 0 && rows.length > 0 && rows.every(r => r.querySelectorAll('.wst').length === n); })()`),
+    'every player found has a line for every league: the team that has him, yours, or free agent');
+  await shot('trade-search');
   await ev(`(([...document.querySelectorAll('#tsearch .wrow')].find(r => r.querySelector('b').textContent === ${JSON.stringify(team3Player)}) || document).querySelector('[data-tsearch]') || {click() {}}).click(); true`);
   check(await waitFor(`document.querySelector('[data-ui="tradePartner"]').value === '3' && [...document.querySelectorAll('.trade-sum .tchip')].some(c => c.textContent.includes(${JSON.stringify(team3Player)}))`, 3000),
     'Trade for him makes his team the partner and puts him on the get side');
@@ -925,9 +931,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   }
 
   T.section('the free weekly email (newsletter.js)');
-  check(await ev(`!!window.TitanNewsletter && !window.TitanNewsletter.ready() && !document.querySelector('.nl-card')`),
-    'until Kit\'s form is set up, the app shows no signup card');
-  // A stand-in form number, as newsletter.js's FORM_ID will hold Kit's; Kit's address is answered by the test.
+  check(await ev(`!!window.TitanNewsletter && window.TitanNewsletter.ready()`), 'Kit\'s form number is set in newsletter.js, so the signup boxes can show');
+  // With no form number (the override ''), nothing half-working shows.
+  await send('Page.addScriptToEvaluateOnNewDocument', {source: 'window.TitanNewsletterForm = "";'});
+  await send('Page.navigate', {url: ORIGIN + '/app/waivers'});
+  check(await waitFor(`!!window.TitanNewsletter && !window.TitanNewsletter.ready() && /Your waiver plan/.test(document.body.innerText) && !document.querySelector('.nl-card')`, 30000),
+    'without a form number, the app shows no signup card');
+  // A stand-in form number (it runs after the one above, so it wins); Kit's address is answered by the test, never sent to Kit.
   await send('Page.addScriptToEvaluateOnNewDocument', {source: 'window.TitanNewsletterForm = "1234567";'});
   await send('Fetch.enable', {patterns: [...ESPN_PATTERNS, {urlPattern: '*app.kit.com*'}]});
   await send('Page.navigate', {url: ORIGIN + '/?home'});

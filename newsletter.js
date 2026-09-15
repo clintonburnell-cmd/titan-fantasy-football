@@ -6,10 +6,11 @@
    hidden, so nothing half-working shows. A device that has joined is remembered (localStorage titan.newsletter):
    boxes marked data-hide-joined, and the app's cards, stop asking. The UI test sets window.TitanNewsletterForm. */
 (function () {
-  var FORM_ID = '';
+  var FORM_ID = '9921118'; // Kit's "Titan Waiver Wire" form (app.kit.com/forms/designers/9921118/edit)
   var KEY = 'titan.newsletter';
 
-  function formId() { return String(window.TitanNewsletterForm || FORM_ID || ''); }
+  // The UI test can swap in its own form, or '' for none.
+  function formId() { return String(window.TitanNewsletterForm !== undefined ? window.TitanNewsletterForm : FORM_ID); }
   function endpoint() { return 'https://app.kit.com/forms/' + encodeURIComponent(formId()) + '/subscriptions'; }
   function joined() { try { return localStorage.getItem(KEY) === 'joined'; } catch (e) { return false; } }
   function remember() { try { localStorage.setItem(KEY, 'joined'); } catch (e) { /* private window: it just asks again */ } }
