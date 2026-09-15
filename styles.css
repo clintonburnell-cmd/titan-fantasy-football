@@ -1062,6 +1062,16 @@ body.app-page :is(.stand .tnum, .stand .st-odds b) { font-variant-numeric: tabul
 .idea-t > small { color: var(--muted); font-size: .76rem; }
 .tlineup { display: grid; gap: 4px; padding-top: 10px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .tlineup .tl-who { display: inline-block; min-width: 12rem; color: var(--muted); }
+.tl-t { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.tl-t th, .tl-t td { padding: 4px 10px 4px 0; text-align: left; vertical-align: top; }
+.tl-t td b { white-space: nowrap; }
+.tl-t thead th { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+.tl-t tbody th { font-weight: 600; color: var(--muted); }
+.tedge { font-size: .9rem; }
+.idea-t .iwhy { color: var(--accent-2); }
+.ttags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 2px; }
+.ttags .pill { font-size: .64rem; padding: 0 6px; }
+.tmom { font-size: .7rem; color: var(--muted); font-weight: 600; }
 .trows .rdiv { padding: 8px 14px 6px; border-top: 1px solid var(--line); font-size: .7rem; font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase; color: var(--muted); }
 .tnote { padding: 8px 14px 12px; border-top: 1px solid var(--line); }

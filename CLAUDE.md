@@ -285,7 +285,20 @@ One note per screen or feature.
   adjustment: a waiver pickup (`SCC.waiverValue`, about the 300th-best player) per spot freed. Trade
   ideas (`SCC.tradeIdeas`): fair 1-2 player trades that raise the value of your best starters
   (`lineupPoints` with values, not one week's projections), at most two per partner. The ideas card
-  is one line until Find trades, and Clear folds it back. "Who has him?" (`tradeSearchResults`)
+  is one line until Find trades, and Clear folds it back. The edge (v1.39.0, the owner's ask for "an edge in statistical
+  trades"): the market's values alone can't find one (every fair trade is one the market calls even), so the Trade tab
+  reads the numbers behind the market. For the owner, the Value report's rows for the league's format (`valueRowsFor`,
+  `S.value.rows`, loaded on the Trade tab too) give each player's usage edge (`edgeFor`: `SCC.impliedValue` from the
+  row's `vgap` against FantasyCalc's price, minus that price), a buy/sell/keep tag and a momentum note on the roster
+  rows (`valueTag`: a rising price on touchdown-driven points, `td`, is one to sell into), and the summary's edge line
+  (`edgeLine`, `.tedge`). Everyone else's edge line is Titan's own values summed (no FantasyCalc numbers). Trade ideas
+  take `edge` (the owner's own gain is measured by market value plus edge, the partner's by market value, so a swap of
+  equally priced players the market misjudges is an idea), `points` (rest-of-season points, `spanFor`/`SCC.spanPoints`
+  from the season projections with byes out; an idea may not lower them) and `thin` (positionStrength), and each
+  carries `accept` and `why` (fills their hole, they get the best player, asks two starters for one; ±15% a point on
+  the order). The impact table (`lineupImpact`, `.tl-t`) shows this week, the rest of the regular season (`LAST_REG_WEEK`
+  17) and the playoff weeks (`cfg.playoffStart` or 15, three weeks; for the owner tilted up to 10% by the Data dump's
+  playoff schedule rank, `playoffTilt`). "Who has him?" (`tradeSearchResults`)
   searches every league: each league's teams load for it (`loadTradeTeams(d, true)`, which redraws only the results so
   the box keeps its cursor), and every league gets a chip: the team that has him, yours, or free agent (a league not
   loaded yet, or Yahoo, falls back to the snapshot's `takenNorm`: free or taken). Tapping another team's chip

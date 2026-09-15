@@ -432,8 +432,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await ev(`!document.querySelector('.tdyn')`), 'a redraft league has no dynasty note (Titan\'s values are this season only)');
   check(await ev(`[...document.querySelectorAll('.trade-sum *')].every(el => el.getBoundingClientRect().right <= document.querySelector('.trade-sum').getBoundingClientRect().right + 1)`),
     'on a phone the trade fits inside its card (nothing cut off on the right)');
-  check(await ev(`document.querySelectorAll('.trade-sum .tlineup p').length === 3`),
-    'each team\'s projected starters, before and after: ' + (await text('.trade-sum .tlineup')).replace(/\s+/g, ' ').slice(0, 90));
+  check(await waitFor(`document.querySelectorAll('.trade-sum .tl-t tbody tr').length === 3 && document.querySelectorAll('.trade-sum .tl-t thead th').length === 3 &&
+    /Rest of season/.test(document.querySelector('.trade-sum .tl-t').textContent) && /Playoffs \\(weeks 15-17\\)/.test(document.querySelector('.trade-sum .tl-t').textContent)`, 20000),
+    'each team\'s projected starters before and after, this week, the rest of the season and the playoff weeks: ' + (await text('.trade-sum .tlineup')).replace(/\s+/g, ' ').slice(0, 120));
+  check(await ev(`/By Titan's own values/.test((document.querySelector('.trade-sum .tedge') || {}).textContent || '')`),
+    'and what Titan\'s own values say about the trade: ' + (await text('.trade-sum .tedge')).replace(/\s+/g, ' ').slice(0, 120));
 
   await ev(`document.querySelector('[data-action="trade-find"]').click(); true`);
   check(await waitFor(`document.querySelectorAll('.tideas .idea').length > 0 || /No fair trade/.test((document.querySelector('.tideas') || {}).textContent || '')`, 8000),
@@ -983,6 +986,19 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await vsearch('');
   check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'it fits a 390px phone');
   await shot('data-dump');
+  // On the Trade tab, the owner's Value report adds the usage edge: the line under the verdict reads by it.
+  await tab('trade');
+  await ev(`(() => { const s = document.querySelector('[data-ui="tradePartner"]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
+  await waitFor(`document.querySelectorAll('.tteam').length === 2`, 5000);
+  await ev(`document.querySelector('.tteam [data-trade="give"]').click(); true`);
+  await ev(`document.querySelector('.tteam [data-trade="get"]').click(); true`);
+  check(await waitFor(`/usage edge/i.test((document.querySelector('.trade-sum .tedge') || {}).textContent || '')`, 5000),
+    'for the owner, the trade\'s edge line reads by the Value report\'s usage numbers: ' + (await text('.trade-sum .tedge')).replace(/\s+/g, ' ').slice(0, 100));
+  await ev(`document.querySelector('[data-action="trade-find"]').click(); true`);
+  check(await waitFor(`/usage edge counts on your side/.test((document.querySelector('.tideas') || {}).textContent || '')`, 8000),
+    'and Find trades says the usage edge counts on the owner\'s side');
+  await ev(`document.querySelector('[data-action="trade-reset"]').click(); true`);
+  await tab('dump');
   await pickLeague('all');
   await ev(`window.TitanApp.setOwner(false); true`);
   check(await waitFor(`/Only Titan's owner sees this screen/.test(document.getElementById('view').textContent) && document.querySelector('#tabs [data-tab="value"]').hidden &&

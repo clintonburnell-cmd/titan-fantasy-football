@@ -120,6 +120,37 @@ check(best && best.partner.id === 'A' && ids(best.give) === 'r3,w1' && ids(best.
 check(ideas.length >= 2 && ideas.every(x => x.verdict.fair && x.myGain > 0) && ideas.filter(x => x.partner.id === 'A').length <= 2 &&
   new Set(ideas.map(x => ids(x.get))).size === ideas.length, 'every idea is fair and helps your lineup; at most two per team, each wanting someone different');
 check(!ideas.some(x => x.partner.id === 'B'), 'no idea where nothing fair helps');
+check(ideas.every(x => typeof x.accept === 'number' && Array.isArray(x.why) && x.trueGain === x.myGain && x.edge === 0 && x.myPts === 0),
+  'without the edge or points, an idea\'s true gain is its market gain and it still says how likely a yes is');
+// Team D starts two cheap receivers; the one fair trade that helps me is my top RB for both of them.
+const teamD = {id: 'D', name: 'D', roster: [P('qd', 'QB'), P('wd1', 'WR'), P('wd2', 'WR')]};
+const TVD = Object.assign({qd: 1000, wd1: 1700, wd2: 1400}, TV);
+const twoFor1 = SCC.tradeIdeas(meT, [teamD], {value: p => TVD[p.id] || 0, slots: ['QB', 'RB', 'WR', 'FLEX'], waiver: 50});
+check(twoFor1.length === 1 && twoFor1[0].give.length === 1 && twoFor1[0].get.length === 2 && twoFor1[0].accept === 0 &&
+  twoFor1[0].why.join('; ') === 'they get the best player in it; asks two of their starters for one',
+  'an idea that asks two of their starters for one is a harder yes, and handing them the best player an easier one: ' + twoFor1.map(x => x.why.join('; ')).join(' | '));
+
+section('the usage edge, points over weeks, and ideas that use them');
+check(SCC.impliedValue(5000, 0.25) === 6667 && SCC.impliedValue(5000, -0.25) === 3750 && SCC.impliedValue(5000, 0) === 5000 && SCC.impliedValue(0, 0.5) === 0,
+  'implied value: the market\'s price if it agreed with the usage numbers (a quarter under: 6,667; a quarter over: 3,750)');
+const sp2 = {a: [170, 0], b: [340, 17]};
+check(SCC.spanPoints(sp2, 'a', {ppr: 0}, 10, 17, 12) === 70 && SCC.spanPoints(sp2, 'b', {ppr: 1}, 15, 17, 0) === 63 && SCC.spanPoints(sp2, 'zz', {ppr: 0}, 1, 17, 0) === 0,
+  'points over a span of weeks: a 17-game season\'s share each week, the bye left out, in the league\'s scoring');
+// Two equally priced receivers: the market says even, the usage numbers say mine is a sell-high and theirs a buy-low.
+const EV = {q1: 1000, r1: 3000, w1: 3000, qc: 1000, rc: 400, wc: 3000}, ED = {w1: -1500, wc: 1500};
+const meE = {id: 'me', roster: [P('q1', 'QB'), P('r1', 'RB'), P('w1', 'WR')]};
+const teamC = {id: 'C', name: 'C', roster: [P('qc', 'QB'), P('rc', 'RB'), P('wc', 'WR')]};
+const base = {value: p => EV[p.id] || 0, slots: ['QB', 'RB', 'WR'], waiver: 50};
+check(SCC.tradeIdeas(meE, [teamC], base).length === 0, 'by market value alone, swapping two equally priced receivers gains nothing');
+const PT = {q1: 100, r1: 100, w1: 100, qc: 100, rc: 50, wc: 110};
+const withEdge = SCC.tradeIdeas(meE, [teamC], Object.assign({edge: p => ED[p.id] || 0, points: p => PT[p.id] || 0, thin: {C: ['WR']}}, base));
+const e0 = withEdge[0];
+check(withEdge.length === 1 && ids(e0.give) === 'w1' && ids(e0.get) === 'wc' && e0.myGain === 0 && e0.trueGain === 3000 && e0.edge === 3000 && e0.verdict.fair,
+  'with the usage edge, the same swap is an idea: fair by the market, +3,000 by usage (my sell-high for their buy-low)');
+check(e0.myPts === 10 && e0.theirPts === -10 && e0.accept === 1 && e0.why.join() === 'fills their hole at WR',
+  'it says both teams\' rest-of-season points, and why they might say yes: ' + e0.why.join('; '));
+const drop = SCC.tradeIdeas(meE, [teamC], Object.assign({edge: p => ED[p.id] || 0, points: p => (p.id === 'wc' ? 90 : PT[p.id] || 0)}, base));
+check(drop.length === 0, 'an idea that would lower the rest-of-season points of your best lineup is dropped, whatever the values say');
 
 // sleeper.js reading a league's teams, with Sleeper's answers made up here (no network).
 section('a dynasty Sleeper league\'s teams and picks');

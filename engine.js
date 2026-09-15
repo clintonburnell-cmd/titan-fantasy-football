@@ -319,6 +319,27 @@
     return out;
   }
 
+  /* What the market's price would be if it agreed with the usage numbers: the Value report's
+     `vgap` is the gap between a player's market value and the value at his projected rank, as a
+     share of the larger (positive: the market underrates him). Implied value from the two; the
+     edge is implied minus market: what a trade at market price hands over or picks up. */
+  function impliedValue(value, vgap) {
+    var v = Math.max(0, Number(value) || 0), g = Number(vgap) || 0;
+    if (!v || !g) return v;
+    return Math.round(g > 0 ? v / (1 - Math.min(g, 0.95)) : v * (1 + Math.max(g, -0.95)));
+  }
+
+  /* A player's projected points over weeks `from` to `to` (both counted), from Sleeper's season
+     projection in the league's scoring: a 17-game season's share for each week, his bye week
+     left out. The Trade tab's rest of season (this week to the last regular-season week) and
+     playoff weeks. */
+  var SEASON_GAMES = 17;
+  function spanPoints(seasonProj, id, cfg, from, to, bye) {
+    var total = projFor(seasonProj, id, cfg) || 0, games = 0;
+    for (var w = Math.max(1, Number(from) || 1); w <= (Number(to) || 0); w++) if (w !== Number(bye)) games++;
+    return round2(total / SEASON_GAMES * games);
+  }
+
   /* Trade ideas for one team in a league: trades of one or two players each way (not two
      for two) that FantasyCalc's calculator calls fair (tradeVerdict, roster spots counted)
      and that make the team's starting lineup stronger. A lineup's strength here is the value
@@ -326,14 +347,30 @@
      week's projections. Trades that leave both lineups stronger come first; within each
      group, ranked by our gain plus half theirs (up to ours). Each side offers its `top` (12)
      most valuable players; at most two ideas per team and one per player wanted.
-     opts: {value(p), slots, waiver, max, top}. */
+     opts: {value(p), slots, waiver, max, top}, and for the edge:
+       edge(p): the usage numbers' edge on his market value (impliedValue minus market). Then a
+         team's own gain is measured by market value plus edge (what the players are worth by
+         usage), the partner's still by market value (what they see), and an idea that swaps
+         equal market value for players the market underrates counts as a gain.
+       points(p): his rest-of-season projected points. An idea must not lower the team's best
+         lineup by points (a value gain that scores less is a mirage), and each idea says both
+         teams' change (myPts, theirPts).
+       thin: {teamId: [positions]} where each partner is thin (positionStrength).
+     Each idea also carries `accept`, how likely the partner is to say yes (-1 to 2), and its
+     reasons: +1 when the trade fills a position they're thin at, +1 when they get the single
+     most valuable player in it, -1 when they'd give two starters for one. It tilts the order by
+     15% a point. */
   function tradeIdeas(me, others, opts) {
     var value = opts.value, slots = opts.slots || [], waiver = opts.waiver || 0, max = opts.max || 6, top = opts.top || 12;
+    var edge = typeof opts.edge === 'function' ? opts.edge : null, points = typeof opts.points === 'function' ? opts.points : null;
+    var thin = opts.thin || {};
     var pool = function (roster) {
       return roster.filter(function (p) { return p.pos !== 'PICK' && value(p) > 0; })
         .sort(function (a, b) { return value(b) - value(a); }).slice(0, top);
     };
     var strength = function (roster) { return lineupPoints(roster, slots, value); };
+    var mine = edge ? function (roster) { return lineupPoints(roster, slots, function (p) { return value(p) + (Number(edge(p)) || 0); }); } : strength;
+    var byPoints = points ? function (roster) { return lineupPoints(roster, slots, points); } : null;
     var combos = function (list) {
       var out = list.map(function (p) { return [p]; });
       for (var i = 0; i < list.length; i++) for (var j = i + 1; j < list.length; j++) out.push([list[i], list[j]]);
@@ -341,23 +378,45 @@
     };
     var items = function (list) { return list.map(function (p) { return {v: value(p)}; }); };
     var without = function (roster, gone) { return roster.filter(function (p) { return !gone.some(function (g) { return g.id === p.id; }); }); };
-    var myBase = strength(me.roster), myCombos = combos(pool(me.roster)), ideas = [];
+    var sumOf = function (list, f) { return list.reduce(function (s, p) { return s + (Number(f(p)) || 0); }, 0); };
+    var maxOf = function (list) { return list.reduce(function (m, p) { return Math.max(m, value(p)); }, 0); };
+    var startersOf = function (roster) {
+      var ids = {};
+      bestByPoints(roster.filter(function (p) { return !p.held && p.pos !== 'PICK'; })
+        .map(function (p) { return {id: p.id, pos: p.pos, pts: value(p)}; }), slots).forEach(function (p) { if (p) ids[p.id] = 1; });
+      return ids;
+    };
+    var myBase = strength(me.roster), myTrue = mine(me.roster), myPtsBase = byPoints ? byPoints(me.roster) : 0;
+    var myCombos = combos(pool(me.roster)), ideas = [];
     (others || []).forEach(function (o) {
-      var theirBase = strength(o.roster), theirCombos = combos(pool(o.roster));
+      var theirBase = strength(o.roster), theirCombos = combos(pool(o.roster)), theirStarters = startersOf(o.roster);
+      var theirPtsBase = byPoints ? byPoints(o.roster) : 0, holes = thin[String(o.id)] || [];
       myCombos.forEach(function (give) {
         theirCombos.forEach(function (get) {
           if (give.length === 2 && get.length === 2) return;
           var R = tradeVerdict(items(give), items(get), waiver);
           if (!R.fair) return;
-          var gain = strength(without(me.roster, give).concat(get)) - myBase;
-          if (gain <= 0) return;
-          ideas.push({partner: o, give: give, get: get, verdict: R, myGain: round2(gain),
-            theirGain: round2(strength(without(o.roster, get).concat(give)) - theirBase)});
+          var after = without(me.roster, give).concat(get), gain = strength(after) - myBase, trueGain = mine(after) - myTrue;
+          if (trueGain <= 0) return;
+          var theirAfter = without(o.roster, get).concat(give), myPts = 0, theirPts = 0;
+          if (byPoints) {
+            myPts = round2(byPoints(after) - myPtsBase);
+            if (myPts < 0) return;
+            theirPts = round2(byPoints(theirAfter) - theirPtsBase);
+          }
+          var why = [], accept = 0;
+          var fills = give.filter(function (p) { return holes.indexOf(p.pos) >= 0; }).map(function (p) { return p.pos; });
+          if (fills.length) { accept++; why.push('fills their hole at ' + fills.filter(function (p, i) { return fills.indexOf(p) === i; }).join(' and ')); }
+          if (maxOf(give) > maxOf(get)) { accept++; why.push('they get the best player in it'); }
+          if (get.length === 2 && give.length === 1 && get.every(function (p) { return theirStarters[p.id]; })) { accept--; why.push('asks two of their starters for one'); }
+          ideas.push({partner: o, give: give, get: get, verdict: R, myGain: round2(gain), trueGain: round2(trueGain),
+            theirGain: round2(strength(theirAfter) - theirBase), edge: edge ? Math.round(sumOf(get, edge) - sumOf(give, edge)) : 0,
+            myPts: myPts, theirPts: theirPts, accept: accept, why: why});
         });
       });
     });
     // Trades that leave both lineups stronger come first: the other side is likelier to say yes.
-    var score = function (x) { return x.myGain + 0.5 * Math.min(x.theirGain, x.myGain); };
+    var score = function (x) { return (x.trueGain + 0.5 * Math.min(x.theirGain, x.trueGain)) * (1 + 0.15 * x.accept); };
     ideas.sort(function (a, b) { return (b.theirGain >= 0) - (a.theirGain >= 0) || score(b) - score(a); });
     var perTeam = {}, wanted = {}, out = [];
     ideas.forEach(function (x) {
@@ -2516,7 +2575,7 @@
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel, scoringDeltas: scoringDeltas, scoringNotes: scoringNotes,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues, positionStrength: positionStrength,
-    lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas,
+    lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, impliedValue: impliedValue, spanPoints: spanPoints,
     draftFromSleeper: draftFromSleeper, draftGrades: draftGrades,
     impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags, transactionsFrom: transactionsFrom,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks, combineRanks: combineRanks,
