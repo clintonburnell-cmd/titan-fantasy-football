@@ -379,7 +379,7 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   handles every signup box (`form[data-newsletter]` inside `[data-newsletter-box]`): the home page's hero and its
   `#newsletter` section, the `/newsletter/` page, every guide, and the app's `newsletterCard` on Waivers and Settings. It
   posts the email to Kit's form endpoint (`https://app.kit.com/forms/<FORM_ID>/subscriptions`, field `email_address`;
-  no key, so no server code) in the background, and remembers a device that joined (`titan.newsletter`), which hides the
+  no key, so no server code) in the background, shows a pop-up saying to check email to finish (`popup()`, `dialog.nl-pop`), and remembers a device that joined (`titan.newsletter`), which hides the
   boxes marked `data-hide-joined` and the app's cards. `FORM_ID` in newsletter.js is Kit's form number (public; the
   "Titan Waiver Wire" form, 9921118, set 2026-09-15); while it's empty every box stays hidden. The UI test overrides it
   with `window.TitanNewsletterForm` ('' for none) and answers Kit's address itself: tests never post to the real form. A new website page gets a signup box too. Beyond the boxes, links that stay for everyone, joined or not: a

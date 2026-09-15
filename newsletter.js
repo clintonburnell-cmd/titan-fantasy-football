@@ -42,10 +42,28 @@
       f.classList.add('nl-done');
       if (note) note.textContent = 'Almost done: check your inbox and tap the link in Kit\'s email to confirm. ' +
         'Not there? Check your spam or promotions folder.';
+      popup();
     }, function () {
       if (note) note.textContent = 'That didn\'t go through. Check your connection and try again.';
     }).then(function () { if (btn) btn.disabled = false; });
   });
+
+  /* A pop-up once the signup is sent, so nobody misses the step left: Kit's confirmation email. The note under the box
+     says the same, for a browser without <dialog>. Styled by .nl-pop in styles.css, which every page loads. */
+  function popup() {
+    if (!document.createElement('dialog').showModal) return;
+    var d = document.createElement('dialog');
+    d.className = 'nl-pop';
+    d.setAttribute('aria-labelledby', 'nl-pop-h');
+    d.innerHTML = '<div><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>' +
+      '<h2 id="nl-pop-h">Subscription successful</h2><p>Check your email to finish: tap the link in Kit\'s email to confirm.</p>' +
+      '<p class="nl-pop-fine">Not there? Check your spam or promotions folder.</p><button type="button" class="btn">OK</button></div>';
+    document.body.appendChild(d);
+    d.querySelector('button').addEventListener('click', function () { d.close(); });
+    d.addEventListener('click', function (e) { if (e.target === d) d.close(); }); // a tap outside it
+    d.addEventListener('close', function () { d.remove(); });
+    d.showModal();
+  }
 
   // Back from Kit's confirmation link or the no-JavaScript post: /newsletter/?joined=1.
   function welcome() {

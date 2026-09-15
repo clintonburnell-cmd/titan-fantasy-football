@@ -115,6 +115,16 @@ main#view { min-height: 100vh; }
 .nl-top svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
 .nl-top:hover { border-color: var(--accent-2); }
 @media (max-width: 720px) { .nl-top { display: none; } }
+/* The pop-up after a newsletter signup (newsletter.js popup()), on the website and in the app. */
+.nl-pop { border: 0; padding: 0; border-radius: var(--radius); width: min(92vw, 380px); background: var(--surface); color: var(--text);
+  box-shadow: 0 24px 60px rgb(0 0 0 / .35); }
+.nl-pop::backdrop { background: rgb(10 15 26 / .55); }
+.nl-pop > div { padding: 24px 22px 20px; text-align: center; display: grid; gap: 8px; justify-items: center; }
+.nl-pop svg { width: 44px; height: 44px; fill: none; stroke: var(--ok); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.nl-pop h2 { margin: 0; font-size: 1.2rem; }
+.nl-pop p { margin: 0; color: var(--muted); line-height: 1.5; }
+.nl-pop .nl-pop-fine { font-size: .85rem; }
+.nl-pop .btn { margin-top: 8px; min-width: 120px; }
 
 .top-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 .tip {

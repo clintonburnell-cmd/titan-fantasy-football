@@ -1008,6 +1008,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`/check your inbox/.test(document.querySelector('.nl-card').textContent) && /spam/.test(document.querySelector('.nl-card').textContent)`, 5000) &&
     kitPosts.some(p => p.method === 'POST' && /forms\/1234567\/subscriptions/.test(p.url) && /email_address=fan%40example\.com/.test(p.body)),
     'signing up sends the email to Kit\'s form and says to check the inbox, and the spam folder: ' + JSON.stringify(kitPosts.map(p => p.body)));
+  check(await waitFor(`(() => { const d = document.querySelector('dialog.nl-pop');
+    return !!d && d.open && /Subscription successful/.test(d.textContent) && /Check your email to finish/.test(d.textContent); })()`, 3000),
+    'and a pop-up says the subscription worked and to check email to finish');
+  await shot('newsletter-popup');
+  await ev(`document.querySelector('dialog.nl-pop button').click(); true`);
+  check(await waitFor(`!document.querySelector('dialog.nl-pop')`, 3000), 'OK closes the pop-up');
   await tab('settings');
   check(await ev(`!document.querySelector('.nl-card')`), 'once this device has joined, the app stops asking (no card in Settings)');
   check(await ev(`(() => { const a = document.querySelector('.nl-top');
