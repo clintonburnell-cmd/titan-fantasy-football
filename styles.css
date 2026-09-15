@@ -568,6 +568,10 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .note { padding: 8px 14px; border-top: 1px solid var(--line); font-size: .82rem; color: var(--muted); }
 .note.wire b { color: var(--accent-2); }
 .note.hurt, .note.hurt b { color: var(--bad); }
+.note.close-call b { color: var(--accent-2); }
+.note.close-call em { font-style: normal; font-weight: 600; }
+.mrange { margin: 2px 0 0; }
+.mrange small { color: var(--muted); }
 /* Lineups: the recommended lineup (NEW where it differs from yours), then yours beside it. */
 .lu-h { font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 12px 14px 6px;
   border-top: 1px solid var(--line); margin: 0; }

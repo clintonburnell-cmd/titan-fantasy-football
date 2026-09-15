@@ -22,6 +22,9 @@ section('position strength: where each team is deep or thin');
     'a starter plus a strong bench back ranks first at RB (200, with 180 of depth counted a quarter)');
   check(at('C', 'RB').start === 150 && at('C', 'RB').rank === 3 && at('C', 'RB').grade === 'thin', 'IR players don\'t count: team C is thin at RB');
   check(at('B', 'WR').grade === 'deep' && at('C', 'WR').rank === 2 && at('A', 'WR').grade === 'thin', 'WR: C\'s bench receiver (120 + a quarter of 100) puts it 2nd behind B (150); A is thin');
+  check(at('B', 'RB').grade === 'mid' && at('B', 'RB').z > 0 && at('B', 'RB').z < 0.6 && at('C', 'WR').grade === 'mid',
+    'deep and thin are 0.6 standard deviations from the league\'s average, so a team near the middle is mid, not a third: ' +
+    ['A', 'B', 'C'].map(id => id + ' RB ' + at(id, 'RB').z).join(', '));
 }
 
 section('records, all-play and luck');
@@ -42,6 +45,9 @@ const sum = R.teams.reduce((s, t) => s + t.playoffs, 0);
 check(Math.abs(sum - 2) < 1e-9 && R.teams.every(t => t.playoffs >= 0 && t.playoffs <= 1), 'the playoff odds add up to the playoff spots (2)');
 const again = SCC.standings(teams, games, {}, {playoffTeams: 2, sims: 4000, seed: 3});
 check(again.teams.map(t => t.playoffs).join() === R.teams.map(t => t.playoffs).join(), 'the same league gives the same odds');
+// B scored 100, 130 and 60: the streakiest team; A 120, 110 and 100 the steadiest. Each keeps its own swing, steadied by the league's.
+check(by('B').sd > by('A').sd && by('A').sd >= 8 && by('B').sd <= 45 && R.teams.every(t => t.sd > 0),
+  `each team's own swing goes into its odds (A ${by('A').sd}, B ${by('B').sd})`);
 const strong = SCC.standings(teams, games, {D: 200, A: 80, B: 80, C: 80}, {playoffTeams: 2, sims: 4000, seed: 3});
 check(strong.teams.find(t => t.id === 'D').playoffs > by('D').playoffs, 'a team projected to score big has better odds');
 const pre = SCC.standings(teams, games.map(x => Object.assign({}, x, {done: false})), {A: 130, B: 100, C: 100, D: 90}, {playoffTeams: 2, sims: 2000});

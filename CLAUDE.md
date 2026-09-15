@@ -197,17 +197,27 @@ One note per screen or feature.
   week's projections, so rankings imported for that week win. `S.A` stays this week's (nav dot, Waivers, alerts).
   While a later week draws, `LV` holds it and `kickText`, `teamKick`, `projOf` and `ctxLine` read it; game lines,
   weather, live notes and the game tiles are this week's only.
+- Close calls on Lineups (`closeNotes`, v1.41.0): for each starter with a bench player at his position within `CLOSE`
+  ranks (`SCC.closeCallPairs`, pure, tested), a note gives both players' floor and ceiling (`SCC.spreadOf`: the
+  projection give or take the player's usual swing, his PPR points over the last three finished weeks from
+  `loadUsage`, `statWeeks`, blended with his position's usual `SPREAD_CV`), who has the softer matchup (`dvpRank`
+  from the game context) and a lean from the win chance (`winChance`, from the Matchup data, loaded quietly): the
+  higher floor when you're the favorite (60%+), the higher ceiling as the underdog (40% or less). The recommended
+  lineup itself still follows the rankings: never let the note change a call. Matchup's card shows each side's range
+  (`rangeLine`: points so far plus the floors, and plus the ceilings, of the starters yet to play).
 - Matchup: where you stand, in words, comes from `SCC.matchStatus` (pure, tested) through `matchState`
   in `app.js`, which the card and the summary at the top share; the summary's filters are
   `MATCH_KINDS` (`S.ui.matchFilter`, chips `data-mfilter`). Opened, the scoreboard (`.board`) shows the
   score, so the header's score row hides.
 - The Standings tab (`SCC.standings`): records, all-play, luck, power and playoff odds from 5,000
-  seeded simulations; schedules from `API.leagueSchedule` (Sleeper matchups, or ESPN via
+  seeded simulations (each team scores around its mean with its own swing: the spread of its weekly
+  scores blended with the league's, `SD_PRIOR` games' worth, clamped 8 to 45); schedules from `API.leagueSchedule` (Sleeper matchups, or ESPN via
   `ESPN.fetchSchedule`; private ESPN leagues through `espnLeague` kind `schedule`).
 - Position strength (`SCC.positionStrength`, pure and tested): each team's best lineup this season
   by Sleeper's season projections (never FantasyCalc's, so everyone sees it), starters added up by
-  position plus a quarter of the best bench player there, ranked across the league; top third 'deep',
-  bottom third 'thin'. Standings shows every team's ranks (`strengthTable`, table `.pstr`, not
+  position plus a quarter of the best bench player there, ranked across the league; 'deep' is 0.6
+  standard deviations or more above the league's average at the position (`z`), 'thin' that far below
+  (was terciles until v1.41.0). Standings shows every team's ranks (`strengthTable`, table `.pstr`, not
   `.stand`, which the UI test counts); the Trade tab shows the partner and you once a partner is
   picked (`tradeFit`, "Where you both stand", with the good fits). Both load the season projections.
 - The Transactions tab (tab id `moves`, address `/app/transactions`): each Sleeper league's last three

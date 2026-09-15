@@ -487,10 +487,11 @@
   /* Where each team in a league is deep or thin, position by position: its best starting
      lineup by `pts` (Titan uses Sleeper's season projections, never FantasyCalc's), the
      starters at each position added up, plus a quarter of its best bench player there
-     (depth), ranked across the league (1 = strongest). The top third are 'deep', the bottom
-     third 'thin'; IR and taxi players don't count. {teams: [{id, byPos: {QB: {start, depth,
-     rank, grade}}}], positions, n}. */
-  var STRENGTH_POS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+     (depth), ranked across the league (1 = strongest). 'deep' is 0.6 standard deviations or
+     more above the league's average at that position, 'thin' that far below (z), so teams a
+     point apart get the same label; IR and taxi players don't count. {teams: [{id, byPos:
+     {QB: {start, depth, rank, grade, z}}}], positions, n}. */
+  var STRENGTH_POS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'], STRENGTH_Z = 0.6;
   function positionStrength(teams, slots, pts) {
     var starters = (slots || []).filter(function (s) { return !NOT_STARTERS[s]; });
     var out = (teams || []).map(function (t) {
@@ -509,17 +510,20 @@
       });
       return {id: String(t.id), byPos: byPos};
     });
-    var n = out.length, third = Math.floor(n / 3);
+    var n = out.length;
     var positions = STRENGTH_POS.filter(function (pos) {
       return starters.some(function (s) { return slotFits(s, pos); }) &&
         out.some(function (t) { return t.byPos[pos] && t.byPos[pos].start > 0; });
     });
     positions.forEach(function (pos) {
       var score = function (t) { var c = t.byPos[pos] || {start: 0, depth: 0}; return c.start + 0.25 * c.depth; };
+      var all = out.map(score), mean = all.reduce(function (a, b) { return a + b; }, 0) / (n || 1);
+      var sd = Math.sqrt(all.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / (n || 1));
       out.slice().sort(function (a, b) { return score(b) - score(a); }).forEach(function (t, i) {
         var c = t.byPos[pos] = t.byPos[pos] || {start: 0, depth: 0};
         c.rank = i + 1;
-        c.grade = i < third ? 'deep' : i >= n - third ? 'thin' : 'mid';
+        c.z = sd ? round2((score(t) - mean) / sd) : 0;
+        c.grade = c.z >= STRENGTH_Z ? 'deep' : c.z <= -STRENGTH_Z ? 'thin' : 'mid';
       });
     });
     return {teams: out, positions: positions, n: n};
@@ -738,6 +742,8 @@
 
   /* ------------------------------------------------------------ standings */
 
+  var SD_PRIOR = 4; // games' worth of the league's swing blended into each team's own (standings)
+
   // A seeded random number source (mulberry32), so the same league gives the same odds every time.
   function seeded(seed) {
     var a = seed >>> 0;
@@ -799,6 +805,21 @@
       t.mean = wP + t.g ? (p * wP + t.pf) / (wP + t.g) : leagueAvg;
     });
     var sd = Math.min(35, Math.max(12, 0.18 * leagueAvg));
+    // Each team's own swing: the spread of its weekly scores, steadied by the league's (four games' worth) while
+    // few are played, so a streaky team's odds are wider than a steady one's.
+    var scoresOf = {};
+    Object.keys(byWeek).forEach(function (week) {
+      var s = byWeek[week];
+      Object.keys(s).forEach(function (i) { (scoresOf[i] = scoresOf[i] || []).push(s[i]); });
+    });
+    ids.forEach(function (i) {
+      var sc = scoresOf[i] || [], g = sc.length, v = 0;
+      if (g >= 2) {
+        var m = sc.reduce(function (a, b) { return a + b; }, 0) / g;
+        v = sc.reduce(function (a, b) { return a + (b - m) * (b - m); }, 0) / (g - 1);
+      }
+      T[i].sd = Math.min(45, Math.max(8, Math.sqrt((v * (g >= 2 ? g : 0) + sd * sd * SD_PRIOR) / ((g >= 2 ? g : 0) + SD_PRIOR))));
+    });
 
     var left = (games || []).filter(function (m) { return !m.done && T[String(m.a)] && T[String(m.b)]; });
     var n = Math.max(1, opts.sims || 5000), spots = Math.min(opts.playoffTeams || 6, ids.length), rand = seeded(opts.seed || 7);
@@ -808,7 +829,7 @@
       ids.forEach(function (i) { w[i] = T[i].w + T[i].t / 2; pf[i] = T[i].pf; });
       left.forEach(function (m) {
         var a = String(m.a), b = String(m.b);
-        var ap = T[a].mean + sd * normal(rand), bp = T[b].mean + sd * normal(rand);
+        var ap = T[a].mean + T[a].sd * normal(rand), bp = T[b].mean + T[b].sd * normal(rand);
         pf[a] += ap; pf[b] += bp;
         w[ap > bp ? a : b]++;
       });
@@ -828,7 +849,7 @@
     var zE = z(ids.map(function (i) { return T[i].mean; }));
     var out = ids.map(function (i, j) {
       var t = T[i], apG = t.apW + t.apL + t.apT;
-      return {id: i, name: t.name, wins: t.w, losses: t.l, ties: t.t, games: t.g, pf: round2(t.pf), pa: round2(t.pa),
+      return {id: i, name: t.name, wins: t.w, losses: t.l, ties: t.t, games: t.g, pf: round2(t.pf), pa: round2(t.pa), sd: round2(t.sd),
         allPlay: {w: t.apW, l: t.apL, t: t.apT}, luck: apG ? round2(t.w + t.t / 2 - (t.apW + t.apT / 2) / apG * t.g) : 0,
         expected: round2(t.mean), power: played.length ? 0.5 * zA[j] + 0.3 * zP[j] + 0.2 * zE[j] : zE[j],
         playoffs: t.inN / n, top: t.topN / n, projWins: round2(t.winSum / n)};
@@ -1604,6 +1625,54 @@
     var t = 0;
     for (var i = 0; i < list.length; i++) if (list[i]) t += Number(list[i].pts || 0);
     return round2(t);
+  }
+
+  /* A player's floor and ceiling this week: his projection give or take his usual swing. The swing is
+     a share of his projection (a coefficient of variation): his own, from his points in the weeks
+     given (Sleeper's stats as fetchStats trims them, PPR points), blended with his position's usual
+     share (a few games' worth of prior, SPREAD_PRIOR) so one big week doesn't set it. Floor and
+     ceiling sit about 0.85 swings out (near the 20th and 80th percentiles). Null without a
+     projection. {sd, floor, ceiling, games}. */
+  var SPREAD_CV = {QB: 0.35, RB: 0.5, WR: 0.55, TE: 0.6, K: 0.45, DEF: 0.6};
+  var SPREAD_PRIOR = 4, SPREAD_Z = 0.85;
+  function spreadOf(weeks, id, pos, proj) {
+    proj = Number(proj);
+    if (!proj || proj <= 0) return null;
+    var pts = [];
+    (weeks || []).forEach(function (m) {
+      var s = m && m[id];
+      if (s && (Number(s.gp) || Number(s.snp))) pts.push(Number(s.ppr) || 0);
+    });
+    var prior = SPREAD_CV[pos] || 0.5, n = pts.length, cv = prior;
+    if (n >= 2) {
+      var mean = pts.reduce(function (a, b) { return a + b; }, 0) / n;
+      var own = mean > 0 ? Math.sqrt(pts.reduce(function (a, b) { return a + (b - mean) * (b - mean); }, 0) / (n - 1)) / mean : prior;
+      cv = (own * n + prior * SPREAD_PRIOR) / (n + SPREAD_PRIOR);
+    }
+    var sd = round2(proj * cv);
+    return {sd: sd, floor: round2(Math.max(0, proj - SPREAD_Z * sd)), ceiling: round2(proj + SPREAD_Z * sd), games: n};
+  }
+
+  /* The close calls in a lineup: a starter (from `opt`, the recommended lineup) and a bench player at
+     his position ranked within CLOSE spots of him, neither locked, hurt or on bye. One pair per
+     starter (the nearest bench player), each bench player once. [{starter, bench}]. */
+  function closeCallPairs(opt, roster) {
+    var starting = {}, out = [], taken = {};
+    (opt || []).forEach(function (o) { if (o.p) starting[o.p.id] = 1; });
+    var bench = (roster || []).filter(function (p) {
+      return !starting[p.id] && !p.held && !p.locked && !p.outish && !p.onBye && p.rank !== null && p.rank !== undefined;
+    });
+    (opt || []).forEach(function (o) {
+      var s = o.p;
+      if (!s || s.locked || s.outish || s.onBye || s.rank === null || s.rank === undefined) return;
+      var best = null;
+      bench.forEach(function (b) {
+        if (taken[b.id] || b.pos !== s.pos || Math.abs(b.rank - s.rank) > CLOSE) return;
+        if (!best || Math.abs(b.rank - s.rank) < Math.abs(best.rank - s.rank)) best = b;
+      });
+      if (best) { taken[best.id] = 1; out.push({starter: s, bench: best}); }
+    });
+    return out;
   }
 
   function closeCalls(roster, slots, startedIds) {
@@ -2633,7 +2702,7 @@
     gameStates: gameStates, weekProgress: weekProgress,
     rankKey: rankKey, rankLabel: rankLabel, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
-    closeCalls: closeCalls, freeAgents: freeAgents,
+    closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,

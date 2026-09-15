@@ -899,7 +899,7 @@
     // A later week: its own projections, and no game lines or weather (those are this week's).
     const projN = Object.keys(w ? A.proj : S.proj).length, C = w ? null : S.ctx.data;
     const credit = (w ? '<p class="fine">Injury tags are as they stand today. For a later week, only IR, PUP and suspensions bench a player.</p>' : '') +
-      (projN || C ? `<p class="fine">${projN ? 'Projections via Sleeper. ' : ''}${C
+      (projN || C ? `<p class="fine">${projN ? 'Projections via Sleeper. A close call\'s floor and ceiling are the projection give or take the player\'s usual swing (his recent weeks, steadied by his position\'s). ' : ''}${C
       ? `Game lines from ESPN, forecasts from the <a href="https://www.weather.gov" target="_blank" rel="noopener">National Weather Service</a>, and points
         allowed by position from <a href="https://github.com/nflverse" target="_blank" rel="noopener">nflverse</a> (CC BY 4.0${C.dvpSeason ? ', ' + esc(C.dvpSeason) + ' season' : ''}).` : ''}</p>` : '');
     // Leagues sit two across on wide screens (.league-grid).
@@ -993,7 +993,7 @@
     }
     const rec = recLineup(L);
     h += `<h4 class="lu-h">${LV ? `Recommended lineup for week ${LV.week}` : 'Recommended lineup'}</h4><ol class="lineup lineup-rec">${
-      rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg)).join('')}</ol>${compareLineups(L, rec)}`;
+      rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg)).join('')}</ol>${compareLineups(L, rec)}${LV ? '' : closeNotes(L)}`;
     L.wire.forEach(w => {
       const tail = w.cur ? `, better than ${esc(w.cur.name)} (${esc(rl(w.cur))})`
         : w.anyUnranked ? ', and you are starting someone unranked here' : '';
@@ -1009,6 +1009,57 @@
 
   function rankCell(p) {
     return `<span class="rank">${p.rank === null ? 'NR' : esc(rl(p))}${has(p.tier) ? `<small>T${esc(p.tier)}</small>` : ''}</span>`;
+  }
+
+  /* The weeks of Sleeper's stats behind floors and ceilings (the same three finished weeks Waivers' usage lines read,
+     loadUsage), and a player's floor and ceiling this week (SCC.spreadOf) in the league's scoring. */
+  function statWeeks() {
+    const U = S.waiv.usage;
+    if (!U || U.week !== S.snap.week) { if (!S.waiv.usageBusy && !DEMO) loadUsage(); return []; }
+    return U.list || [];
+  }
+  const spreadFor = (p, cfg) => SCC.spreadOf(statWeeks(), p.id, p.pos, SCC.projFor(S.proj, p.id, cfg));
+  // How soft a player's matchup is: his opponent's rank for points given up to his position (1 gives up the most), from the game context.
+  function dvpRank(p) {
+    const C = S.ctx.data, t = C && C.teams && C.teams[SCC.teamAbbr(p.team)];
+    const d = t && C.dvp && C.dvp[t.opp] && C.dvp[t.opp][p.pos];
+    return d ? d.rank : null;
+  }
+  // Your chance to win this week in a league, from the Matchup tab's data when it's in (0 to 100), else null.
+  function winChance(cfg) {
+    const M = S.match;
+    if (!M.data || M.week !== S.snap.week) { if (!M.busy && !DEMO) loadMatchups(true); return null; }
+    const m = M.data.find(x => x.cfg.id === cfg.id);
+    return m && !m.error && !m.none ? matchState(m).pa : null;
+  }
+
+  /* The close calls in a league's lineup (SCC.closeCallPairs: a starter and a bench player at his position within
+     CLOSE ranks of each other), each with both players' floor and ceiling, the softer matchup, and a lean: when
+     you're the favorite this week (60% or more) the higher floor is the safer start; as the underdog (40% or less)
+     the higher ceiling gives the better shot. The recommended lineup itself follows the rankings; this is the
+     second opinion for the spots where they're nearly even. */
+  const FAV = 60, DOG = 40;
+  function closeNotes(L) {
+    const pairs = SCC.closeCallPairs(L.opt, L.roster);
+    if (!pairs.length) return '';
+    const pa = winChance(L.cfg), notes = [];
+    pairs.forEach(({starter, bench}) => {
+      const a = spreadFor(starter, L.cfg), b = spreadFor(bench, L.cfg);
+      if (!a || !b) return;
+      const floorer = a.floor >= b.floor ? starter : bench, ceiler = a.ceiling >= b.ceiling ? starter : bench;
+      const fl = floorer === starter ? a : b, ce = ceiler === starter ? a : b;
+      let s = `<b>${esc(starter.name)}</b> over <b>${esc(bench.name)}</b> is a close call (${esc(rl(starter))} vs ${esc(rl(bench))}). `;
+      if (floorer === ceiler) s += `${esc(floorer.name)} has both the higher floor (${fmt(fl.floor)}) and the higher ceiling (${fmt(ce.ceiling)}).`;
+      else s += `${esc(floorer.name)} has the higher floor (${fmt(fl.floor)} to ${fmt(fl.ceiling)}), ${esc(ceiler.name)} the higher ceiling (${fmt(ce.floor)} to ${fmt(ce.ceiling)}).`;
+      const ra = dvpRank(starter), rb = dvpRank(bench);
+      if (ra && rb && ra !== rb) s += ` ${esc((ra < rb ? starter : bench).name)} has the softer matchup (${nth(Math.min(ra, rb))} most given up to ${esc(starter.pos)}s, against ${nth(Math.max(ra, rb))}).`;
+      if (pa !== null && floorer !== ceiler) {
+        if (pa >= FAV) s += ` <em>You're the favorite this week (${pa}%), so the higher floor is the safer start.</em>`;
+        else if (pa <= DOG) s += ` <em>You're the underdog this week (${pa}%), so the higher ceiling gives you the better shot.</em>`;
+      }
+      notes.push(`<p class="note close-call">${s}</p>`);
+    });
+    return notes.join('');
   }
 
   // A started player's points: LIVE while his game is on, FINAL once it's over.
@@ -1278,7 +1329,7 @@
     } catch (e) {
       Object.assign(S.match, {busy: false, error: 'Could not load this week\'s matchups: ' + (e && e.message ? e.message : e)});
     }
-    if (S.ui.tab === 'matchup') render();
+    if (S.ui.tab === 'matchup' || S.ui.tab === 'lineups') render(); // Lineups: the close calls' lean rests on the win chance
   }
 
   // A player's game this week: 'pre', 'in_game' or 'complete' (or nothing on a bye).
@@ -1343,6 +1394,26 @@
     return `<div class="mpts-col ${side}"><b${(p.pts || 0) > theirs ? ' class="win"' : ''}>${fmt(p.pts)}</b>${proj !== null ? `<small>${fmt(proj)}</small>` : ''}</div>`;
   }
 
+  /* Each side's range this week: points so far plus the floors, and plus the ceilings, of the starters yet to play
+     (SCC.spreadOf), so a lead reads with its risk. Nothing before the projections are in. */
+  function rangeLine(m) {
+    const side = s => {
+      let lo = 0, hi = 0, any = false;
+      s.players.forEach(p => {
+        if (!p || p.empty) return;
+        const g = gameOf(p.team);
+        if (g && g.state !== 'pre') { lo += p.pts || 0; hi += p.pts || 0; return; }
+        const sp = spreadFor(p, m.cfg);
+        if (!sp) return;
+        any = true; lo += sp.floor; hi += sp.ceiling;
+      });
+      return any ? [lo, hi] : null;
+    };
+    const a = side(m.me), b = side(m.opp);
+    if (!a || !b) return '';
+    return `<p class="fine mrange">Range: you ${fmt(a[0])} to ${fmt(a[1])}, them ${fmt(b[0])} to ${fmt(b[1])}<small> (each starter's floor to ceiling)</small></p>`;
+  }
+
   function matchCard(m) {
     const head = `<header class="card-h"><div><h3>${leagueIcon(m.cfg)}${esc(m.cfg.key)}</h3><p>${esc(SCC.describeLeague(m.cfg))}</p></div></header>`;
     if (m.error) return `<article class="card league">${head}<p class="note">Couldn't load this matchup: ${esc(m.error)}</p></article>`;
@@ -1362,7 +1433,7 @@
       <span class="sb-pts${tone(x)}">${fmt(t.pts)}</span><small>${t.started && !final ? 'projected final ' + fmt(t.final) : 'projected ' + fmt(t.proj)}</small></div>`;
     const say = `<p class="mh-status ${st.phase === 'pre' ? 'pre' : st.lead > 0 ? 'ahead' : st.lead < 0 ? (favored ? 'fav' : 'behind') : ''}">${esc(st.text)}${
       favored ? ', still projected to win' : ''}${
-      st.phase === 'live' ? ` <small>· ${a.left} of yours to play, ${b.left} of theirs</small>` : ''}</p>`;
+      st.phase === 'live' ? ` <small>· ${a.left} of yours to play, ${b.left} of theirs</small>` : ''}</p>${final ? '' : rangeLine(m)}`;
     const rows = m.cfg.lineup.map((slot, i) => {
       const x = m.me.players[i], y = m.opp.players[i];
       return `<li class="mrow">${matchInfo(x, 'me')}${matchPts(x, m.cfg, 'me', y)}
@@ -3236,7 +3307,7 @@
     try { W.usage = {week: wk, list: await Promise.all(weeks.map(w => API.fetchStats(S.snap.season, w)))}; }
     catch (e) { W.usage = {week: wk, list: [], error: true}; }
     W.usageBusy = false;
-    if (S.ui.tab === 'waivers') render();
+    if (['waivers', 'lineups', 'matchup'].includes(S.ui.tab)) render(); // Lineups and Matchup: floors and ceilings
   }
 
   // One line of a player's recent usage: his share of the snaps (and whether it's rising), then per game what matters at his position.
@@ -3553,8 +3624,8 @@
         <th class="st-opt">Points</th><th class="st-opt">All-play</th><th class="st-opt">Luck</th><th class="st-opt">Power</th><th>Playoffs</th></tr></thead>
         <tbody>${R.teams.map(cell).join('')}</tbody></table></div>
       <p class="fine">${R.spots} teams make the playoffs; the dashed line is the cut. The odds come from ${thousands(R.sims)} simulations of the
-        ${R.left} games left: each team scores around its average so far, blended with this week's projected lineup, give or take the
-        league's usual swings. Division winners aren't modeled. All-play is a team's record if it had played every team every week, and
+        ${R.left} games left: each team scores around its average so far, blended with this week's projected lineup, give or take its own
+        usual swing (steadied by the league's while few games are played). Division winners aren't modeled. All-play is a team's record if it had played every team every week, and
         luck is how many more (or fewer) wins it has than that record would give. Power ranks all-play, points per game and projected
         strength together.</p>` + strengthTable(strengthOf(cfg, Tm.list), R, mineId, cfg);
   }
@@ -3622,7 +3693,7 @@
           return c.rank ? `<td class="ps g-${c.grade}">${nth(c.rank)}</td>` : '<td class="ps">–</td>';
         }).join('')}</tr>`).join('')}</tbody></table>
       <p class="fine">Each team's best lineup this season by Sleeper's projections, position by position, counting its best bench player a little.
-        Green is the league's top third at that position, red the bottom third.${cfg.kind === 'Dynasty' ? ' This season only: it doesn\'t weigh age.' : ''}</p></section>`;
+        Green is well above the league's average at that position (deep), red well below (thin).${cfg.kind === 'Dynasty' ? ' This season only: it doesn\'t weigh age.' : ''}</p></section>`;
   }
 
   // The Trade tab, once a partner is picked: where they're thin and deep, where you are, and whether that fits.

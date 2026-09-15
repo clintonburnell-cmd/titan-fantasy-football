@@ -471,4 +471,22 @@ check(cuffs.length === 2 && /His backup, Backup Back, is a free agent there\./.t
   'a ruled-out starter\'s backup is named where he\'s a free agent, and not where someone has him: ' + inFirst.body);
 check(SCC.playerInfo({'9': ['A B', 'RB', 'KC', 2]}, '9').depth === 2 && SCC.trimPlayers({'9': {first_name: 'A', last_name: 'B', position: 'RB', team: 'KC', depth_chart_order: 2}})['9'][3] === 2,
   'the player list keeps each player\'s place on the depth chart');
+
+section('floor and ceiling, and the close calls in a lineup');
+{
+  // Three weeks of stats: a steady receiver (10, 10, 10) and a streaky one (2, 20, 8), both projected 12.
+  const wk = (a, b) => ({s1: {gp: 1, ppr: a}, s2: {gp: 1, ppr: b}});
+  const weeks = [wk(10, 2), wk(10, 20), wk(10, 8)];
+  const steady = SCC.spreadOf(weeks, 's1', 'WR', 12), streaky = SCC.spreadOf(weeks, 's2', 'WR', 12), fresh = SCC.spreadOf(weeks, 'nobody', 'WR', 12);
+  check(steady.games === 3 && steady.sd < fresh.sd && fresh.sd < streaky.sd && steady.floor > streaky.floor && steady.ceiling < streaky.ceiling,
+    `a steady player's range is narrower than his position's usual, a streaky one's wider (sd ${steady.sd}, ${fresh.sd}, ${streaky.sd})`);
+  check(fresh.games === 0 && fresh.sd === 6.6 && fresh.floor === 6.39 && fresh.ceiling === 17.61 && SCC.spreadOf(weeks, 's1', 'WR', 0) === null,
+    'with no games, the position\'s usual swing (a WR: 55% of his projection); nothing without a projection');
+  const P = (id, pos, rank, x) => Object.assign({id, name: id, pos, rank}, x);
+  const opt = [{slot: 'RB', p: P('r1', 'RB', 5)}, {slot: 'WR', p: P('w1', 'WR', 10)}, {slot: 'FLEX', p: P('r2', 'RB', 30)}, {slot: 'TE', p: P('t1', 'TE', 3)}];
+  const roster = opt.map(o => o.p).concat([P('r3', 'RB', 36), P('r4', 'RB', 34, {outish: true}), P('w2', 'WR', 40), P('t2', 'TE', 4, {locked: true}), P('w3', 'WR', 14, {onBye: true})]);
+  const pairs = SCC.closeCallPairs(opt, roster);
+  check(pairs.length === 1 && pairs[0].starter.id === 'r2' && pairs[0].bench.id === 'r3',
+    'a close call is a bench player at the starter\'s position within 12 ranks who could play: not one ruled out, locked or on bye, and not a 30-rank gap');
+}
 T.done();
