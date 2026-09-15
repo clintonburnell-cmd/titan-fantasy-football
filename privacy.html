@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Privacy · Titan Fantasy Football Manager</title>
   <link rel="canonical" href="https://titanfantasyfootball.com/privacy.html">
-  <meta name="description" content="What Titan Fantasy Football Manager keeps, who it talks to, and how to delete your data.">
+  <meta name="description" content="What Titan Fantasy Football Manager keeps, who it talks to, how long it keeps things, and how to see or delete your data.">
   <meta name="theme-color" content="#f3f6fc">
   <script>
     // White and blue by default; dark when chosen on this device (theme.js), set before anything draws.
@@ -13,21 +13,36 @@
   </script>
   <script src="/theme.js" defer></script>
   <script src="/stats.js" defer></script>
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css">
-  <style>
-    .doc { max-width: 680px; padding-block: 28px 56px; display: grid; gap: 14px; }
-    .doc h1 { font-size: 1.5rem; font-weight: 850; }
-    .doc h2 { font-size: 1.05rem; margin-top: 10px; }
-    .doc p, .doc li { color: var(--muted); }
-    .doc ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 6px; }
-  </style>
+  <script src="/newsletter.js" defer></script>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/site.css">
 </head>
 <body>
-  <main class="wrap doc">
-    <p><a href="./">← Titan Fantasy Football Manager</a></p>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-top">
+    <div class="site-in">
+      <a class="site-brand" href="/"><img src="/icon.svg" alt="" width="30" height="30"><b><span class="long">Titan Fantasy Football Manager</span><span class="short">Titan</span></b></a>
+      <nav class="site-nav" aria-label="Site">
+        <a href="/guides/">Guides</a>
+        <a href="/newsletter/">Weekly email</a>
+      </nav>
+      <button type="button" class="theme-btn" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" fill="currentColor"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <a class="btn site-cta" href="/app/">Open Titan</a>
+      <details class="site-menu">
+        <summary>Menu</summary>
+        <nav aria-label="Site"><a href="/">Home</a><a href="/guides/">Guides</a><a href="/newsletter/">Weekly email</a><a href="/app/?demo">Try a demo</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav>
+      </details>
+    </div>
+  </header>
+
+  <main class="site-in guide" id="main">
+    <p class="crumbs"><a href="/">Titan</a> › Privacy</p>
     <h1>Privacy</h1>
-    <p>Last updated September 15, 2026.</p>
+    <p class="lead">What Titan keeps, who it talks to, how long it keeps things, and how to see or delete your data.</p>
+    <p>Last updated September 15, 2026. Titan is run by Titan Forge, a one-person business, which is the controller of the
+      data described here.</p>
 
     <h2>On your device</h2>
     <p>Titan keeps these in your browser's storage on your own device:</p>
@@ -36,6 +51,7 @@
       <li>The rankings you import.</li>
       <li>A copy of your last refresh (rosters, injuries and game locks) so the app opens instantly.</li>
       <li>A trimmed copy of Sleeper's public player list (names, positions and teams).</li>
+      <li>Your light or dark choice, on the website and in the app.</li>
     </ul>
     <p>Clearing your browser data, or tapping <b>Switch account</b> in Settings, removes them from that device.</p>
 
@@ -50,7 +66,9 @@
       <li>Your ESPN login, only if you save it for private ESPN leagues: the <code>espn_s2</code> and <code>SWID</code> cookies
         ESPN's website uses to keep you signed in.</li>
       <li>If you turn on game-day alerts: a notification address for each device you turned them on for (a push token from
-        Google's Firebase Cloud Messaging), which alerts you want, and which were already sent this week, so none repeats.</li>
+        Google's Firebase Cloud Messaging), which alerts you want, which were already sent this week (so none repeats), and
+        the names of the starters Titan is watching for news, so a breaking story can be matched to your teams without
+        re-reading your leagues.</li>
     </ul>
     <p>Titan's server uses a saved ESPN login only to read your ESPN leagues, which a browser can't do for a private league
       itself. The app never shows it again, and <b>Settings → Link more leagues? → ESPN → Remove my ESPN login</b> deletes it. Because those
@@ -58,9 +76,11 @@
     <p>Only you can read or change your synced data: Titan's database rules allow access to a person's data only when that
       same person is signed in. Titan doesn't share it or sell it, and Titan's owner sees only totals (such as how many
       accounts exist or how many added an ESPN league), never anyone's details.</p>
-    <p>While you're signed in, Titan's server also keeps a record of each week: on NFL game days, every 15 minutes, it reads
-      your linked Sleeper and ESPN leagues and your synced rankings, and saves each player's rank, Titan's call and his projected points
-      under your account, frozen at his game's kickoff. The Results tab compares how your teams did with that record.</p>
+    <p>While you have a Titan account and have used Titan in the last 45 days, Titan's server also keeps a record of each
+      week: on NFL game days, every 15 minutes, it reads your linked Sleeper and ESPN leagues and your synced rankings, and
+      saves each player's rank, Titan's call and his projected points under your account, frozen at his game's kickoff. The
+      Results tab compares how your teams did with that record. An account that hasn't opened Titan in 45 days is left
+      alone until it comes back, unless it has alerts on.</p>
     <p>If you turn on alerts, the same check looks for starters ruled out or on bye and empty lineup spots, and sends an
       alert to your devices through Firebase Cloud Messaging. On days without games it also looks for players ruled out
       at noon, 4 PM and 8 PM Eastern, when injury reports come out. Turning alerts off on a device, or signing out there,
@@ -75,15 +95,33 @@
       services, Kit counts which emails are opened and which links are clicked. Titan uses your address only to send this
       guide and never sells or shares it. Your browser also remembers that you joined, so Titan stops asking.</p>
 
+    <h2>How long Titan keeps things</h2>
+    <ul>
+      <li>Synced data stays until you delete your account, or remove a piece of it in Settings.</li>
+      <li>The weekly record of Titan's calls is kept for the current season and the one before, then deleted.</li>
+      <li>Alert addresses go when you turn alerts off on that device or sign out there.</li>
+      <li>Deleted data leaves the live database at once, and Titan's daily backups within 7 days.</li>
+      <li>Google Cloud keeps its own logs of requests to Titan's server (the address of the device and its browser, not who
+        you are) for up to 30 days.</li>
+    </ul>
+
+    <h2>Your rights and how to use them</h2>
+    <p>Wherever you live, you can see, correct, take away or delete what Titan holds about you, and object to how it's used.
+      Most of it you can do yourself: Settings shows what's linked and synced, lets you remove an ESPN login or turn alerts
+      off, and <b>Delete my Titan account</b> removes everything. For a copy of your synced data, a correction, or anything
+      else, email the address under Contact and it will be handled within 30 days. Titan isn't for children under 13, and
+      doesn't knowingly keep anything about them.</p>
+
     <h2>Who Titan talks to</h2>
     <ul>
       <li><b>Sleeper</b> (<code>api.sleeper.app</code>): your device reads your leagues directly, the same information anyone can
         see on your public Sleeper profile. Titan has no password for your Sleeper account and cannot change your lineups,
         make claims or trade. Projected points also come from Sleeper, which gets them from RotoWire, and player photos,
-        team logos and avatars load from Sleeper's image server (<code>sleepercdn.com</code>).</li>
+        team logos and avatars load from Sleeper's image server (<code>sleepercdn.com</code>), on the website's home page too.</li>
       <li><b>ESPN</b> (<code>fantasy.espn.com</code>): your device reads ESPN's public NFL schedule for kickoff times, which
         sends nothing about you. If you add ESPN leagues, public ones are read by your device directly and private ones by
-        Titan's server with the ESPN login you saved. Titan can't change your ESPN lineups either.</li>
+        Titan's server with the ESPN login you saved. When Titan's server can't reach ESPN's scoreboard, your browser reads
+        the live scores from ESPN directly instead. Titan can't change your ESPN lineups either.</li>
       <li><b>Google</b>: Firebase, for sign-in and sync if you choose to sign in, for delivering alerts if you turn them on,
         for hosting the app, and for this week's Waiver Wire on the newsletter page once you've joined, which your browser
         reads from Titan's Firebase database without sending anything about you.</li>
@@ -96,6 +134,9 @@
         your payment details.</li>
       <li><b>X</b>: only if you tap an account on the News tab, which opens it in the X app or on x.com.</li>
     </ul>
+    <p>Titan's server also reads FantasyCalc (trade values), the National Weather Service (weather at kickoff) and
+      nflverse (defensive stats) to build the numbers everyone sees. Those are read once and shared with every user, and
+      nothing about you is sent to them.</p>
 
     <h2>What Titan doesn't do</h2>
     <ul>
@@ -114,8 +155,32 @@
       <a href="https://github.com/clintonburnell-cmd/titan-fantasy-football/issues">open an issue on GitHub</a>. Using Titan
       is also covered by the <a href="/terms.html">Terms of Use</a>.</p>
 
-    <p class="fine">Titan Fantasy Football Manager isn't affiliated with or endorsed by the NFL or any NFL team, Sleeper or ESPN. Developed by <a href="https://www.titanforgedev.com" target="_blank" rel="noopener">Titan Forge</a>.</p>
-    <div><a class="tip" href="https://ko-fi.com/titandev" target="_blank" rel="noopener"><span class="tip-cup" aria-hidden="true">☕</span><span class="tip-text"><b>Like my work?</b> <span>Consider a tip!</span></span></a></div>
+    <div class="nl-box" data-newsletter-box data-hide-joined>
+      <p class="tag">Free every Tuesday</p>
+      <h2>Get the Titan Waiver Wire</h2>
+      <p>Who to grab before waivers run, who to buy low and who to sell high, from each player's real usage. One free
+        email a week. <a href="/newsletter/">What's in each email</a></p>
+      <form class="nl-form" data-newsletter="privacy" action="https://app.kit.com/forms/9921118/subscriptions" method="post">
+        <label class="sr-only" for="nl-email">Email address</label>
+        <input id="nl-email" type="email" name="email_address" required placeholder="you@example.com" autocomplete="email">
+        <button class="btn big" type="submit">Get it free</button>
+        <p class="fine nl-note" data-newsletter-note aria-live="polite">One email a week during the season. Unsubscribe any time.</p>
+      </form>
+    </div>
   </main>
+
+  <footer class="site-foot">
+    <div class="site-in">
+      <span>© 2026 Titan Fantasy Football Manager. Not affiliated with or endorsed by the NFL or any NFL team, Sleeper, ESPN or any rankings site. Developed by <a href="https://www.titanforgedev.com" target="_blank" rel="noopener">Titan Forge</a>.</span>
+      <nav class="foot-links" aria-label="More">
+        <a href="/">Home</a>
+        <a href="/newsletter/">Weekly email</a>
+        <a href="/guides/">Guides</a>
+        <a href="/terms.html">Terms</a>
+        <a href="mailto:gainalphatrading@gmail.com">Contact</a>
+      </nav>
+      <a class="tip" href="https://ko-fi.com/titandev" target="_blank" rel="noopener"><span class="tip-cup" aria-hidden="true">☕</span><span class="tip-text"><b>Like my work?</b> <span>Consider a tip!</span></span></a>
+    </div>
+  </footer>
 </body>
 </html>

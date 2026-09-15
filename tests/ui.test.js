@@ -197,7 +197,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const bad = faq.length !== shown.length ? 'count ' + faq.length + ' vs ' + shown.length
       : (faq.map((q, i) => q.name !== shown[i][0] || q.acceptedAnswer.text !== shown[i][1] ? q.name : '').filter(Boolean)[0] || '');
     return {title: document.title, types: ld ? ld['@graph'].map(x => x['@type']).join(',') : 'invalid JSON-LD', bad}; })()`);
-  check(/Sleeper, ESPN and Yahoo/.test(seo.title) && seo.types === 'WebSite,WebApplication,FAQPage' && !seo.bad,
+  // The title leads with what people search for, and doesn't promise Yahoo (the page's own Yahoo mentions say "coming soon").
+  check(/^Fantasy Football Start\/Sit Tool for Sleeper and ESPN \| Titan$/.test(seo.title) && seo.types === 'Organization,WebSite,WebApplication,FAQPage' && !seo.bad,
     `search: "${seo.title}", structured data ${seo.types}, ` + (seo.bad ? 'FAQ differs at: ' + seo.bad : 'its FAQ identical to the page\'s'));
 
   T.section('the app, at /app/');
@@ -997,12 +998,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await send('Page.navigate', {url: ORIGIN + '/app/waivers'});
   check(await waitFor(`!!window.TitanNewsletter && !window.TitanNewsletter.ready() && /Your waiver plan/.test(document.body.innerText) && !document.querySelector('.nl-card')`, 30000),
     'without a form number, the app shows no signup card');
+  await send('Page.navigate', {url: ORIGIN + '/guides/'});
+  check(await waitFor(`!!document.querySelector('.nl-box') && document.querySelector('.nl-box').hidden`, 10000), 'and the website hides its boxes too');
   // A stand-in form number (it runs after the one above, so it wins); Kit's address is answered by the test, never sent to Kit.
   await send('Page.addScriptToEvaluateOnNewDocument', {source: 'window.TitanNewsletterForm = "1234567";'});
   await send('Fetch.enable', {patterns: [...ESPN_PATTERNS, {urlPattern: '*app.kit.com*'}, {urlPattern: '*firestore.googleapis.com*documents/public/*'}]});
   await send('Page.navigate', {url: ORIGIN + '/?home'});
   check(await waitFor(`!!document.querySelector('.nl-hero') && !document.querySelector('.nl-hero').hidden && !document.querySelector('#newsletter').hidden`, 10000),
     'with it set up, the home page shows its signup boxes: under the main buttons, and a section of their own');
+  // In the HTML as served (newsletter.js rewrites the action to the test's stand-in form once it runs).
+  const homeHtml = require('fs').readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
+  const homeForms = homeHtml.match(/<form[^>]*data-newsletter=[^>]*>/g) || [];
+  check(homeForms.length === 2 && homeForms.every(f => /action="https:\/\/app\.kit\.com\/forms\/9921118\/subscriptions"/.test(f) && /method="post"/.test(f)),
+    'each box\'s form carries Kit\'s address in the HTML itself, so a signup works even without newsletter.js');
+  check(await ev(`(() => { const s = document.querySelector('.site-menu'), d = getComputedStyle(s).display !== 'none', n = getComputedStyle(document.querySelector('.site-nav')).display === 'none';
+    return d && n && s.querySelectorAll('nav a[href="/guides/"], nav a[href="/newsletter/"]').length === 2 && document.querySelector('.skip').getAttribute('href') === '#main' && !!document.getElementById('main'); })()`),
+    'on a phone the header shows a Menu with Guides and the weekly email in place of the nav, and every page starts with a skip link');
   await shot('home-newsletter');
   await ev(`document.querySelector('#newsletter').scrollIntoView({block: 'start', behavior: 'instant'}); true`);
   await sleep(300);
@@ -1032,9 +1043,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'the home page\'s signup boxes stay hidden for someone who joined');
   check(await ev(`!!document.querySelector('.site-foot .foot-links a[href="/newsletter/"]')`), 'but the footer still links the weekly email, as every guide\'s does');
   await send('Page.navigate', {url: ORIGIN + '/newsletter/?joined=1'});
-  check(await waitFor(`!document.querySelector('[data-newsletter-joined]').hidden && !document.querySelector('.nl-box').hidden &&
+  check(await waitFor(`!document.querySelector('[data-newsletter-joined]').hidden && document.querySelector('.nl-box').hidden &&
     document.querySelector('form[data-newsletter]').action.endsWith('/forms/1234567/subscriptions')`, 10000),
-    'the newsletter page welcomes someone back from Kit\'s confirmation, keeps its own signup box, and its form points at Kit');
+    'the newsletter page welcomes someone back from Kit\'s confirmation and puts its signup box away (they\'ve joined), its form pointing at Kit');
   check(await waitFor(`(() => { const s = document.querySelector('[data-nl-issue]'), f = s && s.querySelector('iframe');
     return !!f && !s.hidden && /week 9/.test(f.srcdoc) && !!f.contentDocument && /stand-in issue/.test(f.contentDocument.body.textContent) &&
       /Through week 8/.test(s.querySelector('[data-nl-issue-meta]').textContent) && f.offsetHeight > 100; })()`, 10000),

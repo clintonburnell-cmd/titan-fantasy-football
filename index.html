@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Titan Fantasy Football Manager: Start/Sit Tool for Sleeper, ESPN and Yahoo</title>
+  <title>Fantasy Football Start/Sit Tool for Sleeper and ESPN | Titan</title>
+  <link rel="preconnect" href="https://sleepercdn.com" crossorigin>
+  <link rel="preload" as="image" href="/titan.svg">
   <script>
     // In a browser, titanfantasyfootball.com always shows the website; Open Titan
     // leads to the app at /app/. Only the Android app (it opens /?source=play)
@@ -26,7 +28,7 @@
   <link rel="canonical" href="https://titanfantasyfootball.com/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Titan Fantasy Football Manager">
-  <meta property="og:title" content="Titan Fantasy Football Manager: Start/Sit Tool for Sleeper, ESPN and Yahoo">
+  <meta property="og:title" content="Titan: a fantasy football start/sit tool for Sleeper and ESPN">
   <meta property="og:description" content="Every league in one place. Every call from your rankings.">
   <meta property="og:url" content="https://titanfantasyfootball.com/">
   <meta property="og:image" content="https://titanfantasyfootball.com/og-image.jpg">
@@ -43,15 +45,25 @@
     "@context": "https://schema.org",
     "@graph": [
       {
+        "@type": "Organization",
+        "@id": "https://titanfantasyfootball.com/#org",
+        "name": "Titan Fantasy Football Manager",
+        "url": "https://titanfantasyfootball.com/",
+        "logo": "https://titanfantasyfootball.com/icon-192.png",
+        "email": "gainalphatrading@gmail.com"
+      },
+      {
         "@type": "WebSite",
         "name": "Titan Fantasy Football Manager",
         "alternateName": "Titan",
-        "url": "https://titanfantasyfootball.com/"
+        "url": "https://titanfantasyfootball.com/",
+        "publisher": {"@id": "https://titanfantasyfootball.com/#org"}
       },
       {
         "@type": "WebApplication",
         "name": "Titan Fantasy Football Manager",
         "url": "https://titanfantasyfootball.com/",
+        "publisher": {"@id": "https://titanfantasyfootball.com/#org"},
         "applicationCategory": "SportsApplication",
         "operatingSystem": "Any (web browser)",
         "browserRequirements": "Requires JavaScript",
@@ -94,39 +106,46 @@
   <link rel="stylesheet" href="/site.css">
 </head>
 <body>
+  <a class="skip" href="#main">Skip to content</a>
   <header class="site-top">
     <div class="site-in">
-      <a class="site-brand" href="/?home"><img src="/icon.svg" alt="" width="30" height="30"><b><span class="long">Titan Fantasy Football Manager</span><span class="short">Titan</span></b></a>
-      <nav class="site-nav" aria-label="Sections">
+      <a class="site-brand" href="/"><img src="/icon.svg" alt="" width="30" height="30"><b><span class="long">Titan Fantasy Football Manager</span><span class="short">Titan</span></b></a>
+      <nav class="site-nav" aria-label="Site">
         <a href="#leagues">Leagues</a>
         <a href="#rankings">Rankings</a>
         <a href="#features">Features</a>
         <a href="#faq">FAQ</a>
+        <a href="/guides/">Guides</a>
+        <a href="/newsletter/">Weekly email</a>
       </nav>
       <button type="button" class="theme-btn" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" fill="currentColor"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       <a class="btn site-cta" href="/app/">Open Titan</a>
+      <details class="site-menu">
+        <summary>Menu</summary>
+        <nav aria-label="Site"><a href="#leagues">Leagues</a><a href="#rankings">Rankings</a><a href="#features">Features</a><a href="#faq">FAQ</a><a href="/guides/">Guides</a><a href="/newsletter/">Weekly email</a><a href="/app/?demo">Try a demo</a><a href="/privacy.html">Privacy</a></nav>
+      </details>
     </div>
   </header>
 
-  <main>
+  <main id="main">
     <section class="hero">
       <div class="site-in hero-in">
         <div>
           <p class="eyebrow">Fantasy football, one place</p>
-          <h1>Every league in one place. <span>Every call from your rankings.</span></h1>
+          <h1>Every fantasy football league in one place. <span>Every call from your rankings.</span></h1>
           <p class="hero-sub">Titan brings your Sleeper and ESPN leagues together, then checks every lineup against the rankings you import: who to start, who to sit, the swaps to make and the free agents worth grabbing.</p>
           <div class="ctas">
             <a class="btn big" href="/app/">Open Titan</a>
             <a class="btn ghost big" href="/app/?demo">Try a demo</a>
           </div>
           <p class="fine">Free. No Sleeper password. Works in the browser on any phone or computer.</p>
-          <div class="nl-hero" data-newsletter-box data-hide-joined hidden>
+          <div class="nl-hero" data-newsletter-box data-hide-joined>
             <p class="nl-lead">Or get the free weekly waiver guide by email:</p>
-            <form class="nl-form" data-newsletter="home-hero">
+            <form class="nl-form" data-newsletter="home-hero" action="https://app.kit.com/forms/9921118/subscriptions" method="post">
               <label class="sr-only" for="nl-email-hero">Email address</label>
               <input id="nl-email-hero" type="email" name="email_address" required placeholder="you@example.com" autocomplete="email">
               <button class="btn big" type="submit">Get it free</button>
-              <p class="fine nl-note" data-newsletter-note>Every Tuesday before waivers run. Unsubscribe any time.</p>
+              <p class="fine nl-note" data-newsletter-note aria-live="polite">Every Tuesday before waivers run. Unsubscribe any time.</p>
             </form>
           </div>
         </div>
@@ -147,12 +166,12 @@
             <li><b>Late games in FLEX.</b> So a late scratch can still be covered from your bench.</li>
           </ul>
         </div>
-        <div>
-          <div class="demo" aria-label="A sample lineup in Titan">
+        <figure class="demo-fig">
+          <div class="demo" aria-hidden="true">
             <div class="card league">
-              <div class="card-h"><div><h3>Sample League</h3><p>12 teams · Half PPR · Redraft · projected <b class="pts-proj">121.6</b></p></div><span class="pill p-swap">2 changes</span></div>
+              <div class="card-h"><div><p class="card-title">Sample League</p><p>12 teams · Half PPR · Redraft · projected <b class="pts-proj">121.6</b></p></div><span class="pill p-swap">2 changes</span></div>
               <div class="moves">
-                <div class="moves-h"><h4>Make these changes in Sleeper</h4><span class="btn ghost small">Open in Sleeper ↗</span></div>
+                <div class="moves-h"><span class="moves-title">Make these changes in Sleeper</span><span class="btn ghost small">Open in Sleeper ↗</span></div>
                 <div class="move"><span class="slot">RB</span>
                   <span class="mv out">Tyrell Banks <em>RB31</em></span>
                   <span class="mv in">Jalen Pierce <em>RB18</em></span>
@@ -164,29 +183,29 @@
                 <p class="fine">Later kickoffs go in FLEX, so a late scratch can still be covered from your bench.</p>
               </div>
               <ol class="lineup">
-                <li class="row r-ok"><span class="slot">QB</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/phi.png" alt=""></span>
+                <li class="row r-ok"><span class="slot">QB</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/phi.png" alt="" loading="lazy" decoding="async"></span>
                   <span class="who"><span class="name-line"><b>Marcus Hale</b><em class="kick">Sun 1:00 PM</em></span><small>QB · PHI · proj 21.4</small></span>
                   <span class="right"><span class="rank">QB4</span><span class="verdict v-ok">OK</span></span></li>
-                <li class="row r-ok"><span class="slot">RB</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/atl.png" alt=""></span>
+                <li class="row r-ok"><span class="slot">RB</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/atl.png" alt="" loading="lazy" decoding="async"></span>
                   <span class="who"><span class="name-line"><b>Dre Collins</b><em class="kick">Sun 1:00 PM</em></span><small>RB · ATL · proj 18.9</small></span>
                   <span class="right"><span class="rank">RB1</span><span class="verdict v-ok">OK</span></span></li>
-                <li class="row r-swap"><span class="slot">RB</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/ten.png" alt=""></span>
+                <li class="row r-swap"><span class="slot">RB</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/ten.png" alt="" loading="lazy" decoding="async"></span>
                   <span class="who"><span class="name-line"><b>Tyrell Banks</b><em class="kick">Sun 1:00 PM</em></span><small>RB · TEN · proj 8.7</small></span>
                   <span class="right"><span class="rank">RB31</span><span class="verdict v-swap">SWAP OUT</span></span></li>
-                <li class="row r-ok"><span class="slot">WR</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/lar.png" alt=""></span>
+                <li class="row r-ok"><span class="slot">WR</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/lar.png" alt="" loading="lazy" decoding="async"></span>
                   <span class="who"><span class="name-line"><b>Isaiah Moore</b><em class="kick">Sun 4:25 PM</em></span><small>WR · LAR · proj 16.2</small></span>
                   <span class="right"><span class="rank">WR6</span><span class="verdict v-ok">OK</span></span></li>
-                <li class="row r-ok"><span class="slot">TE</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/ari.png" alt=""></span>
+                <li class="row r-ok"><span class="slot">TE</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/ari.png" alt="" loading="lazy" decoding="async"></span>
                   <span class="who"><span class="name-line"><b>Evan Brooks</b><em class="kick">Sun 4:05 PM</em></span><small>TE · ARI · proj 12.8</small></span>
                   <span class="right"><span class="rank">TE3</span><span class="verdict v-ok">OK</span></span></li>
-                <li class="row r-ok"><span class="slot">FLEX</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/cin.png" alt=""></span>
+                <li class="row r-ok"><span class="slot">FLEX</span><span class="pphoto"><img class="hs" src="https://sleepercdn.com/images/team_logos/nfl/cin.png" alt="" loading="lazy" decoding="async"></span>
                   <span class="who"><span class="name-line"><b>Rico Vance</b><em class="kick">Thu 8:15 PM</em></span><small>WR · CIN · proj 17.5</small></span>
                   <span class="right"><span class="rank">WR4</span><span class="verdict v-ok">OK</span></span></li>
               </ol>
             </div>
           </div>
-          <p class="demo-label">A sample lineup: made-up players, Titan's real layout.</p>
-        </div>
+          <figcaption class="demo-label">A sample lineup: made-up players, Titan's real layout.</figcaption>
+        </figure>
       </div>
     </section>
 
@@ -217,13 +236,14 @@
           <div>
             <ol class="steps">
               <li><div><b>Build or export your rankings</b><span>Your own spreadsheet, or a ranking site's CSV export. One file for every position, or one file per position.</span></div></li>
-              <li><div><b>Import them in Titan</b><span>Choose the file or paste it on the Rankings tab. Titan reads the players, positions and ranks.</span></div></li>
+              <li><div><b>Import them in Titan</b><span>Choose the file or paste it on the Rankings tab. Titan reads the players, positions and ranks. <a href="/guides/import-fantasy-rankings.html">How to import rankings</a></span></div></li>
               <li><div><b>Follow the calls</b><span>Every slot gets a call, with the exact swaps to make and the free agents worth a claim.</span></div></li>
             </ol>
-            <div class="formats" aria-label="Formats Titan reads">
-              <span>Your own CSV</span><span>A spreadsheet paste</span><span>Late-Round</span><span>FantasyPros</span><span>The Hall</span>
-            </div>
-            <p class="fine" style="margin-top:14px">No rankings yet? Titan starts with Sleeper's weekly projections, in each league's own scoring, and they fill any position your file leaves out.</p>
+            <p class="sr-only" id="formats-h">Formats Titan reads</p>
+            <ul class="formats" aria-labelledby="formats-h">
+              <li>Your own CSV</li><li>A spreadsheet paste</li><li>Late-Round</li><li>FantasyPros</li><li>The Hall</li>
+            </ul>
+            <p class="fine" style="margin-top:14px">No rankings yet? Titan starts with Sleeper's weekly projections, in each league's own scoring, and they fill any position your file leaves out. Use several sources? <a href="/guides/combine-fantasy-rankings.html">Combine them into one list</a>.</p>
           </div>
           <div class="flow">
             <h3>Your file</h3>
@@ -258,9 +278,9 @@ Tyrell Banks,RB,TEN,31</pre></div>
           <div class="feature"><h3>Results</h3><p>Won or lost in every league each week, your score against the projection, and your season so far.</p></div>
           <div class="feature"><h3>Exposure</h3><p>Players you own across several teams, and a search across all your rosters.</p></div>
           <div class="feature"><h3>Open in Sleeper or ESPN</h3><p>One tap from any league to its team page, to make the changes.</p></div>
-          <div class="feature"><h3>Trade help</h3><p>Pick players on both sides and see who wins, weighed with trade values from <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>, and how each starting lineup changes.</p></div>
+          <div class="feature"><h3>Trade help</h3><p>Pick players on both sides and see who wins, weighed with trade values from <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>, and how each starting lineup changes. <a href="/guides/fantasy-trade-help.html">Trade help guide</a></p></div>
           <div class="feature"><h3>Standings and playoff odds</h3><p>Records, power rankings, luck, and every team's playoff chances from 5,000 simulated seasons.</p></div>
-          <div class="feature"><h3>Draft results</h3><p>Every pick in your leagues' drafts graded against its spot, team grades from A+ to D, and a round-by-round board.</p></div>
+          <div class="feature"><h3>Draft results</h3><p>Every pick in your leagues' drafts graded against its spot, team grades from A+ to D, and a round-by-round board. <a href="/guides/fantasy-draft-grades.html">Draft grades guide</a></p></div>
           <div class="feature"><h3>Combine rankings</h3><p>Average several rankings into one list for the week, and count any source double or triple.</p></div>
           <div class="feature"><h3>News</h3><p>ESPN's latest NFL news with your players marked, and an alert when there's news about one of your starters.</p></div>
           <div class="feature"><h3>Game-day alerts</h3><p>A heads-up when a starter is ruled out, and a lineup check before each kickoff.</p></div>
@@ -268,18 +288,18 @@ Tyrell Banks,RB,TEN,31</pre></div>
       </div>
     </section>
 
-    <section class="site-sec nl-sec" id="newsletter" data-newsletter-box data-hide-joined hidden>
+    <section class="site-sec nl-sec" id="newsletter" data-newsletter-box data-hide-joined>
       <div class="site-in">
         <p class="tag">Free every Tuesday</p>
         <h2>The Titan Waiver Wire</h2>
         <p class="sec-sub">A free weekly email before waivers run: who to grab, who to buy low and who to sell high,
           from each player's real usage (snaps, targets, carries and red-zone looks). <a href="/newsletter/">What's in
           each email</a></p>
-        <form class="nl-form" data-newsletter="home">
+        <form class="nl-form" data-newsletter="home" action="https://app.kit.com/forms/9921118/subscriptions" method="post">
           <label class="sr-only" for="nl-email-home">Email address</label>
           <input id="nl-email-home" type="email" name="email_address" required placeholder="you@example.com" autocomplete="email">
           <button class="btn big" type="submit">Get it free</button>
-          <p class="fine nl-note" data-newsletter-note>One email a week during the season. Unsubscribe any time.</p>
+          <p class="fine nl-note" data-newsletter-note aria-live="polite">One email a week during the season. Unsubscribe any time.</p>
         </form>
       </div>
     </section>
@@ -292,7 +312,7 @@ Tyrell Banks,RB,TEN,31</pre></div>
           <li><b>No Sleeper password.</b> Titan reads what your Sleeper profile already shows.</li>
           <li><b>Read-only.</b> Titan never changes your lineups, makes claims or trades.</li>
           <li><b>Your rankings stay yours.</b> Kept on your device, or synced to your own Google sign-in if you choose.</li>
-          <li><b>No ads, no tracking.</b> Titan doesn't sell or share anything, and the website counts visits without cookies. If you join the weekly email, Kit sends it and counts opens and clicks. <a href="/privacy.html">Read the privacy policy</a>.</li>
+          <li><b>No ads, no ad tracking.</b> Titan doesn't sell or share anything, and the website counts visits without cookies. If you join the weekly email, Kit sends it and counts opens and clicks. <a href="/privacy.html">Read the privacy policy</a>.</li>
         </ul>
       </div>
     </section>
@@ -328,6 +348,7 @@ Tyrell Banks,RB,TEN,31</pre></div>
       <nav class="foot-links" aria-label="More">
         <a href="/app/">Open Titan</a>
         <a href="/newsletter/">Weekly email</a>
+        <a href="/guides/">Guides</a>
         <a href="/guides/import-fantasy-rankings.html">Import rankings</a>
         <a href="/guides/sleeper-start-sit.html">Sleeper guide</a>
         <a href="/guides/espn-private-league.html">ESPN guide</a>

@@ -20,7 +20,9 @@
   // ~14 MB, so it is kept for a few days. Injuries are pulled fresh every refresh.
   var PLAYERS_TTL = 3 * 24 * 3600 * 1000;
   var BATCH = 25;
-  var FETCH_OPTS = typeof window !== 'undefined' ? {cache: 'no-store'} : {};
+  // The browser reads fresh; Titan's server also gives up after 20 seconds, so a hung read can't stall the job.
+  var fetchOpts = typeof window !== 'undefined' ? function () { return {cache: 'no-store'}; }
+    : function () { return typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? {signal: AbortSignal.timeout(20000)} : {}; };
 
   /* localStorage in the browser, plain memory under Node. Every access is
      guarded: private windows and full storage throw. */
@@ -47,7 +49,7 @@
   async function getJson(url) {
     for (var attempt = 1; attempt <= 3; attempt++) {
       try {
-        var res = await fetch(url, FETCH_OPTS);
+        var res = await fetch(url, fetchOpts());
         if (res.ok) return await res.json();
         if (res.status === 404) return null;
       } catch (e) {

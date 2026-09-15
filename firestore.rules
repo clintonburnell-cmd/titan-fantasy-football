@@ -1,15 +1,39 @@
 rules_version = '2';
 
-// Titan Fantasy Football. Each signed-in person can read and write only their
-// own data, stored under users/{their uid}. Nothing else is readable by anyone.
+// Titan Fantasy Football. Each signed-in person can read and write only their own area, users/{uid},
+// and only the parts the app writes: nothing else is readable by anyone. Collections with no rule here
+// (espnCreds, yahooTokens, yahooStates, tradeValues, meta) are the server's alone and deny everyone.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    function own(uid) { return request.auth != null && request.auth.uid == uid; }
+
+    // The linked account and league switches, plus two flags the server job reads: whether any device
+    // has alerts on (alertsOn, kept by the app and by the job) and when Titan was last opened (lastSeen).
+    match /users/{uid} {
+      allow read, delete: if own(uid);
+      allow create, update: if own(uid) && request.resource.data.keys().hasOnly(['account', 'alertsOn', 'lastSeen']);
     }
-    // The rankings lab (Compare rankings): Titan's owner only, the account with the titanOwner claim.
-    // The server writes each week's FantasyCalc snapshot; the owner's app keeps lab/config, the
-    // league formats to save.
+    // Each week's rankings.
+    match /users/{uid}/ranks/{week} {
+      allow read, write: if own(uid) && week.matches('^[0-9]{1,2}$');
+    }
+    // Each week's frozen record of Titan's calls: the server job writes it, the app only reads it.
+    match /users/{uid}/history/{week} {
+      allow read: if own(uid);
+    }
+    // That an ESPN login is saved (the SWID and when): the server writes it; the cookie itself is in
+    // espnCreds/{uid}, which no browser can read.
+    match /users/{uid}/private/espn {
+      allow read: if own(uid);
+    }
+    // Game-day alerts: each device's push address and the alerts wanted.
+    match /users/{uid}/private/alerts {
+      allow read, write: if own(uid);
+    }
+
+    // The rankings lab (Compare rankings), the value report and the data dump: Titan's owner only, the
+    // account with the titanOwner claim. The server and the owner's PC write them; the owner's app keeps
+    // lab/config, the league formats to save.
     match /lab/{doc} {
       allow read: if request.auth != null && request.auth.token.titanOwner == true;
       allow write: if request.auth != null && request.auth.token.titanOwner == true && doc == 'config';

@@ -37,7 +37,7 @@ live site, so site changes reach it without a new upload. What's done lives in `
 | `sync.js` | Google sign-in, Firestore sync, the saved ESPN login, the private-ESPN transport, the Yahoo link (ES module) |
 | `yahoo.js` | Yahoo Fantasy's nested answers read into Titan's shapes (being built; see Rules) |
 | `syncplan.js` | Which copy wins when syncing (pure) |
-| `functions/index.js` | `freezeCalls` (every 15 minutes on game days) and `espnLeague` (reads private ESPN leagues) |
+| `functions/index.js` | `freezeCalls` (every 15 minutes on game days), `espnLeague` and `espnLogin` (private ESPN leagues and the saved login), `deleteMyAccount`, the `/api` feeds |
 | `tests/` | `node tests/run.js` |
 
 ## Never
@@ -52,6 +52,12 @@ The rules that hold whatever the task.
   password files. Test rankings come from `tests/fixtures/sample-rankings.csv`.
 - Tests must never read a real person's ESPN league: serve ESPN requests with `stubEspn` or
   Chrome's request interception, as the existing tests do.
+- Never put a credential where a browser can read it. A saved ESPN login (`espn_s2`) lives in
+  `espnCreds/{uid}` and Yahoo's tokens in `yahooTokens/{uid}`: top-level collections with no rule, so
+  only the server reaches them. `users/{uid}/...` is readable by that person's browser, so nothing
+  secret goes there (private/espn holds only the SWID and when). Never ask for Sleeper logins.
+- Never store the owner's Sleeper login to act for him (asked 2026-09-15; declined: Sleeper has no
+  write API, its terms allow suspension for automated means in prize contests, a stored password is a target).
 - Show new ESPN or Yahoo features in the app and the Play listing only once they work (Google treats
   promised features in a listing as misleading). The website says Yahoo is coming soon, at the
   owner's request (2026-09-11): its title, a Yahoo card and the FAQ. Keep that wording honest until
@@ -299,6 +305,34 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
 
 ## Server, ESPN and alerts
 
+- Firestore (`firestore.rules`, explicit per path, nothing wildcarded): a person reads and writes
+  `users/{uid}` (keys `account`, `alertsOn`, `lastSeen` only), `ranks/{week}` and `private/alerts`;
+  reads `history/{week}` (the job writes it) and `private/espn` (the server writes it). `lab/` is the
+  owner's, `public/` is world-readable and server-written, everything else (`espnCreds`, `yahooTokens`,
+  `yahooStates`, `tradeValues`, `meta`) is the server's alone. `firestore.indexes.json` exempts the big
+  fields (rows, values, formats, tokens...) from automatic indexing: a document over 40,000 index
+  entries is refused, so exempt any new large map or array field.
+- The user document mirrors two things the job queries on: `alertsOn` (the app sets it when alerts go on
+  or off; `deliver` clears it when the last device dies) and `lastSeen` (each sign-in's `reconcile`).
+  Backfilled for existing accounts on 2026-09-15. On non-game days `run` reads only `alertsOn == true`;
+  on game days it skips accounts unseen for 45 days unless alerts are on (`DORMANT_AFTER`).
+- `run` works through people eight at a time (`USERS_AT_ONCE`, `Promise.allSettled`) inside a 450-second
+  budget (`JOB_BUDGET`, the function's limit is 540), and logs an error containing "could not" naming
+  how many were left. Every outside read on the server has a timeout (`timeout()` in index.js,
+  `fetchT` in espn.js, `fetchOpts` in sleeper.js). The week's record is written only when it changed.
+  Each person gets at most `MAX_ALERTS_AT_ONCE` alerts per run and at most `MAX_ESPN_LEAGUES` ESPN
+  leagues read (`espnLeaguesOf` validates ids).
+- The ESPN login: `espnLogin` (callable) validates and saves it to `espnCreds/{uid}` and notes
+  `{swid, savedAt}` in `private/espn`; `espnCredsFor` reads it back for the job and `espnLeague`, and
+  moves a login saved the old way (pre-2026-09-15, in `private/espn` with `s2`) on first read; the
+  client also sends one over at sign-in. Account deletion is `deleteMyAccount` (callable): recursive
+  delete of `users/{uid}`, then `espnCreds`, `yahooTokens`, `yahooStates where uid`, then the Auth
+  user; it wants a sign-in within five minutes (`recent-login`), and the client re-authenticates and retries.
+- The public `/api` addresses take plain GETs with known parameters only (`plainGet`): a made-up
+  parameter would skip the CDN cache and reach the function every time.
+- Hosting sends security headers on every response (`firebase.json`: nosniff, frame denial, referrer
+  policy, permissions policy, HSTS). No Content-Security-Policy yet: the inline scripts and Firebase's
+  hosts would need hashing and listing, and a wrong one breaks sign-in; do it report-only first.
 - Alerts: `SCC.alertsFor` decides (pure, tested), `alertUser` and `deliver` in `functions/index.js`
   send Firebase Cloud Messaging data messages to the tokens in `users/{uid}/private/alerts`, and
   `sw.js` shows them. Keep each alert's key stable, or people get repeats: `out|week|league|player|tag`

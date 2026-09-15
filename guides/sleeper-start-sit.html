@@ -13,6 +13,57 @@
   <meta property="og:url" content="https://titanfantasyfootball.com/guides/sleeper-start-sit.html">
   <meta property="og:image" content="https://titanfantasyfootball.com/og-image.jpg">
   <meta name="twitter:card" content="summary_large_image">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Titan",
+            "item": "https://titanfantasyfootball.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Guides",
+            "item": "https://titanfantasyfootball.com/guides/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "Start/sit help for all your Sleeper leagues"
+          }
+        ]
+      },
+      {
+        "@type": "Article",
+        "headline": "Start/sit help for all your Sleeper leagues",
+        "description": "Link your Sleeper username once (no password) and get start/sit calls, swaps and waiver ideas for every Sleeper league you play, based on your own rankings.",
+        "url": "https://titanfantasyfootball.com/guides/sleeper-start-sit.html",
+        "image": "https://titanfantasyfootball.com/og-image.jpg",
+        "datePublished": "2026-09-13",
+        "dateModified": "2026-09-15",
+        "author": {
+          "@type": "Organization",
+          "name": "Titan Fantasy Football Manager",
+          "url": "https://titanfantasyfootball.com/",
+          "logo": "https://titanfantasyfootball.com/icon-192.png"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Titan Fantasy Football Manager",
+          "url": "https://titanfantasyfootball.com/",
+          "logo": "https://titanfantasyfootball.com/icon-192.png"
+        },
+        "mainEntityOfPage": "https://titanfantasyfootball.com/guides/sleeper-start-sit.html"
+      }
+    ]
+  }
+  </script>
   <meta name="theme-color" content="#f3f6fc">
   <script>
     // White and blue by default; dark when chosen on this device (theme.js), set before anything draws.
@@ -27,22 +78,27 @@
   <link rel="stylesheet" href="/site.css">
 </head>
 <body>
+  <a class="skip" href="#main">Skip to content</a>
   <header class="site-top">
     <div class="site-in">
       <a class="site-brand" href="/"><img src="/icon.svg" alt="" width="30" height="30"><b><span class="long">Titan Fantasy Football Manager</span><span class="short">Titan</span></b></a>
-      <nav class="site-nav" aria-label="Guides">
-        <a href="/guides/import-fantasy-rankings.html">Import rankings</a>
-        <a href="/guides/sleeper-start-sit.html" aria-current="page">Sleeper</a>
-        <a href="/guides/espn-private-league.html">ESPN</a>
+      <nav class="site-nav" aria-label="Site">
+        <a href="/guides/">Guides</a>
+        <a href="/newsletter/">Weekly email</a>
       </nav>
       <button type="button" class="theme-btn" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" fill="currentColor"/></svg><svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       <a class="btn site-cta" href="/app/">Open Titan</a>
+      <details class="site-menu">
+        <summary>Menu</summary>
+        <nav aria-label="Site"><a href="/">Home</a><a href="/guides/">Guides</a><a href="/newsletter/">Weekly email</a><a href="/app/?demo">Try a demo</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a></nav>
+      </details>
     </div>
   </header>
 
-  <main class="site-in guide">
+  <main class="site-in guide" id="main">
     <p class="crumbs"><a href="/">Titan</a> › <a href="/guides/">Guides</a></p>
     <h1>Start/sit help for all your Sleeper leagues</h1>
+    <p class="checked">Last checked September 2026</p>
     <p class="lead">Link your Sleeper username once and Titan checks every lineup you have, in every league, against
       your rankings. No password, and it works for any Sleeper account.</p>
 
@@ -91,16 +147,16 @@
     <p class="note-box">Play on ESPN too? Titan puts <a href="/guides/espn-private-league.html">ESPN leagues</a> right
       alongside your Sleeper ones.</p>
 
-    <div class="nl-box" data-newsletter-box data-hide-joined hidden>
+    <div class="nl-box" data-newsletter-box data-hide-joined>
       <p class="tag">Free every Tuesday</p>
       <h2>Get the Titan Waiver Wire</h2>
       <p>Who to grab before waivers run, who to buy low and who to sell high, from each player's real usage. One free
         email a week. <a href="/newsletter/">What's in each email</a></p>
-      <form class="nl-form" data-newsletter="guide-sleeper-start-sit">
+      <form class="nl-form" data-newsletter="guide-sleeper-start-sit" action="https://app.kit.com/forms/9921118/subscriptions" method="post">
         <label class="sr-only" for="nl-email">Email address</label>
         <input id="nl-email" type="email" name="email_address" required placeholder="you@example.com" autocomplete="email">
         <button class="btn big" type="submit">Get it free</button>
-        <p class="fine nl-note" data-newsletter-note>One email a week during the season. Unsubscribe any time.</p>
+        <p class="fine nl-note" data-newsletter-note aria-live="polite">One email a week during the season. Unsubscribe any time.</p>
       </form>
     </div>
     <div class="guide-cta"><a class="btn big" href="/app/">Open Titan</a><a class="btn ghost big" href="/app/?demo">Try a demo</a></div>
@@ -112,6 +168,7 @@
       <nav class="foot-links" aria-label="More">
         <a href="/">Home</a>
         <a href="/newsletter/">Weekly email</a>
+        <a href="/guides/">Guides</a>
         <a href="/guides/import-fantasy-rankings.html">Rankings guide</a>
         <a href="/guides/espn-private-league.html">ESPN guide</a>
         <a href="/privacy.html">Privacy</a>

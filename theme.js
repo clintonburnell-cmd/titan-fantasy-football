@@ -15,6 +15,7 @@
     if (meta) meta.content = BAR[t];
     document.querySelectorAll('[data-theme-toggle]').forEach(function (b) {
       b.setAttribute('aria-label', label);
+      b.setAttribute('aria-pressed', String(t === 'dark')); // a toggle: pressed means dark is on
       b.title = label;
     });
   }

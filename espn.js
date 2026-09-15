@@ -50,6 +50,12 @@
     return s && s[0] !== '{' ? '{' + s + '}' : s;
   }
 
+  // On Titan's server every read gives up after 20 seconds (the browser's own fetches keep their own limits).
+  function fetchT(url, opts) {
+    var server = typeof window === 'undefined' && typeof AbortSignal !== 'undefined' && AbortSignal.timeout;
+    return fetch(url, Object.assign(server ? {signal: AbortSignal.timeout(20000)} : {}, opts || {}));
+  }
+
   function cookieHeader(creds) {
     return 'espn_s2=' + String(creds.s2 || '').trim() + '; SWID=' + normSwid(creds.swid);
   }
@@ -62,7 +68,7 @@
     var url = BASE + season + '/segments/0/leagues/' + id + '?' + query;
     var browser = typeof window !== 'undefined';
     try {
-      var res = await fetch(url, browser ? {cache: 'no-store', credentials: 'omit'}
+      var res = await fetchT(url, browser ? {cache: 'no-store', credentials: 'omit'}
         : {headers: opts.creds && opts.creds.s2 ? {Cookie: cookieHeader(opts.creds)} : {}});
       if (res.ok) return {json: await res.json()};
       if (res.status === 404) return {error: 'not found'};
@@ -214,7 +220,7 @@
       var headers = i === 0 ? Object.assign({}, filtered) : {};
       if (!browser && opts.creds && opts.creds.s2) headers.Cookie = cookieHeader(opts.creds);
       try {
-        var res = await fetch(url, browser ? {cache: 'no-store', credentials: 'omit', headers: headers} : {headers: headers});
+        var res = await fetchT(url, browser ? {cache: 'no-store', credentials: 'omit', headers: headers} : {headers: headers});
         status = res.status;
         if (!res.ok) break;
         var got = pick(await res.json(), teamId);
@@ -287,7 +293,7 @@
      and the over/under). */
   var SCOREBOARD = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
   async function fetchScoreboard() {
-    var res = await fetch(SCOREBOARD);
+    var res = await fetchT(SCOREBOARD);
     if (!res.ok) throw new Error('ESPN scoreboard answered ' + res.status);
     return scoreboardFrom(await res.json());
   }
@@ -316,7 +322,7 @@
   async function readSchedule(id, season, opts) {
     opts = opts || {};
     var browser = typeof window !== 'undefined';
-    var res = await fetch(BASE + season + '/segments/0/leagues/' + id + '?' + SCHEDULE_VIEWS,
+    var res = await fetchT(BASE + season + '/segments/0/leagues/' + id + '?' + SCHEDULE_VIEWS,
       browser ? {cache: 'no-store', credentials: 'omit'} : {headers: opts.creds && opts.creds.s2 ? {Cookie: cookieHeader(opts.creds)} : {}});
     if (res.ok) return res.json();
     throw new Error(res.status === 401 || res.status === 403 ? 'private' : 'ESPN answered ' + res.status);
@@ -373,7 +379,7 @@
   async function readDraft(id, season, opts) {
     opts = opts || {};
     var browser = typeof window !== 'undefined';
-    var res = await fetch(BASE + season + '/segments/0/leagues/' + id + '?view=mDraftDetail&view=mSettings',
+    var res = await fetchT(BASE + season + '/segments/0/leagues/' + id + '?view=mDraftDetail&view=mSettings',
       browser ? {cache: 'no-store', credentials: 'omit'} : {headers: opts.creds && opts.creds.s2 ? {Cookie: cookieHeader(opts.creds)} : {}});
     if (!res.ok) throw new Error(res.status === 401 || res.status === 403 ? 'private' : 'ESPN answered ' + res.status);
     var json = await res.json(), dd = json.draftDetail || {}, s = json.settings || {};
@@ -385,7 +391,7 @@
     var pool = [];
     if (picks.length) {
       var filter = {'x-fantasy-filter': JSON.stringify({filterIds: {value: picks.map(function (p) { return p.playerId; })}})};
-      var pr = await fetch(BASE + season + '/' + POOL, browser ? {credentials: 'omit', headers: filter} : {headers: filter});
+      var pr = await fetchT(BASE + season + '/' + POOL, browser ? {credentials: 'omit', headers: filter} : {headers: filter});
       if (!pr.ok) throw new Error('ESPN\'s player list answered ' + pr.status);
       pool = ((await pr.json()) || []).map(function (p) {
         return {id: p.id, fullName: p.fullName || '', defaultPositionId: p.defaultPositionId, proTeamId: p.proTeamId};
@@ -433,7 +439,7 @@
   var NEWS = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=50';
   async function fetchNews() {
     var browser = typeof window !== 'undefined';
-    var res = await fetch(NEWS, browser ? {credentials: 'omit', cache: 'no-store'} : {});
+    var res = await fetchT(NEWS, browser ? {credentials: 'omit', cache: 'no-store'} : {});
     if (!res.ok) throw new Error('ESPN news answered ' + res.status);
     return newsFrom(await res.json());
   }
@@ -457,7 +463,7 @@
 
   async function fetchKickoffs(season) {
     var browser = typeof window !== 'undefined';
-    var res = await fetch(BASE + season + '?view=proTeamSchedules_wl', browser ? {credentials: 'omit'} : {});
+    var res = await fetchT(BASE + season + '?view=proTeamSchedules_wl', browser ? {credentials: 'omit'} : {});
     return res.ok ? kickoffsFrom(await res.json()) : null;
   }
 

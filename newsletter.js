@@ -1,10 +1,11 @@
 /* The Titan Waiver Wire, Titan's free weekly email: every signup box (a <form data-newsletter> inside a
-   [data-newsletter-box]) sends the email address to Kit, the newsletter service. Kit's form endpoint takes a plain
-   form post with no key, so this posts it in the background (no-cors: the answer can't be read, so the box says
-   "check your inbox") and Kit sends the confirmation email. Without JavaScript the boxes stay hidden.
-   FORM_ID is Kit's form number (public: it's in every signup form on the web). Until it's set, every box stays
-   hidden, so nothing half-working shows. A device that has joined is remembered (localStorage titan.newsletter):
-   boxes marked data-hide-joined, and the app's cards, stop asking. The UI test sets window.TitanNewsletterForm. */
+   [data-newsletter-box]) sends the email address to Kit, the newsletter service. Each form's own action is Kit's
+   form endpoint, which takes a plain form post with no key, so a signup works even if this file never runs (Kit then
+   shows its own thank-you page). With it running, the post goes in the background instead (no-cors: the answer
+   can't be read, so the box says "check your inbox"), and Kit sends the confirmation email either way.
+   FORM_ID is Kit's form number (public: it's in every signup form on the web). A device that has joined is
+   remembered (localStorage titan.newsletter): boxes marked data-hide-joined, and the app's cards, stop asking.
+   The UI test sets window.TitanNewsletterForm ('' hides every box, so nothing half-working shows). */
 (function () {
   var FORM_ID = '9921118'; // Kit's "Titan Waiver Wire" form (app.kit.com/forms/designers/9921118/edit)
   var KEY = 'titan.newsletter';
@@ -15,7 +16,8 @@
   function joined() { try { return localStorage.getItem(KEY) === 'joined'; } catch (e) { return false; } }
   function remember() { try { localStorage.setItem(KEY, 'joined'); } catch (e) { /* private window: it just asks again */ } }
 
-  // Shows the boxes once there's a form to post to; hides the ones marked data-hide-joined on a device that joined.
+  // The boxes ship visible: this hides them all when there's no form to post to, and the ones marked
+  // data-hide-joined on a device that joined.
   function prep(root) {
     var ready = !!formId(), done = joined();
     (root || document).querySelectorAll('[data-newsletter-box]').forEach(function (box) {
@@ -65,7 +67,7 @@
     d.showModal();
   }
 
-  // Back from Kit's confirmation link or the no-JavaScript post: /newsletter/?joined=1.
+  // Back from Kit's confirmation link, which lands on /newsletter/?joined=1.
   function welcome() {
     if (!/[?&]joined=1\b/.test(location.search)) return;
     remember();

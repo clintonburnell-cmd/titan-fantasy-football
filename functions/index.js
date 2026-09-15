@@ -34,10 +34,45 @@ let warm = null; // the trimmed player list, kept between runs on a warm instanc
 // Sends one alert to many devices (Firebase Cloud Messaging); tests swap it out.
 let sendPush = msg => getMessaging().sendEachForMulticast(msg);
 
+// Every outside read gives up after this long, so one hung connection can't eat the job's whole budget.
+const FETCH_TIMEOUT = 15000;
+const timeout = ms => ({signal: AbortSignal.timeout(ms || FETCH_TIMEOUT)});
+
 async function getJson(url) {
-  const res = await fetch(url);
+  const res = await fetch(url, timeout());
   if (!res.ok) throw new Error(url + ' answered ' + res.status);
   return res.json();
+}
+
+/* A saved ESPN login (espn_s2 and SWID) lives in espnCreds/{uid}, which no browser can read (no rule
+   matches it, so Firestore denies everyone but the server). The app keeps only {swid, savedAt} in
+   users/{uid}/private/espn, to show that a login is saved and find the person's team. Logins saved before
+   2026-09-15 sat in private/espn with the cookie: the first read moves one over and strips it there.
+   Tests swap the store for memory (setCreds). */
+let creds = {
+  get: uid => db.doc('espnCreds/' + uid).get().then(s => s.data() || null),
+  set: (uid, v) => db.doc('espnCreds/' + uid).set(v),
+  del: uid => db.doc('espnCreds/' + uid).delete()
+};
+const ESPN_S2 = /^[^\s;,]{40,2000}$/;
+const ESPN_SWID = /^\{[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\}$/;
+async function espnCredsFor(uid, userRef) {
+  const saved = await creds.get(uid);
+  if (saved && saved.s2) return saved;
+  const shown = userRef.collection('private').doc('espn');
+  const old = (await shown.get()).data();
+  if (!old || !old.s2) return null;
+  const moved = {s2: String(old.s2), swid: ESPN.normSwid(old.swid), savedAt: old.savedAt || Date.now()};
+  await creds.set(uid, moved);
+  await shown.set({swid: moved.swid, savedAt: moved.savedAt});
+  return moved;
+}
+
+// The ESPN leagues a person linked, as the server will read them: a sane number, with ids that are ids.
+const MAX_ESPN_LEAGUES = 25;
+function espnLeaguesOf(account) {
+  const list = account && account.espn && Array.isArray(account.espn.leagues) ? account.espn.leagues : [];
+  return list.filter(l => l && /^\d{1,12}$/.test(String(l.id))).slice(0, MAX_ESPN_LEAGUES);
 }
 
 /* Sleeper's full player list is ~14 MB, so the trimmed copy (~140 KB) is kept
@@ -84,7 +119,8 @@ async function freezeForUser(userRef, account, ctx) {
   const weeks = {};
   rankDocs.forEach(d => { weeks[d.id] = d.get('rows') || []; });
   // A saved ESPN login opens the person's private ESPN leagues.
-  const login = (await userRef.collection('private').doc('espn').get()).data() || null;
+  const login = await espnCredsFor(userRef.id, userRef);
+  if (account && account.espn) account = Object.assign({}, account, {espn: Object.assign({}, account.espn, {leagues: espnLeaguesOf(account)})});
   const snap = await API.collect(account, null, null, {espnCreds: login});
   // The server's refresh skips kickoff times; the FLEX order and the lineup check use them.
   snap.kickoffs = ctx.kickoffs || {};
@@ -96,7 +132,8 @@ async function freezeForUser(userRef, account, ctx) {
     const ref = userRef.collection('history').doc(String(ctx.week));
     const prev = (await ref.get()).data() || null;
     record = SCC.freezeWeek(prev, analysis, ctx.proj, ctx.season, ctx.week);
-    await ref.set(record);
+    // Once every player's game has kicked off the record stops changing: don't rewrite it every 15 minutes.
+    if (JSON.stringify(prev) !== JSON.stringify(record)) await ref.set(record);
   }
   const alerts = await alertUser(userRef, analysis, ctx).catch(e => { logger.warn('could not send one user\'s alerts: ' + e.message); return 0; });
   return {record, alerts};
@@ -111,6 +148,7 @@ async function hasAlerts(userRef) {
 /* A person's new game-day alerts (SCC.alertsFor), sent to every device they
    turned alerts on for. Only this week's sent alerts are remembered. Returns
    how many went out. */
+const MAX_ALERTS_AT_ONCE = 8;
 async function alertUser(userRef, analysis, ctx) {
   const ref = userRef.collection('private').doc('alerts');
   const doc = (await ref.get()).data();
@@ -126,7 +164,8 @@ async function alertUser(userRef, analysis, ctx) {
     want}).concat(want.waivers ? SCC.waiverReminder(analysis.leagues, {week: ctx.week, etDay: ctx.etDay, etHour: ctx.etHour, date: ctx.etDate, sent}) : []);
   // The starters the news check watches until the next alert check (newsAlerts).
   const watch = SCC.newsWatch(analysis);
-  if (list.length) return deliver(ref, list, sent, {watch});
+  // At most a few at once: a bad injury Sunday across many leagues shouldn't bury a phone (the rest wait for the next run).
+  if (list.length) return deliver(ref, list.slice(0, MAX_ALERTS_AT_ONCE), sent, {watch});
   if (JSON.stringify(doc.watch || []) !== JSON.stringify(watch)) {
     const latest = (await ref.get()).data() || {};
     await ref.set(Object.assign({}, latest, {watch}));
@@ -139,7 +178,7 @@ async function alertUser(userRef, analysis, ctx) {
    last check (with half an hour's overlap, since ESPN can post a story a little late)
    and tags a player are people's saved starters (the watch list from their last alert
    check) looked through. Returns how many alerts went out. */
-const NEWS_OVERLAP = 30 * 60000, NEWS_MAX_AGE = 3 * 3600 * 1000;
+const NEWS_OVERLAP = 30 * 60000, NEWS_MAX_AGE = 3 * 3600 * 1000, NEWS_FAILURES_TO_ALARM = 8;
 
 /* Where news alerts read ESPN's stories: Titan's own /api/news first (the News tab's shared,
    cached copy), then ESPN directly. ESPN has turned the game-day job's server away (403)
@@ -166,12 +205,21 @@ async function newsAlerts(week, deps = {}) {
   const meta = (await metaRef.get()).data() || {};
   let stories;
   try { stories = await (deps.fetchNews || newsForAlerts)(); }
-  catch (e) { logger.warn('ESPN news unavailable: ' + e.message); return 0; }
+  catch (e) {
+    // A short outage is normal (ESPN turns the server away now and then); two hours of them isn't, and the
+    // "Titan server problems" alert matches "could not".
+    const failures = (meta.failures || 0) + 1;
+    await metaRef.set(Object.assign({}, meta, {failures}));
+    if (failures >= NEWS_FAILURES_TO_ALARM) logger.error(`news alerts could not run for ${failures} checks in a row: ` + e.message);
+    else logger.warn('ESPN news unavailable: ' + e.message);
+    return 0;
+  }
   const since = Math.max((meta.checkedAt || 0) - NEWS_OVERLAP, now - NEWS_MAX_AGE);
-  await metaRef.set({checkedAt: now});
+  await metaRef.set({checkedAt: now, failures: 0});
   const fresh = stories.filter(s => s.at > since && s.athletes.length);
   if (!fresh.length) return 0;
-  const docs = deps.userDocs ? await deps.userDocs() : (await db.collection('users').get()).docs;
+  // Only people with alerts on (users/{uid}.alertsOn, kept by the app and by deliver).
+  const docs = deps.userDocs ? await deps.userDocs() : (await db.collection('users').where('alertsOn', '==', true).get()).docs;
   let n = 0;
   for (const u of docs) {
     const ref = u.ref.collection('private').doc('alerts');
@@ -209,10 +257,15 @@ async function deliver(ref, list, sent, extra) {
   const keep = {};
   for (const t in latest.tokens || {}) if (!dead.has(t)) keep[t] = latest.tokens[t];
   await ref.set(Object.assign({}, latest, extra || {}, {tokens: keep, sent}));
+  // The user document mirrors whether any device is left (users/{uid}.alertsOn), which the job queries on.
+  if (!Object.keys(keep).length && ref.parent && ref.parent.parent) {
+    await ref.parent.parent.set({alertsOn: false}, {merge: true}).catch(e => logger.warn('could not note alerts off: ' + e.message));
+  }
   return n;
 }
 
 async function run() {
+  const startedAt = Date.now();
   const state = await getJson(SLEEPER + '/v1/state/nfl');
   const season = String(state.season);
   const week = Number(state.week);
@@ -229,7 +282,7 @@ async function run() {
   const games = sched.filter(g => Number(g.week) === week);
   // The rankings lab's FantasyCalc snapshot for the week, the first run that finds none (every run, every day).
   const begun = games.some(g => g.status === 'in_game' || g.status === 'complete');
-  await labSnapshot(season, week, Date.now(), {late: begun}).catch(e => logger.warn('rankings lab snapshot failed: ' + e.message));
+  await labSnapshot(season, week, Date.now(), {late: begun}).catch(e => logger.warn('could not save the rankings lab snapshot: ' + e.message));
   const today = new Date().toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
   const et = new Date(new Date().toLocaleString('en-US', {timeZone: 'America/New_York'}));
   const gameDay = games.some(g => g.date === today || g.status === 'in_game');
@@ -246,28 +299,40 @@ async function run() {
   // The day and hour in Eastern time, for the waiver reminder (8 PM the evening before waivers run).
   const ctx = {season, week, proj, players, kickoffs, freeze: gameDay, etDay: et.getDay(), etHour: et.getHours(), etDate: today};
 
-  const users = await db.collection('users').get();
-  let done = 0, failed = 0, sent = 0;
-  for (const u of users.docs) {
+  // Away from game days only the alerts run, so only for people who turned them on (users/{uid}.alertsOn).
+  const users = gameDay ? await db.collection('users').get() : await db.collection('users').where('alertsOn', '==', true).get();
+  let done = 0, failed = 0, sent = 0, dormant = 0, left = 0;
+  const queue = users.docs.filter(u => {
     const account = u.get('account');
-    const espnLeagues = account && account.espn && account.espn.leagues;
-    if (!account || !(account.userId || (espnLeagues && espnLeagues.length))) continue;
-    // Away from game days only the alerts run, so only for people who turned them on.
-    if (!gameDay && !(await hasAlerts(u.ref))) continue;
-    try { const r = await freezeForUser(u.ref, account, ctx); done++; sent += r.alerts; }
-    catch (e) { failed++; logger.warn('could not check one user: ' + e.message); }
+    if (!account || !(account.userId || espnLeaguesOf(account).length)) return false;
+    // Someone who hasn't opened Titan in a while is left alone until they do, unless they have alerts on.
+    const seen = Number(u.get('lastSeen')) || 0;
+    if (gameDay && !u.get('alertsOn') && seen && Date.now() - seen > DORMANT_AFTER) { dormant++; return false; }
+    return true;
+  });
+  // A few people at a time, and a stop well before the function's own limit: the rest are named in the log
+  // (the "Titan server problems" alert matches "could not") rather than silently dropped.
+  for (let i = 0; i < queue.length; i += USERS_AT_ONCE) {
+    if (Date.now() - startedAt > JOB_BUDGET) { left = queue.length - i; break; }
+    const results = await Promise.allSettled(queue.slice(i, i + USERS_AT_ONCE).map(u => freezeForUser(u.ref, u.get('account'), ctx)));
+    results.forEach(r => {
+      if (r.status === 'fulfilled') { done++; sent += r.value.alerts; }
+      else { failed++; logger.warn('could not check one user: ' + (r.reason && r.reason.message ? r.reason.message : r.reason)); }
+    });
   }
+  if (left) logger.error(`the game-day job could not finish in time: ${left} of ${queue.length} people were not checked`);
   const what = gameDay ? 'saved calls for' : 'checked alerts for';
-  logger.info(`week ${week}: ${what} ${done} user(s), ${sent} alert(s) and ${news} news alert(s) sent, ${failed} failed`);
+  logger.info(`week ${week}: ${what} ${done} user(s), ${sent} alert(s) and ${news} news alert(s) sent, ${failed} failed, ${dormant} dormant skipped`);
   return `week ${week}: ${what} ${done}, ${sent} alerts, ${news} news, ${failed} failed`;
 }
+const USERS_AT_ONCE = 8, JOB_BUDGET = 450 * 1000, DORMANT_AFTER = 45 * 24 * 3600 * 1000;
 
 exports.freezeCalls = onSchedule({
   schedule: 'every 15 minutes',
   timeZone: 'America/New_York',
   region: 'us-central1',
   memory: '1GiB',
-  timeoutSeconds: 300,
+  timeoutSeconds: 540,
   maxInstances: 1
 }, run);
 
@@ -282,7 +347,7 @@ exports.espnLeague = onCall({region: 'us-central1', memory: '256MiB', maxInstanc
       ((points || matchup) && (!/^\d{1,2}$/.test(String(week)) || !/^\d{1,3}$/.test(String(teamId))))) {
     throw new HttpsError('invalid-argument', 'Not an ESPN league.');
   }
-  const login = (await db.doc(`users/${req.auth.uid}/private/espn`).get()).data();
+  const login = await espnCredsFor(req.auth.uid, db.doc('users/' + req.auth.uid));
   if (!login || !login.s2) throw new HttpsError('failed-precondition', 'No ESPN login saved.');
   // The season's schedule and scores (the Standings tab).
   if (kind === 'schedule') {
@@ -306,6 +371,43 @@ exports.espnLeague = onCall({region: 'us-central1', memory: '256MiB', maxInstanc
   if (r.error === 'private') throw new HttpsError('permission-denied', 'private');
   if (r.error) throw new HttpsError('unavailable', r.error);
   return ESPN.slimLeague(r.json);
+});
+
+/* Saves (or removes) a person's ESPN login where only the server can read it (espnCreds/{uid}), and
+   notes in their own area that one is saved (private/espn: the SWID and when). */
+exports.espnLogin = onCall({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 30}, async req => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
+  const uid = req.auth.uid, d = req.data || {}, shown = db.doc(`users/${uid}/private/espn`);
+  if (d.remove) {
+    await Promise.all([creds.del(uid).catch(() => {}), shown.delete().catch(() => {})]);
+    return {saved: false};
+  }
+  const s2 = String(d.s2 || '').trim(), swid = ESPN.normSwid(d.swid);
+  if (!ESPN_S2.test(s2) || !ESPN_SWID.test(swid)) {
+    throw new HttpsError('invalid-argument', 'That doesn\'t look like an ESPN login. Paste espn_s2 and SWID exactly as the browser shows them.');
+  }
+  const savedAt = Date.now();
+  await creds.set(uid, {s2, swid, savedAt});
+  await shown.set({swid, savedAt});
+  return {saved: true, swid, savedAt};
+});
+
+/* Deletes everything Titan holds for a person, then their sign-in: their whole users/{uid} area (every
+   subcollection), the ESPN login, Yahoo's tokens and any half-finished Yahoo sign-in. Done here rather
+   than in the browser so a lost connection halfway can't leave the login or push addresses behind, and
+   so a retry finishes the job. Like Google's own deleteUser, it wants a recent sign-in. */
+const RECENT_LOGIN = 5 * 60;
+exports.deleteMyAccount = onCall({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 120}, async req => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
+  const uid = req.auth.uid, authAt = Number(req.auth.token.auth_time) || 0;
+  if (Date.now() / 1000 - authAt > RECENT_LOGIN) throw new HttpsError('failed-precondition', 'recent-login');
+  await db.recursiveDelete(db.doc('users/' + uid));
+  await Promise.all([db.doc('yahooTokens/' + uid).delete(), db.doc('espnCreds/' + uid).delete()]);
+  const states = await db.collection('yahooStates').where('uid', '==', uid).get();
+  await Promise.all(states.docs.map(s => s.ref.delete()));
+  await getAuth().deleteUser(uid).catch(e => { if (e.code !== 'auth/user-not-found') throw e; });
+  logger.info('an account was deleted');
+  return {deleted: true};
 });
 
 /* Totals for Titan's owner (the one account with the titanOwner custom
@@ -574,9 +676,19 @@ async function tradeValues(f, doc, now = Date.now(), get = getJson) {
   return out;
 }
 
+/* The public /api addresses answer plain GETs with the parameters they know and nothing else. Firebase
+   Hosting's CDN keys its cache on the whole address, so a made-up parameter would reach the function every
+   time: those are refused for 400 instead. */
+function plainGet(req, res, allowed) {
+  const extra = Object.keys(req.query || {}).filter(k => !allowed.includes(k));
+  if (req.method !== 'GET' || extra.length) { res.status(400).json({error: 'Not a Titan request.'}); return false; }
+  return true;
+}
+
 exports.tradeValues = onRequest({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 30, invoker: 'public'}, async (req, res) => {
+  if (!plainGet(req, res, ['dynasty', 'qbs', 'teams', 'ppr'])) return;
   const f = valuesFormat(req.query);
-  if (req.method !== 'GET' || !f) { res.status(400).json({error: 'Not a league format.'}); return; }
+  if (!f) { res.status(400).json({error: 'Not a league format.'}); return; }
   try {
     const out = await tradeValues(f, db.doc('tradeValues/' + valuesKey(f)));
     // Browsers and Firebase Hosting's CDN keep it for an hour, so most visits never reach this function.
@@ -662,6 +774,7 @@ async function latestNews(now = Date.now(), fetchNews = () => ESPN.fetchNews(), 
 }
 
 exports.espnNews = onRequest({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 20, invoker: 'public'}, async (req, res) => {
+  if (!plainGet(req, res, [])) return;
   try {
     const out = await latestNews();
     res.set('Cache-Control', 'public, max-age=60, s-maxage=120');
@@ -699,6 +812,7 @@ async function latestScores(now = Date.now(), read = () => ESPN.fetchScoreboard(
 }
 
 exports.nflScores = onRequest({region: 'us-central1', memory: '256MiB', maxInstances: 5, timeoutSeconds: 20, invoker: 'public'}, async (req, res) => {
+  if (!plainGet(req, res, [])) return;
   try {
     const out = await latestScores();
     res.set('Cache-Control', 'public, max-age=15, s-maxage=20');
@@ -733,7 +847,7 @@ let contextCache = null, dvpCache = null;
 const hourlyAt = {}; // each stadium's hourly-forecast address, which doesn't change
 
 async function nwsJson(url) {
-  const res = await fetch(url, {headers: NWS_HEADERS});
+  const res = await fetch(url, Object.assign({headers: NWS_HEADERS}, timeout()));
   if (!res.ok) throw new Error('NWS answered ' + res.status);
   return res.json();
 }
@@ -752,7 +866,7 @@ async function kickoffWeather(team, at, get = nwsJson) {
 }
 
 async function csvGz(url) {
-  const res = await fetch(url);
+  const res = await fetch(url, timeout(60000)); // a season's stats, a few MB
   if (!res.ok) throw new Error(url + ' answered ' + res.status);
   return zlib.gunzipSync(Buffer.from(await res.arrayBuffer())).toString('utf8');
 }
@@ -801,6 +915,7 @@ async function buildContext(now = Date.now(), deps = {}) {
 }
 
 exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInstances: 3, timeoutSeconds: 120, invoker: 'public'}, async (req, res) => {
+  if (!plainGet(req, res, [])) return;
   try {
     const out = await buildContext();
     res.set('Cache-Control', 'public, max-age=900, s-maxage=1800');
@@ -814,5 +929,6 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
 exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
   yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll, latestScores, newsForAlerts, labSnapshot, formatFromKey,
   setSend: fn => { sendPush = fn; },
+  setCreds: store => { creds = store; }, espnCredsFor, espnLeaguesOf, plainGet,
   // A new server instance: nothing in memory, nothing saved from it yet.
   freshInstance: () => { newsCache = scoresCache = contextCache = null; Object.keys(copies).forEach(k => delete copies[k]); }};

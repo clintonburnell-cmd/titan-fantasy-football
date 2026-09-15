@@ -22,6 +22,7 @@ const API = require(path.join(FN, 'shared', 'sleeper.js'));
 // users/{uid} with its ranks, history and private collections, in memory.
 function fakeUser(db) {
   return {
+    id: db.uid || 'test-uid',
     collection: name => ({
       get: async () => ({forEach: cb => Object.entries(db[name]).forEach(([id, data]) => cb({id, get: k => data[k]}))}),
       doc: id => ({
@@ -80,6 +81,12 @@ function fakeUser(db) {
     `the cached player list round-trips gzipped (${Math.round(gz.length / 1024)} KB, Firestore allows 1 MB)`);
 
   section('one account, one week');
+  // The server-only store for ESPN logins (espnCreds/{uid}), in memory.
+  const credsStore = {};
+  job.setCreds({get: async uid => credsStore[uid] || null, set: async (uid, v) => { credsStore[uid] = v; }, del: async uid => { delete credsStore[uid]; }});
+  check(job.espnLeaguesOf({espn: {leagues: [{id: '123'}, {id: '../x'}, {id: 456}, {}].concat(Array.from({length: 40}, (_, i) => ({id: String(1000 + i)})))}}).length === 25 &&
+    job.espnLeaguesOf({espn: {leagues: [{id: '../x'}]}}).length === 0 && job.espnLeaguesOf(null).length === 0,
+    'the server reads at most 25 ESPN leagues per person, only ones with real ids');
   const sawCookie = [];
   const undo = T.stubEspn({
     99999901: L1,
@@ -107,6 +114,15 @@ function fakeUser(db) {
   const lg = rec && rec.leagues['espn:99999901'];
   check(rec && Object.keys(rec.leagues).length === 2, 'with the saved login, the private league is saved too');
   check(sawCookie.some(c => /espn_s2=test-s2; SWID=\{00000001-AAAA/.test(c)), 'the login went to ESPN as a cookie, SWID in braces');
+  check(credsStore['test-uid'] && credsStore['test-uid'].s2 === 'test-s2' && db.private.espn.s2 === undefined && db.private.espn.swid === '{00000001-AAAA-4BBB-8CCC-DDDDDDDDDDDD}',
+    'a login saved the old way moved to the server-only store, and the cookie left the person\'s own area');
+  const moved = {uid: 'moved', ranks: {}, history: {}, private: {espn: {swid: '{00000001-AAAA-4BBB-8CCC-DDDDDDDDDDDD}', savedAt: 1}}};
+  credsStore.moved = {s2: 'test-s2', swid: '{00000001-AAAA-4BBB-8CCC-DDDDDDDDDDDD}', savedAt: 1};
+  check((await job.espnCredsFor('moved', fakeUser(moved))).s2 === 'test-s2' && (await job.espnCredsFor('nobody', fakeUser({private: {}}))) === null,
+    'the server-only store is read first; with nothing saved anywhere, there is no login');
+  const q = (query, method = 'GET') => { let code = 200; job.plainGet({method, query}, {status: c => { code = c; return {json: () => {}}; }}, ['dynasty']); return code; };
+  check(q({dynasty: '1'}) === 200 && q({}) === 200 && q({dynasty: '1', cb: '2'}) === 400 && q({dynasty: '1'}, 'POST') === 400,
+    'the public /api addresses refuse made-up parameters and anything but GET, so they can\'t be used to skip the CDN');
   check(lg && Object.keys(lg.players).length === 16 && Object.values(lg.players).some(p => p.proj !== null),
     `16 players saved with ranks, calls and projections (${Object.values(lg.players).filter(p => p.proj !== null).length} projected)`);
   check(JSON.stringify(rec).indexOf('undefined') < 0, 'no undefined values (Firestore rejects them)');
@@ -270,7 +286,12 @@ function fakeUser(db) {
 
   const pid = Object.keys(lg.players)[0], wasLocked = lg.players[pid].locked;
   db.history['1'].leagues['espn:99999901'].players[pid].rank = -7;
-  await job.freezeForUser(fakeUser(db), account, ctx);
+  const beforeAgain = JSON.stringify(db.history['1']);
+  let historyWrites = 0;
+  const counting = fakeUser(db), plainHistory = counting.collection('history');
+  counting.collection = name => name === 'history' ? {doc: id => Object.assign(plainHistory.doc(id), {set: async v => { historyWrites++; db.history[id] = JSON.parse(JSON.stringify(v)); }})} : fakeUser(db).collection(name);
+  await job.freezeForUser(counting, account, ctx);
+  check(historyWrites === (JSON.stringify(db.history['1']) === beforeAgain ? 0 : 1), 'the week\'s record is written only when something in it changed');
   const again = db.history['1'].leagues['espn:99999901'].players[pid];
   check(wasLocked ? again.rank === -7 : again.rank !== -7,
     wasLocked ? 'a player whose game has started keeps his saved entry' : 'a player whose game hasn\'t started is updated');

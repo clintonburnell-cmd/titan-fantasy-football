@@ -11,7 +11,7 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect,
-  getRedirectResult, signOut, deleteUser, reauthenticateWithPopup
+  getRedirectResult, signOut, reauthenticateWithPopup
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   initializeFirestore, doc, getDoc, setDoc, deleteDoc, deleteField, collection, getDocs, onSnapshot
@@ -44,11 +44,14 @@ provider.setCustomParameters({prompt: 'select_account'});
 
 const userDoc = uid => doc(db, 'users', uid);
 const weekDoc = (uid, w) => doc(db, 'users', uid, 'ranks', String(w));
-// The person's ESPN login (espn_s2 and SWID), for private ESPN leagues. Owner-only
-// like everything under users/{uid}; only Titan's server reads the cookie back.
+// That a person saved an ESPN login (the SWID and when), for private ESPN leagues. The login itself
+// (espn_s2) is kept by Titan's server where no browser can read it (functions/index.js, espnCreds).
 const espnDoc = uid => doc(db, 'users', uid, 'private', 'espn');
+const saveEspnLoginOnServer = httpsCallable(getFunctions(app, 'us-central1'), 'espnLogin');
 // Private ESPN leagues are read by Titan's server with that login (functions/index.js).
 const readEspnLeague = httpsCallable(getFunctions(app, 'us-central1'), 'espnLeague');
+// "Delete my Titan account": the server removes everything, then the sign-in.
+const deleteMyAccount = httpsCallable(getFunctions(app, 'us-central1'), 'deleteMyAccount');
 // Totals for Titan's owner only; the server refuses everyone else.
 const readOwnerStats = httpsCallable(getFunctions(app, 'us-central1'), 'ownerStats');
 // "Send a test alert": the server sends one alert to this device.
@@ -97,7 +100,8 @@ async function reconcile(uid) {
   const remoteAccount = snap.exists() ? snap.data().account || null : null;
   const act = Plan.accountAction(App.local().account, remoteAccount);
   if (act === 'pull') App.applyAccount(remoteAccount);
-  else if (act === 'push') await setDoc(userDoc(uid), {account: App.local().account}, {merge: true});
+  // lastSeen: the server job leaves an account alone after 45 days without a visit (unless alerts are on).
+  await setDoc(userDoc(uid), Object.assign({lastSeen: Date.now()}, act === 'push' ? {account: App.local().account} : {}), {merge: true});
 
   const remote = {};
   (await getDocs(collection(db, 'users', uid, 'ranks'))).forEach(d => { remote[d.id] = d.data(); });
@@ -172,13 +176,19 @@ const api = {
     }
     const token = await getToken(getMessaging(app), {serviceWorkerRegistration: await navigator.serviceWorker.ready});
     await setDoc(alertsDoc(u.uid), {tokens: {[token]: {at: Date.now()}}, prefs}, {merge: true});
+    await setDoc(userDoc(u.uid), {alertsOn: true}, {merge: true}); // what the server job queries on
     keepToken(token);
     App.setAlerts(await alertsState(u.uid));
   },
 
   async alertsOff() {
     const u = auth.currentUser, t = localToken();
-    if (u && t) await setDoc(alertsDoc(u.uid), {tokens: {[t]: deleteField()}}, {merge: true});
+    if (u && t) {
+      await setDoc(alertsDoc(u.uid), {tokens: {[t]: deleteField()}}, {merge: true});
+      const rest = await getDoc(alertsDoc(u.uid)).catch(() => null);
+      const devices = rest && rest.exists() ? Object.keys(rest.data().tokens || {}).length : 0;
+      await setDoc(userDoc(u.uid), {alertsOn: devices > 0}, {merge: true});
+    }
     try { await deleteToken(getMessaging(app)); } catch (e) { /* no push address on this device */ }
     keepToken('');
     if (u) App.setAlerts(await alertsState(u.uid));
@@ -238,15 +248,14 @@ const api = {
     return s.exists() ? s.data() : null;
   },
 
+  // The login goes to Titan's server, which keeps it where no browser can read it.
   async saveEspnLogin(creds) {
-    const u = auth.currentUser;
-    if (!u) throw new Error('Sign in first.');
-    await setDoc(espnDoc(u.uid), {s2: String(creds.s2 || '').trim(), swid: ESPN.normSwid(creds.swid), savedAt: Date.now()});
+    if (!auth.currentUser) throw new Error('Sign in first.');
+    await saveEspnLoginOnServer({s2: String(creds.s2 || '').trim(), swid: String(creds.swid || '')});
   },
 
   async deleteEspnLogin() {
-    const u = auth.currentUser;
-    if (u) await deleteDoc(espnDoc(u.uid));
+    if (auth.currentUser) await saveEspnLoginOnServer({remove: true});
   },
 
   /* "Sign in with Yahoo": the server makes a one-time sign-in address, and
@@ -264,30 +273,25 @@ const api = {
     return unlinkYahoo().then(r => r.data);
   },
 
-  /* Removes everything Titan stores for this person, then the sign-in itself.
-     Google asks for a fresh sign-in first if the last one was a while ago. */
+  /* Removes everything Titan stores for this person, then the sign-in itself: Titan's server does it in
+     one go (deleteMyAccount), so a lost connection halfway can't leave anything behind. The server wants
+     a sign-in from the last few minutes, like Google's own account deletion. */
   async deleteAccount() {
     const u = auth.currentUser;
     if (!u) return;
     stopListening();
-    // Yahoo's tokens live outside users/{uid}, where only the server reaches.
-    await unlinkYahoo().catch(() => {});
-    for (const sub of ['ranks', 'history', 'private']) {
-      const docs = await getDocs(collection(db, 'users', u.uid, sub));
-      await Promise.all(docs.docs.map(d => deleteDoc(d.ref)));
-    }
-    await deleteDoc(userDoc(u.uid));
     try { await deleteToken(getMessaging(app)); } catch (e) { /* no push address on this device */ }
     keepToken('');
     try {
-      await deleteUser(u);
+      await deleteMyAccount();
     } catch (e) {
-      if (e.code !== 'auth/requires-recent-login') throw e;
+      if (!/recent-login/.test(String((e && e.message) || ''))) throw e;
       // No popup there either; a fresh sign-in does the same job.
       if (navigator.standalone === true) throw new Error('For security, sign out and sign back in, then delete your account.');
       await reauthenticateWithPopup(u, provider);
-      await deleteUser(u);
+      await deleteMyAccount();
     }
+    await signOut(auth).catch(() => {});
   }
 };
 
@@ -306,9 +310,13 @@ onAuthStateChanged(auth, user => {
   }
   if (ESPN) ESPN.setTransport(args => readEspnLeague(args).then(r => r.data));
   if (YAHOO) YAHOO.setTransport(args => readYahooLeague(args).then(r => r.data));
-  // The app only learns whether a login is saved, and the SWID (to find the person's team).
-  getDoc(espnDoc(user.uid)).then(s => App.setEspnLogin(s.exists() ? {saved: true, swid: s.data().swid, savedAt: s.data().savedAt} : null))
-    .catch(() => App.setEspnLogin(null));
+  // The app only learns whether a login is saved, and the SWID (to find the person's team). A login saved
+  // before 2026-09-15 still holds the cookie here: it goes to the server, which keeps it and strips it here.
+  getDoc(espnDoc(user.uid)).then(async s => {
+    const d = s.exists() ? s.data() : null;
+    if (d && d.s2) await saveEspnLoginOnServer({s2: d.s2, swid: d.swid}).catch(() => {});
+    App.setEspnLogin(d ? {saved: true, swid: d.swid, savedAt: d.savedAt} : null);
+  }).catch(() => App.setEspnLogin(null));
   App.setSync({user: {name: user.displayName || '', email: user.email || '', photo: user.photoURL || ''}});
   // Titan's owner (a custom claim on that one account) gets the stats card in Settings.
   user.getIdTokenResult(true).then(t => App.setOwner(t.claims.titanOwner === true)).catch(() => App.setOwner(false));

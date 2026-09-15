@@ -1,10 +1,22 @@
 {
   "indexes": [],
   "fieldOverrides": [
-    {
-      "collectionGroup": "history",
-      "fieldPath": "leagues",
-      "indexes": []
-    }
+    {"collectionGroup": "history", "fieldPath": "leagues", "indexes": []},
+    {"collectionGroup": "history", "fieldPath": "weeks", "indexes": []},
+    {"collectionGroup": "ranks", "fieldPath": "rows", "indexes": []},
+    {"collectionGroup": "ranks", "fieldPath": "multi", "indexes": []},
+    {"collectionGroup": "tradeValues", "fieldPath": "values", "indexes": []},
+    {"collectionGroup": "lab", "fieldPath": "formats", "indexes": []},
+    {"collectionGroup": "lab", "fieldPath": "json", "indexes": []},
+    {"collectionGroup": "public", "fieldPath": "html", "indexes": []},
+    {"collectionGroup": "meta", "fieldPath": "gz", "indexes": []},
+    {"collectionGroup": "meta", "fieldPath": "teams", "indexes": []},
+    {"collectionGroup": "meta", "fieldPath": "stories", "indexes": []},
+    {"collectionGroup": "meta", "fieldPath": "games", "indexes": []},
+    {"collectionGroup": "private", "fieldPath": "tokens", "indexes": []},
+    {"collectionGroup": "private", "fieldPath": "sent", "indexes": []},
+    {"collectionGroup": "private", "fieldPath": "watch", "indexes": []},
+    {"collectionGroup": "private", "fieldPath": "prefs", "indexes": []},
+    {"collectionGroup": "users", "fieldPath": "account", "indexes": []}
   ]
 }

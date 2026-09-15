@@ -239,8 +239,9 @@ app page. Screens show placeholder cards while they load.
 - **ESPN** (`lm-api-reads.fantasy.espn.com`, the JSON ESPN's own site reads; not a
   documented API): public leagues are read from the device. Private leagues need the
   member's `espn_s2` and `SWID` cookies, which a browser can't send to ESPN, so the
-  person saves them to `users/{uid}/private/espn` and the `espnLeague` callable
-  function reads the league with them and returns a slimmed copy.
+  person saves them through the `espnLogin` callable function, which keeps them in
+  `espnCreds/{uid}` where no browser can read them, and the `espnLeague` callable
+  reads the league with them and returns a slimmed copy.
 
 See `privacy.html`.
 
@@ -382,6 +383,7 @@ No build step and no dependencies. It runs on any static host.
 | `v1.19.1` | The Players dot works like a notification: it marks waiver pickups you haven't seen on Waivers yet, clears once you open Waivers, and comes back only for a new pickup (remembered on each device) |
 | `v1.19.2` | Trade tab: both rosters sort by value, by position, or by position then value (with position headers when grouped, remembered), and every player shows Titan's colored position tag on the rosters, in the trade and in Who has him? |
 | `v1.19.3` | Position strength: every team's rank at each position by its best lineup this season (Sleeper's projections, a little credit for bench depth), shown on Standings with the top third green and the bottom third red, and on the Trade tab as "Where you both stand" for you and your partner, with the good fits called out; the Trade tab also gets Clear all and a partner picker on the partner's roster card |
+| `v1.35.0` | The security release from the 2026-09-15 site review. Server: a saved ESPN login moves to `espnCreds/{uid}`, where no browser can read it (logins saved before are moved on first read); account deletion runs on the server in one go (`deleteMyAccount`); every outside read has a timeout; the game-day job works eight people at a time inside a 450-second budget and names anyone it couldn't reach, reads only accounts with alerts on away from game days, skips accounts unseen for 45 days, writes a week's record only when it changed, caps alerts and ESPN leagues per person; the public `/api` addresses refuse made-up parameters. Firestore rules are explicit per path, big fields are exempt from indexing, and every response carries security headers. Website: signup boxes work without JavaScript and hide only on a joined device; a Menu on phones; Guides and Weekly email in every header; privacy and terms on the site template with rights, retention, governing law and the weekly email; breadcrumb and article data on the guides with a "last checked" date; a skip link and reduced-motion guard; a custom 404 page; the title leads with the keyword and no longer promises Yahoo; "No ads, no ad tracking" |
 | `v1.34.1` | On an Android phone (and Titan's Play app), Open in Sleeper and the trade's Copy and open ask the Sleeper app for the league's team page first, with the web page as the fallback; Sleeper's iPhone app takes only chat links, so iPhones and computers keep the web page |
 | `v1.34.0` | Lineups leads with what each lineup should look like: the recommended lineup (NEW where it differs), then yours and the recommended one side by side, spot by spot, the differences highlighted; one line when they already match. The step list stays above |
 | `v1.33.3` | A pop-up after every newsletter signup, on the website and in the app: "Subscription successful. Check your email to finish", with the spam-folder reminder and an OK button |

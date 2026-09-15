@@ -2,9 +2,13 @@
    This page loads styles.css too, for the same colours, type and the sample
    lineup's look, and adds the website's own layout here. */
 
-html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 .site-in { max-width: 1120px; margin-inline: auto; padding-inline: 20px; }
 .hero, .site-sec { scroll-margin-top: 64px; }
+/* Skip to content: the first link on every page, shown only when it has keyboard focus. */
+.skip { position: absolute; left: -9999px; top: 0; z-index: 100; padding: 10px 14px; border-radius: 0 0 10px 0;
+  background: var(--accent); color: #fff; font-weight: 700; text-decoration: none; }
+.skip:focus { left: 0; outline: 2px solid var(--text); outline-offset: 2px; }
 
 /* ---------------------------------------------------------------- header */
 
@@ -18,13 +22,25 @@ html { scroll-behavior: smooth; }
 .site-top .site-in { display: flex; align-items: center; gap: 22px; padding-block: 16px; }
 .site-brand { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--text); text-decoration: none; }
 .site-brand b { font-weight: 800; letter-spacing: -.01em; white-space: nowrap; }
-.site-nav { display: flex; gap: 24px; margin-left: auto; }
+.site-nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 22px; margin-left: auto; }
 .site-nav a { color: var(--muted); text-decoration: none; font-size: .9rem; font-weight: 600; }
 .site-nav a:hover { color: var(--text); }
 .site-cta { flex: none; }
+/* On a phone the links move into a Menu button (a <details>), so every page still has a way around the site. */
+.site-menu { display: none; position: relative; flex: none; }
+.site-menu summary { list-style: none; cursor: pointer; border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px;
+  font-size: .86rem; font-weight: 700; color: var(--text); background: var(--surface); }
+.site-menu summary::-webkit-details-marker { display: none; }
+.site-menu[open] summary { background: var(--surface-2); }
+.site-menu nav { position: absolute; right: 0; top: calc(100% + 8px); min-width: 12rem; display: grid; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 14px 40px var(--drop); padding: 6px; z-index: 20; }
+.site-menu nav a { color: var(--text); text-decoration: none; font-weight: 600; padding: 10px 12px; border-radius: 8px; }
+.site-menu nav a:hover, .site-menu nav a:focus { background: var(--surface-2); }
 @media (max-width: 760px) {
   .site-nav { display: none; }
   .site-cta { margin-left: auto; }
+  .site-menu { display: block; }
+  .site-top .site-in { gap: 10px; }
 }
 .site-brand .short { display: none; }
 @media (max-width: 480px) {
@@ -68,7 +84,11 @@ html { scroll-behavior: smooth; }
 .hero .fine, .cta-band .fine { color: var(--faint); font-size: .84rem; }
 .demo { box-shadow: 0 30px 80px var(--drop); border-radius: var(--radius); }
 .demo .card { pointer-events: none; }
+.demo-fig { margin: 0; }
 .demo-label { color: var(--faint); font-size: .74rem; text-align: right; margin-top: 10px; }
+/* The sample lineup's labels are plain text, not headings (the page's outline stays about the page), drawn like the app's. */
+.demo .card-title { font-size: .98rem; font-weight: 700; }
+.demo .moves-title { color: var(--swap); font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 @media (max-width: 900px) {
   .hero { padding-block: 40px 0; }
   .hero-in { grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -101,8 +121,8 @@ html { scroll-behavior: smooth; }
 .steps b { display: block; margin-top: 7px; }
 .steps span { color: var(--muted); font-size: .94rem; }
 
-.formats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
-.formats span { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: .82rem; }
+.formats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; list-style: none; padding: 0; }
+.formats li { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; font-size: .82rem; }
 
 .flow { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
 .flow h3 { color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
@@ -148,6 +168,8 @@ html { scroll-behavior: smooth; }
 .guide p a, .guide li a, .guide .crumbs a { text-decoration: underline; text-underline-offset: 2px; }
 .guide h1 { font-size: clamp(1.8rem, 4.2vw, 2.6rem); line-height: 1.12; letter-spacing: -.02em; font-weight: 850; }
 .guide .lead { color: var(--muted); font-size: 1.1rem; margin-top: 14px; }
+.guide .checked { color: var(--faint); font-size: .84rem; margin-top: 10px; }
+.guide .checked + .lead { margin-top: 10px; }
 .guide h2 { font-size: 1.3rem; margin-top: 38px; letter-spacing: -.01em; }
 .guide p, .guide li { color: var(--muted); font-size: 1rem; line-height: 1.65; }
 .guide p { margin-top: 12px; }
@@ -167,7 +189,7 @@ html { scroll-behavior: smooth; }
 
 /* ------------------------------------------------- the weekly waiver guide */
 
-/* Signup boxes for the Titan Waiver Wire (newsletter.js posts them to Kit; hidden until it's set up). */
+/* Signup boxes for the Titan Waiver Wire (each form posts to Kit on its own; newsletter.js takes over when it runs). */
 .nl-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; max-width: 34em; }
 .nl-form input[type="email"] { flex: 1 1 14em; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px;
   background: var(--surface); color: var(--text); font: inherit; font-size: 1rem; }
