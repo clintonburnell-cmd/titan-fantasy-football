@@ -1188,6 +1188,16 @@
      gets his team's game day and opponent (none on bye); and only injury tags that outlast a game (IR,
      PUP, suspended and the like) still bench him, since today's Out or Doubtful is about this week.
      The snapshot itself is left as it was. */
+  /* A Sleeper league's team page, where its lineup is set. On an Android phone it's an intent: the Sleeper app
+     (com.sleeperbot) opens it if the app takes league links, and Chrome loads the web page itself if not (or if the
+     app isn't installed), so it's never worse than the plain link. Sleeper's iPhone app takes only chat links (its
+     apple-app-site-association, checked 2026-09-15), so everywhere else it's the web page. */
+  function sleeperTeamUrl(id, android) {
+    var path = 'sleeper.com/leagues/' + encodeURIComponent(id) + '/team', web = 'https://' + path;
+    if (!android) return web;
+    return 'intent://' + path + '#Intent;scheme=https;package=com.sleeperbot;S.browser_fallback_url=' + encodeURIComponent(web) + ';end';
+  }
+
   var LASTING = {IR: 1, PUP: 1, Sus: 1, NA: 1, DNR: 1};
   function planWeek(snap, schedule, week) {
     var games = {}, opp = {};
@@ -2456,7 +2466,7 @@
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
     trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
-    openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, planWeek: planWeek, applyPoints: applyPoints,
+    openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, planWeek: planWeek, sleeperTeamUrl: sleeperTeamUrl, applyPoints: applyPoints,
     keepStartedRanks: keepStartedRanks, winProbability: winProbability, matchStatus: matchStatus, benchMistakes: benchMistakes,
     labWeek: labWeek, rankCorrelation: rankCorrelation
   };

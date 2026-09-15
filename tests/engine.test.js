@@ -337,6 +337,13 @@ const planL = SCC.analyzeAll(plan, SCC.weeklyMap([{name: 'Plan Qb', pos: 'QB', t
 check(planL.rows[0].verdict === 'OK' && planL.rows[0].p.opp === 'BUF' && planL.rows[1].verdict === 'ON BYE' && !planL.rows[1].p.opp,
   'the plan starts the QB against BUF, and the RB whose team is off that week shows ON BYE, with no opponent');
 
+section('opening a Sleeper league');
+check(SCC.sleeperTeamUrl('123', false) === 'https://sleeper.com/leagues/123/team', 'a computer or an iPhone opens the league\'s team page on the web');
+const sleeperIntent = SCC.sleeperTeamUrl('123', true);
+check(sleeperIntent === 'intent://sleeper.com/leagues/123/team#Intent;scheme=https;package=com.sleeperbot;' +
+  'S.browser_fallback_url=https%3A%2F%2Fsleeper.com%2Fleagues%2F123%2Fteam;end',
+  'an Android phone asks the Sleeper app first, with the same web page as the fallback: ' + sleeperIntent);
+
 section('chance to win a matchup');
 const team = (projs, state, pts) => projs.map((proj, i) => ({proj, state: state || 'pre', pts: pts ? pts[i] : 0}));
 const even = SCC.winProbability(team([15, 15, 15]), team([15, 15, 15]));

@@ -19,6 +19,8 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1'};
   const STALE_MS = 5 * 60 * 1000;
+  // An Android phone (Titan's Play app too): Sleeper's buttons ask the Sleeper app first (SCC.sleeperTeamUrl).
+  const IS_ANDROID = /Android/i.test(navigator.userAgent || '');
   const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'lab', 'value', 'dump', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
@@ -881,12 +883,18 @@
   }
   function lineupUrl(cfg) {
     if (cfg.platform === 'yahoo') return cfg.url || 'https://football.fantasysports.yahoo.com/';
-    if (cfg.platform !== 'espn') return `https://sleeper.com/leagues/${encodeURIComponent(cfg.id)}/team`;
+    if (cfg.platform !== 'espn') return SCC.sleeperTeamUrl(cfg.id, IS_ANDROID);
     const team = cfg.teamId !== null && cfg.teamId !== undefined ? `&teamId=${encodeURIComponent(cfg.teamId)}` : '';
     return `https://fantasy.espn.com/football/team?leagueId=${encodeURIComponent(cfg.espnId)}${team}&seasonId=${encodeURIComponent(S.snap ? S.snap.season : '')}`;
   }
   // Demo leagues have no team page to open.
-  const openSite = cfg => cfg.demo ? '' : `<a class="btn ghost small open-site" href="${esc(lineupUrl(cfg))}" target="_blank" rel="noopener">Open in ${siteName(cfg)} ↗</a>`;
+  // An app link (intent:) opens in place: a new tab for it would be left blank behind the app.
+  const newTab = url => (/^intent:/.test(url) ? '' : ' target="_blank" rel="noopener"');
+  const openSite = cfg => {
+    if (cfg.demo) return '';
+    const url = lineupUrl(cfg);
+    return `<a class="btn ghost small open-site" href="${esc(url)}"${newTab(url)}>Open in ${siteName(cfg)} ↗</a>`;
+  };
   const kickOf = p => kickText(p) ? ', ' + kickText(p) : '';
 
   function leagueCard(L) {
@@ -3751,7 +3759,7 @@
     /* Neither Sleeper nor ESPN lets another app fill in a trade offer (Sleeper's API is
        read-only), so Titan copies the trade as text and opens your team on the site. */
     const names = list => list.map(p => p.name).join(' + ');
-    const send = give.length && get.length && !cfg.demo ? `<div class="tsend"><a class="btn small" href="${esc(lineupUrl(cfg))}" target="_blank" rel="noopener"
+    const send = give.length && get.length && !cfg.demo ? `<div class="tsend"><a class="btn small" href="${esc(lineupUrl(cfg))}"${newTab(lineupUrl(cfg))}
         data-trade-copy="${esc(`Trade offer: my ${names(give)} for your ${names(get)}`)}">Copy and open ${siteName(cfg)} ↗</a>
       <span class="fine">${siteName(cfg)} doesn't let other apps fill in a trade, so Titan copies it for you. On ${siteName(cfg)},
         start a trade with ${esc(partner.name)}, add these players, and paste it as a note if you like.</span></div>` : '';
