@@ -296,8 +296,9 @@
     if (!s || !S.snap) return;
     const season = String(S.snap.season), week = Number(S.snap.week) || 1, gone = [];
     for (let i = 0; i < s.length; i++) {
-      const m = /^titan\.(proj|kickoffs|sproj)\.v1\.(\d{4})(?:\.(\d+))?$/.exec(s.key(i) || '');
-      if (m && (m[2] !== season || (m[1] === 'proj' && Number(m[3]) < week - 2))) gone.push(m[0]);
+      const m = /^titan\.(proj|kickoffs|sproj)\.v(\d)\.(\d{4})(?:\.(\d+))?$/.exec(s.key(i) || '');
+      // Other seasons, weeks well past, and the older shape (v1, without the stat line) all go.
+      if (m && (m[3] !== season || (m[1] !== 'kickoffs' && m[2] === '1') || (m[1] === 'proj' && Number(m[4]) < week - 2))) gone.push(m[0]);
     }
     gone.forEach(k => store.del(k));
   }
@@ -905,7 +906,7 @@
     return h + (list.length ? `<div class="league-grid">${list.map(leagueCard).join('')}</div>` : '') + credit;
   }
 
-  const projOf = (p, cfg) => SCC.projFor(LV ? LV.proj : S.proj, p.id, cfg.ppr);
+  const projOf = (p, cfg) => SCC.projFor(LV ? LV.proj : S.proj, p.id, cfg);
 
   /* This week's games across every lineup: starters and bench players whose
      game has started (locked) or is still to come. Players on IR or a taxi
@@ -1293,7 +1294,7 @@
       if (g && g.state === 'pre') left++;
       if (g && g.state === 'in_game') live = true;
       if (g && g.state !== 'complete') done = false;
-      proj += SCC.projFor(S.proj, p.id, cfg.ppr) || 0;
+      proj += SCC.projFor(S.proj, p.id, cfg) || 0;
     });
     return {pts, proj, live, done: done && started, started, left};
   }
@@ -1332,7 +1333,7 @@
      player opposite (`other`) in that spot. Before his game, his projection in grey italics. */
   function matchPts(p, cfg, side, other) {
     if (!p || p.empty) return `<div class="mpts-col ${side}"></div>`;
-    const g = gameOf(p.team), started = g && g.state !== 'pre', proj = SCC.projFor(S.proj, p.id, cfg.ppr);
+    const g = gameOf(p.team), started = g && g.state !== 'pre', proj = SCC.projFor(S.proj, p.id, cfg);
     if (!started) {
       return g ? `<div class="mpts-col ${side} yet"><b>${proj !== null ? fmt(proj) : '–'}</b><small>proj</small></div>`
         : `<div class="mpts-col ${side}"><b class="muted">${fmt(0)}</b></div>`;
@@ -1380,7 +1381,7 @@
   }
 
   // One side's starters as the win-chance model reads them.
-  const winList = (side, cfg) => side.players.map(p => (!p || p.empty ? null : {pts: p.pts, proj: SCC.projFor(S.proj, p.id, cfg.ppr), state: (gameOf(p.team) || {}).state || ''}));
+  const winList = (side, cfg) => side.players.map(p => (!p || p.empty ? null : {pts: p.pts, proj: SCC.projFor(S.proj, p.id, cfg), state: (gameOf(p.team) || {}).state || ''}));
   // A matchup's totals, where you stand (SCC.matchStatus) and your chance to win, for its card and the summary.
   function matchState(m) {
     const a = sideTotals(m.me, m.cfg), b = sideTotals(m.opp, m.cfg);
@@ -3240,7 +3241,7 @@
     const sp = S.trade.season && S.trade.season.map;
     if (!sp || !Object.keys(sp).length) return 0;
     const id = p.id || idByName(playerList(), p.name);
-    return id ? (titanValueFor(cfg)({id, pos: p.pos}) || 0) * 1000 + (SCC.projFor(sp, id, cfg.ppr) || 0) : 0;
+    return id ? (titanValueFor(cfg)({id, pos: p.pos}) || 0) * 1000 + (SCC.projFor(sp, id, cfg) || 0) : 0;
   }
 
   // This week's plan choices: claims marked done and drops changed (S.ui.wplan, started over when the week turns).
@@ -3490,7 +3491,7 @@
     if (!sched.teams.length || !sched.games.length) return h + '<div class="empty-note">This league has no regular-season schedule yet.</div>';
     // This week's projected points for each team's best lineup.
     const proj = {};
-    (Tm.list || []).forEach(t => { proj[t.id] = SCC.lineupPoints(t.roster, cfg.lineup, p => SCC.projFor(S.proj, p.id, cfg.ppr) || 0); });
+    (Tm.list || []).forEach(t => { proj[t.id] = SCC.lineupPoints(t.roster, cfg.lineup, p => SCC.projFor(S.proj, p.id, cfg) || 0); });
     const key = [sched.games.filter(g => g.done).length, Object.keys(S.proj).length, S.snap.week].join('|');
     if (!St.result || St.key !== key) {
       Object.assign(St, {key, result: SCC.standings(sched.teams, sched.games, proj, {playoffTeams: cfg.playoffTeams || sched.playoffTeams, sims: 5000, seed: 7})});
@@ -3559,7 +3560,7 @@
   function strengthOf(cfg, teams) {
     const sp = S.trade.season && S.trade.season.map;
     if (!sp || !Object.keys(sp).length || !teams || !teams.length) return null;
-    return SCC.positionStrength(teams, cfg.lineup, p => SCC.projFor(sp, p.id, cfg.ppr) || 0);
+    return SCC.positionStrength(teams, cfg.lineup, p => SCC.projFor(sp, p.id, cfg) || 0);
   }
 
   // Standings: every team's rank at each position, in the standings' order.
@@ -3818,7 +3819,7 @@
      league's scoring), before and after the trade. Draft picks don't play. */
   function lineupImpact(cfg, me, partner, give, get) {
     if (!Object.keys(S.proj).length || !give.length || !get.length) return '';
-    const pts = p => SCC.projFor(S.proj, p.id, cfg.ppr) || 0;
+    const pts = p => SCC.projFor(S.proj, p.id, cfg) || 0;
     const line = (team, out, inn) => {
       const gone = new Set(out.map(p => p.id));
       const before = SCC.lineupPoints(team.roster, cfg.lineup, pts);

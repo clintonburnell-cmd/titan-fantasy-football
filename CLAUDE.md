@@ -74,6 +74,17 @@ How the pieces fit, and what keeps them working.
   scripts, styles, fonts and images from the saved copy at once and refreshes it in the background
   (stale-while-revalidate); pages go to the network but fall back to the saved copy after `PAGE_WAIT`
   (2.5 s). So a deployed change reaches a device on its second open, not its first.
+- Scoring (`SCC.trimProjections`, `projFor`, `scoringDeltas`): a projection is `[standard points, receptions,
+  stat line]` and a league's points are standard + `cfg.ppr` × receptions + Σ `cfg.scoring[k]` × stat[k], where
+  `cfg.scoring` is the league's differences from Sleeper's standard (`SLEEPER_STD`, verified against pts_std
+  2026-09-15) over the stats Sleeper projects (`PROJECTED`). Standard and PPR leagues come out exactly as
+  Sleeper's numbers; 6-point passing TDs, TE premium (`bonus_rec_te`, which Sleeper projects as the tight
+  end's catches), first downs, bonuses and ESPN's -2 interceptions count where a league scores them.
+  Sleeper leagues get `scoring` from `scoring_settings`; ESPN leagues from `scoringOf` (stat ids mapped, a
+  per-position `pointsOverrides` on receptions becoming `bonus_rec_*`); Yahoo has none yet. Pass the league
+  (`cfg`) to `projFor`/`defaultRanks`, not `cfg.ppr`: a number still works but drops the rest. The week's
+  record (`freezeWeek`) carries each league's `scoring`; `rankingsBy` builds one map per distinct scoring;
+  `describeLeague` names 6-pt pass TDs and TE premium (`scoringNotes`). Cached projections are v2 keys.
 - `render()` repaints in place (`paint` → `morph`: attributes and text set only where they differ,
   children paired by position or by id), so focus, sideways scroll, open menus and decoded photos
   survive the live tick. Consequences: never rely on a repaint resetting a field or a scroll

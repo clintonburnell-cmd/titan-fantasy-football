@@ -105,6 +105,31 @@
     return 0;
   }
 
+  /* The rest of an ESPN league's scoring, in Sleeper's stat names, as differences from Sleeper's standard
+     (SCC.scoringDeltas). ESPN's stat ids: passing yards 3, passing TDs 4, passing two-point 19, interceptions 20,
+     rushing yards 24, rushing TDs 25, rushing two-point 26, receiving yards 42, receiving TDs 43, receiving
+     two-point 44, receptions 53, fumbles lost 72. A per-position override on receptions (pointsOverrides, ESPN's
+     position ids: RB 2, WR 3, TE 4) is TE premium and the like: Sleeper projects bonus_rec_te/rb/wr as that
+     position's catches, so the extra rides on those. */
+  var ESPN_STAT = {3: 'pass_yd', 4: 'pass_td', 19: 'pass_2pt', 20: 'pass_int', 24: 'rush_yd', 25: 'rush_td', 26: 'rush_2pt',
+    42: 'rec_yd', 43: 'rec_td', 44: 'rec_2pt', 72: 'fum_lost'};
+  var ESPN_REC_BONUS = {2: 'bonus_rec_rb', 3: 'bonus_rec_wr', 4: 'bonus_rec_te'};
+  function scoringOf(settings) {
+    var items = (settings.scoringSettings && settings.scoringSettings.scoringItems) || [], asSleeper = {};
+    items.forEach(function (it) {
+      var key = ESPN_STAT[Number(it.statId)];
+      if (key) asSleeper[key] = Number(it.points) || 0;
+      if (Number(it.statId) === 53 && it.pointsOverrides) {
+        var base = Number(it.points) || 0;
+        for (var pos in it.pointsOverrides) {
+          var bonus = ESPN_REC_BONUS[pos];
+          if (bonus) asSleeper[bonus] = (Number(it.pointsOverrides[pos]) || 0) - base;
+        }
+      }
+    });
+    return SCC.scoringDeltas(asSleeper);
+  }
+
   /* The league as Titan describes every league (see SCC.leaguesFromSleeper).
      `link` is what the person saved: {id, teamId}. */
   function leagueCfg(json, link, prefs) {
@@ -119,7 +144,7 @@
     return {
       id: id, platform: 'espn', espnId: String(json.id), teamId: teamId,
       key: name, name: name, pic: logo, lineup: lineupOf(s),
-      teams: Number(s.size) || (json.teams || []).length, ppr: pprOf(s),
+      teams: Number(s.size) || (json.teams || []).length, ppr: pprOf(s), scoring: scoringOf(s),
       bench: Number(((s.rosterSettings || {}).lineupSlotCounts || {})[20]) || 0, // bench spots (Waivers' plan)
       kind: s.draftSettings && Number(s.draftSettings.keeperCount) > 0 ? 'Keeper' : 'Redraft',
       bestBall: false, status: '',
@@ -506,7 +531,7 @@
         name: s.name, size: s.size,
         rosterSettings: {lineupSlotCounts: (s.rosterSettings && s.rosterSettings.lineupSlotCounts) || {}},
         scoringSettings: {scoringItems: ((s.scoringSettings && s.scoringSettings.scoringItems) || []).map(function (i) {
-          return {statId: i.statId, points: i.points};
+          return i.pointsOverrides ? {statId: i.statId, points: i.points, pointsOverrides: i.pointsOverrides} : {statId: i.statId, points: i.points};
         })},
         draftSettings: {keeperCount: (s.draftSettings && s.draftSettings.keeperCount) || 0},
         scheduleSettings: {playoffTeamCount: (s.scheduleSettings || {}).playoffTeamCount, matchupPeriodCount: (s.scheduleSettings || {}).matchupPeriodCount},

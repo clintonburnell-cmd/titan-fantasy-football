@@ -121,11 +121,28 @@ section('combining several rankings (Import multiple sources)');
 }
 
 section('projections');
-const pm = SCC.trimProjections([{player_id: '10', stats: {pts_std: 10, pts_half_ppr: 12.5, pts_ppr: 15}},
-  {player_id: 'SEA', stats: {pts_std: 8.81, pts_ppr: 8.81}}, {player_id: '99', stats: {}}, {player_id: '98'}]);
-check(JSON.stringify(pm) === '{"10":[10,5],"SEA":[8.81,0]}', 'trimmed to standard points and catch points');
+const pm = SCC.trimProjections([{player_id: '10', stats: {pts_std: 10, pts_half_ppr: 12.5, pts_ppr: 15, rec: 5, rec_yd: 60, gp: 1, adp_dd_ppr: 30, pass_td: 0}},
+  {player_id: 'SEA', stats: {pts_std: 8.81, pts_ppr: 8.81}}, {player_id: '99', stats: {}}, {player_id: '98'}, {player_id: '0', stats: {pts_std: 0, pts_ppr: 0, rec: 0}}]);
+check(JSON.stringify(pm) === '{"0":[0,0],"10":[10,5,{"rec":5,"rec_yd":60}],"SEA":[8.81,0]}',
+  'trimmed to standard points, catch points and the nonzero stat line (none for a player projected nothing)');
 check(SCC.projFor(pm, '10', 1) === 15 && SCC.projFor(pm, '10', 0.5) === 12.5 && SCC.projFor(pm, '10', 0.25) === 11.25, 'any points-per-catch');
 check(SCC.projFor(pm, 'SEA', 1) === 8.81 && SCC.projFor(pm, 'nobody', 1) === null, 'defenses by team; unknown players have none');
+// A league's scoring beyond receptions: differences from Sleeper's standard, applied to the stat line.
+const sixPt = {rec: 1, pass_td: 6, pass_yd: 0.04, pass_int: -2, rec_yd: 0.1, bonus_rec_te: 0.5, def_3_and_out: 0.2};
+check(JSON.stringify(SCC.scoringDeltas(sixPt)) === '{"pass_td":2,"pass_int":-1,"bonus_rec_te":0.5}',
+  'a league\'s scoring as differences from Sleeper\'s standard, over the stats Sleeper projects (receptions apart)');
+check(JSON.stringify(SCC.scoringDeltas({rec: 0.5, pass_td: 4, rush_yd: 0.1})) === '{}', 'a standard or PPR league has no differences');
+const qbm = SCC.trimProjections([{player_id: 'q', stats: {pts_std: 20, pts_ppr: 20, pass_td: 2, pass_int: 1, pass_yd: 250}},
+  {player_id: 't', stats: {pts_std: 8, pts_ppr: 12, rec: 4, bonus_rec_te: 4}}]);
+const six = {ppr: 1, scoring: SCC.scoringDeltas(sixPt)};
+check(SCC.projFor(qbm, 'q', six) === 23 && SCC.projFor(qbm, 'q', {ppr: 1}) === 20 && SCC.projFor(qbm, 'q', 1) === 20,
+  'in a 6-point-passing-TD league with -2 interceptions the QB gains 2 a TD and loses 1 an interception (20 -> 23); elsewhere he stays at 20');
+check(SCC.projFor(qbm, 't', six) === 14 && SCC.projFor(qbm, 't', {ppr: 1}) === 12, 'TE premium adds the bonus on each of the tight end\'s catches (12 -> 14)');
+check(/6-pt pass TD · TE premium/.test(SCC.describeLeague({teams: 12, ppr: 1, kind: 'Redraft', scoring: six.scoring})) &&
+  !/pass TD/.test(SCC.describeLeague({teams: 12, ppr: 1, kind: 'Redraft', scoring: {}})), 'a league\'s description names the scoring that differs');
+const bySc = SCC.rankingsBy([], qbm, {q: ['Q Back', 'QB', 'KC'], t: ['T End', 'TE', 'KC']});
+check(bySc(six)[SCC.norm('Q Back')].rank === 1 && bySc({ppr: 1})[SCC.norm('Q Back')].rank === 1 && bySc(six) !== bySc({ppr: 1}),
+  'the default rankings are built once per distinct scoring');
 
 section('the kickoff record');
 const cfg = {id: 'L1', key: 'L1', name: 'Test League', ppr: 1, lineup: ['QB', 'RB']};

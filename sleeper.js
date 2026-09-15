@@ -367,7 +367,7 @@
   async function demoPlayers(season, week) {
     var list = (await getJson(projectionsUrl(season, week)).catch(function () { return null; })) || [];
     var proj = SCC.trimProjections(list);
-    if (Object.keys(proj).length) store.set('titan.proj.v1.' + season + '.' + week, {ts: Date.now(), map: proj});
+    if (Object.keys(proj).length) store.set('titan.proj.v2.' + season + '.' + week, {ts: Date.now(), map: proj});
     var players = {};
     list.forEach(function (e) {
       var p = e && e.player, id = e ? String(e.player_id) : '';
@@ -798,7 +798,7 @@
     return 'https://api.sleeper.app/projections/nfl/' + season + '/' + week + '?season_type=regular' + PROJ_POS;
   }
   async function fetchProjections(season, week) {
-    var key = 'titan.proj.v1.' + season + '.' + week;
+    var key = 'titan.proj.v2.' + season + '.' + week; // v2: with the projected stat line (SCC.trimProjections)
     var cached = store.get(key);
     if (cached && Date.now() - cached.ts < 3600 * 1000) return cached.map;
     try {
@@ -814,7 +814,7 @@
   /* Sleeper's season-long projections, trimmed and kept for 12 hours: Titan's own trade
      values (SCC.titanValues) on the Trade tab. Never throws: no projections, no values. */
   async function fetchSeasonProjections(season) {
-    var key = 'titan.sproj.v1.' + season, cached = store.get(key);
+    var key = 'titan.sproj.v2.' + season, cached = store.get(key);
     if (cached && Date.now() - cached.ts < 12 * 3600 * 1000) return cached.map;
     try {
       var map = SCC.trimProjections((await getJson('https://api.sleeper.app/projections/nfl/' + season + '?season_type=regular' + PROJ_POS)) || []);

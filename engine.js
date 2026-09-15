@@ -186,6 +186,7 @@
         lineup: (l.roster_positions || []).filter(function (p) { return !NOT_STARTERS[p]; }),
         teams: l.total_rosters || s.num_teams || 0,
         ppr: l.scoring_settings ? Number(l.scoring_settings.rec || 0) : 0,
+        scoring: scoringDeltas(l.scoring_settings), // the rest of its scoring, as differences from Sleeper's standard
         kind: s.type === 2 ? 'Dynasty' : s.type === 1 ? 'Keeper' : 'Redraft',
         bestBall: bestBall,
         rounds: Number(s.draft_rounds) || 0, // draft rounds, for a dynasty league's picks (Trade tab)
@@ -206,8 +207,8 @@
 
   function describeLeague(l) {
     var scoring = l.ppr >= 1 ? 'PPR' : l.ppr >= 0.5 ? 'Half PPR' : l.ppr > 0 ? l.ppr + ' PPR' : 'Standard';
-    return [l.platform === 'espn' ? 'ESPN' : l.platform === 'yahoo' ? 'Yahoo' : '', l.teams ? l.teams + ' teams' : '', scoring, l.kind, l.bestBall ? 'Best ball' : '']
-      .filter(Boolean).join(' · ');
+    return [l.platform === 'espn' ? 'ESPN' : l.platform === 'yahoo' ? 'Yahoo' : '', l.teams ? l.teams + ' teams' : '', scoring].concat(scoringNotes(l))
+      .concat([l.kind, l.bestBall ? 'Best ball' : '']).filter(Boolean).join(' · ');
   }
 
   /* ------------------------------------------------------------ trades */
@@ -308,7 +309,7 @@
     });
     for (var id in seasonProj || {}) {
       var pos = playerInfo(players, id).pos;
-      if (starts[pos]) (byPos[pos] = byPos[pos] || []).push({id: id, pts: projFor(seasonProj, id, cfg.ppr) || 0});
+      if (starts[pos]) (byPos[pos] = byPos[pos] || []).push({id: id, pts: projFor(seasonProj, id, cfg) || 0});
     }
     Object.keys(byPos).forEach(function (pos) {
       var list = byPos[pos].sort(function (a, b) { return b.pts - a.pts; });
@@ -1082,12 +1083,13 @@
      `players` is the trimmed player list (trimPlayers). */
   var DEFAULT_POS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
   var OVERALL = {QB: 1, RB: 1, WR: 1, TE: 1};
-  function defaultRanks(projMap, players, ppr) {
+  // `cfg`: the league ({ppr, scoring}), or just its points per catch.
+  function defaultRanks(projMap, players, cfg) {
     var list = [], seen = {}, count = {}, out = [];
     for (var id in projMap || {}) {
       var info = playerInfo(players, id);
       if (DEFAULT_POS.indexOf(info.pos) < 0) continue;
-      var pts = projFor(projMap, id, ppr);
+      var pts = projFor(projMap, id, cfg);
       if (pts > 0) list.push({name: info.name, pos: info.pos, team: info.team, pts: pts});
     }
     list.sort(function (a, b) { return b.pts - a.pts || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0); });
@@ -1111,16 +1113,17 @@
   function rankingsBy(rows, projMap, players) {
     var have = rankCounts(rows);
     var fill = !!projMap && Object.keys(projMap).length > 0 && DEFAULT_POS.some(function (p) { return !have[p]; });
-    var plain = null, byPpr = {};
+    var plain = null, byScoring = {};
     return function (cfg) {
       if (!fill) return plain || (plain = weeklyMap(rows));
-      var ppr = Number(cfg && cfg.ppr) || 0;
-      if (!byPpr[ppr]) {
-        var gaps = defaultRanks(projMap, players, ppr).filter(function (r) { return !have[r.pos]; });
+      // One map per distinct scoring (points per catch and the rest).
+      var key = (Number(cfg && cfg.ppr) || 0) + '|' + JSON.stringify((cfg && cfg.scoring) || {});
+      if (!byScoring[key]) {
+        var gaps = defaultRanks(projMap, players, cfg).filter(function (r) { return !have[r.pos]; });
         // The imported rows go last, so on a shared name the import wins.
-        byPpr[ppr] = weeklyMap(gaps.concat(rows || []));
+        byScoring[key] = weeklyMap(gaps.concat(rows || []));
       }
-      return byPpr[ppr];
+      return byScoring[key];
     };
   }
 
@@ -1847,6 +1850,15 @@
      uses. Each player keeps his standard-scoring points and the points his
      catches add at full PPR, so any league's reception value works:
      standard + ppr * catches. */
+  /* Sleeper's projections come with standard points (pts_std), PPR points and the projected stat line
+     (pass_td, rec_yd, pass_fd, bonus_rec_te and so on). Titan keeps [standard, receptions, stats]: receptions
+     are PPR points minus standard, and the stats are the projected line, rounded, nonzero only, for players
+     projected any points. A league's points are then standard + its catch points + its differences from
+     Sleeper's standard scoring times the stats (scoringDeltas): standard and PPR leagues come out exactly as
+     Sleeper says, and 6-point passing TDs, TE premium, first downs, bonuses and ESPN's -2 interceptions all
+     count where a league scores them. Checked 2026-09-15: pts_std is SLEEPER_STD applied to the stat line,
+     to within rounding, for every position. */
+  var NOT_A_STAT = /^(pts_|adp_|pos_adp|gp$)/;
   function trimProjections(list) {
     var map = {};
     (list || []).forEach(function (e) {
@@ -1855,14 +1867,67 @@
       if (!isFinite(std) && !isFinite(full)) return;
       if (!isFinite(std)) std = full;
       if (!isFinite(full)) full = std;
-      map[String(e.player_id)] = [round2(std), round2(full - std)];
+      var entry = [round2(std), round2(full - std)];
+      if (std > 0.05 || full > 0.05) {
+        var stats = {}, any = false;
+        for (var k in e.stats) {
+          if (NOT_A_STAT.test(k)) continue;
+          var v = round2(Number(e.stats[k]));
+          if (v) { stats[k] = v; any = true; }
+        }
+        if (any) entry.push(stats);
+      }
+      map[String(e.player_id)] = entry;
     });
     return map;
   }
 
-  function projFor(projMap, id, ppr) {
+  // Sleeper's standard scoring, per projected stat: what pts_std is made of. (Receptions are the PPR setting, kept apart.)
+  var SLEEPER_STD = {pass_yd: 0.04, pass_td: 4, pass_int: -1, pass_2pt: 2, rush_yd: 0.1, rush_td: 6, rush_2pt: 2, rec_yd: 0.1, rec_td: 6, rec_2pt: 2,
+    fum_lost: -2, xpm: 1, fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3, fgm_40_49: 4, fgm_50p: 5, fgmiss: -1,
+    sack: 1, int: 2, fum_rec: 2, ff: 1, def_td: 6, def_st_td: 6, st_td: 6, safe: 2, blk_kick: 2, def_st_ff: 1, def_st_fum_rec: 1, st_ff: 1, st_fum_rec: 1,
+    pts_allow_0: 10, pts_allow_1_6: 7, pts_allow_7_13: 4, pts_allow_14_20: 1, pts_allow_21_27: 0, pts_allow_28_34: -1, pts_allow_35p: -4};
+  // The stats Sleeper projects (the ones a league's scoring can be applied to).
+  var PROJECTED = ['pass_yd', 'pass_td', 'pass_int', 'pass_2pt', 'pass_att', 'pass_cmp', 'pass_inc', 'pass_fd', 'pass_sack', 'pass_cmp_40p', 'pass_int_td',
+    'rush_yd', 'rush_td', 'rush_2pt', 'rush_att', 'rush_fd', 'rush_40p', 'rec_yd', 'rec_td', 'rec_2pt', 'rec_tgt', 'rec_fd', 'rec_40p',
+    'rec_0_4', 'rec_5_9', 'rec_10_19', 'rec_20_29', 'rec_30_39', 'bonus_rec_te', 'bonus_rec_rb', 'bonus_rec_wr', 'bonus_rush_td_qb', 'fum', 'fum_lost',
+    'xpm', 'xpa', 'xpmiss', 'fgm', 'fga', 'fgm_0_19', 'fgm_20_29', 'fgm_30_39', 'fgm_40_49', 'fgm_50p', 'fgm_yds', 'fgmiss', 'fgmiss_30_39', 'fgmiss_40_49',
+    'sack', 'int', 'ff', 'fum_rec', 'def_td', 'def_st_td', 'st_td', 'def_kr_td', 'def_pr_td', 'pr_td', 'safe', 'blk_kick', 'tkl_loss', 'def_fum_td',
+    'def_kr_yd', 'def_pr_yd', 'pr_yd', 'pts_allow', 'pts_allow_0', 'pts_allow_1_6', 'pts_allow_7_13', 'pts_allow_14_20', 'pts_allow_21_27', 'pts_allow_28_34',
+    'pts_allow_35p', 'yds_allow', 'yds_allow_200_299', 'yds_allow_300_349', 'yds_allow_350_399', 'yds_allow_400_449'];
+  var IS_PROJECTED = {};
+  PROJECTED.forEach(function (k) { IS_PROJECTED[k] = 1; });
+
+  /* A league's scoring as differences from Sleeper's standard, over the stats Sleeper projects, receptions
+     apart (they're cfg.ppr): {} for a league that scores like Sleeper's standard or PPR. `settings` is a Sleeper
+     league's scoring_settings, or the same keys built from another site's settings. */
+  function scoringDeltas(settings) {
+    var out = {};
+    for (var k in settings || {}) {
+      if (k === 'rec' || !IS_PROJECTED[k]) continue;
+      var d = round2((Number(settings[k]) || 0) - (SLEEPER_STD[k] || 0));
+      if (Math.abs(d) >= 0.005) out[k] = d;
+    }
+    return out;
+  }
+
+  // A player's projected points in a league: `cfg` is the league ({ppr, scoring}), or just its points per catch.
+  function projFor(projMap, id, cfg) {
     var e = projMap && projMap[String(id)];
-    return e ? round2(e[0] + (Number(ppr) || 0) * e[1]) : null;
+    if (!e) return null;
+    var ppr = typeof cfg === 'number' ? cfg : Number(cfg && cfg.ppr) || 0;
+    var pts = e[0] + ppr * e[1];
+    var sc = cfg && typeof cfg === 'object' && cfg.scoring, st = e[2];
+    if (sc && st) for (var k in sc) if (st[k]) pts += sc[k] * st[k];
+    return round2(pts);
+  }
+
+  // What a league's scoring does differently, in words, for describeLeague.
+  function scoringNotes(cfg) {
+    var sc = (cfg && cfg.scoring) || {}, out = [];
+    if (sc.pass_td) out.push((4 + sc.pass_td) + '-pt pass TD');
+    if (sc.bonus_rec_te > 0) out.push('TE premium');
+    return out;
   }
 
   function sumProj(list) {
@@ -1894,12 +1959,12 @@
           n: p.name, pos: p.pos, team: p.team, start: !!p.start, slot: p.slot || '',
           rank: p.rank === undefined ? null : p.rank,
           tier: p.tier === '' || p.tier === undefined ? null : p.tier,
-          proj: projFor(projMap, p.id, L.cfg.ppr),
+          proj: projFor(projMap, p.id, L.cfg),
           call: call[p.id] || (titanSlot[p.id] ? 'START' : 'BENCH'),
           titan: titanSlot[p.id] || '', inj: p.inj || '', locked: !!p.locked, at: now
         };
       });
-      out.leagues[id] = {key: L.cfg.key, name: L.cfg.name, ppr: L.cfg.ppr || 0, lineup: L.cfg.lineup, players: players};
+      out.leagues[id] = {key: L.cfg.key, name: L.cfg.name, ppr: L.cfg.ppr || 0, scoring: L.cfg.scoring || {}, lineup: L.cfg.lineup, players: players};
     });
     // A league switched off mid-week keeps what was already saved for it.
     for (var lid in old) if (!out.leagues[lid]) out.leagues[lid] = old[lid];
@@ -1966,7 +2031,7 @@
         id: String(id), name: info.name, pos: info.pos, team: info.team,
         rank: h ? (h.rank === undefined ? null : h.rank) : (w && w.rank !== null ? w.rank : null),
         pts: Number(pp[String(id)] || 0),
-        proj: h && h.proj !== null && h.proj !== undefined ? h.proj : projFor(projMap, id, lg.ppr),
+        proj: h && h.proj !== null && h.proj !== undefined ? h.proj : projFor(projMap, id, lg),
         call: h ? h.call : '', frozen: !!h,
         start: !!startedIds[String(id)],
         locked: false, outish: false, slot: slotOf[String(id)] || ''
@@ -2203,7 +2268,7 @@
     var have = {sleeper: true, fc: false, imports: !!(opts.imports && opts.imports.length)};
     var rows = [];
     (res.leagues || []).forEach(function (x) {
-      var cfg = x.cfg, dflt = defaultRanks(proj, players, cfg.ppr), lists = {sleeper: weeklyMap(dflt)};
+      var cfg = x.cfg, dflt = defaultRanks(proj, players, cfg), lists = {sleeper: weeklyMap(dflt)};
       var fv = opts.fcFor ? opts.fcFor(cfg) : null;
       if (fv && fv.length) {
         have.fc = true;
@@ -2449,7 +2514,7 @@
     INJ_OUT: INJ_OUT, WIRE_GROUPS: WIRE_GROUPS, SLOT_POS: SLOT_POS, teamLabel: teamLabel, playerIndex: playerIndex, matchPlayer: matchPlayer,
     norm: norm, teamAbbr: teamAbbr, byeOf: byeOf, byesFromSchedule: byesFromSchedule, setByes: setByes,
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
-    leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel,
+    leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel, scoringDeltas: scoringDeltas, scoringNotes: scoringNotes,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues, positionStrength: positionStrength,
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas,
     draftFromSleeper: draftFromSleeper, draftGrades: draftGrades,

@@ -66,6 +66,16 @@ const {check, section} = T;
   const sfc = ESPN.leagueCfg(SF, {id: SF.id, teamId: 2}, {'espn:99999902': {active: false}});
   check(sfc.lineup.join(' ') === 'QB RB RB WR WR TE FLEX SUPER_FLEX K DEF' && sfc.active === false && sfc.ppr === 1,
     'superflex lineup, full PPR, switched off by the person\'s choice');
+  check(JSON.stringify(cfg.scoring) === '{}', 'a league scoring like Sleeper\'s standard (with receptions apart) has no scoring differences');
+  // ESPN's scoring in Sleeper's terms: 6-point passing TDs, -2 interceptions (ESPN's default, Sleeper's is -1), and TE premium
+  // as a per-position override on receptions (position 4 is TE).
+  const custom = Object.assign({}, L1, {settings: Object.assign({}, L1.settings, {scoringSettings: {scoringItems: [
+    {statId: 4, points: 6}, {statId: 20, points: -2}, {statId: 3, points: 0.04}, {statId: 53, points: 1, pointsOverrides: {4: 1.5}}]}})});
+  const ccfg = ESPN.leagueCfg(custom, {id: L1.id, teamId: 1}, {});
+  check(ccfg.ppr === 1 && JSON.stringify(ccfg.scoring) === '{"pass_td":2,"pass_int":-1,"bonus_rec_te":0.5}' && /6-pt pass TD · TE premium/.test(SCC.describeLeague(ccfg)),
+    'an ESPN league\'s scoring maps to Sleeper\'s stats as differences from standard: ' + SCC.describeLeague(ccfg));
+  const slimmed = ESPN.slimLeague(custom);
+  check(JSON.stringify(ESPN.leagueCfg(slimmed, {id: L1.id, teamId: 1}, {}).scoring) === JSON.stringify(ccfg.scoring), 'the slimmed copy the server sends keeps the overrides');
   const withLogo = Object.assign({}, L1, {teams: L1.teams.map(t => Object.assign({}, t, {logo: 'http://example.com/logo-' + t.id + '.png'}))});
   check(ESPN.leagueCfg(withLogo, {id: L1.id, teamId: 3}, {}).pic === 'https://example.com/logo-3.png' && cfg.pic === '' &&
     ESPN.leagueCfg(withLogo, {id: L1.id}, {}).pic === '', 'the league picture is your team\'s logo (made https); none without a logo or a team');
