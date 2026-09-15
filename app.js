@@ -2043,6 +2043,14 @@
       <td>${pct(t.tet)}</td><td>${n(t.rbx)}</td><td>${n(t.wrx)}</td><td>${n(t.tex)}</td><td>${whole(t.ptd)}</td><td>${whole(t.rtd)}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
+  // Leagues in the order every other tab shows them (the snapshot's); any the snapshot doesn't have come after, by name.
+  function snapOrder(list) {
+    const at = {};
+    ((S.snap && S.snap.leagues) || []).forEach((d, i) => { at[d.cfg.id] = i; });
+    const place = L => (L.id in at ? at[L.id] : Infinity);
+    return [...list].sort((a, b) => place(a) - place(b) || String(a.name).localeCompare(String(b.name)));
+  }
+
   // Each league's ideas, in the order they're acted on: this week's lineup, then the wire, trades and the playoffs.
   const DUMP_KINDS = [['start', 'Start this week', 'add'], ['add', 'Pick up', 'add'], ['buy', 'Buy from a rival', 'buy'],
     ['sell', 'Sell from your roster', 'sell'], ['watch', 'Playoff schedule', 'watch']];
@@ -2074,7 +2082,7 @@
     const move = m => `<li data-find=" ${esc(SCC.norm(m.n))} "><b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
     const group = (list, title, cls) => (list && list.length ? `<h4 class="vr-k ${cls}">${title}</h4><ul class="vr-moves">${list.map(move).join('')}</ul>` : '');
     const cfgOf = id => (((S.snap && S.snap.leagues) || []).find(d => d.cfg.id === id) || {}).cfg;
-    h += `<h3 class="vr-h">${one ? 'Your ideas' : 'Your ideas, league by league'}</h3><div class="league-grid">${(one ? [one] : R.leagues || []).map(L => {
+    h += `<h3 class="vr-h">${one ? 'Your ideas' : 'Your ideas, league by league'}</h3><div class="league-grid">${(one ? [one] : snapOrder(R.leagues || [])).map(L => {
       const c = count(L), cfg = cfgOf(L.id);
       return `<details class="card vr-lg"${c ? ' open' : ''}><summary class="card-h"><div><h3>${cfg ? leagueIcon(cfg) : ''}${esc(L.name)}</h3>
         <p>${esc(L.format)} · ${plural(c, 'idea')}</p></div></summary><div class="vr-body">${DUMP_KINDS.map(([k, t, cls]) => group(L[k], t, cls)).join('')}${

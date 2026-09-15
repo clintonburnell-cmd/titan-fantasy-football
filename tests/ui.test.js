@@ -862,7 +862,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     add: [{n: 'Add Guy', why: 'Usage worth 12.0 a game.', x: 'TE, KC'}], watch: []});
   const DR = {v: 1, season: 2026, week: 2, fileWeek: 1, file: 'week1-data-dump.xlsx', updated: '2026-09-15 09:36', at: Date.now(),
     notes: ['1 game of data so far.'], tiles: [['ideas', 6], ['leagues', 2], ['players', 3], ['teams', 1]],
-    leagues: [dlg(lid, 'Dump Test League'), dlg('other-dump', 'Another Dump League')],
+    // Listed by name, as data_dump.py writes them: the screen puts them in the app's own league order instead.
+    leagues: [dlg('other-dump', 'Another Dump League'), dlg(lid, 'Dump Test League')],
     players: [drow('d1', 'Buy Guy', 'RB'), drow('d2', 'Sell Guy', 'WR', {buy: false, sell: true, oe: 8}), drow('d3', 'Other Guy', 'QB', {buy: false})],
     lists: {buys: [drow('d1', 'Buy Guy', 'RB')], sells: [drow('d2', 'Sell Guy', 'WR', {buy: false, sell: true, oe: 8})], soft: [drow('d3', 'Other Guy', 'QB', {buy: false})],
       tough: [], next4easy: [], next4hard: [], playoffEasy: [], playoffHard: []},
@@ -936,6 +937,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await tab('dump');
   check(await waitFor(`location.pathname === '/app/data-dump' && document.querySelectorAll('.vr-lg').length === 2 && document.querySelectorAll('.vr-lg .vr-moves li').length === 6`, 5000),
     'the owner sees it at /app/data-dump: each league\'s ideas (start, pick up, buy)');
+  // Each heading's own text, without its league icon's site badge (the "E" on an ESPN league).
+  const ddOrder = await ev(`[...document.querySelectorAll('.vr-lg h3')].map(h => [...h.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim()).join(' | ')`);
+  check(ddOrder === 'Dump Test League | Another Dump League',
+    'its leagues come in the same order as every other tab (the app\'s leagues first), not by name: ' + ddOrder);
   check(await ev(`[...document.querySelectorAll('.subtabs [data-go]')].map(b => b.textContent).join('|') === 'Import|Import multiple|Compare|Value|Data dump'`),
     'Data dump is its own screen under Rankings, right after Value');
   check(await ev(`(() => { const nav = document.querySelector('.subtabs'), n = nav.getBoundingClientRect(), b = nav.querySelector('[aria-current="page"]').getBoundingClientRect();
