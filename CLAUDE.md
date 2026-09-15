@@ -124,7 +124,7 @@ How the pieces fit, and what keeps them working.
 ## Navigation, look and type
 
 - Navigation: six sections (`SECTIONS` in `app.js`): Lineups, Matchup, League (Standings, Rosters,
-  Trade, Transactions), Players (Waivers, News, Exposure, Byes) and Rankings (Import, which is the `ranks`
+  Trade, Transactions), Players (Waivers, News, Exposure, Byes, Schedule) and Rankings (Import, which is the `ranks`
   screen, Import multiple, which is `multi` at `/app/multiple`, and for Titan's owner only Compare (`lab`) and Value
   report (`value`), the screens in `OWNER_TABS`) and Results (the `score` screen), with Settings behind the gear (`#gear`). Phones, the Android app and home-screen
   copies show them as a bar along the bottom (the header is solid there: a see-through `backdrop-filter`
@@ -183,9 +183,21 @@ One note per screen or feature.
   note; the forward arrow to this week opens only once a game has started (`weekStarted`); a failure
   is retried when the screen is reopened a minute later (`errorAt`). Matchup's "projected final" once
   games start is `winProbability`'s expected total (`matchState`), the number the win chance rests on.
-- Dialogs (`openPlayerCard`, `openDraftResults`) return focus to what opened them (`pcOpener`,
-  `dlgOpener`). The player searches share `indexOf(players)` (names normalised once per player list)
-  through `searchPlayers`.
+- Dialogs (`openPlayerCard`, `openDraftResults`, `openSearch`) return focus to what opened them (`pcOpener`,
+  `dlgOpener`, `psOpener`). The player searches share `indexOf(players)` (names normalised once per player list)
+  through `searchPlayers`. Find a player (v1.43.0): the magnifier in the header (`#psearch-btn`, shown with the
+  gear once there's a snapshot) opens `dialog.psearch` (`searchDialog`), a search over every NFL player with
+  where he is in each league (`wStatus`); a name opens his card on top; Back closes it (`popstate`, like the card).
+- Schedule strength (`screenSos`, tab `sos`, `/app/schedule`, under Players, for everyone): `SCC.scheduleStrength`
+  (pure, tested) over Sleeper's NFL schedule (`API.nflSchedule`, kept in `S.sos`) and the game context's
+  points-allowed ranks (`S.ctx.data.dvp`), a position at a time (`S.ui.sosPos`, chips `data-sos-pos`): each team's
+  next games, the average opponent rank over the next four weeks, the rest of the regular season and weeks 15 to
+  17, and your players on that team. Standings' playoff picture (`playoffPicture`, `.ppic`): each game still to
+  play this week run both ways through the standings simulation (`PICTURE_SIMS`), your own game first, then who
+  to root for by the swing in your odds. Lineups' "Copy changes" (`data-copy`, the moves as text; a generic
+  clipboard listener). The player card ends with "In the news" (`playerNews`: ESPN's stories tagging him from the
+  News feed, loaded if it isn't yet; `loadNews` repaints an open card). Value and Data dump tables share
+  `reportTable` (`rt` formatters; each screen passes its columns).
 - Lineups' league cards (`leagueCard`): the changes to make, then the recommended lineup (`recLineup`: the engine's
   `L.opt` when there are moves, else the lineup as set, so it never shows a change the steps don't; `recRow`, NEW where
   it differs) and yours beside it (`compareLineups`, table `.lu-cmp`, the differing spots highlighted, your players'

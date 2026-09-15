@@ -21,12 +21,13 @@
   const STALE_MS = 5 * 60 * 1000;
   // An Android phone (Titan's Play app too): Sleeper's buttons ask the Sleeper app first (SCC.sleeperTeamUrl).
   const IS_ANDROID = /Android/i.test(navigator.userAgent || '');
-  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'lab', 'value', 'dump', 'settings'];
+  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'lab', 'value', 'dump', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
-    score: 'Results', news: 'News', ranks: 'Rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump', trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
+    sos: 'Schedule strength', score: 'Results', news: 'News', ranks: 'Rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump',
+    trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
-  const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes',
+  const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes', sos: 'schedule',
     score: 'results', news: 'news', ranks: 'rankings', multi: 'multiple', lab: 'compare', value: 'value', dump: 'data-dump', trade: 'trade', moves: 'transactions',
     settings: 'settings'};
   const tabFromPath = () => {
@@ -41,12 +42,12 @@
     {id: 'lineups', name: 'Lineups', tabs: ['lineups']},
     {id: 'matchup', name: 'Matchup', tabs: ['matchup']},
     {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
-    {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes']},
+    {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes', 'sos']},
     // Compare (lab), Value and Data dump are Titan's owner's only: they show only on the owner's account.
     {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'multi', 'lab', 'value', 'dump']},
     {id: 'results', name: 'Results', tabs: ['score']}
   ];
-  const SUB_NAMES = {ranks: 'Import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', score: 'Results'};
+  const SUB_NAMES = {ranks: 'Import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', score: 'Results', sos: 'Schedule'};
   const OWNER_TABS = ['lab', 'value', 'dump']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else)
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
@@ -145,6 +146,7 @@
     value: {busy: false, data: null, error: '', at: 0, q: ''}, // the value report (Titan's owner only), from the owner's PC; q: its player search
     dump: {busy: false, data: null, error: '', at: 0}, // the data dump (Titan's owner only), from the owner's PC; it shares the value report's search
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
+    sos: {sched: null, busy: false, error: ''}, // the NFL schedule, for Schedule strength
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
     waiv: {trend: null, busy: false, error: '', faab: {}, q: '', usage: null, usageBusy: false}, // usage: the last few weeks' stats (loadUsage)
@@ -490,6 +492,7 @@
     b.classList.toggle('spin', S.busy);
     $('tabs').hidden = !a;
     $('gear').hidden = !a;
+    $('psearch-btn').hidden = !a || !S.snap;
     const sec = sectionOf(S.ui.tab);
     document.querySelectorAll('#tabs [data-tab], #gear').forEach(t =>
       t.setAttribute('aria-current', t.dataset.tab === S.ui.tab ? 'page' : 'false'));
@@ -999,8 +1002,12 @@
     let h = `<details class="card league fold" ${foldAttrs('lineup', L.cfg)}>
       <summary class="card-h"><div><h3>${leagueIcon(L.cfg)}${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg)) + projLine(L)}</p></div><span class="pill p-${st[0]}">${st[1]}</span></summary>`;
     if (L.moves.length) {
+      // The changes as text, for the clipboard (Copy changes): one line a spot.
+      const copyText = `${L.cfg.key}, week ${LV ? LV.week : S.snap.week} lineup changes:\n` + L.moves.map(m =>
+        `${slotName(m.slot)}: ${m.out ? `out ${m.out.name}${m.to ? ` (to ${slotName(m.to)})` : ''}` : 'empty'} → in ${m.inn.name}${m.from ? ` (from ${slotName(m.from)})` : ''}`).join('\n');
       // A starter changing spots shows where he goes or comes from, and when he plays.
-      h += `<div class="moves"><div class="moves-h"><h4>${LV ? `For week ${LV.week}, make these changes in ${siteName(L.cfg)}` : `Make these changes in ${siteName(L.cfg)}`}</h4>${openSite(L.cfg)}</div>${L.moves.map(m => `
+      h += `<div class="moves"><div class="moves-h"><h4>${LV ? `For week ${LV.week}, make these changes in ${siteName(L.cfg)}` : `Make these changes in ${siteName(L.cfg)}`}</h4><span class="moves-b">${
+        L.cfg.demo ? '' : `<button type="button" class="btn small ghost" data-copy="${esc(copyText)}">Copy changes</button>`}${openSite(L.cfg)}</span></div>${L.moves.map(m => `
         <div class="move"><span class="slot">${esc(slotName(m.slot))}</span>
           <span class="mv out${m.to ? ' to' : ''}">${m.out ? `${esc(m.out.name)} <em>${m.to ? `to ${esc(slotName(m.to))}${esc(kickOf(m.out))}` : esc(rl(m.out))}</em>` : '<em>nobody</em>'}</span>
           <span class="mv in">${esc(m.inn.name)} <em>${m.from ? `from ${esc(slotName(m.from))}${esc(kickOf(m.inn))}` : esc(rl(m.inn)) + (m.inn.opp ? ' vs ' + esc(m.inn.opp) : '')}</em></span>
@@ -1136,7 +1143,7 @@
     S.ctx.at = Date.now();
     S.ctx.busy = false;
     if (S.ctx.data && S.snap) analyze(); // the matchup tilt on close calls reads it
-    if (S.ui.tab === 'lineups') render();
+    if (S.ui.tab === 'lineups' || S.ui.tab === 'sos') render();
   }
 
   // A player's game context under his name (SCC.gameTags); who he plays only when his rankings don't say.
@@ -1280,6 +1287,17 @@
     catch (e) { S.news.error = 'Could not load the news from ESPN.'; }
     S.news.busy = false;
     if (S.ui.tab === 'news') render();
+    if (PC && PC.open) PC.innerHTML = playerCardHtml(); // the card's news
+  }
+
+  // A player's latest news on his card: ESPN's stories that tag him (the News tab's feed, loaded if it isn't yet), newest first.
+  function playerNews(p) {
+    const N = S.news;
+    if (!N.list) { if (!N.busy && !N.error && !DEMO) loadNews(); return ''; }
+    const n = SCC.norm(p.name), list = N.list.filter(s => (s.athletes || []).some(a => SCC.norm(a.name) === n)).slice(0, 3);
+    if (!list.length) return '';
+    return `<div class="pc-news"><h3>In the news</h3><ul>${list.map(s => `<li><a href="${esc(s.url)}" target="_blank" rel="noopener"><b>${esc(s.headline)}</b>
+      <small>${esc(ago(s.at))} · ESPN</small></a></li>`).join('')}</ul></div>`;
   }
   setInterval(() => {
     if (S.ui.tab === 'news' && !document.hidden && S.news.list && Date.now() - S.news.at > NEWS_EVERY) loadNews();
@@ -1632,6 +1650,43 @@
           <span class="meter" title="${r.starts} starting"><i style="width:${Math.round(100 * r.count / Math.max(E.active, 1))}%"></i><b style="width:${
             Math.round(100 * r.starts / Math.max(E.active, 1))}%"></b></span></span>
       </li>`).join('')}</ul>`;
+    return h;
+  }
+
+  /* ---- Schedule strength (Players → Schedule, for everyone): each NFL team's remaining opponents ranked by the
+     points they give up to a position (the game context's nflverse numbers, the same ones behind the matchup tags),
+     averaged over the next four weeks, the rest of the regular season and the fantasy-playoff weeks. */
+  const SOS_POS = ['QB', 'RB', 'WR', 'TE'];
+  async function loadSos() {
+    S.sos.busy = true;
+    try { S.sos.sched = await API.nflSchedule(S.snap.season); }
+    catch (e) { S.sos.error = 'Could not load the NFL schedule.'; }
+    S.sos.busy = false;
+    if (S.ui.tab === 'sos') render();
+  }
+  function screenSos() {
+    if (!S.snap) return emptyState();
+    if (!S.sos.sched && !S.sos.busy && !S.sos.error) loadSos();
+    if (!S.ctx.busy && Date.now() - S.ctx.at > CONTEXT_EVERY) loadContext();
+    const pos = SOS_POS.includes(S.ui.sosPos) ? S.ui.sosPos : 'RB', wk = S.snap.week, C = S.ctx.data;
+    let h = `<p class="lede">Which teams' players have the easiest road ahead: each NFL team's remaining opponents, ranked by the points they give up
+      to a position (1 gives up the most), averaged over the next four weeks, the rest of the regular season and the fantasy playoffs (weeks 15 to 17).</p>
+      <div class="chips" role="group" aria-label="Position">${SOS_POS.map(p => `<button type="button" class="chip" data-sos-pos="${p}" aria-pressed="${p === pos}">${p}</button>`).join('')}</div>`;
+    if (S.sos.error) h += `<div class="banner stop">${esc(S.sos.error)} <button class="link" data-action="sos-retry">Try again</button></div>`;
+    if (!S.sos.sched || !C || !C.dvp) return h + `<div class="empty-note">${S.sos.error ? '' : 'Loading the schedule and the points allowed by position…'}</div>`;
+    const rows = SCC.scheduleStrength(S.sos.sched, C.dvp, pos, wk, {next4: [wk, wk + 3], ros: [wk, LAST_REG_WEEK], playoffs: [15, 17]});
+    // Your players on each team at this position, across your leagues (starters counted).
+    const mine = {};
+    ((S.A && S.A.leagues) || []).forEach(L => L.roster.forEach(p => { if (p.pos === pos && p.team) (mine[SCC.teamAbbr(p.team)] = mine[SCC.teamAbbr(p.team)] || new Set()).add(p.name); }));
+    const ease = v => (v === null || v === undefined ? '–' : `<span class="${v <= 12 ? 'good' : v >= 21 ? 'amber' : ''}">${fmt(v)}</span>`);
+    const next = r => r.opps.filter(o => o.week >= wk).slice(0, 3).map(o => `${o.home ? 'vs' : 'at'} ${esc(o.opp)}${o.rank ? ` <small>${o.rank}</small>` : ''}`).join(', ') || 'Bye';
+    h += `<div class="card table-wrap"><table class="rtable sos-t"><thead><tr><th>Team</th><th>Next games</th><th class="tnum">Next 4</th><th class="tnum">Rest of season</th>
+      <th class="tnum">Playoffs</th><th>Your ${esc(pos)}s</th></tr></thead><tbody>${rows.map(r => `<tr${mine[r.team] ? ' class="mine"' : ''}><td><b>${esc(r.team)}</b></td>
+      <td class="sos-next">${next(r)}</td><td class="tnum">${ease(r.spans.next4)}</td><td class="tnum">${ease(r.spans.ros)}</td><td class="tnum">${ease(r.spans.playoffs)}</td>
+      <td class="sos-mine">${mine[r.team] ? esc([...mine[r.team]].join(', ')) : ''}</td></tr>`).join('')}</tbody></table></div>
+      <p class="fine">Easiest rest of season first. Green is an average opponent rank of 12 or better (soft), amber 21 or worse (tough); the small number
+      beside each opponent is its rank against ${esc(pos)}s. Points allowed by position from <a href="https://github.com/nflverse" target="_blank" rel="noopener">nflverse</a>
+      (CC BY 4.0${C.dvpSeason ? ', ' + esc(C.dvpSeason) + ' season' : ''}); schedule via Sleeper.</p>`;
     return h;
   }
 
@@ -2236,22 +2291,31 @@
   // A rank where 1 is the easiest (a matchup, a schedule): green in the easiest quarter, amber in the toughest.
   const easeRank = r => (r === null || r === undefined ? '–' : `<span class="${r <= 8 ? 'good' : r >= 25 ? 'amber' : ''}">${r}</span>`);
 
+  /* The Value report's and Data dump's tables share one builder: a pinned player column (his call as a pill, his name
+     and a line under it, `sub`), a Where column when a league is picked, then the report's own columns ([header,
+     cell(row)]). `filtered` marks the table of everyone (the position chips filter it in place). */
+  const rt = {
+    n: (v, d = 1) => (v === null || v === undefined ? '–' : Number(v).toFixed(d)),
+    share: v => (v === null || v === undefined ? '–' : Math.round(v * 100) + '%'),
+    sgn: (v, d = 1) => (v === null || v === undefined ? '–'
+      : `<span class="${v > 0 ? 'good' : v < 0 ? 'amber' : ''}">${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(d)}</span>`),
+    rank: (p, r) => (r === null || r === undefined ? '–' : esc(p) + r)
+  };
+  function reportTable(rows, cols, sub, filtered, where) {
+    const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
+    return `<div class="table-wrap vr-scroll"><table class="season-t vr-t"><thead><tr><th>Player</th>${where ? '<th class="vr-w">Where</th>' : ''}${
+      cols.map(c => `<th${c[2] ? ` class="${c[2]}"` : ''}>${c[0]}</th>`).join('')}</tr></thead><tbody>${rows.map(r =>
+      `<tr data-find=" ${esc(SCC.norm(r.n))} ${esc(String(r.t || '').toLowerCase())} ${esc(String(r.p || '').toLowerCase())} "${filtered ? ` data-vp="${esc(r.p)}"${
+        vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${callPill(r, filtered)}<b>${esc(r.n)}</b><small>${esc(sub(r))}</small></td>${
+        where ? `<td class="vr-w">${where(r)}</td>` : ''}${cols.map(c => `<td${c[2] ? ` class="${c[2]}"` : ''}>${c[1](r)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
+
   // where(row): who has him in the picked league (a Where column), or null under All leagues.
   function dumpTable(rows, filtered, where) {
-    const n = (v, d = 1) => (v === null || v === undefined ? '–' : Number(v).toFixed(d));
-    const share = v => (v === null || v === undefined ? '–' : Math.round(v * 100) + '%');
-    const sgn = v => (v === null || v === undefined ? '–'
-      : `<span class="${v > 0 ? 'good' : v < 0 ? 'amber' : ''}">${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(1)}</span>`);
     const next = r => (r.o === 'BYE' ? 'Bye' : `${r.h ? 'vs' : 'at'} ${esc(r.o || '')}`);
-    const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
-    return `<div class="table-wrap vr-scroll"><table class="season-t vr-t"><thead><tr><th>Player</th>${where ? '<th class="vr-w">Where</th>' : ''}<th>Points</th>
-      <th>Expected</th><th>Over expected</th><th>Targets</th><th>Carries</th><th class="vr-w">Next</th><th>Matchup</th><th>Adjusted</th><th>Next 4</th><th>Playoffs</th>
-      </tr></thead><tbody>${rows.map(r =>
-      `<tr data-find=" ${esc(SCC.norm(r.n))} ${esc(String(r.t || '').toLowerCase())} ${esc(String(r.p || '').toLowerCase())} "${filtered ? ` data-vp="${esc(r.p)}"${
-        vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${callPill(r, filtered)}<b>${
-        esc(r.n)}</b><small>${esc([(r.p || '') + (r.xr || ''), r.t].filter(Boolean).join(' · '))}</small></td>${where ? `<td class="vr-w">${where(r)}</td>` : ''}
-      <td>${n(r.fp)}</td><td>${n(r.x)}</td><td>${sgn(r.oe)}</td><td>${share(r.sh)}</td><td>${share(r.rs)}</td><td class="vr-w">${next(r)}</td><td>${easeRank(r.mu)}</td>
-      <td>${n(r.adj)}</td><td>${easeRank(r.n4)}</td><td>${easeRank(r.po)}</td></tr>`).join('')}</tbody></table></div>`;
+    return reportTable(rows, [['Points', r => rt.n(r.fp)], ['Expected', r => rt.n(r.x)], ['Over expected', r => rt.sgn(r.oe)], ['Targets', r => rt.share(r.sh)],
+      ['Carries', r => rt.share(r.rs)], ['Next', next, 'vr-w'], ['Matchup', r => easeRank(r.mu)], ['Adjusted', r => rt.n(r.adj)], ['Next 4', r => easeRank(r.n4)],
+      ['Playoffs', r => easeRank(r.po)]], r => [(r.p || '') + (r.xr || ''), r.t].filter(Boolean).join(' · '), filtered, where);
   }
 
   function dumpTeams(teams) {
@@ -2432,17 +2496,9 @@
 
   // where(row): who has him in the picked league (a Where column), or null under All leagues.
   function valueTable(rows, filtered, where) {
-    const n = (v, d = 1) => (v === null || v === undefined ? '–' : Number(v).toFixed(d));
-    const share = v => (v === null || v === undefined ? '–' : Math.round(v * 100) + '%');
-    const sgn = (v, d = 1) => (v === null || v === undefined ? '–'
-      : `<span class="${v > 0 ? 'good' : v < 0 ? 'amber' : ''}">${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(d)}</span>`);
-    const rank = (p, r) => (r === null || r === undefined ? '–' : esc(p) + r);
-    const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
-    return `<div class="table-wrap vr-scroll"><table class="season-t vr-t"><thead><tr><th>Player</th>${where ? '<th class="vr-w">Where</th>' : ''}<th>Projection</th><th>Points</th><th>Over usage</th>
-      <th>Snaps</th><th>Target share</th><th>Red zone</th><th>By projection</th><th>Market</th><th>Gap</th><th>Rank change</th></tr></thead><tbody>${rows.map(r =>
-      `<tr data-find=" ${esc(SCC.norm(r.n))} ${esc(String(r.t || '').toLowerCase())} ${esc(String(r.p || '').toLowerCase())} "${filtered ? ` data-vp="${esc(r.p)}"${vp !== 'ALL' && r.p !== vp ? ' hidden' : ''}` : ''}><td class="vr-p">${callPill(r, filtered)}<b>${esc(r.n)}</b><small>${esc([r.p, r.t].filter(Boolean).join(' · '))}</small></td>
-      ${where ? `<td class="vr-w">${where(r)}</td>` : ''}<td>${n(r.proj)}</td><td>${n(r.fp)}</td><td>${sgn(r.fpoe)}</td><td>${share(r.snap)}</td><td>${share(r.tgt)}</td><td>${n(r.rz)}</td>
-      <td>${rank(r.p, r.ur)}</td><td>${rank(r.p, r.mr)}</td><td>${sgn(r.gap, 0)}</td><td>${sgn(r.ch, 0)}</td></tr>`).join('')}</tbody></table></div>`;
+    return reportTable(rows, [['Projection', r => rt.n(r.proj)], ['Points', r => rt.n(r.fp)], ['Over usage', r => rt.sgn(r.fpoe)], ['Snaps', r => rt.share(r.snap)],
+      ['Target share', r => rt.share(r.tgt)], ['Red zone', r => rt.n(r.rz)], ['By projection', r => rt.rank(r.p, r.ur)], ['Market', r => rt.rank(r.p, r.mr)],
+      ['Gap', r => rt.sgn(r.gap, 0)], ['Rank change', r => rt.sgn(r.ch, 0)]], r => [r.p, r.t].filter(Boolean).join(' · '), filtered, where);
   }
 
   function screenValue() {
@@ -3565,7 +3621,7 @@
     const proj = SCC.projFor(S.proj, id, 1), opp = mine && mine.opp;
     const week = [opp && 'vs ' + opp, teamKick(p.team), proj !== null && `projected ${fmt(proj)} PPR`].filter(Boolean).join(' · ');
     let h = week ? `<p class="pc-week"><b>Week ${esc(S.snap.week)}:</b> ${esc(week)}</p>` : '';
-    h += playerRead(p);
+    h += playerRead(p) + playerNews(p);
     if (S.A && S.A.leagues.length) {
       h += `<div class="wchips pc-where">${S.A.leagues.map(L => { const s = wStatus(L, p); return `<span class="wst ${s}">${esc(L.cfg.key)}${
         s === 'mine' ? ' · yours' : s === 'taken' ? ' · taken' : ' · free'}</span>`; }).join('')}</div>`;
@@ -3631,6 +3687,40 @@
     return St.result;
   }
 
+  /* The playoff picture: what this week's games mean for your odds. Each game still to play this week is run both
+     ways through the standings simulation (fewer sims than the table's), and the difference in your playoff chance
+     says who to root for. Your own game leads. Nothing once the week is played or before the schedule is in. */
+  const PICTURE_SIMS = 2000;
+  function playoffPicture(d, sched, R) {
+    const cfg = d.cfg, Tm = S.trade.teams[cfg.id];
+    if (!R || !Tm || !Tm.list) return '';
+    const mineId = String(cfg.platform === 'espn' ? cfg.teamId : d.rosterId), week = S.snap.week;
+    const games = sched.games.filter(g => Number(g.week) === Number(week) && !g.done && String(g.a) !== String(g.b));
+    if (!games.length || R.left === 0) return '';
+    const proj = {};
+    Tm.list.forEach(t => { proj[t.id] = SCC.lineupPoints(t.roster, cfg.lineup, p => SCC.projFor(S.proj, p.id, cfg) || 0); });
+    const opts = {playoffTeams: cfg.playoffTeams || sched.playoffTeams, sims: PICTURE_SIMS, seed: 11};
+    const odds = forced => {
+      const list = sched.games.map(g => (g === forced.g ? Object.assign({}, g, {done: true, aPts: forced.aWins ? 1 : 0, bPts: forced.aWins ? 0 : 1}) : g));
+      const t = SCC.standings(sched.teams, list, proj, opts).teams.find(x => x.id === mineId);
+      return t ? t.playoffs : null;
+    };
+    const name = id => { const t = sched.teams.find(x => String(x.id) === String(id)); return t ? t.name : 'Team ' + id; };
+    const rows = games.map(g => {
+      const a = odds({g, aWins: true}), b = odds({g, aWins: false});
+      if (a === null || b === null) return null;
+      const mine = String(g.a) === mineId || String(g.b) === mineId, iAmA = String(g.a) === mineId;
+      const swing = Math.round((a - b) * 100), fav = swing >= 0 ? g.a : g.b; // the winner that helps you
+      return {g, mine, swing: Math.abs(swing), fav, winOdds: mine ? (iAmA ? a : b) : null, loseOdds: mine ? (iAmA ? b : a) : null};
+    }).filter(Boolean).sort((x, y) => (y.mine - x.mine) || y.swing - x.swing);
+    const line = r => r.mine
+      ? `<li class="pp-mine"><b>Your game:</b> win it and you're at ${pct(r.winOdds)}, lose it and ${pct(r.loseOdds)}.</li>`
+      : r.swing < 1 ? `<li><span class="fine">${esc(name(r.g.a))} vs ${esc(name(r.g.b))}: doesn't move your odds.</span></li>`
+        : `<li>Root for <b>${esc(name(r.fav))}</b> over ${esc(name(r.fav === r.g.a ? r.g.b : r.g.a))} <span class="good">+${r.swing}%</span> for you.</li>`;
+    return `<section class="card pad ppic"><h3>This week's playoff picture</h3><ul>${rows.map(line).join('')}</ul>
+      <p class="fine">Each game this week run both ways through the same simulation: the difference is what that result does to your playoff chance.</p></section>`;
+  }
+
   /* Where each team stands for trades, in a dynasty or keeper league (a redraft team out of the race has no
      future to trade for): contending at 55% playoff odds or more, rebuilding at 25% or less, from the standings
      simulation. {map: {teamId: stance}, odds: {teamId}}, or null until the schedule is in. */
@@ -3667,13 +3757,14 @@
     if (!St || St.busy || !Tm || Tm.busy) return h + '<div class="empty-note">Loading the schedule and every team\'s roster…</div>';
     const sched = St.sched;
     if (!sched.teams.length || !sched.games.length) return h + '<div class="empty-note">This league has no regular-season schedule yet.</div>';
-    const R = standingsResult(d), mineId = String(cfg.platform === 'espn' ? cfg.teamId : d.rosterId), me = R.teams.find(t => t.id === mineId);
+    const R = standingsResult(d), picture = playoffPicture(d, sched, R), mineId = String(cfg.platform === 'espn' ? cfg.teamId : d.rosterId), me = R.teams.find(t => t.id === mineId);
     if (me) {
       h += `<div class="banner ok"><b>Your playoff chances in ${esc(cfg.key)}: ${pct(me.playoffs)}.</b> ${me.games
         ? `You're ${nth(me.seed)} at ${recordOf(me)}, power-ranked ${nth(me.powerRank)} of ${R.teams.length},`
         : `No games played yet, so this comes from this week's projected lineups. You're power-ranked ${nth(me.powerRank)} of ${R.teams.length},`}
         with about ${fmt(me.projWins)} wins expected by the end of the regular season.</div>`;
     }
+    h += picture;
     const cell = t => `<tr class="${t.id === mineId ? 'mine' : ''}${t.seed === R.spots ? ' cut' : ''}"><td class="tnum">${t.seed}</td>
       <td class="st-team">${esc(t.name)}</td><td>${recordOf(t)}</td><td class="st-opt tnum">${fmt(t.pf)}</td>
       <td class="st-opt">${t.allPlay.w}-${t.allPlay.l}${t.allPlay.t ? '-' + t.allPlay.t : ''}</td>
@@ -4383,7 +4474,7 @@
 
   const SCREENS = {
     lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
-    score: screenScore, ranks: screenRanks, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`,
+    sos: screenSos, score: screenScore, ranks: screenRanks, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`,
     dump: () => `<div class="vr-page">${screenDump()}</div>`, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
 
@@ -4405,9 +4496,62 @@
   }
 
   // Back and Forward move between screens, as on any website.
+  /* Find a player (the magnifier in the header, any screen): a dialog with a search over every NFL player
+     (searchPlayers), each with where he is in your leagues; a name opens his card on top. Back closes it. */
+  let PS = null, psBack = false, psOpener = null;
+  function searchDialog() {
+    if (PS) return PS;
+    PS = document.createElement('dialog');
+    PS.className = 'dlg psearch';
+    PS.setAttribute('aria-labelledby', 'ps-title');
+    document.body.appendChild(PS);
+    PS.addEventListener('close', () => {
+      if (!psBack && history.state && history.state.psearch) history.back();
+      psBack = false;
+      if (psOpener && psOpener.isConnected) psOpener.focus();
+    });
+    PS.addEventListener('input', e => {
+      if (!e.target.matches('[data-psearch]')) return;
+      S.ui.psq = e.target.value;
+      const box = PS.querySelector('#ps-results');
+      if (box) box.innerHTML = searchResults();
+    });
+    PS.addEventListener('click', e => {
+      if (e.target.closest('[data-action="psearch-close"]')) { PS.close(); return; }
+      const t = e.target.closest('[data-pcard]');
+      if (t) openPlayerCard(t.dataset.pcard);
+    });
+    return PS;
+  }
+  function openSearch() {
+    if (!S.snap) return;
+    const d = searchDialog();
+    d.innerHTML = `<header class="dlg-h"><div class="dlg-t"><div><h2 id="ps-title">Find a player</h2><p>Any NFL player: where he is in every league</p></div></div>
+      <button type="button" class="dlg-x" data-action="psearch-close" aria-label="Close">✕</button></header>
+      <div class="dlg-body"><label class="field"><span class="sr-only">Player name</span><input type="search" data-psearch placeholder="At least three letters"
+        value="${esc(S.ui.psq || '')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="ps-results">${searchResults()}</div></div>`;
+    if (d.open) return;
+    psOpener = document.activeElement;
+    d.showModal();
+    if (location.protocol !== 'file:') history.pushState(Object.assign({}, history.state, {psearch: 1}), '', location.href);
+    const box = d.querySelector('[data-psearch]');
+    if (box) box.focus();
+  }
+  function searchResults() {
+    const q = SCC.norm(S.ui.psq || '').trim();
+    if (q.length < 3) return '<p class="fine">Type three letters or more.</p>';
+    const found = searchPlayers(playerList(), q, 12), leagues = (S.A && S.A.leagues) || [];
+    if (!found.length) return '<p class="fine">Nobody by that name on an NFL team.</p>';
+    return `<ul class="wlist">${found.map(p => `<li class="wrow">${headshot(p, true)}<span class="who"><b${pcAttr(p)}>${esc(p.name)}</b>
+      <small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.team || '')}${p.pos && p.pos !== 'DEF' ? ' · tap for his card' : ''}</small>${leagues.length
+        ? `<span class="wchips">${leagues.map(L => { const s = wStatus(L, p); return `<span class="wst ${s}">${esc(L.cfg.key)} · ${s === 'mine' ? 'yours' : s === 'taken' ? 'taken' : 'free'}</span>`; }).join('')}</span>` : ''}</span></li>`).join('')}</ul>`;
+  }
+  $('psearch-btn').addEventListener('click', openSearch);
+
   window.addEventListener('popstate', () => {
-    // Back with a player's card or the draft results open closes them and stays on the screen.
+    // Back with a player's card, the search or the draft results open closes them and stays on the screen.
     if (PC && PC.open) { pcBack = true; PC.close(); return; }
+    if (PS && PS.open) { psBack = true; PS.close(); return; }
     if (DLG && DLG.open) { dlgBack = true; DLG.close(); return; }
     const t = tabFromPath();
     if (t && t !== S.ui.tab) go(t, true);
@@ -4430,6 +4574,19 @@
     if (form === 'link') linkAccount(el.username.value);
     else if (form === 'espn-add') addEspn(el.league.value);
     else if (form === 'espn-login') saveEspnLogin(el.s2.value, el.swid.value);
+  });
+
+  // Copy (a league's lineup changes as text): to the clipboard, with a word either way.
+  view.addEventListener('click', e => {
+    const b = e.target.closest('[data-copy]');
+    if (!b) return;
+    const done = ok => toast(ok ? 'Copied. Paste it wherever you set your lineup.' : 'Titan couldn\'t copy on this device.');
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(b.dataset.copy).then(() => done(true), () => done(false));
+    else done(false);
+  });
+  view.addEventListener('click', e => {
+    const c = e.target.closest('[data-sos-pos]');
+    if (c) { S.ui.sosPos = c.dataset.sosPos; saveUi(); render(); }
   });
 
   // Copy and open: the link opens the site as usual while the trade goes to the clipboard.
@@ -4512,6 +4669,7 @@
     else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
     else if (a === 'matchups') loadMatchups();
     else if (a === 'news-retry') { S.news.error = ''; loadNews(); }
+    else if (a === 'sos-retry') { S.sos.error = ''; loadSos(); render(); }
     else if (a === 'stand-retry') {
       [S.stand, S.trade.teams].forEach(m => Object.keys(m).forEach(k => { if (m[k].error) delete m[k]; }));
       render();

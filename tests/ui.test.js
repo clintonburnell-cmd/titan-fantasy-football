@@ -372,7 +372,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     return {fixed: getComputedStyle(t).position, gap: Math.round(innerHeight - r.bottom),
       subs: [...document.querySelectorAll('.subtabs button')].map(b => b.innerText).join(' | '),
       on: (document.querySelector('[data-section][aria-current="page"]') || {}).dataset?.section}; })()`);
-  check(nav.fixed === 'fixed' && nav.gap <= 1 && nav.subs === 'Waivers | News | Exposure | Byes' && nav.on === 'players',
+  check(nav.fixed === 'fixed' && nav.gap <= 1 && nav.subs === 'Waivers | News | Exposure | Byes | Schedule' && nav.on === 'players',
     `on a phone the sections sit along the bottom, and Players shows its screens as sub-tabs (${nav.subs})`);
   await tab('trade');
   await tab('byes');
@@ -567,6 +567,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`history.back(); true`);
   check(await waitFor(`!document.querySelector('dialog.pcard[open]') && location.pathname === '/app/lineups'`, 3000), 'Back closes the card and stays on Lineups');
   check(await ev(`document.activeElement === document.querySelector('.lineup [data-pcard]')`), 'and keyboard focus returns to the name that opened it');
+  check(await ev(`!document.querySelector('.moves') || !!document.querySelector('.moves [data-copy]')`), 'a league with changes to make offers to copy them as text');
+
+  // Find a player: the magnifier in the header, from any screen.
+  const starter = await ev(`document.querySelector('.lineup [data-pcard]').textContent.trim()`);
+  await ev(`document.getElementById('psearch-btn').click(); true`);
+  check(await waitFor(`!!document.querySelector('dialog.psearch[open]') && document.activeElement === document.querySelector('dialog.psearch [data-psearch]')`, 3000),
+    'the magnifier opens Find a player, with the cursor in the box');
+  await ev(`(() => { const i = document.querySelector('dialog.psearch [data-psearch]'); i.value = ${JSON.stringify(starter)}; i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
+  check(await waitFor(`[...document.querySelectorAll('dialog.psearch .wrow')].some(r => r.querySelector('b').textContent === ${JSON.stringify(starter)} && /yours/.test(r.textContent))`, 3000),
+    'searching a starter\'s name finds him, marked yours in his league: ' + starter);
+  await ev(`[...document.querySelectorAll('dialog.psearch .wrow b[data-pcard]')].find(b => b.textContent === ${JSON.stringify(starter)}).click(); true`);
+  check(await waitFor(`!!document.querySelector('dialog.pcard[open]')`, 3000), 'tapping him opens his card on top of the search');
+  await ev(`history.back(); true`);
+  await waitFor(`!document.querySelector('dialog.pcard[open]')`, 3000);
+  await ev(`history.back(); true`);
+  check(await waitFor(`!document.querySelector('dialog.psearch[open]') && location.pathname === '/app/lineups'`, 3000), 'Back closes the card, then the search, and stays on Lineups');
 
   T.section('the Standings tab');
   await tab('standings');
@@ -579,6 +595,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     return rows.filter(r => r.classList.contains('mine')).length === 1 && rows.every(r => /%$/.test(r.querySelector('.st-odds b').textContent)) &&
       rows.findIndex(r => r.classList.contains('cut')) === 3; })()`), 'your team is marked, every team has playoff odds, and the line falls after the 4th');
   check(/Your playoff chances/.test(await text('#view .banner.ok')), 'your own chances lead the page: ' + (await text('#view .banner.ok')).slice(0, 80));
+  check(await waitFor(`document.querySelectorAll('.ppic li').length >= 1 && /Your game/.test(document.querySelector('.ppic').textContent)`, 20000),
+    'the playoff picture: your game\'s win-or-lose odds, then who to root for this week: ' + (await text('.ppic')).replace(/\s+/g, ' ').slice(0, 120));
+
+  T.section('Schedule strength');
+  await tab('sos');
+  check(await waitFor(`location.pathname === '/app/schedule' && document.querySelectorAll('.sos-t tbody tr').length >= 30`, 30000),
+    'Schedule strength lists every NFL team\'s road ahead at /app/schedule (under Players)');
+  await ev(`document.querySelector('[data-sos-pos="WR"]').click(); true`);
+  check(await waitFor(`document.querySelector('[data-sos-pos="WR"]').getAttribute('aria-pressed') === 'true' && /Your WRs/.test(document.querySelector('.sos-t thead').textContent)`, 3000),
+    'a position chip switches the table to that position');
+  check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'it fits a 390px phone');
 
   T.section('the News tab');
   await tab('news');
@@ -1010,7 +1037,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // Screenshots of every screen at phone and computer widths (TITAN_SHOTS only), to compare a change to the whole app's look.
   if (process.env.TITAN_SHOTS) {
     T.section('a tour of every screen (screenshots only)');
-    const TOUR = ['lineups', 'matchup', 'standings', 'rosters', 'trade', 'moves', 'waivers', 'news', 'exposure', 'byes', 'score', 'ranks', 'multi', 'settings'];
+    const TOUR = ['lineups', 'matchup', 'standings', 'rosters', 'trade', 'moves', 'waivers', 'news', 'exposure', 'byes', 'sos', 'score', 'ranks', 'multi', 'settings'];
     for (const [w, h, dpr, mobile] of [[390, 844, 2, true], [1280, 900, 1, false]]) {
       await send('Emulation.setDeviceMetricsOverride', {width: w, height: h, deviceScaleFactor: dpr, mobile});
       for (const t of TOUR) {

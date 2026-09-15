@@ -472,6 +472,20 @@ check(cuffs.length === 2 && /His backup, Backup Back, is a free agent there\./.t
 check(SCC.playerInfo({'9': ['A B', 'RB', 'KC', 2]}, '9').depth === 2 && SCC.trimPlayers({'9': {first_name: 'A', last_name: 'B', position: 'RB', team: 'KC', depth_chart_order: 2}})['9'][3] === 2,
   'the player list keeps each player\'s place on the depth chart');
 
+section('strength of schedule by position');
+{
+  const sched = [{week: 3, home: 'KC', away: 'BUF'}, {week: 4, home: 'SF', away: 'KC'}, {week: 5, home: 'KC', away: 'MIA'}, {week: 2, home: 'MIA', away: 'KC'},
+    {week: 15, home: 'BUF', away: 'KC'}, {week: 16, home: 'KC', away: 'SF'}, {week: 3, home: 'MIA', away: 'SF'}];
+  const dvp = {BUF: {RB: {rank: 30}}, SF: {RB: {rank: 2}}, MIA: {RB: {rank: 10}}, KC: {RB: {rank: 20}}};
+  const S = SCC.scheduleStrength(sched, dvp, 'RB', 3, {next4: [3, 6], ros: [3, 17], playoffs: [15, 17]});
+  const kc = S.find(r => r.team === 'KC');
+  check(kc.opps.map(o => `${o.week}:${o.opp}${o.home ? 'h' : 'a'}:${o.rank}`).join() === '3:BUFh:30,4:SFa:2,5:MIAh:10,15:BUFa:30,16:SFh:2',
+    'each team\'s remaining opponents from the week given, with each defense\'s rank against the position: ' + kc.opps.map(o => o.opp).join(', '));
+  check(kc.spans.next4 === 14 && kc.spans.ros === 14.8 && kc.spans.playoffs === 16 && S.find(r => r.team === 'SF').spans.next4 === 15,
+    `the average rank over each span (KC next four ${kc.spans.next4}, rest of season ${kc.spans.ros}, playoffs ${kc.spans.playoffs})`);
+  check(S.map(r => r.team).join() === 'MIA,KC,SF,BUF', 'easiest rest of season first: ' + S.map(r => r.team + ' ' + r.spans.ros).join(', '));
+}
+
 section('floor and ceiling, and the close calls in a lineup');
 {
   // Three weeks of stats: a steady receiver (10, 10, 10) and a streaky one (2, 20, 8), both projected 12.

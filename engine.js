@@ -713,6 +713,38 @@
     return {teams: out, weeks: Object.keys(weeks).length};
   }
 
+  /* Strength of schedule by position, from the points each defense gives up (dvpFrom's teams, rank 1
+     giving up the most): for every NFL team, its remaining opponents from week `from` and the average
+     of their ranks at `pos` over each span (a low average is an easy stretch). spans: {next4: [from,
+     from + 3], ros: [from, 17], playoffs: [15, 17]}. [{team, opps: [{week, opp, home, rank}], spans:
+     {next4, ros, playoffs}}], easiest rest of season first. */
+  function scheduleStrength(schedule, dvp, pos, from, spans) {
+    var byTeam = {};
+    from = Number(from) || 1;
+    (schedule || []).forEach(function (g) {
+      var w = Number(g.week);
+      if (!w || w < from || !g.home || !g.away) return;
+      var h = teamAbbr(g.home), a = teamAbbr(g.away);
+      (byTeam[h] = byTeam[h] || []).push({week: w, opp: a, home: true});
+      (byTeam[a] = byTeam[a] || []).push({week: w, opp: h, home: false});
+    });
+    var rankOf = function (opp) { var d = dvp && dvp[opp] && dvp[opp][pos]; return d ? d.rank : null; };
+    var out = Object.keys(byTeam).map(function (t) {
+      var opps = byTeam[t].sort(function (a, b) { return a.week - b.week; })
+        .map(function (o) { return {week: o.week, opp: o.opp, home: o.home, rank: rankOf(o.opp)}; });
+      var avg = function (lo, hi) {
+        var v = opps.filter(function (o) { return o.week >= lo && o.week <= hi && o.rank !== null; }).map(function (o) { return o.rank; });
+        return v.length ? round1(v.reduce(function (s, x) { return s + x; }, 0) / v.length) : null;
+      };
+      var sp = {};
+      Object.keys(spans || {}).forEach(function (k) { sp[k] = avg(spans[k][0], spans[k][1]); });
+      return {team: t, opps: opps, spans: sp};
+    });
+    var key = function (r) { return r.spans.ros === null || r.spans.ros === undefined ? Infinity : r.spans.ros; };
+    out.sort(function (a, b) { return key(a) - key(b) || a.team.localeCompare(b.team); });
+    return out;
+  }
+
   /* A player's game context for his row on Lineups ([{text, tone}]): who he plays (opts.opp),
      his team's expected points (a defense: the opponent's), how soft or tough his matchup is
      (the opponent's rank for points given up to his position: the top or bottom eight), and
@@ -2744,7 +2776,7 @@
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, impliedValue: impliedValue, spanPoints: spanPoints,
     flexShares: flexShares,
     draftFromSleeper: draftFromSleeper, draftGrades: draftGrades,
-    impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags, transactionsFrom: transactionsFrom,
+    impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags, scheduleStrength: scheduleStrength, transactionsFrom: transactionsFrom,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks, combineRanks: combineRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,

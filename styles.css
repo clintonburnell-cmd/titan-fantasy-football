@@ -210,6 +210,23 @@ main#view { min-height: 100vh; }
   background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
 
 /* Settings: the gear in the header. On a narrow phone Refresh is just its icon, to make room. */
+.search-btn { display: inline-grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; cursor: pointer;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+.search-btn:hover { color: var(--text); border-color: var(--accent-2); }
+.search-btn svg { width: 20px; height: 20px; }
+.psearch .wlist { list-style: none; margin: 0; padding: 0; }
+.pc-news { margin: 4px 0; }
+.pc-news h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; }
+.pc-news ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pc-news a { display: grid; gap: 2px; text-decoration: none; color: inherit; padding: 8px 10px; background: var(--chip); border-radius: 10px; }
+.pc-news a small { color: var(--muted); }
+.ppic ul { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 6px; }
+.ppic .pp-mine { padding: 6px 10px; border-radius: 8px; background: var(--chip); }
+.moves-b { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sos-t td, .sos-t th { white-space: nowrap; }
+.sos-t .sos-next small { color: var(--muted); }
+.sos-t .sos-mine { white-space: normal; min-width: 8rem; font-size: .8rem; color: var(--muted); }
+.sos-t tr.mine td { background: var(--chip); }
 .gear-btn { display: inline-grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; cursor: pointer;
   border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
 .gear-btn:hover { color: var(--text); border-color: var(--accent-2); }
