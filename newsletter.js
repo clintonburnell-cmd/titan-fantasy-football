@@ -40,7 +40,8 @@
       remember();
       input.value = '';
       f.classList.add('nl-done');
-      if (note) note.textContent = 'Almost done: check your inbox and tap the link in Kit\'s email to confirm.';
+      if (note) note.textContent = 'Almost done: check your inbox and tap the link in Kit\'s email to confirm. ' +
+        'Not there? Check your spam or promotions folder.';
     }, function () {
       if (note) note.textContent = 'That didn\'t go through. Check your connection and try again.';
     }).then(function () { if (btn) btn.disabled = false; });
