@@ -903,7 +903,9 @@
           <span class="mv in">${esc(m.inn.name)} <em>${m.from ? `from ${esc(slotName(m.from))}${esc(kickOf(m.inn))}` : esc(rl(m.inn)) + (m.inn.opp ? ' vs ' + esc(m.inn.opp) : '')}</em></span>
         </div>`).join('')}${L.moves.some(m => m.from || m.to) ? '<p class="fine">Later kickoffs go in FLEX, so a late scratch can still be covered from your bench.</p>' : ''}</div>`;
     }
-    h += `<ol class="lineup">${L.rows.map(r => lineupRow(r, L.cfg)).join('')}</ol>`;
+    const rec = recLineup(L);
+    h += `<h4 class="lu-h">${LV ? `Recommended lineup for week ${LV.week}` : 'Recommended lineup'}</h4><ol class="lineup lineup-rec">${
+      rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg)).join('')}</ol>${compareLineups(L, rec)}`;
     L.wire.forEach(w => {
       const tail = w.cur ? `, better than ${esc(w.cur.name)} (${esc(rl(w.cur))})`
         : w.anyUnranked ? ', and you are starting someone unranked here' : '';
@@ -985,17 +987,43 @@
     return tags.length ? `<small class="gctx">${tags.map(t => `<span class="${t.tone}">${esc(t.text)}</span>`).join(' · ')}</small>` : '';
   }
 
-  function lineupRow(r, cfg) {
-    if (!r.p) {
-      return `<li class="row r-stop"><span class="slot">${esc(slotName(r.slot))}</span><span class="pphoto"><span class="hs"></span></span>
-        <span class="who"><b>Slot empty</b></span><span class="right"><span class="verdict v-stop">FILL SLOT</span></span></li>`;
+  /* Each league card leads with the lineup Titan recommends, spot by spot in the league's own order, then yours beside
+     it (compareLineups). With no changes to make, the recommended lineup is yours as it stands (the engine's optimal
+     lineup can differ only in how equal players sit, which isn't a change). */
+  const recLineup = L => (L.moves.length ? L.opt || [] : L.rows.map(r => ({slot: r.slot, p: r.p})));
+  const sameIn = (a, b) => ((a && a.id) || '') === ((b && b.id) || '');
+
+  // One spot of the recommended lineup; NEW where he isn't in that spot now.
+  function recRow(o, cur, cfg) {
+    if (!o.p) {
+      return `<li class="row r-stop"><span class="slot">${esc(slotName(o.slot))}</span><span class="pphoto"><span class="hs"></span></span>
+        <span class="who"><b>Nobody to start</b><small>No one on your roster fits this spot: see the wire below.</small></span>
+        <span class="right"><span class="verdict v-stop">FILL SLOT</span></span></li>`;
     }
-    const p = r.p, v = VERDICT[r.verdict] || 'ok';
-    const proj = projOf(p, cfg);
+    const p = o.p, fresh = !sameIn(p, cur), proj = projOf(p, cfg);
     const sub = [p.pos, p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
-    return `<li class="row r-${v}"><span class="slot" data-pos="${esc(p.pos)}">${esc(slotName(r.slot))}</span>${headshot(p)}
+    // Only when nobody better is left: a player on bye or ruled out still takes the spot, and says so.
+    const tag = scored(p) ? scoreChip(p) : p.locked ? '<span class="verdict v-locked">LOCKED</span>'
+      : p.onBye ? '<span class="verdict v-stop">ON BYE</span>' : p.outish ? '<span class="verdict v-stop">OUT</span>'
+      : fresh ? '<span class="verdict v-new">NEW</span>' : '';
+    return `<li class="row${fresh ? ' r-new' : ''}${p.locked ? ' r-locked' : ''}"><span class="slot" data-pos="${esc(p.pos)}">${esc(slotName(o.slot))}</span>${headshot(p)}
       <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small>${ctxLine(p)}</span>
-      <span class="right">${rankCell(p)}${scored(p) ? scoreChip(p) : `<span class="verdict v-${v}">${esc(r.verdict)}</span>`}</span></li>`;
+      <span class="right">${rankCell(p)}${tag}</span></li>`;
+  }
+
+  // Your lineup and the recommended one side by side, spot by spot, the spots that differ highlighted; your side keeps
+  // each call (swap out, on bye, do not start). A lineup that already matches gets one line instead.
+  function compareLineups(L, rec) {
+    const diff = L.rows.filter((r, i) => !sameIn(r.p, (rec[i] || {}).p)).length;
+    if (!diff) return '<p class="fine lu-same">Your lineup matches the recommended one: nothing to change.</p>';
+    const who = p => (p ? `<b${pcAttr(p)}>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}</small>` : '<b class="lu-empty">Empty</b>');
+    return `<h4 class="lu-h">Yours vs recommended <small>${plural(diff, 'spot')} different</small></h4><div class="lu-cmp-wrap"><table class="lu-cmp">
+      <thead><tr><th>Spot</th><th>Yours</th><th>Recommended</th></tr></thead><tbody>${L.rows.map((r, i) => {
+        const o = rec[i] || {}, same = sameIn(r.p, o.p);
+        const call = r.verdict && r.verdict !== 'OK' && !same ? `<span class="verdict v-${VERDICT[r.verdict] || 'ok'}">${esc(r.verdict)}</span>` : '';
+        return `<tr${same ? '' : ' class="lu-diff"'}><td class="slot" data-pos="${esc((r.p || o.p || {}).pos || '')}">${esc(slotName(r.slot))}</td>
+          <td>${who(r.p)}${call}</td><td>${who(o.p)}</td></tr>`;
+      }).join('')}</tbody></table></div>`;
   }
 
   /* ---- News */

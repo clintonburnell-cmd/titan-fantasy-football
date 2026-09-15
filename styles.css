@@ -561,6 +561,26 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .note { padding: 8px 14px; border-top: 1px solid var(--line); font-size: .82rem; color: var(--muted); }
 .note.wire b { color: var(--accent-2); }
 .note.hurt, .note.hurt b { color: var(--bad); }
+/* Lineups: the recommended lineup (NEW where it differs from yours), then yours beside it. */
+.lu-h { font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 12px 14px 6px;
+  border-top: 1px solid var(--line); margin: 0; }
+.lu-h small { text-transform: none; letter-spacing: 0; font-weight: 700; margin-left: 6px; color: var(--swap); }
+.lineup-rec .row:first-child { border-top: 0; }
+.r-new { background: var(--ok-soft); }
+.v-new { background: var(--ok); color: #fff; }
+.lu-cmp-wrap { overflow-x: auto; margin: 0 14px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.lu-cmp { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .84rem; }
+.lu-cmp th { text-align: left; font-size: .66rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted);
+  background: var(--surface-2); padding: 6px 8px; }
+.lu-cmp th:first-child { width: 3.4rem; }
+.lu-cmp td { padding: 7px 8px; border-top: 1px solid var(--line); vertical-align: top; overflow: hidden; }
+.lu-cmp td b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lu-cmp td small { display: block; color: var(--muted); font-size: .72rem; }
+.lu-cmp .verdict { display: inline-block; margin-top: 3px; }
+.lu-cmp tr.lu-diff td { background: var(--swap-soft); }
+.lu-cmp tr.lu-diff td:last-child b { color: var(--ok); }
+.lu-empty { color: var(--muted); font-weight: 600; }
+.lu-same { padding: 8px 14px 12px; border-top: 1px solid var(--line); margin: 0; }
 
 /* --------------------------------------------------------------- exposure */
 

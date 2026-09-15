@@ -730,8 +730,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'Done ticks a claim off: ' + await ev(`document.querySelector('.wplan-h .wmeta').textContent`));
   await shot('waivers-plan');
   await ev(`document.querySelector('[data-wdone]').click(); true`);
-  // Lineups' week dropdown: this week, then every week to come, each a plan.
+  // Each league card: the recommended lineup first, then yours beside it (or one line when they match).
   await tab('lineups');
+  const cmp = await ev(`(() => { const c = document.querySelector('.card.league'), t = c.querySelector('.lu-cmp');
+    return {rec: c.querySelectorAll('.lineup-rec .row').length, head: (c.querySelector('.lu-h') || {}).textContent || '', rows: t ? t.querySelectorAll('tbody tr').length : 0,
+      diff: t ? t.querySelectorAll('tr.lu-diff').length : 0, fresh: c.querySelectorAll('.lineup-rec .r-new').length, same: !!c.querySelector('.lu-same'),
+      moves: c.querySelectorAll('.move').length}; })()`);
+  check(cmp.rec > 0 && /^Recommended lineup/.test(cmp.head.trim()) && (cmp.same ? cmp.moves === 0 && cmp.fresh === 0 : cmp.rows === cmp.rec && cmp.diff > 0 && cmp.fresh > 0),
+    `each league leads with its recommended lineup (${cmp.rec} spots, ${cmp.fresh} new), then yours beside it (${cmp.same ? 'they match' : cmp.diff + ' of ' + cmp.rows + ' spots differ'})`);
+  await shot('lineups-compare');
+  // Lineups' week dropdown: this week, then every week to come, each a plan.
   const weeks = await ev(`[...document.querySelectorAll('select[data-ui="lineWeek"] option')].map(o => o.value)`);
   check(weeks.length >= 2 && weeks[0] === '0' && weeks[weeks.length - 1] === '18', `Lineups has a week dropdown: this week, then every week to 18 (${weeks.length} choices)`);
   const later = weeks[Math.min(2, weeks.length - 1)];

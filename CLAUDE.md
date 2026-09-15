@@ -144,6 +144,10 @@ How the pieces fit, and what keeps them working.
 
 One note per screen or feature.
 
+- Lineups' league cards (`leagueCard`): the changes to make, then the recommended lineup (`recLineup`: the engine's
+  `L.opt` when there are moves, else the lineup as set, so it never shows a change the steps don't; `recRow`, NEW where
+  it differs) and yours beside it (`compareLineups`, table `.lu-cmp`, the differing spots highlighted, your players'
+  verdicts on your side; one line when they match). Tests count `.lineup .row`, which is the recommended list.
 - Lineups' week dropdown (`screenBar`, `select[data-ui="lineWeek"]`, `S.look`, not remembered): this week, then
   every week to 18 (`LAST_WEEK`). A later week is a plan: `SCC.planWeek` (pure, tested) copies the snapshot with
   that week's game days and opponents from Sleeper's schedule (`API.nflSchedule`), nothing locked or scored, and
