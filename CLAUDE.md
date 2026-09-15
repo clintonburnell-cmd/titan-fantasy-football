@@ -372,7 +372,9 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   no key, so no server code) in the background, and remembers a device that joined (`titan.newsletter`), which hides the
   boxes marked `data-hide-joined` and the app's cards. `FORM_ID` in newsletter.js is Kit's form number (public; the
   "Titan Waiver Wire" form, 9921118, set 2026-09-15); while it's empty every box stays hidden. The UI test overrides it
-  with `window.TitanNewsletterForm` ('' for none) and answers Kit's address itself: tests never post to the real form. A new website page gets a signup box too. The privacy page's "If you join the
+  with `window.TitanNewsletterForm` ('' for none) and answers Kit's address itself: tests never post to the real form. A new website page gets a signup box too. Beyond the boxes, links that stay for everyone, joined or not: a
+  "Free weekly email" pill beside the app's title (`.nl-top`, hidden at 720px and narrower), "Weekly email" in the
+  app's footer, and "Weekly email" in every website footer's `.foot-links` (a new page's footer gets it too). The privacy page's "If you join the
   weekly email" section and the Play Data safety form (email address, collected when someone signs up) must stay true.
   The email itself is drafted by titan-analytics each Tuesday (`reports/newsletter-latest.html`, from nflverse usage
   only: never FantasyCalc's values, never the owner's leagues). The owner reads it, pastes it into a Kit broadcast and

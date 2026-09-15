@@ -109,6 +109,12 @@ main#view { min-height: 100vh; }
 .brand div { min-width: 0; }
 .brand h1 { font-size: 1.02rem; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; }
 .brand p { color: var(--muted); font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The Titan Waiver Wire beside the title: wider screens only (a phone's header is full; the footer links it there). */
+.nl-top { flex: none; display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; padding: 5px 12px; border: 1px solid var(--line);
+  border-radius: 999px; font-size: .8rem; font-weight: 700; color: var(--accent-2); text-decoration: none; white-space: nowrap; }
+.nl-top svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.nl-top:hover { border-color: var(--accent-2); }
+@media (max-width: 720px) { .nl-top { display: none; } }
 
 .top-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 .tip {

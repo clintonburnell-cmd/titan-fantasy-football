@@ -958,9 +958,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'signing up sends the email to Kit\'s form and says to check the inbox: ' + JSON.stringify(kitPosts.map(p => p.body)));
   await tab('settings');
   check(await ev(`!document.querySelector('.nl-card')`), 'once this device has joined, the app stops asking (no card in Settings)');
+  check(await ev(`(() => { const a = document.querySelector('.nl-top');
+    return !!a && a.getAttribute('href') === '/newsletter/' && getComputedStyle(a).display === 'none' && !!document.querySelector('.foot-cols a[href="/newsletter/"]'); })()`),
+    'the header\'s Free weekly email link hides on a phone, and the footer links the weekly email on every width, joined or not');
   await send('Page.navigate', {url: ORIGIN + '/?home'});
   check(await waitFor(`!!document.querySelector('.nl-hero') && document.querySelector('.nl-hero').hidden && document.querySelector('#newsletter').hidden`, 10000),
     'the home page\'s signup boxes stay hidden for someone who joined');
+  check(await ev(`!!document.querySelector('.site-foot .foot-links a[href="/newsletter/"]')`), 'but the footer still links the weekly email, as every guide\'s does');
   await send('Page.navigate', {url: ORIGIN + '/newsletter/?joined=1'});
   check(await waitFor(`!document.querySelector('[data-newsletter-joined]').hidden && !document.querySelector('.nl-box').hidden &&
     document.querySelector('form[data-newsletter]').action.endsWith('/forms/1234567/subscriptions')`, 10000),
