@@ -355,6 +355,17 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   `counts` keeps it off `/app/`, the Play app (`?source=play`, the android-app referrer, `titan.play`),
   home-screen copies and any host but titanfantasyfootball.com. Never load it in the app: the Play
   Data safety form declares no analytics, and the privacy policy says the app has none. `TOKEN` is public.
+- The Titan Waiver Wire, Titan's free weekly email, runs on Kit (the newsletter service, free plan). `newsletter.js`
+  handles every signup box (`form[data-newsletter]` inside `[data-newsletter-box]`): the home page's hero and its
+  `#newsletter` section, the `/newsletter/` page, every guide, and the app's `newsletterCard` on Waivers and Settings. It
+  posts the email to Kit's form endpoint (`https://app.kit.com/forms/<FORM_ID>/subscriptions`, field `email_address`;
+  no key, so no server code) in the background, and remembers a device that joined (`titan.newsletter`), which hides the
+  boxes marked `data-hide-joined` and the app's cards. `FORM_ID` in newsletter.js is Kit's form number (public); while
+  it's empty every box stays hidden. A new website page gets a signup box too. The privacy page's "If you join the
+  weekly email" section and the Play Data safety form (email address, collected when someone signs up) must stay true.
+  The email itself is drafted by titan-analytics each Tuesday (`reports/newsletter-latest.html`, from nflverse usage
+  only: never FantasyCalc's values, never the owner's leagues). The owner reads it, pastes it into a Kit broadcast and
+  sends it; nothing sends on its own.
 
 ## Writing (app text, README, store listing)
 

@@ -165,6 +165,24 @@ html { scroll-behavior: smooth; }
 .guide-link h2 { font-size: 1.05rem; margin: 0 0 6px; letter-spacing: 0; }
 .guide .guide-link p { margin-top: 0; font-size: .92rem; }
 
+/* ------------------------------------------------- the weekly waiver guide */
+
+/* Signup boxes for the Titan Waiver Wire (newsletter.js posts them to Kit; hidden until it's set up). */
+.nl-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; max-width: 34em; }
+.nl-form input[type="email"] { flex: 1 1 14em; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: 1rem; }
+.nl-form input[type="email"]:focus { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+.nl-form .btn.big { width: auto; padding-inline: 22px; }
+.nl-form .nl-note { flex-basis: 100%; margin: 0; color: var(--faint); font-size: .84rem; }
+.nl-form.nl-done .nl-note { color: var(--ok); font-weight: 700; }
+.nl-hero { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line); max-width: 34em; }
+.nl-hero .nl-lead { font-weight: 700; }
+.nl-hero .nl-form { margin-top: 10px; }
+.nl-box { margin-top: 36px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
+.guide .nl-box h2 { margin-top: 0; }
+.guide .nl-box p { margin-top: 8px; }
+.nl-sec .sec-sub a { color: var(--accent-2); font-weight: 700; }
+
 /* ---------------------------------------------------------------- footer */
 
 .site-foot { border-top: 1px solid var(--line); padding-block: 28px 44px; color: var(--faint); font-size: .84rem; }

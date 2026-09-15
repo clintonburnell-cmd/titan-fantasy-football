@@ -2401,7 +2401,7 @@
             autocorrect="off" spellcheck="false" value="${esc(S.link.name || '')}" ${S.link.busy ? 'disabled' : ''}></label>
           <button class="btn" type="submit" ${S.link.busy ? 'disabled' : ''}>${S.link.busy ? 'Finding you…' : 'Link Sleeper'}</button></form>
         ${S.link.error ? `<div class="banner stop">${esc(S.link.error)}</div>` : ''}`;
-    let h = `<section class="card pad" data-sync-slot="settings">${syncSettings()}</section>${alertsCard()}${appearanceCard()}${S.owner.is ? ownerCard() : ''}
+    let h = `<section class="card pad" data-sync-slot="settings">${syncSettings()}</section>${alertsCard()}${newsletterCard('settings')}${appearanceCard()}${S.owner.is ? ownerCard() : ''}
       <section class="card pad" id="link-leagues">${linkLeagues(sleeper)}</section>
       <section class="card pad"><h3>Leagues</h3>
         <p class="fine">Your Sleeper leagues are found automatically and your ESPN leagues are the ones you added, each with its own lineup format. Switch off any you don't want Titan to manage.</p>
@@ -2843,6 +2843,21 @@
     }).join('')}</ul>`;
   }
 
+  /* The Titan Waiver Wire, Titan's free weekly email: a signup card on Waivers and in Settings. newsletter.js posts
+     it to Kit and remembers a device that joined; until Kit's form is set up, or once this device has joined, no card. */
+  function newsletterCard(where) {
+    const N = window.TitanNewsletter;
+    if (!N || !N.ready() || N.joined()) return '';
+    const id = 'nl-app-' + where;
+    return `<section class="card pad nl-card"><h3>Free weekly waiver guide</h3>
+      <p class="fine">Every Tuesday before waivers run: who to grab, who to buy low and who to sell high, from each player's real usage.
+        One email a week, free.</p>
+      <form class="nl-form" data-newsletter="app-${where}"><label class="sr-only" for="${id}">Email address</label>
+        <input id="${id}" type="email" name="email_address" required placeholder="you@example.com" autocomplete="email">
+        <button class="btn" type="submit">Get it free</button>
+        <p class="fine nl-note" data-newsletter-note>Unsubscribe any time. Sent by Kit, an email service.</p></form></section>`;
+  }
+
   // The last three finished weeks of Sleeper's stats, for each pickup's usage (SCC.usageOf). Loaded once a week per visit.
   const USAGE_WEEKS = 3;
   async function loadUsage() {
@@ -2971,7 +2986,7 @@
     const anyFaab = leagues.some(L => L.cfg.faab && onSleeper(L.cfg));
     let h = `<p class="lede">Your waiver plan for every league, then backups for hurt starters, what Sleeper players are adding, and where anyone
       is available.${anyFaab ? ' Where a league bids for players, Titan suggests a bid from its recent winning bids.' : ''}</p>
-      ${planCard(leagues, players, bid, budget)}
+      ${planCard(leagues, players, bid, budget)}${newsletterCard('waivers')}
       <section class="card pad wsec"><h3>Where is he available?</h3>
         <label class="field"><span>A player's name</span><input type="search" data-waiver-search placeholder="At least three letters" value="${esc(W.q)}"
           autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="wsearch">${waiverSearchResults()}</div></section>`;

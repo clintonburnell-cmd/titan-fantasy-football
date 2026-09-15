@@ -86,6 +86,7 @@
   </script>
   <script src="/theme.js" defer></script>
   <script src="/stats.js" defer></script>
+  <script src="/newsletter.js" defer></script>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -119,6 +120,15 @@
             <a class="btn ghost big" href="/app/?demo">Try a demo</a>
           </div>
           <p class="fine">Free. No Sleeper password. Works in the browser on any phone or computer.</p>
+          <div class="nl-hero" data-newsletter-box data-hide-joined hidden>
+            <p class="nl-lead">Or get the free weekly waiver guide by email:</p>
+            <form class="nl-form" data-newsletter="home-hero">
+              <label class="sr-only" for="nl-email-hero">Email address</label>
+              <input id="nl-email-hero" type="email" name="email_address" required placeholder="you@example.com" autocomplete="email">
+              <button class="btn big" type="submit">Get it free</button>
+              <p class="fine nl-note" data-newsletter-note>Every Tuesday before waivers run. Unsubscribe any time.</p>
+            </form>
+          </div>
         </div>
 
         <div class="hero-art"><img src="/titan.svg" alt="A Titan lifting a football overhead" width="440" height="790"></div>
@@ -258,6 +268,22 @@ Tyrell Banks,RB,TEN,31</pre></div>
       </div>
     </section>
 
+    <section class="site-sec nl-sec" id="newsletter" data-newsletter-box data-hide-joined hidden>
+      <div class="site-in">
+        <p class="tag">Free every Tuesday</p>
+        <h2>The Titan Waiver Wire</h2>
+        <p class="sec-sub">A free weekly email before waivers run: who to grab, who to buy low and who to sell high,
+          from each player's real usage (snaps, targets, carries and red-zone looks). <a href="/newsletter/">What's in
+          each email</a></p>
+        <form class="nl-form" data-newsletter="home">
+          <label class="sr-only" for="nl-email-home">Email address</label>
+          <input id="nl-email-home" type="email" name="email_address" required placeholder="you@example.com" autocomplete="email">
+          <button class="btn big" type="submit">Get it free</button>
+          <p class="fine nl-note" data-newsletter-note>One email a week during the season. Unsubscribe any time.</p>
+        </form>
+      </div>
+    </section>
+
     <section class="site-sec" id="private">
       <div class="site-in">
         <span class="tag">Private by design</span>
@@ -266,7 +292,7 @@ Tyrell Banks,RB,TEN,31</pre></div>
           <li><b>No Sleeper password.</b> Titan reads what your Sleeper profile already shows.</li>
           <li><b>Read-only.</b> Titan never changes your lineups, makes claims or trades.</li>
           <li><b>Your rankings stay yours.</b> Kept on your device, or synced to your own Google sign-in if you choose.</li>
-          <li><b>No ads, no tracking.</b> Titan doesn't sell or share anything, and the website counts visits without cookies. <a href="/privacy.html">Read the privacy policy</a>.</li>
+          <li><b>No ads, no tracking.</b> Titan doesn't sell or share anything, and the website counts visits without cookies. If you join the weekly email, Kit sends it and counts opens and clicks. <a href="/privacy.html">Read the privacy policy</a>.</li>
         </ul>
       </div>
     </section>

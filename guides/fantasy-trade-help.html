@@ -20,6 +20,7 @@
   </script>
   <script src="/theme.js" defer></script>
   <script src="/stats.js" defer></script>
+  <script src="/newsletter.js" defer></script>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/styles.css">
@@ -84,6 +85,18 @@
     <p class="note-box">Curious who drafted best in your league? <a href="/guides/fantasy-draft-grades.html">Draft
       results</a> grade every pick, right from the Trade tab.</p>
 
+    <div class="nl-box" data-newsletter-box data-hide-joined hidden>
+      <p class="tag">Free every Tuesday</p>
+      <h2>Get the Titan Waiver Wire</h2>
+      <p>Who to grab before waivers run, who to buy low and who to sell high, from each player's real usage. One free
+        email a week. <a href="/newsletter/">What's in each email</a></p>
+      <form class="nl-form" data-newsletter="guide-fantasy-trade-help">
+        <label class="sr-only" for="nl-email">Email address</label>
+        <input id="nl-email" type="email" name="email_address" required placeholder="you@example.com" autocomplete="email">
+        <button class="btn big" type="submit">Get it free</button>
+        <p class="fine nl-note" data-newsletter-note>One email a week during the season. Unsubscribe any time.</p>
+      </form>
+    </div>
     <div class="guide-cta"><a class="btn big" href="/app/">Open Titan</a><a class="btn ghost big" href="/app/?demo">Try a demo</a></div>
   </main>
 

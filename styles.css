@@ -893,6 +893,14 @@ body.app-page :is(.stand .tnum, .stand .st-odds b) { font-variant-numeric: tabul
   .vr-page .vr-t th { letter-spacing: .03em; }
 }
 
+/* The weekly waiver guide's signup card in the app (Waivers and Settings; newsletter.js posts it to Kit). */
+.nl-card .nl-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.nl-card .nl-form input[type="email"] { flex: 1 1 12em; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface-2); color: var(--text); font: inherit; font-size: 16px; }
+.nl-card .nl-form input[type="email"]:focus { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+.nl-card .nl-note { flex-basis: 100%; margin: 0; }
+.nl-card .nl-form.nl-done .nl-note { color: var(--ok); font-weight: 600; }
+
 /* Value report (Titan's owner only): the weekly report from the owner's PC. */
 .vr-h { font-size: 1.05rem; margin-top: 4px; }
 .vr-lg > summary { cursor: pointer; list-style: none; }

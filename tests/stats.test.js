@@ -36,7 +36,7 @@ check(S.counts(blocked, 'test-token'), 'blocked storage does not break it');
 
 section('which pages load it');
 const has = f => /<script src="\/stats\.js" defer><\/script>/.test(fs.readFileSync(path.join(T.ROOT, f), 'utf8'));
-const pages = ['index.html', 'privacy.html', 'terms.html',
+const pages = ['index.html', 'privacy.html', 'terms.html', 'newsletter/index.html',
   ...fs.readdirSync(path.join(T.ROOT, 'guides')).filter(f => f.endsWith('.html')).map(f => 'guides/' + f)];
 pages.forEach(f => check(has(f), f + ' loads stats.js'));
 check(!has('app/index.html'), 'the app page does not load stats.js');

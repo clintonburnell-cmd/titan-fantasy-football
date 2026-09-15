@@ -111,6 +111,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise(r => ws.addEventListener('open', r));
   let seq = 0, bumpWeek = false; // bumpWeek: the demo's section moves Sleeper's NFL week on one, so no game has started
+  const kitPosts = []; // signups the newsletter test sends to Kit's form address (answered here, never sent to Kit)
   const pending = {}, problems = [];
   const ESPN_PATTERNS = [{urlPattern: '*fantasy.espn.com*leagues*'}, {urlPattern: '*fantasy.espn.com*players*'}];
   const send = (method, params = {}) => new Promise(r => { const id = ++seq; pending[id] = r; ws.send(JSON.stringify({id, method, params})); });
@@ -129,6 +130,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
           if (bumpWeek && w >= 1 && w < 18) s = Object.assign({}, s, {week: w + 1, display_week: w + 1, leg: w + 1});
           send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(s)).toString('base64')});
         }, () => send('Fetch.continueRequest', {requestId: m.params.requestId}));
+        return;
+      }
+      // Kit's form address (the weekly email's signups): recorded and answered here.
+      if (url.includes('app.kit.com/forms/')) {
+        kitPosts.push({url, method: m.params.request.method, body: m.params.request.postData || ''});
+        send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: 200, body: '', responseHeaders: [{name: 'content-type', value: 'text/html'}]});
         return;
       }
       // ESPN's scoreboard, which the browser reads itself when Titan's server can't (ESPN allows any site).
@@ -896,6 +903,42 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     await tab('lineups');
     check(true, `${TOUR.length} screens photographed at 390px and 1280px`);
   }
+
+  T.section('the free weekly email (newsletter.js)');
+  check(await ev(`!!window.TitanNewsletter && !window.TitanNewsletter.ready() && !document.querySelector('.nl-card')`),
+    'until Kit\'s form is set up, the app shows no signup card');
+  // A stand-in form number, as newsletter.js's FORM_ID will hold Kit's; Kit's address is answered by the test.
+  await send('Page.addScriptToEvaluateOnNewDocument', {source: 'window.TitanNewsletterForm = "1234567";'});
+  await send('Fetch.enable', {patterns: [...ESPN_PATTERNS, {urlPattern: '*app.kit.com*'}]});
+  await send('Page.navigate', {url: ORIGIN + '/?home'});
+  check(await waitFor(`!!document.querySelector('.nl-hero') && !document.querySelector('.nl-hero').hidden && !document.querySelector('#newsletter').hidden`, 10000),
+    'with it set up, the home page shows its signup boxes: under the main buttons, and a section of their own');
+  await shot('home-newsletter');
+  await ev(`document.querySelector('#newsletter').scrollIntoView({block: 'start', behavior: 'instant'}); true`);
+  await sleep(300);
+  await shot('home-newsletter-section');
+  await send('Page.navigate', {url: ORIGIN + '/app/waivers'});
+  check(await waitFor(`!!document.querySelector('.nl-card form[data-newsletter="app-waivers"]')`, 30000), 'and Waivers shows the free weekly guide\'s signup card');
+  await ev(`document.querySelector('.nl-card').scrollIntoView({block: 'center'}); true`);
+  await sleep(300);
+  await shot('app-newsletter-card');
+  await ev(`(() => { const f = document.querySelector('.nl-card form'); f.querySelector('input').value = 'fan@example.com'; f.querySelector('button').click(); return true; })()`);
+  check(await waitFor(`/check your inbox/.test(document.querySelector('.nl-card').textContent)`, 5000) &&
+    kitPosts.some(p => p.method === 'POST' && /forms\/1234567\/subscriptions/.test(p.url) && /email_address=fan%40example\.com/.test(p.body)),
+    'signing up sends the email to Kit\'s form and says to check the inbox: ' + JSON.stringify(kitPosts.map(p => p.body)));
+  await tab('settings');
+  check(await ev(`!document.querySelector('.nl-card')`), 'once this device has joined, the app stops asking (no card in Settings)');
+  await send('Page.navigate', {url: ORIGIN + '/?home'});
+  check(await waitFor(`!!document.querySelector('.nl-hero') && document.querySelector('.nl-hero').hidden && document.querySelector('#newsletter').hidden`, 10000),
+    'the home page\'s signup boxes stay hidden for someone who joined');
+  await send('Page.navigate', {url: ORIGIN + '/newsletter/?joined=1'});
+  check(await waitFor(`!document.querySelector('[data-newsletter-joined]').hidden && !document.querySelector('.nl-box').hidden &&
+    document.querySelector('form[data-newsletter]').action.endsWith('/forms/1234567/subscriptions')`, 10000),
+    'the newsletter page welcomes someone back from Kit\'s confirmation, keeps its own signup box, and its form points at Kit');
+  await shot('newsletter-page');
+  await send('Fetch.enable', {patterns: ESPN_PATTERNS});
+  await send('Page.navigate', {url: ORIGIN + '/app/'});
+  await waitFor('!!document.querySelector("#tabs")', 20000);
 
   T.section('who the website sends to the app');
   const go = async url => { await send('Page.navigate', {url: ORIGIN + url}); await sleep(1500); return ev('location.pathname + location.search'); };
