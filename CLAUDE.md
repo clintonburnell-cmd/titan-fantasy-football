@@ -374,7 +374,12 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   "Titan Waiver Wire" form, 9921118, set 2026-09-15); while it's empty every box stays hidden. The UI test overrides it
   with `window.TitanNewsletterForm` ('' for none) and answers Kit's address itself: tests never post to the real form. A new website page gets a signup box too. Beyond the boxes, links that stay for everyone, joined or not: a
   "Free weekly email" pill beside the app's title (`.nl-top`, hidden at 720px and narrower), "Weekly email" in the
-  app's footer, and "Weekly email" in every website footer's `.foot-links` (a new page's footer gets it too). The privacy page's "If you join the
+  app's footer, and "Weekly email" in every website footer's `.foot-links` (a new page's footer gets it too).
+  New subscribers get this week's issue on the page Kit's confirmation link opens (`/newsletter/?joined=1`), and any
+  joined device sees it there: `issue()` in newsletter.js reads Firestore `public/waiver-wire-latest` over REST (anyone
+  can read `public/`; only the owner's PC writes it, through titan-analytics' upload.js) and draws it in a sandboxed
+  iframe. `public/` is readable by the world: only the usage picks ever go there, never FantasyCalc's values, the
+  owner's leagues or anyone's data. The privacy page's "If you join the
   weekly email" section and the Play Data safety form (email address, collected when someone signs up) must stay true.
   The email itself is drafted by titan-analytics each Tuesday (`reports/newsletter-latest.html`, from nflverse usage
   only: never FantasyCalc's values, never the owner's leagues). The owner reads it, pastes it into a Kit broadcast and

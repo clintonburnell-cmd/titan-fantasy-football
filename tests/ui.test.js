@@ -132,6 +132,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         }, () => send('Fetch.continueRequest', {requestId: m.params.requestId}));
         return;
       }
+      // Titan's public copy of this week's Waiver Wire (the newsletter page): a stand-in issue, so the test never reads the real one.
+      if (url.includes('firestore.googleapis.com') && url.includes('/documents/public/waiver-wire-latest')) {
+        const doc = {fields: {html: {stringValue: '<h1>Titan Waiver Wire, week 9</h1><p>A stand-in issue for the test.</p>'},
+          subject: {stringValue: 'Titan Waiver Wire, week 9: a test'}, through: {stringValue: 'Through week 8 of 2026 (16 of 16 games)'}, week: {integerValue: '9'}}};
+        send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: 200, body: Buffer.from(JSON.stringify(doc)).toString('base64'),
+          responseHeaders: [{name: 'access-control-allow-origin', value: '*'}, {name: 'content-type', value: 'application/json'}]});
+        return;
+      }
       // Kit's form address (the weekly email's signups): recorded and answered here.
       if (url.includes('app.kit.com/forms/')) {
         kitPosts.push({url, method: m.params.request.method, body: m.params.request.postData || ''});
@@ -939,7 +947,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'without a form number, the app shows no signup card');
   // A stand-in form number (it runs after the one above, so it wins); Kit's address is answered by the test, never sent to Kit.
   await send('Page.addScriptToEvaluateOnNewDocument', {source: 'window.TitanNewsletterForm = "1234567";'});
-  await send('Fetch.enable', {patterns: [...ESPN_PATTERNS, {urlPattern: '*app.kit.com*'}]});
+  await send('Fetch.enable', {patterns: [...ESPN_PATTERNS, {urlPattern: '*app.kit.com*'}, {urlPattern: '*firestore.googleapis.com*documents/public/*'}]});
   await send('Page.navigate', {url: ORIGIN + '/?home'});
   check(await waitFor(`!!document.querySelector('.nl-hero') && !document.querySelector('.nl-hero').hidden && !document.querySelector('#newsletter').hidden`, 10000),
     'with it set up, the home page shows its signup boxes: under the main buttons, and a section of their own');
@@ -969,6 +977,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`!document.querySelector('[data-newsletter-joined]').hidden && !document.querySelector('.nl-box').hidden &&
     document.querySelector('form[data-newsletter]').action.endsWith('/forms/1234567/subscriptions')`, 10000),
     'the newsletter page welcomes someone back from Kit\'s confirmation, keeps its own signup box, and its form points at Kit');
+  check(await waitFor(`(() => { const s = document.querySelector('[data-nl-issue]'), f = s && s.querySelector('iframe');
+    return !!f && !s.hidden && /week 9/.test(f.srcdoc) && !!f.contentDocument && /stand-in issue/.test(f.contentDocument.body.textContent) &&
+      /Through week 8/.test(s.querySelector('[data-nl-issue-meta]').textContent) && f.offsetHeight > 100; })()`, 10000),
+    'and shows this week\'s issue right there, read from Titan\'s public copy, in a frame of its own');
+  await shot('newsletter-issue');
   await shot('newsletter-page');
   await send('Fetch.enable', {patterns: ESPN_PATTERNS});
   await send('Page.navigate', {url: ORIGIN + '/app/'});

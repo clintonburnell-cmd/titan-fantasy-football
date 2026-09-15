@@ -53,8 +53,30 @@
     document.querySelectorAll('[data-newsletter-joined]').forEach(function (el) { el.hidden = false; });
   }
 
+  /* This week's issue on the newsletter page ([data-nl-issue]), for someone back from Kit's confirmation link or on a
+     device that joined: read from Titan's Firestore (public/waiver-wire-latest, which anyone can read; titan-analytics
+     posts it each Tuesday) and drawn in a sandboxed frame, so the email's own styles stay apart from the page's. */
+  var ISSUE = 'https://firestore.googleapis.com/v1/projects/titan-fantasy-football/databases/(default)/documents/public/' +
+    'waiver-wire-latest?key=AIzaSyDjOaXVvwa9JxSjrLe3Ihnmlbd0Te4jS4Q';
+  function issue() {
+    var box = document.querySelector('[data-nl-issue]');
+    if (!box || !window.fetch || !(joined() || /[?&]joined=1\b/.test(location.search))) return;
+    var meta = box.querySelector('[data-nl-issue-meta]'), frame = box.querySelector('iframe');
+    box.hidden = false;
+    function fit() { try { frame.style.height = frame.contentDocument.documentElement.scrollHeight + 'px'; } catch (e) { /* keeps its min-height */ } }
+    fetch(ISSUE).then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); }).then(function (d) {
+      var f = d.fields || {}, html = f.html && f.html.stringValue;
+      if (!html) throw new Error('no issue yet');
+      if (meta) meta.textContent = f.through ? f.through.stringValue + '.' : '';
+      frame.addEventListener('load', fit);
+      window.addEventListener('resize', fit);
+      frame.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+        '<base target="_blank"><style>body{margin:0;padding:18px;background:#fff}</style></head><body>' + html + '</body></html>';
+    }).catch(function () { box.hidden = true; });
+  }
+
   window.TitanNewsletter = {ready: function () { return !!formId(); }, joined: joined, prep: prep};
-  function start() { prep(); welcome(); }
+  function start() { prep(); welcome(); issue(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })();

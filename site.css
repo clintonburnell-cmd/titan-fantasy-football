@@ -178,6 +178,9 @@ html { scroll-behavior: smooth; }
 .nl-hero { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line); max-width: 34em; }
 .nl-hero .nl-lead { font-weight: 700; }
 .nl-hero .nl-form { margin-top: 10px; }
+/* This week's issue on the newsletter page (newsletter.js issue()): the email as sent, white like an inbox, in its own frame. */
+.nl-issue { margin-top: 30px; }
+.nl-issue iframe { display: block; width: 100%; min-height: 480px; margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
 .nl-box { margin-top: 36px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; }
 .guide .nl-box h2 { margin-top: 0; }
 .guide .nl-box p { margin-top: 8px; }
