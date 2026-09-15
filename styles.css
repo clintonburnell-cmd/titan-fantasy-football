@@ -1067,7 +1067,7 @@ body.app-page :is(.stand .tnum, .stand .st-odds b) { font-variant-numeric: tabul
 .tl-t td b { white-space: nowrap; }
 .tl-t thead th { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
 .tl-t tbody th { font-weight: 600; color: var(--muted); }
-.tedge { font-size: .9rem; }
+.tedge, .tbye, .tstance { font-size: .9rem; }
 .idea-t .iwhy { color: var(--accent-2); }
 .ttags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 2px; }
 .ttags .pill { font-size: .64rem; padding: 0 6px; }

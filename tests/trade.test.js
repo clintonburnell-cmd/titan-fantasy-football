@@ -15,9 +15,18 @@ section('Titan\'s own value (the Trade tab for everyone but Titan\'s owner)');
   const cfgTv = {teams: 2, ppr: 0, lineup: ['QB', 'RB', 'WR', 'FLEX']};
   const tv = SCC.titanValues(sp, pl, cfgTv);
   check(tv[1] === 100 && tv[2] === 50 && tv[3] === 0 && tv[4] === 0, 'QBs: projected points above the 3rd-best QB (two teams start one each)');
-  check(tv[11] === 60 && tv[12] === 40 && tv[13] === 20 && tv[14] === 0 && tv[15] === 0, 'RBs: above the 4th-best, the flex shared out; nobody goes below zero');
+  // RB starters come to 2.9, so replacement sits nine tenths of the way from the 3rd-best (160) to the 4th (140): 142.
+  check(tv[11] === 58 && tv[12] === 38 && tv[13] === 18 && tv[14] === 0 && tv[15] === 0, 'RBs: above a replacement read between the 3rd- and 4th-best, the flex shared out; nobody goes below zero');
   check(tv[21] === undefined, 'a position the league doesn\'t start gets no value');
-  check(SCC.titanValues(sp, pl, Object.assign({}, cfgTv, {ppr: 1}))[11] === 70, 'in the league\'s scoring: PPR adds the catches');
+  check(SCC.titanValues(sp, pl, Object.assign({}, cfgTv, {ppr: 1}))[11] === 68, 'in the league\'s scoring: PPR adds the catches');
+  // Over weeks 1 to 17 every team sits out its bye, so each player keeps 16 of his 17 games' points.
+  const span = SCC.titanValues(sp, pl, cfgTv, {from: 1, to: 17});
+  check(span[1] === 94 && span[2] === 47 && span[3] === 0, 'over a span of weeks: each player\'s share of the season, his bye left out (16 of 17 games here)');
+  const own = SCC.titanValues(sp, pl, cfgTv, {shares: {FLEX: {RB: 1}}});
+  check(own[11] === 80 && own[12] === 60 && own[14] === 20 && own[15] === 0, 'with the league\'s own flex shares (all RB here), RB replacement moves to the 5th-best');
+  const teams = [{id: 1, roster: [{id: '11', pos: 'RB'}, {id: '12', pos: 'RB'}, {id: '1', pos: 'QB'}]}, {id: 2, roster: [{id: '13', pos: 'RB'}, {id: '2', pos: 'QB'}, {id: 'w', pos: 'WR'}]}];
+  const fs = SCC.flexShares(teams, ['QB', 'RB', 'FLEX'], p => ({11: 20, 12: 15, 13: 10, w: 12, 1: 30, 2: 30})[p.id] || 0);
+  check(JSON.stringify(fs) === '{"FLEX":{"RB":0.5,"WR":0.5}}', 'flex shares from how the league\'s teams fill their flex spots: ' + JSON.stringify(fs));
 }
 
 section('league format');
@@ -122,10 +131,10 @@ check(ideas.length >= 2 && ideas.every(x => x.verdict.fair && x.myGain > 0) && i
 check(!ideas.some(x => x.partner.id === 'B'), 'no idea where nothing fair helps');
 check(ideas.every(x => typeof x.accept === 'number' && Array.isArray(x.why) && x.trueGain === x.myGain && x.edge === 0 && x.myPts === 0),
   'without the edge or points, an idea\'s true gain is its market gain and it still says how likely a yes is');
-// Team D starts two cheap receivers; the one fair trade that helps me is my top RB for both of them.
+// Team D starts cheap players; without a WR of my own, the fair trades that help me are one of my RBs for two of theirs.
 const teamD = {id: 'D', name: 'D', roster: [P('qd', 'QB'), P('wd1', 'WR'), P('wd2', 'WR')]};
 const TVD = Object.assign({qd: 1000, wd1: 1700, wd2: 1400}, TV);
-const twoFor1 = SCC.tradeIdeas(meT, [teamD], {value: p => TVD[p.id] || 0, slots: ['QB', 'RB', 'WR', 'FLEX'], waiver: 50});
+const twoFor1 = SCC.tradeIdeas({id: 'me', roster: meT.roster.filter(p => p.id !== 'w1')}, [teamD], {value: p => TVD[p.id] || 0, slots: ['QB', 'RB', 'WR', 'FLEX'], waiver: 50});
 check(twoFor1.length === 1 && twoFor1[0].give.length === 1 && twoFor1[0].get.length === 2 && twoFor1[0].accept === 0 &&
   twoFor1[0].why.join('; ') === 'they get the best player in it; asks two of their starters for one',
   'an idea that asks two of their starters for one is a harder yes, and handing them the best player an easier one: ' + twoFor1.map(x => x.why.join('; ')).join(' | '));
@@ -151,6 +160,27 @@ check(e0.myPts === 10 && e0.theirPts === -10 && e0.accept === 1 && e0.why.join()
   'it says both teams\' rest-of-season points, and why they might say yes: ' + e0.why.join('; '));
 const drop = SCC.tradeIdeas(meE, [teamC], Object.assign({edge: p => ED[p.id] || 0, points: p => (p.id === 'wc' ? 90 : PT[p.id] || 0)}, base));
 check(drop.length === 0, 'an idea that would lower the rest-of-season points of your best lineup is dropped, whatever the values say');
+
+section('two for two, and draft picks for rebuilders');
+{
+  // I have three RBs and no WR; they have three WRs and no RB. No one-for-one or two-for-one is fair; two for two is.
+  const V2 = {q: 1000, ra: 2000, rb: 1900, rc: 1000, qp: 1000, wx: 2000, wy: 1500, wz: 1400};
+  const me2 = {id: 'me', roster: [P('q', 'QB'), P('ra', 'RB'), P('rb', 'RB'), P('rc', 'RB')]};
+  const pr = {id: 'Pr', name: 'Pr', roster: [P('qp', 'QB'), P('wx', 'WR'), P('wy', 'WR'), P('wz', 'WR')]};
+  const two = SCC.tradeIdeas(me2, [pr], {value: p => V2[p.id] || 0, slots: ['QB', 'RB', 'WR', 'FLEX'], waiver: 50});
+  check(two.length >= 1 && ids(two[0].give) === 'rb,rc' && ids(two[0].get) === 'wy,wz' && two[0].myGain === 1000 && two[0].theirGain === 1400,
+    'two for two balances two uneven rosters, and leads when it helps both most: ' + two.map(x => ids(x.give) + ' for ' + ids(x.get)).join(', '));
+  // A rebuilding partner takes picks: my 2027 1st for their starting RB is an idea only when they're rebuilding.
+  const V3 = {q1: 1000, r1: 500, w1: 1000, 'pick:2027:1:1': 2000, qr: 1000, rr: 2000, wr: 300};
+  const me3 = {id: 'me', roster: [P('q1', 'QB'), P('r1', 'RB'), P('w1', 'WR')], picks: [{id: 'pick:2027:1:1', pos: 'PICK', name: '2027 1st'}]};
+  const rb = {id: 'Rb', name: 'Rb', roster: [P('qr', 'QB'), P('rr', 'RB'), P('wr', 'WR')]};
+  const o3 = {value: p => V3[p.id] || 0, slots: ['QB', 'RB', 'WR'], waiver: 50};
+  check(SCC.tradeIdeas(me3, [rb], o3).length === 0, 'without a stance, draft picks stay out of the ideas');
+  const pk = SCC.tradeIdeas(me3, [rb], Object.assign({stance: {Rb: 'rebuilder'}}, o3));
+  check(pk.length === 1 && ids(pk[0].give) === 'pick:2027:1:1' && ids(pk[0].get) === 'rr' && pk[0].verdict.fair && pk[0].myGain === 1500 && pk[0].accept === 1 &&
+    pk[0].why.join() === 'they\'re rebuilding, and this brings picks', 'for a rebuilding partner my pick buys their starter, and the idea says why they\'d take it: ' + (pk[0] ? pk[0].why.join() : 'none'));
+  check(SCC.tradeIdeas(me3, [rb], Object.assign({stance: {Rb: 'contender'}}, o3)).length === 0, 'a contender isn\'t offered picks');
+}
 
 // sleeper.js reading a league's teams, with Sleeper's answers made up here (no network).
 section('a dynasty Sleeper league\'s teams and picks');

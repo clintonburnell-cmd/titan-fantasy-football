@@ -289,17 +289,23 @@
 
   /* Titan's own trade value, for the Trade tab on every account but Titan's owner's:
      FantasyCalc asks that its numbers stay out of other sites' trade calculators. A
-     player's projected points this season above a replacement-level player at his
-     position, in the league's scoring: replacement is the best player just outside what
-     the league's teams start there (flex spots shared out). Built only from Sleeper's
-     season projections, never from FantasyCalc's values. {playerId: whole points, 0 at or
-     below replacement}. */
+     player's projected points above a replacement-level player at his position, in the
+     league's scoring: replacement is the player just outside what the league's teams start
+     there (flex spots shared out), read between the two players either side of that spot so
+     one roster spot more or fewer moves the line a little, not to the next player. Built
+     only from Sleeper's season projections, never from FantasyCalc's values. {playerId:
+     whole points, 0 at or below replacement}.
+     opts: {from, to}: count only weeks from..to (each player's bye left out: a trade is a
+       rest-of-season decision, and a player who's missed games keeps his per-game worth);
+       the whole season when absent. {shares}: the league's own flex shares (flexShares)
+       instead of FLEX_SHARE. */
   var FLEX_SHARE = {FLEX: {RB: 0.45, WR: 0.45, TE: 0.1}, WRRB_FLEX: {RB: 0.5, WR: 0.5}, REC_FLEX: {WR: 0.8, TE: 0.2},
     SUPER_FLEX: {QB: 0.9, RB: 0.05, WR: 0.05}};
-  function titanValues(seasonProj, players, cfg) {
-    var teams = Number(cfg.teams) || 12, starts = {}, byPos = {}, out = {};
+  function titanValues(seasonProj, players, cfg, opts) {
+    opts = opts || {};
+    var teams = Number(cfg.teams) || 12, starts = {}, byPos = {}, out = {}, shares = opts.shares || {};
     (cfg.lineup || []).forEach(function (slot) {
-      var share = FLEX_SHARE[slot];
+      var share = shares[slot] || FLEX_SHARE[slot];
       if (!share) {
         if (!PLAYER_POS[slot]) return;
         share = {};
@@ -307,14 +313,43 @@
       }
       for (var pos in share) starts[pos] = (starts[pos] || 0) + share[pos];
     });
+    var span = opts.from && opts.to;
     for (var id in seasonProj || {}) {
-      var pos = playerInfo(players, id).pos;
-      if (starts[pos]) (byPos[pos] = byPos[pos] || []).push({id: id, pts: projFor(seasonProj, id, cfg) || 0});
+      var info = playerInfo(players, id);
+      if (!starts[info.pos]) continue;
+      var pts = span ? spanPoints(seasonProj, id, cfg, opts.from, opts.to, byeOf(info.team)) : projFor(seasonProj, id, cfg) || 0;
+      (byPos[info.pos] = byPos[info.pos] || []).push({id: id, pts: pts});
     }
     Object.keys(byPos).forEach(function (pos) {
       var list = byPos[pos].sort(function (a, b) { return b.pts - a.pts; });
-      var repl = list[Math.min(Math.round(teams * starts[pos]), list.length - 1)].pts;
+      var at = Math.min(teams * starts[pos], list.length - 1), lo = Math.floor(at), hi = Math.min(Math.ceil(at), list.length - 1);
+      var repl = list[lo].pts + (list[hi].pts - list[lo].pts) * (at - lo);
       list.forEach(function (x) { out[x.id] = Math.max(0, Math.round(x.pts - repl)); });
+    });
+    return out;
+  }
+
+  /* How a league's teams actually fill their flex spots: each team's best lineup by `pts`,
+     the positions in each flex slot counted across the league. {FLEX: {RB: 0.6, WR: 0.4}, ...}
+     for the flex slots seen; titanValues takes it as `shares`. */
+  function flexShares(teams, slots, pts) {
+    var counts = {};
+    (teams || []).forEach(function (t) {
+      var pool = (t.roster || []).filter(function (p) { return !p.held && p.pos !== 'PICK'; })
+        .map(function (p) { return {id: p.id, pos: p.pos, pts: Number(pts(p)) || 0}; });
+      bestByPoints(pool, slots || []).forEach(function (p, i) {
+        var slot = slots[i];
+        if (!p || !FLEX_SLOTS[slot]) return;
+        var c = counts[slot] = counts[slot] || {};
+        c[p.pos] = (c[p.pos] || 0) + 1;
+      });
+    });
+    var out = {};
+    Object.keys(counts).forEach(function (slot) {
+      var c = counts[slot], n = 0, pos;
+      for (pos in c) n += c[pos];
+      out[slot] = {};
+      for (pos in c) out[slot][pos] = round2(c[pos] / n);
     });
     return out;
   }
@@ -340,13 +375,15 @@
     return round2(total / SEASON_GAMES * games);
   }
 
-  /* Trade ideas for one team in a league: trades of one or two players each way (not two
-     for two) that FantasyCalc's calculator calls fair (tradeVerdict, roster spots counted)
-     and that make the team's starting lineup stronger. A lineup's strength here is the value
-     of its best starters (lineupPoints with values), which suits a trade better than one
-     week's projections. Trades that leave both lineups stronger come first; within each
-     group, ranked by our gain plus half theirs (up to ours). Each side offers its `top` (12)
-     most valuable players; at most two ideas per team and one per player wanted.
+  /* Trade ideas for one team in a league: trades of one or two pieces each way that
+     FantasyCalc's calculator calls fair (tradeVerdict, roster spots counted) and that make
+     the team's starting lineup stronger. A lineup's strength here is the value of its best
+     starters (lineupPoints with values), which suits a trade better than one week's
+     projections. Trades that leave both lineups stronger come first; within each group,
+     ranked by our gain plus half theirs (up to ours). Each side offers its `top` (12) most
+     valuable players; at most two ideas per team and one per player wanted. Two for two is
+     allowed (it's how uneven rosters get balanced); draft picks join a side's pool only when
+     the other side is rebuilding (`stance`, below).
      opts: {value(p), slots, waiver, max, top}, and for the edge:
        edge(p): the usage numbers' edge on his market value (impliedValue minus market). Then a
          team's own gain is measured by market value plus edge (what the players are worth by
@@ -356,18 +393,23 @@
          lineup by points (a value gain that scores less is a mirage), and each idea says both
          teams' change (myPts, theirPts).
        thin: {teamId: [positions]} where each partner is thin (positionStrength).
-     Each idea also carries `accept`, how likely the partner is to say yes (-1 to 2), and its
+       stance: {teamId: 'contender' | 'rebuilder' | 'mid'} from playoff odds, `me.id` included.
+         A rebuilder takes picks: our picks (me.picks) join our pool for a rebuilding partner,
+         and a contending partner's picks join theirs when we're rebuilding.
+     Each idea also carries `accept`, how likely the partner is to say yes (-1 to 3), and its
      reasons: +1 when the trade fills a position they're thin at, +1 when they get the single
-     most valuable player in it, -1 when they'd give two starters for one. It tilts the order by
-     15% a point. */
+     most valuable player in it, +1 when a rebuilder gets picks or a contender gets a player for
+     picks, -1 when they'd give two starters for one. It tilts the order by 15% a point. */
   function tradeIdeas(me, others, opts) {
     var value = opts.value, slots = opts.slots || [], waiver = opts.waiver || 0, max = opts.max || 6, top = opts.top || 12;
     var edge = typeof opts.edge === 'function' ? opts.edge : null, points = typeof opts.points === 'function' ? opts.points : null;
-    var thin = opts.thin || {};
-    var pool = function (roster) {
-      return roster.filter(function (p) { return p.pos !== 'PICK' && value(p) > 0; })
+    var thin = opts.thin || {}, stance = opts.stance || {}, myStance = stance[String(me.id)] || 'mid';
+    var pool = function (team, withPicks) {
+      var list = (team.roster || []).concat(withPicks ? team.picks || [] : []);
+      return list.filter(function (p) { return (p.pos !== 'PICK' || withPicks) && value(p) > 0; })
         .sort(function (a, b) { return value(b) - value(a); }).slice(0, top);
     };
+    var isPick = function (p) { return p.pos === 'PICK'; };
     var strength = function (roster) { return lineupPoints(roster, slots, value); };
     var mine = edge ? function (roster) { return lineupPoints(roster, slots, function (p) { return value(p) + (Number(edge(p)) || 0); }); } : strength;
     var byPoints = points ? function (roster) { return lineupPoints(roster, slots, points); } : null;
@@ -376,7 +418,7 @@
       for (var i = 0; i < list.length; i++) for (var j = i + 1; j < list.length; j++) out.push([list[i], list[j]]);
       return out;
     };
-    var items = function (list) { return list.map(function (p) { return {v: value(p)}; }); };
+    var items = function (list) { return list.map(function (p) { return {v: value(p), pick: isPick(p)}; }); };
     var without = function (roster, gone) { return roster.filter(function (p) { return !gone.some(function (g) { return g.id === p.id; }); }); };
     var sumOf = function (list, f) { return list.reduce(function (s, p) { return s + (Number(f(p)) || 0); }, 0); };
     var maxOf = function (list) { return list.reduce(function (m, p) { return Math.max(m, value(p)); }, 0); };
@@ -387,13 +429,16 @@
       return ids;
     };
     var myBase = strength(me.roster), myTrue = mine(me.roster), myPtsBase = byPoints ? byPoints(me.roster) : 0;
-    var myCombos = combos(pool(me.roster)), ideas = [];
+    var myPlayers = combos(pool(me, false)), myWithPicks = null, ideas = [];
     (others || []).forEach(function (o) {
-      var theirBase = strength(o.roster), theirCombos = combos(pool(o.roster)), theirStarters = startersOf(o.roster);
+      var theirStance = stance[String(o.id)] || 'mid';
+      var giveCombos = theirStance === 'rebuilder' ? (myWithPicks = myWithPicks || combos(pool(me, true))) : myPlayers;
+      var theirBase = strength(o.roster), theirCombos = combos(pool(o, myStance === 'rebuilder' && theirStance === 'contender')), theirStarters = startersOf(o.roster);
       var theirPtsBase = byPoints ? byPoints(o.roster) : 0, holes = thin[String(o.id)] || [];
-      myCombos.forEach(function (give) {
+      giveCombos.forEach(function (give) {
         theirCombos.forEach(function (get) {
-          if (give.length === 2 && get.length === 2) return;
+          // Picks for picks says nothing about either lineup.
+          if (give.every(isPick) && get.every(isPick)) return;
           var R = tradeVerdict(items(give), items(get), waiver);
           if (!R.fair) return;
           var after = without(me.roster, give).concat(get), gain = strength(after) - myBase, trueGain = mine(after) - myTrue;
@@ -409,6 +454,8 @@
           if (fills.length) { accept++; why.push('fills their hole at ' + fills.filter(function (p, i) { return fills.indexOf(p) === i; }).join(' and ')); }
           if (maxOf(give) > maxOf(get)) { accept++; why.push('they get the best player in it'); }
           if (get.length === 2 && give.length === 1 && get.every(function (p) { return theirStarters[p.id]; })) { accept--; why.push('asks two of their starters for one'); }
+          if (theirStance === 'rebuilder' && give.some(isPick)) { accept++; why.push('they\'re rebuilding, and this brings picks'); }
+          else if (theirStance === 'contender' && get.some(isPick) && !give.some(isPick)) { accept++; why.push('they\'re contending, and this brings a player now'); }
           ideas.push({partner: o, give: give, get: get, verdict: R, myGain: round2(gain), trueGain: round2(trueGain),
             theirGain: round2(strength(theirAfter) - theirBase), edge: edge ? Math.round(sumOf(get, edge) - sumOf(give, edge)) : 0,
             myPts: myPts, theirPts: theirPts, accept: accept, why: why});
@@ -2576,6 +2623,7 @@
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel, scoringDeltas: scoringDeltas, scoringNotes: scoringNotes,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues, positionStrength: positionStrength,
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, impliedValue: impliedValue, spanPoints: spanPoints,
+    flexShares: flexShares,
     draftFromSleeper: draftFromSleeper, draftGrades: draftGrades,
     impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags, transactionsFrom: transactionsFrom,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks, combineRanks: combineRanks,

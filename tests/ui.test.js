@@ -430,6 +430,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     [...document.querySelectorAll('.tteam .tval')].some(v => /\\d/.test(v.textContent))`, 20000),
     'without the owner flag: no FantasyCalc totals, the verdict in percent, and Titan\'s own values beside players');
   check(await ev(`!document.querySelector('.tdyn')`), 'a redraft league has no dynasty note (Titan\'s values are this season only)');
+  check(await ev(`/rest of this season/.test(document.getElementById('view').textContent) && !document.querySelector('.tstance')`),
+    'Titan\'s values are for the rest of this season; a redraft league has no contender or rebuilder line');
   check(await ev(`[...document.querySelectorAll('.trade-sum *')].every(el => el.getBoundingClientRect().right <= document.querySelector('.trade-sum').getBoundingClientRect().right + 1)`),
     'on a phone the trade fits inside its card (nothing cut off on the right)');
   check(await waitFor(`document.querySelectorAll('.trade-sum .tl-t tbody tr').length === 3 && document.querySelectorAll('.trade-sum .tl-t thead th').length === 3 &&

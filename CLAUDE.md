@@ -298,7 +298,15 @@ One note per screen or feature.
   carries `accept` and `why` (fills their hole, they get the best player, asks two starters for one; ±15% a point on
   the order). The impact table (`lineupImpact`, `.tl-t`) shows this week, the rest of the regular season (`LAST_REG_WEEK`
   17) and the playoff weeks (`cfg.playoffStart` or 15, three weeks; for the owner tilted up to 10% by the Data dump's
-  playoff schedule rank, `playoffTilt`). "Who has him?" (`tradeSearchResults`)
+  playoff schedule rank, `playoffTilt`). Batch B (v1.40.0): ideas allow two for two; in a dynasty or keeper league each
+  team's stance from the standings simulation (`stanceOf`: contender at 55% playoff odds, rebuilder at 25%;
+  `standingsResult` is shared with Standings) puts draft picks into the ideas for rebuilding partners (and from
+  contenders when you're rebuilding) and a line on "Where you both stand" (`stanceLine`) says what to offer; "to even
+  it out" leans toward a position the receiving side is thin at; a bye check (`byeCheck`, `SCC.byeNeeds`) warns when
+  the trade leaves a week with an empty starting spot, or notes one it clears; Titan's own values are for the rest of
+  the season (`titanValues` opts `from`/`to`, byes out), read between the two players either side of the replacement
+  spot, with the flex shares from how the league's teams fill them (`SCC.flexShares`) once its teams are loaded.
+  "Who has him?" (`tradeSearchResults`)
   searches every league: each league's teams load for it (`loadTradeTeams(d, true)`, which redraws only the results so
   the box keeps its cursor), and every league gets a chip: the team that has him, yours, or free agent (a league not
   loaded yet, or Yahoo, falls back to the snapshot's `takenNorm`: free or taken). Tapping another team's chip

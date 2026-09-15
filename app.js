@@ -3480,7 +3480,38 @@
       const why = e && /private|permission/i.test(e.message || e.code || '') ? 'it\'s private, so it needs your ESPN login (Settings)' : (e && e.message) || e;
       S.stand[id] = {error: `Could not load the schedule for ${d.cfg.key}: ${why}.`};
     }
-    if (S.ui.tab === 'standings') render();
+    if (S.ui.tab === 'standings' || S.ui.tab === 'trade') render();
+  }
+
+  /* The standings simulation for a league (SCC.standings), rebuilt when the games played, the projections or the
+     week change; null until its schedule and teams are in. Standings and the Trade tab (each team's stance) share it. */
+  function standingsResult(d) {
+    const cfg = d.cfg, St = S.stand[cfg.id], Tm = S.trade.teams[cfg.id];
+    if (!St || St.busy || St.error || !Tm || !Tm.list) return null;
+    const sched = St.sched;
+    if (!sched.teams.length || !sched.games.length) return null;
+    // This week's projected points for each team's best lineup.
+    const proj = {};
+    Tm.list.forEach(t => { proj[t.id] = SCC.lineupPoints(t.roster, cfg.lineup, p => SCC.projFor(S.proj, p.id, cfg) || 0); });
+    const key = [sched.games.filter(g => g.done).length, Object.keys(S.proj).length, S.snap.week].join('|');
+    if (!St.result || St.key !== key) {
+      Object.assign(St, {key, result: SCC.standings(sched.teams, sched.games, proj, {playoffTeams: cfg.playoffTeams || sched.playoffTeams, sims: 5000, seed: 7})});
+    }
+    return St.result;
+  }
+
+  /* Where each team stands for trades, in a dynasty or keeper league (a redraft team out of the race has no
+     future to trade for): contending at 55% playoff odds or more, rebuilding at 25% or less, from the standings
+     simulation. {map: {teamId: stance}, odds: {teamId}}, or null until the schedule is in. */
+  const STANCE = {contender: 0.55, rebuilder: 0.25};
+  function stanceOf(d) {
+    if (d.cfg.kind === 'Redraft' || d.cfg.platform === 'yahoo' || DEMO) return null;
+    if (!S.stand[d.cfg.id]) loadStandings(d);
+    const R = standingsResult(d);
+    if (!R) return null;
+    const map = {}, odds = {};
+    R.teams.forEach(t => { map[t.id] = t.playoffs >= STANCE.contender ? 'contender' : t.playoffs <= STANCE.rebuilder ? 'rebuilder' : 'mid'; odds[t.id] = t.playoffs; });
+    return {map, odds};
   }
 
   const pct = x => x >= 0.995 && x < 1 ? '>99%' : x > 0 && x < 0.005 ? '<1%' : Math.round(x * 100) + '%';
@@ -3505,14 +3536,7 @@
     if (!St || St.busy || !Tm || Tm.busy) return h + '<div class="empty-note">Loading the schedule and every team\'s roster…</div>';
     const sched = St.sched;
     if (!sched.teams.length || !sched.games.length) return h + '<div class="empty-note">This league has no regular-season schedule yet.</div>';
-    // This week's projected points for each team's best lineup.
-    const proj = {};
-    (Tm.list || []).forEach(t => { proj[t.id] = SCC.lineupPoints(t.roster, cfg.lineup, p => SCC.projFor(S.proj, p.id, cfg) || 0); });
-    const key = [sched.games.filter(g => g.done).length, Object.keys(S.proj).length, S.snap.week].join('|');
-    if (!St.result || St.key !== key) {
-      Object.assign(St, {key, result: SCC.standings(sched.teams, sched.games, proj, {playoffTeams: cfg.playoffTeams || sched.playoffTeams, sims: 5000, seed: 7})});
-    }
-    const R = St.result, mineId = String(cfg.platform === 'espn' ? cfg.teamId : d.rosterId), me = R.teams.find(t => t.id === mineId);
+    const R = standingsResult(d), mineId = String(cfg.platform === 'espn' ? cfg.teamId : d.rosterId), me = R.teams.find(t => t.id === mineId);
     if (me) {
       h += `<div class="banner ok"><b>Your playoff chances in ${esc(cfg.key)}: ${pct(me.playoffs)}.</b> ${me.games
         ? `You're ${nth(me.seed)} at ${recordOf(me)}, power-ranked ${nth(me.powerRank)} of ${R.teams.length},`
@@ -3566,8 +3590,13 @@
     const sp = S.trade.season && S.trade.season.map;
     if (!sp || !Object.keys(sp).length) return () => null;
     S.trade.tv = S.trade.tv || {};
-    if (!S.trade.tv[cfg.id]) S.trade.tv[cfg.id] = SCC.titanValues(sp, playerList(), cfg);
-    const m = S.trade.tv[cfg.id];
+    // The rest of this season (byes out), the flex spots shared out the way this league's teams fill them once they're in.
+    const teams = (S.trade.teams[cfg.id] || {}).list, week = S.snap.week, k = `${cfg.id}|${week}|${teams ? 'league' : ''}`;
+    if (!S.trade.tv[k]) {
+      S.trade.tv[k] = SCC.titanValues(sp, playerList(), cfg, {from: week, to: Math.max(LAST_REG_WEEK, week),
+        shares: teams ? SCC.flexShares(teams, cfg.lineup, p => SCC.projFor(sp, p.id, cfg) || 0) : undefined});
+    }
+    const m = S.trade.tv[k];
     return p => (p && p.pos !== 'PICK' && m[p.id] !== undefined ? m[p.id] : null);
   }
   /* Where the teams in a league are deep or thin (SCC.positionStrength), by this season's
@@ -3597,7 +3626,18 @@
   }
 
   // The Trade tab, once a partner is picked: where they're thin and deep, where you are, and whether that fits.
-  function tradeFit(PS, me, partner) {
+  // In a dynasty or keeper league, the partner's stance from their playoff odds (stanceOf), and what to offer them.
+  function stanceLine(d, partner) {
+    const st = stanceOf(d);
+    if (!st) return '';
+    const s = st.map[String(partner.id)], o = st.odds[String(partner.id)];
+    if (s === undefined) return '';
+    return `<p class="tstance">${s === 'rebuilder' ? `<b>They're rebuilding</b> (${pct(o)} playoff odds): offer draft picks or young players for their veterans.`
+      : s === 'contender' ? `<b>They're contending</b> (${pct(o)} playoff odds): they'll pay picks or youth for a starter now.`
+      : `They're in the middle of the race (${pct(o)} playoff odds).`}</p>`;
+  }
+
+  function tradeFit(d, PS, me, partner) {
     const cell = (t, p) => ((PS.teams.find(x => x.id === String(t.id)) || {byPos: {}}).byPos[p]) || {};
     const at = (t, grade) => PS.positions.filter(p => cell(t, p).grade === grade);
     const list = (t, grade) => andList(at(t, grade).map(p => `${p} (${nth(cell(t, p).rank)})`));
@@ -3610,7 +3650,7 @@
     const fit = theyNeed.length || youNeed.length ? `<p class="tfit-good"><b>A good fit:</b> ${[theyNeed.length ? `they're thin at ${andList(theyNeed)}, where you're deep` : '',
       youNeed.length ? `you're thin at ${andList(youNeed)}, where they're deep` : ''].filter(Boolean).join('; ')}.</p>` : '';
     return `<section class="card pad tfit"><h3>Where you both stand</h3>
-      <p>${line(`<b>${esc(partner.name)}</b>`, partner, 'is')} ${line('<b>You</b>', me, 'are')}</p>${fit}
+      <p>${line(`<b>${esc(partner.name)}</b>`, partner, 'is')} ${line('<b>You</b>', me, 'are')}</p>${fit}${stanceLine(d, partner)}
       <p class="fine">Ranked against the ${PS.n} teams in this league by each team's best lineup this season (Sleeper's projections),
         counting its best bench player a little. <button class="link" data-go="standings">See every team on Standings</button></p></section>`;
   }
@@ -3739,8 +3779,9 @@
         <button type="button" class="btn ghost small treset" data-action="trade-reset"${canReset ? '' : ' disabled'}>Clear all</button>
       </div>
       <p class="fine">${fcShown() ? `Values for ${esc(formatName(f))}: what players like these go for in real trades.`
-        : `Weighed for ${esc(formatName(f))}. The number beside each player is Titan's own value: his projected points this season above a
-          replacement starter at his position, in this league's scoring.`}</p>${!fcShown() && d.cfg.kind === 'Dynasty'
+        : `Weighed for ${esc(formatName(f))}. The number beside each player is Titan's own value: his projected points for the rest of this season
+          (byes out) above a replacement starter at his position, in this league's scoring, the flex spots shared out the way this league's teams
+          fill them.`}</p>${!fcShown() && d.cfg.kind === 'Dynasty'
         // Titan's value is one season's projections: in a dynasty league that misses age and the years ahead, so say so.
         ? `<div class="banner swap tdyn"><b>Dynasty league:</b> the numbers beside players come from this season's projections only.
           They don't account for age or future seasons, so young players and rookies can look worth less than they are to a dynasty team.
@@ -3757,7 +3798,7 @@
     const give = P.give.map(id => assets(me).find(p => p.id === id)).filter(Boolean);
     const get = partner ? P.get.map(id => assets(partner).find(p => p.id === id)).filter(Boolean) : [];
     const PS = partner ? strengthOf(d.cfg, teams) : null;
-    if (PS && PS.positions.length) h += tradeFit(PS, me, partner);
+    if (PS && PS.positions.length) h += tradeFit(d, PS, me, partner);
     h += `<section class="card pad tsearch"><label class="field"><span>Who has him? Search for a player in every league</span>
         <input type="search" data-trade-search placeholder="At least three letters" value="${esc(S.trade.q || '')}" autocomplete="off"
           autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="tsearch">${tradeSearchResults()}</div></section>`;
@@ -3782,9 +3823,9 @@
     // Where each partner is thin (so an idea that fills the hole ranks higher), the usage edge (owner) and rest-of-season points.
     const PS = strengthOf(d.cfg, Tm.list), thin = {};
     if (PS) PS.teams.forEach(t => { thin[t.id] = PS.positions.filter(p => (t.byPos[p] || {}).grade === 'thin'); });
-    const edge = edgeFor(d.cfg, V), points = spanFor(d.cfg, S.snap.week, LAST_REG_WEEK);
+    const edge = edgeFor(d.cfg, V), points = spanFor(d.cfg, S.snap.week, LAST_REG_WEEK), stance = (stanceOf(d) || {}).map || {};
     S.trade.ideas[d.cfg.id] = {list: SCC.tradeIdeas(me, Tm.list.filter(t => !t.mine), {value, slots: d.cfg.lineup, waiver: V.waiver, max: 6,
-      edge: edge || undefined, points: points || undefined, thin}), edge: !!edge, points: !!points};
+      edge: edge || undefined, points: points || undefined, thin, stance}), edge: !!edge, points: !!points, stance: Object.keys(stance).length > 0};
     render();
   }
 
@@ -3798,9 +3839,10 @@
     const head = `<div class="tideas-h"><h3>Trade ideas</h3><div class="tideas-b">
         <button type="button" class="btn small ghost" data-action="trade-ideas-clear">Clear</button>
         <button type="button" class="btn small ghost" data-action="trade-find">Look again</button></div></div>
-      <p class="fine">Fair trades (FantasyCalc's values within 5%) of one or two players each way that make your starting lineup
+      <p class="fine">Fair trades (FantasyCalc's values within 5%) of one or two pieces each way that make your starting lineup
         stronger by value${I.points ? ' without lowering its rest-of-season points' : ''}, and theirs too where possible.${I.edge
-          ? ' Your Value report\'s usage edge counts on your side, so a swap of equally priced players the market misjudges is an idea.' : ''}
+          ? ' Your Value report\'s usage edge counts on your side, so a swap of equally priced players the market misjudges is an idea.' : ''}${I.stance
+          ? ' Draft picks come in for teams that are rebuilding (their playoff odds), and from contenders when you are.' : ''}
         Ideas the other side is likelier to take (a hole of theirs filled, the best player theirs) come first.</p>`;
     if (!I.list.length) return `<section class="card pad tideas">${head}<p class="empty-note">No fair trade in this league makes your starting lineup stronger right now.</p></section>`;
     const names = list => list.map(p => `${esc(p.name)}${disp.num(p) ? ` <small>${disp.num(p)}</small>` : ''}`).join(' + ');
@@ -3925,6 +3967,22 @@
         fantasy-playoff weeks (season projections, byes out${tilt ? ', the playoff weeks tilted by each player\'s playoff schedule from your Data dump' : ''}).</p></div>`;
   }
 
+  /* Bye cover after a trade: the weeks from now on where your roster couldn't fill a starting spot (SCC.byeNeeds, each
+     player's bye from his team), before and after the trade. A week the trade opens is a warning; one it clears, good news. */
+  function byeCheck(cfg, me, give, get) {
+    if (!give.length || !get.length || !S.snap.week) return '';
+    const withByes = roster => roster.filter(p => p.pos !== 'PICK').map(p => Object.assign({}, p, {bye: SCC.byeOf(p.team)}));
+    const needs = roster => SCC.byeNeeds([{cfg, roster: withByes(roster)}], S.snap.week)[0].needs;
+    const gone = new Set(give.map(p => p.id));
+    const before = needs(me.roster), after = needs(me.roster.filter(p => !gone.has(p.id)).concat(get));
+    const weeks = list => list.map(n => n.week);
+    const opened = after.filter(n => !weeks(before).includes(n.week)), cleared = before.filter(n => !weeks(after).includes(n.week));
+    if (!opened.length && !cleared.length) return '';
+    const say = n => `week ${n.week} (no ${andList(n.need)}${n.off.length ? ': ' + n.off.join(', ') + ' off' : ''})`;
+    return `<p class="tbye">${opened.length ? `<b class="amber">Bye check:</b> after this trade you couldn't fill a starting spot in ${andList(opened.map(say))}.` : ''}${
+      cleared.length ? ` <b class="good">Bye check:</b> it clears ${andList(cleared.map(n => 'week ' + n.week))}, where you'd have had an empty spot.` : ''}</p>`;
+  }
+
   /* The edge line under the verdict: what the numbers behind the market say. For the owner, the Value report's usage
      edge (SCC.impliedValue against FantasyCalc's price) summed over both sides; for everyone else, Titan's own values
      (projected points above a replacement starter), which never show FantasyCalc's numbers. */
@@ -3939,7 +3997,7 @@
     }
     if (![...give, ...get].some(p => disp.tv(p) !== null)) return '';
     const t = list => list.reduce((s, p) => s + (disp.tv(p) || 0), 0), d = t(get) - t(give);
-    return `<p class="tedge">By Titan's own values (projected points above a replacement starter this season) ${d > 0 ? `you gain <b class="good">+${thousands(d)}</b>`
+    return `<p class="tedge">By Titan's own values (projected points above a replacement starter for the rest of this season) ${d > 0 ? `you gain <b class="good">+${thousands(d)}</b>`
       : d < 0 ? `you give up <b class="amber">${thousands(-d)}</b>` : 'the sides are even'}${R.fair && d > 0 ? ': the market calls it fair, the projections favor you.'
       : R.fair && d < 0 ? ': the market calls it fair, the projections favor them.' : '.'}</p>`;
   }
@@ -3970,9 +4028,12 @@
     let even = '';
     if (give.length && get.length && !R.fair) {
       // One more player from the side giving less, worth about R.even, would even it out.
-      const from = R.winner === 'you' ? me : partner, which = R.winner === 'you' ? 'give' : 'get', taken = S.trade.pick[which];
-      const near = from.roster.filter(p => !taken.includes(p.id) && worth(p) > 0)
-        .sort((a, b) => Math.abs(worth(a) - R.even) - Math.abs(worth(b) - R.even)).slice(0, 3);
+      const from = R.winner === 'you' ? me : partner, to = R.winner === 'you' ? partner : me, which = R.winner === 'you' ? 'give' : 'get', taken = S.trade.pick[which];
+      // The nearest in value, with a lean toward a position the side receiving him is thin at (Where you both stand).
+      const PS = strengthOf(cfg, (S.trade.teams[cfg.id] || {}).list || []), toPS = PS && PS.teams.find(t => t.id === String(to.id));
+      const holes = PS && toPS ? PS.positions.filter(p => (toPS.byPos[p] || {}).grade === 'thin') : [];
+      const closeness = p => Math.abs(worth(p) - R.even) / Math.max(R.even, 1) - (holes.includes(p.pos) ? 0.35 : 0);
+      const near = from.roster.filter(p => !taken.includes(p.id) && worth(p) > 0).sort((a, b) => closeness(a) - closeness(b)).slice(0, 3);
       even = `<p class="fine">To even it out, ${R.winner === 'you' ? 'you\'d add' : 'they\'d add'} a player${disp.fc ? ` worth about ${thousands(R.even)}` : ''}${near.length ? ', like:' : '.'}</p>${
         near.length ? `<div class="chips">${near.map(p => `<button type="button" class="chip" data-trade="${which}" data-pid="${esc(p.id)}">+ ${
           esc(p.name)}${disp.num(p) ? ` <small>${disp.num(p)}</small>` : ''}</button>`).join('')}</div>` : ''}`;
@@ -3991,7 +4052,7 @@
       </div>
       ${any ? `<div class="winbar" title="Each side's share of the trade"><span class="wp me${pg <= 50 ? ' up' : ''}">${100 - pg}%</span>
         <span class="wbar"><i class="wopp" style="width:${100 - pg}%"></i><i class="wme" style="width:${pg}%"></i></span><span class="wp opp${pg >= 50 ? ' up' : ''}">${pg}%</span></div>` : ''}
-      <p class="tverdict">${verdict}</p>${edgeLine(cfg, give, get, R, disp)}${even}${send}${lineupImpact(cfg, me, partner, give, get)}
+      <p class="tverdict">${verdict}</p>${edgeLine(cfg, give, get, R, disp)}${even}${send}${lineupImpact(cfg, me, partner, give, get)}${byeCheck(cfg, me, give, get)}
       <p class="fine">${disp.fc ? `Values add up as they are, since FantasyCalc's values already count stars for more. In an uneven trade, the side getting fewer players also gets a waiver pickup's value (about the 300th-best player) for each roster spot it frees, as FantasyCalc's own calculator does.`
         : `Who wins, and each team's value change, come from FantasyCalc's trade values, counting a waiver pickup's value for each roster spot an uneven trade frees. The numbers beside players are Titan's own values.`}${
         any ? ' <button class="link" data-action="trade-clear">Clear the trade</button>' : ''}</p>
