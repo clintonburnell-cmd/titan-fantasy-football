@@ -279,6 +279,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(games.length === 4 && ['starters locked', 'starters yet to play', 'bench locked', 'bench yet to play'].every(l => games.some(t => t.endsWith(l))),
     'game tiles: ' + games.join(' | '));
   check(count('starters locked') + count('starters yet to play') <= 9, 'starter counts fit the lineup');
+  // Each league card opens with where the roster is deep or thin and its playoff odds (leagueAdvice), loaded quietly.
+  check(await waitFor(`/to make the playoffs/.test((document.querySelector('.league .lg-advice') || {}).textContent || '')`, 40000),
+    'a league card leads with where you stand and your playoff odds: ' + (await text('.league .lg-advice')).replace(/\s+/g, ' ').slice(0, 150));
   T.section('player search on Rosters');
   await tab('rosters');
   const order = await ev(`[...document.querySelectorAll('.roster-card .roster > li')].map(li => li.classList.contains('rdiv') ? '|' + li.innerText.toUpperCase() + '|'
@@ -289,6 +292,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(startLabels === 'QB RB RB WR WR TE FLEX K DEF', 'Rosters list the starters spot by spot, like Sleeper: ' + startLabels);
   check(benchPos.length === 6 && benchPos.every((p, i) => i === 0 || posRank[benchPos[i - 1]] <= posRank[p]) &&
     order[order.length - 1].startsWith('IR:'), `then the bench by position (${benchPos.join(' ')}) and the IR player under Reserve`);
+  check(await waitFor(`/to make the playoffs/.test((document.querySelector('.roster-card .lg-advice') || {}).textContent || '')`, 20000),
+    'Rosters leads each league with the same advice');
   const someone = (await ev(`(document.querySelector('.roster .row .name-line b') || {}).innerText || ''`)).split(' ').pop();
   const search = async q => {
     await ev(`(() => { const i = document.querySelector('[data-roster-search]'); i.focus(); i.value = ${JSON.stringify(q)};

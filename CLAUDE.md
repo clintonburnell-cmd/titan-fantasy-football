@@ -202,6 +202,12 @@ One note per screen or feature.
   clipboard listener). The player card ends with "In the news" (`playerNews`: ESPN's stories tagging him from the
   News feed, loaded if it isn't yet; `loadNews` repaints an open card). Value and Data dump tables share
   `reportTable` (`rt` formatters; each screen passes its columns).
+- Each league's card on Lineups and Rosters opens with `leagueAdvice(cfg)` (v1.47.0, `.lg-advice`): where the roster is
+  deep or thin among QB, RB, WR and TE (`strengthOf`, the same numbers as Standings' Position strength), its playoff
+  odds and seed (`standingsResult`), and one suggestion from the two (trade from depth, fix it on waivers, patch it
+  before the playoffs, or sell veterans on long odds in a dynasty league). Every piece loads quietly and the line fills
+  in as it arrives: the season projections and the league's teams are cheap, so only `ADVICE_AT_ONCE` (2) leagues fetch
+  the heavy schedule at a time, and none while a refresh is running. The demo and Yahoo leagues get nothing.
 - Lineups' league cards (`leagueCard`): the changes to make, then the recommended lineup (`recLineup`: the engine's
   `L.opt` when there are moves, else the lineup as set, so it never shows a change the steps don't; `recRow`, NEW where
   it differs) and yours beside it (`compareLineups`, table `.lu-cmp`, the differing spots highlighted, your players'

@@ -1000,7 +1000,8 @@
       : L.moves.length ? ['swap', plural(L.moves.length, 'change')]
       : ['ok', 'Set'];
     let h = `<details class="card league fold" ${foldAttrs('lineup', L.cfg)}>
-      <summary class="card-h"><div><h3>${leagueIcon(L.cfg)}${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg)) + projLine(L)}</p></div><span class="pill p-${st[0]}">${st[1]}</span></summary>`;
+      <summary class="card-h"><div><h3>${leagueIcon(L.cfg)}${esc(L.cfg.key)}</h3><p>${esc(SCC.describeLeague(L.cfg)) + projLine(L)}</p></div><span class="pill p-${st[0]}">${st[1]}</span></summary>${
+      leagueAdvice(L.cfg)}`;
     if (L.moves.length) {
       // The changes as text, for the clipboard (Copy changes): one line a spot.
       const copyText = `${L.cfg.key}, week ${LV ? LV.week : S.snap.week} lineup changes:\n` + L.moves.map(m =>
@@ -1151,6 +1152,53 @@
     if (LV) return ''; // game lines and weather are this week's
     const tags = SCC.gameTags(S.ctx.data, p, {opp: !p.opp});
     return tags.length ? `<small class="gctx">${tags.map(t => `<span class="${t.tone}">${esc(t.text)}</span>`).join(' · ')}</small>` : '';
+  }
+
+  /* A line of advice at the top of a league's card (Lineups and Rosters): where the roster is deep or thin against the
+     rest of the league (SCC.positionStrength, this season's projections, the same numbers Standings shows) and its
+     playoff odds from the standings simulation, then what the two together suggest. Each piece loads quietly and the
+     line fills in as it arrives, so nothing here holds up the screen; a league with nothing to say yet gets nothing.
+     The demo and Yahoo leagues sit it out. */
+  const ADVICE_AT_ONCE = 2; // leagues whose schedule (every week's matchups, the heavy read) load at a time
+  const ADVICE_POS = {QB: 1, RB: 1, WR: 1, TE: 1};
+  let adviceLoads = 0;
+  function leagueAdvice(cfg) {
+    if (DEMO || cfg.platform === 'yahoo' || !S.snap) return '';
+    const d = (S.snap.leagues || []).find(x => x.cfg.id === cfg.id);
+    if (!d) return '';
+    if (!S.trade.season) loadSeasonProj();
+    if (!S.trade.teams[cfg.id]) loadTradeTeams(d, true);
+    if (!S.stand[cfg.id] && !S.busy && adviceLoads < ADVICE_AT_ONCE) {
+      adviceLoads++;
+      loadStandings(d).then(() => { adviceLoads--; }, () => { adviceLoads--; });
+    }
+    const teams = ((S.trade.teams[cfg.id] || {}).list) || [], me = teams.find(t => t.mine);
+    const PS = me ? strengthOf(cfg, teams) : null, cell = PS && PS.teams.find(t => t.id === String(me.id));
+    // Only the positions worth acting on: nobody trades for a kicker or a defense.
+    const at = grade => (PS && cell ? PS.positions.filter(p => ADVICE_POS[p] && (cell.byPos[p] || {}).grade === grade) : []);
+    const thin = at('thin'), deep = at('deep');
+    const R = standingsResult(d), mineId = String(cfg.platform === 'espn' ? cfg.teamId : d.rosterId);
+    const row = R ? R.teams.find(t => t.id === mineId) : null;
+    if (!thin.length && !deep.length && !row) return '';
+    const bits = [thin.length ? 'thin at ' + andList(thin) : '', deep.length ? 'deep at ' + andList(deep) : ''].filter(Boolean);
+    let shape = bits.join(', ');
+    if (PS && cell && !bits.length) shape = 'in the middle of the league everywhere that matters';
+    shape = shape ? `<b>${shape[0].toUpperCase() + shape.slice(1)}.</b>` : '';
+    const odds = row ? `${pct(row.playoffs)} to make the playoffs, ${nth(row.seed)} of ${R.teams.length}${row.divWinner ? ' and leading your division' : ''}${
+      row.games ? '' : ' (from projections, no games played yet)'}.` : '';
+    // What the shape and the odds together say to do next.
+    const contender = row && row.playoffs >= 0.6, longShot = row && row.playoffs <= 0.25;
+    let move = '';
+    if (thin.length && deep.length) move = `Trade from your ${andList(deep)} depth for help at ${andList(thin)}.`;
+    else if (thin.length) move = `Waivers are the place to fix ${andList(thin)}.`;
+    else if (deep.length) move = `You can trade from ${andList(deep)} depth for what you need later.`;
+    if (longShot) {
+      move = cfg.kind === 'Dynasty' || cfg.kind === 'Keeper'
+        ? 'Long odds this year, which is the time to sell veterans for picks and young players.'
+        : 'Long odds this year, so take swings on upside rather than safe benches.';
+    } else if (contender && thin.length) move = `You're in good shape, so patch ${andList(thin)} before the playoffs.`;
+    else if (contender && !thin.length) move = 'In good shape: check the playoff weeks on Schedule strength before the trade deadline.';
+    return `<p class="lg-advice">${[shape, odds].filter(Boolean).join(' ')}${move ? ` <span class="lg-move">${move}</span>` : ''}</p>`;
   }
 
   /* Each league card leads with the lineup Titan recommends, spot by spot in the league's own order, then yours beside
@@ -1565,7 +1613,7 @@
         : `<li class="row r-stop" data-find=" "><span class="slot">${esc(slotName(r.slot))}</span><span class="pphoto"><span class="hs"></span></span>
           <span class="who"><b>Empty</b></span><span class="right"></span></li>`)).join('');
       return `<details class="card roster-card fold" ${foldAttrs('roster', L.cfg)}><summary class="card-h"><div><h3>${leagueIcon(L.cfg)}${esc(L.cfg.key)}</h3>
-        <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></summary>
+        <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></summary>${leagueAdvice(L.cfg)}
         <ul class="roster">${starters}${bench.length ? '<li class="rdiv">Bench</li>' + bench.map(p => row(p, 'BN')).join('') : ''}${
           held.length ? '<li class="rdiv">Reserve</li>' + held.map(p => row(p, p.heldAs || 'IR', 'held')).join('') : ''}</ul></details>`;
     }).join('') + '</div>';
@@ -1591,7 +1639,7 @@
     const starters = L.rows.map(r => (r.p ? cell(r.p, slotName(r.slot))
       : `<tr class="r-stop" data-find=" "><td><span class="slot">${esc(slotName(r.slot))}</span></td><td colspan="${cols - 1}"><b>Empty</b></td></tr>`)).join('');
     return `<details class="card roster-card fold" ${foldAttrs('roster', L.cfg)}><summary class="card-h"><div><h3>${leagueIcon(L.cfg)}${esc(L.cfg.key)}</h3>
-      <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></summary>
+      <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></summary>${leagueAdvice(L.cfg)}
       <div class="table-wrap"><table class="rtable"><thead><tr><th>Spot</th><th>Player</th><th>Team</th>${hasOpp ? '<th>Opp</th>' : ''}<th>Kickoff</th>
         <th class="tnum">Rank</th><th class="tnum">Proj</th><th class="tnum">Pts</th></tr></thead>
       <tbody>${starters}${bench.length ? divider('Bench') + bench.map(p => cell(p, 'BN')).join('') : ''}${
@@ -3668,7 +3716,8 @@
       const why = e && /private|permission/i.test(e.message || e.code || '') ? 'it\'s private, so it needs your ESPN login (Settings)' : (e && e.message) || e;
       S.stand[id] = {error: `Could not load the schedule for ${d.cfg.key}: ${why}.`};
     }
-    if (S.ui.tab === 'standings' || S.ui.tab === 'trade') render();
+    // Lineups and Rosters lead each league with its playoff odds (leagueAdvice), so they repaint too.
+    if (['standings', 'trade', 'lineups', 'rosters'].includes(S.ui.tab)) render();
   }
 
   /* The standings simulation for a league (SCC.standings), rebuilt when the games played, the projections or the
@@ -3839,7 +3888,7 @@
     try { S.trade.season = {map: await API.fetchSeasonProjections(S.snap.season)}; }
     catch (e) { S.trade.season = {map: {}}; }
     S.trade.tv = {};
-    if (['trade', 'standings', 'waivers'].includes(S.ui.tab)) render();
+    if (['trade', 'standings', 'waivers', 'lineups', 'rosters'].includes(S.ui.tab)) render();
   }
   function titanValueFor(cfg) {
     const sp = S.trade.season && S.trade.season.map;
@@ -4002,7 +4051,7 @@
     }
     const box = quiet && S.ui.tab === 'trade' && id !== S.trade.pick.league ? view.querySelector('#tsearch') : null;
     if (box) box.innerHTML = tradeSearchResults();
-    else if (S.ui.tab === 'trade' || S.ui.tab === 'standings') render();
+    else if (['trade', 'standings', 'lineups', 'rosters'].includes(S.ui.tab)) render(); // Lineups and Rosters: leagueAdvice
   }
 
   function screenTrade() {
