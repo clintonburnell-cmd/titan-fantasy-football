@@ -928,7 +928,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     format: fmt === RD ? 'Redraft, 12 teams, PPR' : 'Dynasty, 10 teams, PPR, superflex', need: 'Your team by position: QB 1st, RB 11th of 12. Thin at RB.',
     sell: [{n: 'Sell Guy', why: 'The market says WR10; his projection says WR30.', x: 'WR, KC', k: fmt === RD}],
     buy: [{n: 'Buy Guy', why: 'His projection says RB12; the market says RB30.', x: 'RB, KC'}],
-    add: [{n: 'Claim Guy', why: 'He\'d start over Someone.', x: 'TE, KC'}]});
+    add: [{n: 'Claim Guy', why: 'He\'d start over Someone. Drop Drop Guy (WR, KC) for him: no trade value on the market.', x: 'TE, KC', d: 'Drop Guy'}]});
   const VR = {v: 2, season: 2026, week: 2, through: 'Through week 1 of 2026 (16 of 16 games)', at: Date.now(), notes: ['Only 1 week of 2026 so far.'],
     format: 'Redraft, 12 teams, PPR', main: RD, tiles: [['leagues', 2], ['sell-high moves', 2], ['buy-low targets', 2], ['claims', 2], ['players valued', 3]],
     leagues: [vlg(lid, 'Value Test League', DY, {1: 'me', 2: 0}), vlg('other', 'Another League', RD, {})],
@@ -984,6 +984,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     /\\(Value Test League\\)/.test(${vsec(0)})`, 3000), 'picking a league shows just its moves, and the lists in its own format');
   const wh = await ev(`[...document.querySelectorAll('tr[data-vp]')].slice(0, 3).map(r => r.cells[0].querySelector('b').textContent + ': ' + r.cells[1].textContent).join(' | ')`);
   check(wh === 'Buy Guy: Yours | Sell Guy: Rival Team (rival) | Dynasty Guy: Free agent', 'and a Where column says who has each player there: ' + wh);
+  const dropPill = await ev(`(document.querySelector('.vr-drop') || {}).textContent || ''`);
+  check(dropPill === 'drop Drop Guy' && await ev(`document.body.textContent.includes('Drop Drop Guy (WR, KC) for him')`),
+    'a claim says who to drop for him, as a pill beside the name and in its reason: ' + dropPill);
   const vsearch = q => ev(`(() => { const i = document.querySelector('[data-value-search]'); i.focus(); i.value = ${JSON.stringify(q)};
     i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
   const shownNames = `[...document.querySelectorAll('tr[data-find]')].filter(r => !r.hidden && !r.closest('[hidden]')).map(r => r.cells[0].querySelector('b').textContent)`;

@@ -438,7 +438,9 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   keep" (the owner's name for them, 2026-09-15): every sell-high row and move carries a verdict (`keep` on rows, `k` on
   moves; `callPill`, `moveTag`), keep (`.p-swap`) when the role is a real starter's or the points come from yards on a
   proven skill, sell otherwise; the Data dump's ideas and tables use the same tags, and a schedule-only sell lean has
-  no verdict. The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
+  no verdict. A claim carries `d`, the drop it suggests (the bench player worth the least; titan-analytics
+  `drop_pick`), shown as a `.vr-drop` pill beside the name (v1.51.1, the owner asked "I don't know who I would
+  drop"). The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
   sideways (`.vr-scroll`) with the player column pinned; its header row follows the page down to the table's end
   (`pinValueHeads` moves it on scroll: sticky can't follow the page out of a box that scrolls sideways). Never add
   FantasyCalc's numbers to anything someone other than the owner can see. The rows carry `rs` (a back's rush share)

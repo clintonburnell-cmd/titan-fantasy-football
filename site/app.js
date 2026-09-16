@@ -2533,7 +2533,9 @@
         placeholder="Name, team or position" value="${esc(S.value.q || '')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label></div>
       <p class="empty-note" data-value-none hidden>Nothing in the data dump matches that.</p>`;
 
-    const move = m => `<li data-find=" ${esc(SCC.norm(m.n))} ">${moveTag(m)}<b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
+    // A claim carries the drop it suggests (d): the bench player worth the least, shown as a pill beside the name.
+    const move = m => `<li data-find=" ${esc(SCC.norm(m.n))} ">${moveTag(m)}<b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small>${
+      m.d ? ` <span class="pill p-stop vr-drop">drop ${esc(m.d)}</span>` : ''}<p>${esc(m.why)}</p></li>`;
     const group = (list, title, cls) => (list && list.length ? `<h4 class="vr-k ${cls}">${title}</h4><ul class="vr-moves">${list.map(move).join('')}</ul>` : '');
     const cfgOf = id => (((S.snap && S.snap.leagues) || []).find(d => d.cfg.id === id) || {}).cfg;
     h += `<h3 class="vr-h">${one ? 'Your ideas' : 'Your ideas, league by league'}</h3><div class="league-grid">${(one ? [one] : snapOrder(R.leagues || [])).map(L => {
@@ -2719,7 +2721,9 @@
     }
 
     // League by league: sells from depth, buys where thin, claims that would start.
-    const move = m => `<li data-find=" ${esc(SCC.norm(m.n))} ">${moveTag(m)}<b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small><p>${esc(m.why)}</p></li>`;
+    // A claim carries the drop it suggests (d): the bench player worth the least, shown as a pill beside the name.
+    const move = m => `<li data-find=" ${esc(SCC.norm(m.n))} ">${moveTag(m)}<b>${esc(m.n)}</b> <small class="vr-x">${esc(m.x)}</small>${
+      m.d ? ` <span class="pill p-stop vr-drop">drop ${esc(m.d)}</span>` : ''}<p>${esc(m.why)}</p></li>`;
     const group = (list, title, cls) => (list.length ? `<h4 class="vr-k ${cls}">${title}</h4><ul class="vr-moves">${list.map(move).join('')}</ul>` : '');
     const cfgOf = id => (((S.snap && S.snap.leagues) || []).find(d => d.cfg.id === id) || {}).cfg;
     // The player search filters the leagues' moves and every table in place (applyValueFilter), so the box keeps its cursor.
