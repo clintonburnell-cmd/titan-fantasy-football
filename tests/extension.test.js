@@ -32,10 +32,10 @@ const VALUE = {v: 2, season: 2026, week: 3, through: 'Through week 2 of 2026', a
     sell: [{n: 'Josh Allen', why: 'The market says QB1; still a solid starter, so keep him unless the offer is strong.', x: 'QB, BUF', k: true}],
     add: [{n: 'Kenny Gainwell', why: '9.8 points a game by his projection; he\'d start over Bench Guy (6.2). Drop Bench Guy for him.', x: 'RB, PIT', d: 'Bench Guy'}]}],
   formats: {redraft: {name: 'Redraft', buys: [], sells: [], risers: [], all: [
-    {s: '111', n: 'Patrick Mahomes', p: 'QB', t: 'KC', proj: 22.1, ur: 3, mr: 10, vgap: 0.18, buy: false, sell: false, keep: false, pb: '5.2 rushing points a game last year', rbk: null, dg: null},
-    {s: '222', n: 'Jaylen Warren', p: 'RB', t: 'PIT', proj: 12.3, ur: 17, mr: 29, vgap: 0.31, buy: true, sell: false, keep: false, pb: null, rbk: 'mini bell cow', dg: {k: 'target', c: 2, a: true, n: 'A thesis.', w: ''}},
-    {s: '333', n: 'Josh Allen', p: 'QB', t: 'BUF', proj: 24.0, ur: 1, mr: 1, vgap: 0, buy: false, sell: true, keep: true, pb: null, rbk: null, dg: null},
-    {s: '444', n: 'Kenny Gainwell', p: 'RB', t: 'PIT', proj: 9.8, ur: 30, mr: 42, vgap: 0.2, buy: true, sell: false, keep: false, pb: null, rbk: null, dg: null}]}}};
+    {s: '111', n: 'Patrick Mahomes', p: 'QB', t: 'KC', proj: 22.1, ur: 3, mr: 10, vgap: 0.18, v: 4000, buy: false, sell: false, keep: false, pb: '5.2 rushing points a game last year', rbk: null, dg: null},
+    {s: '222', n: 'Jaylen Warren', p: 'RB', t: 'PIT', proj: 12.3, ur: 17, mr: 29, vgap: 0.31, v: 2000, buy: true, sell: false, keep: false, pb: null, rbk: 'mini bell cow', dg: {k: 'target', c: 2, a: true, n: 'A thesis.', w: ''}},
+    {s: '333', n: 'Josh Allen', p: 'QB', t: 'BUF', proj: 24.0, ur: 1, mr: 1, vgap: 0, v: 6000, buy: false, sell: true, keep: true, pb: null, rbk: null, dg: null},
+    {s: '444', n: 'Kenny Gainwell', p: 'RB', t: 'PIT', proj: 9.8, ur: 30, mr: 42, vgap: 0.2, v: 900, buy: true, sell: false, keep: false, pb: null, rbk: null, dg: null}]}}};
 const DUMP = {v: 1, week: 3, at: Date.now(), leagues: [{id: '999', name: 'Test League', start: [{n: 'Josh Allen', why: 'Start him over the other one this week.', x: 'QB'}], add: [], watch: []}]};
 const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><header><span>Sleeper</span></header>
   <div class="roster"><div class="row"><span class="name">Patrick Mahomes</span><span>QB - KC</span></div>
@@ -126,6 +126,30 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     check('the league panel names the league and its sections', /Titan · Test League/.test(panel) && /Start/.test(panel) && /Claims/.test(panel) && /Buy low/.test(panel) && /Sell high or keep/.test(panel), panel.slice(0, 300));
     check('the claim shows its drop and a bid from the league\'s winning bids', /drop Bench Guy/.test(panel) && /bid about \$\d+ of \$80 left/.test(panel), panel.slice(panel.indexOf('Claims'), panel.indexOf('Claims') + 220));
     check('the panel carries the position note and a link to Titan', /Thin at RB/.test(panel) && /Open in Titan/.test(panel), '');
+    // The trade check: type a name on each side, pick the suggestion, read the totals and the verdict.
+    const sr = 'document.querySelector("titan-panel").shadowRoot';
+    const type = async (side, text) => {
+      await P.evaluate(`(() => { const i = ${sr}.querySelector('.side input[data-side="${side}"]'); i.value = ${JSON.stringify(text)}; i.dispatchEvent(new Event('input')); })()`, false);
+      await sleep(150);
+      return P.evaluate(`[...${sr}.querySelectorAll('.side[data-side="${side}"] .sugg li')].map(l => l.textContent).join(" | ")`, false);
+    };
+    const sugg = await type('give', 'jos');
+    check('the trade check suggests a valued player from a few letters', /Josh Allen · QB, BUF/.test(sugg), sugg);
+    await P.evaluate(`${sr}.querySelector('.side[data-side="give"] .sugg li').click()`, false);
+    await sleep(200);
+    await type('get', 'mahom');
+    await P.evaluate(`${sr}.querySelector('.side[data-side="get"] .sugg li').click()`, false);
+    await sleep(200);
+    await type('get', 'warren');
+    await P.evaluate(`${sr}.querySelector('.side[data-side="get"] .sugg li').click()`, false);
+    await sleep(200);
+    const totals = await P.evaluate(`${sr}.querySelector('.totals').textContent`, false);
+    // Give Allen (6000, even), get Mahomes (4000 with an 18% edge: worth 4878) and Warren (2000 with 31%: 2899): you win by about 23% of Titan's worth, and gain 10.4 points a game across the pieces.
+    check('the trade check totals both sides and gives a verdict', /You win by 2[0-9]% of Titan's worth/.test(totals) && /gain 10\.4 points a game/.test(totals) && /Yougive6000/.test(totals.replace(/\s+/g, '')) && /Youget6000/.test(totals.replace(/\s+/g, '')), totals.slice(0, 260));
+    await P.evaluate(`${sr}.querySelector('button[data-remove="222"]').click()`, false);
+    await sleep(200);
+    const after1 = await P.evaluate(`${sr}.querySelector('.totals').textContent`, false);
+    check('removing a piece re-totals (Allen for Mahomes alone: you lose)', /You lose by/.test(after1), after1.slice(0, 160));
     // Collapsing the panel keeps the header and hides the body; the choice is remembered.
     await P.evaluate('document.querySelector("titan-panel").shadowRoot.getElementById("head").click()', false);
     await sleep(300);

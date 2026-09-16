@@ -12,6 +12,12 @@ owner-only Value report and Data dump, read from his Titan account.
   drop it names and a bid when the league uses FAAB: `SCC.faabBid` on the league's winning bids, what's left of the
   owner's budget, how hot the pickup is on Sleeper's trending adds, and what he adds over the starter), the dump's
   pickups, buy-lows, sell-highs with keep/sell, the watch list, and the position note. Collapsible; remembers.
+- **A trade check** in the panel: type the players you'd give and get (any player the Value report values in that
+  league's format), and it totals each side's market value, what Titan says they're worth (the market's value moved by
+  the projection's edge), and the points a game, with a verdict (even within 8%, or who wins by how much). It is the
+  pieces' own numbers, not your lineup's change; the link opens Titan's Trade tab for that (lineup points, partners,
+  what the other side would accept). Sleeper's own trade screen isn't read (its markup isn't documented), so the
+  picks are typed.
 - **The popup**: Connect to Titan, Refresh reports, Sign out, and switches for the pills and the panel.
 
 It never writes to Sleeper (no lineups, claims or trades are submitted): step 2, composing a trade on Sleeper's
