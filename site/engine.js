@@ -1397,14 +1397,14 @@
      gets his team's game day and opponent (none on bye); and only injury tags that outlast a game (IR,
      PUP, suspended and the like) still bench him, since today's Out or Doubtful is about this week.
      The snapshot itself is left as it was. */
-  /* A Sleeper league's team page, where its lineup is set. On an Android phone it's an intent: the Sleeper app
-     (com.sleeperbot) opens it if the app takes league links, and Chrome loads the web page itself if not (or if the
-     app isn't installed), so it's never worse than the plain link. Sleeper's iPhone app takes only chat links (its
-     apple-app-site-association, checked 2026-09-15), so everywhere else it's the web page. */
-  function sleeperTeamUrl(id, android) {
-    var path = 'sleeper.com/leagues/' + encodeURIComponent(id) + '/team', web = 'https://' + path;
-    if (!android) return web;
-    return 'intent://' + path + '#Intent;scheme=https;package=com.sleeperbot;S.browser_fallback_url=' + encodeURIComponent(web) + ';end';
+  /* A Sleeper league's team page, where its lineup is set: the same plain web link on every device. Sleeper's apps
+     take only their chat pages from outside (/channels, /topics, /topic and /message in its app link files, checked
+     2026-09-16), so an Android intent aimed at the app for a league page can't resolve, and Chrome sent it to the
+     Play Store even with Sleeper installed (the owner's phone, 2026-09-16; v1.34.1 to v1.47.1 did that). A plain
+     link opens the league on sleeper.com, and Android would hand it to the app by itself if Sleeper ever claims
+     league pages. */
+  function sleeperTeamUrl(id) {
+    return 'https://sleeper.com/leagues/' + encodeURIComponent(id) + '/team';
   }
 
   var LASTING = {IR: 1, PUP: 1, Sus: 1, NA: 1, DNR: 1};

@@ -371,10 +371,12 @@ One note per screen or feature.
   loaded yet, or Yahoo, falls back to the snapshot's `takenNorm`: free or taken). Tapping another team's chip
   (`data-tsearch` league|team|player) moves the Trade tab to that league with that team as partner, him on the get side.
   Copy and open (`data-trade-copy`): copies "Trade offer: my X for your Y" and opens `lineupUrl`.
-  A Sleeper league's team page (`lineupUrl`, from `SCC.sleeperTeamUrl`) is an Android intent on Android
-  (`IS_ANDROID`): the Sleeper app (`com.sleeperbot`) first, the web page as `browser_fallback_url`; an intent link
-  opens in place, without `target="_blank"` (`newTab`). Sleeper's iPhone app takes only chat links (topics, channels,
-  messages in its apple-app-site-association, checked 2026-09-15), so iPhones get the web page. Never store the
+  A Sleeper league's team page (`lineupUrl`, from `SCC.sleeperTeamUrl`) is the plain web link on every device.
+  **Never make it an Android intent again:** Sleeper's apps take only chat links from outside (/channels, /topics,
+  /topic, /message in its app link files, checked 2026-09-16), so an intent aimed at `com.sleeperbot` for a league
+  page can't resolve and Chrome sends it to the Play Store even with Sleeper installed (v1.34.1 to v1.47.1 did; the
+  owner hit it on his phone, 2026-09-16). A plain link opens the league on sleeper.com, and Android would hand it to
+  the app by itself if Sleeper ever claims league pages. Never store the
   owner's Sleeper login to act for him (asked 2026-09-15; declined: no write API, Sleeper's terms, credential risk).
   Sleeper can't be pre-filled: its API is read-only, and its web trade page (`/beta/leagues/:id/trade`,
   checked 2026-09-11) takes only the league and sits behind flags that are off. Never ask for Sleeper logins.

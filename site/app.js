@@ -19,8 +19,6 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  // An Android phone (Titan's Play app too): Sleeper's buttons ask the Sleeper app first (SCC.sleeperTeamUrl).
-  const IS_ANDROID = /Android/i.test(navigator.userAgent || '');
   const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'lab', 'value', 'dump', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
@@ -981,13 +979,13 @@
   }
   function lineupUrl(cfg) {
     if (cfg.platform === 'yahoo') return cfg.url || 'https://football.fantasysports.yahoo.com/';
-    if (cfg.platform !== 'espn') return SCC.sleeperTeamUrl(cfg.id, IS_ANDROID);
+    if (cfg.platform !== 'espn') return SCC.sleeperTeamUrl(cfg.id);
     const team = cfg.teamId !== null && cfg.teamId !== undefined ? `&teamId=${encodeURIComponent(cfg.teamId)}` : '';
     return `https://fantasy.espn.com/football/team?leagueId=${encodeURIComponent(cfg.espnId)}${team}&seasonId=${encodeURIComponent(S.snap ? S.snap.season : '')}`;
   }
   // Demo leagues have no team page to open.
-  // An app link (intent:) opens in place: a new tab for it would be left blank behind the app.
-  const newTab = url => (/^intent:/.test(url) ? '' : ' target="_blank" rel="noopener"');
+  // Each league site opens in a new tab, leaving Titan where it was.
+  const newTab = () => ' target="_blank" rel="noopener"';
   const openSite = cfg => {
     if (cfg.demo) return '';
     const url = lineupUrl(cfg);
