@@ -87,7 +87,7 @@
   function panelStyles() {
     return `
       :host { all: initial; }
-      .box { position: fixed; right: 16px; bottom: 16px; z-index: 2147483000; width: 360px; max-width: calc(100vw - 32px); max-height: min(70vh, 640px);
+      .box { position: fixed; right: 16px; top: 72px; z-index: 2147483000; width: 360px; max-width: calc(100vw - 32px); max-height: min(70vh, 640px);
         display: flex; flex-direction: column; background: #fff; color: #1c2330; border: 1px solid #d9dee7; border-radius: 12px;
         box-shadow: 0 12px 32px rgba(0,0,0,.18); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
       .box.closed { width: auto; max-height: none; }
