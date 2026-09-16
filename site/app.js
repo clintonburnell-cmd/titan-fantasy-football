@@ -2682,7 +2682,8 @@
      out of 10, a still on the list, n the thesis, w what to watch this season), as a pill; hollow once he's off the list. */
   function guidePill(dg) {
     if (!dg || !dg.k) return '';
-    const title = `${dg.a ? 'A' : 'Was a'}${dg.k === 'target' ? ' player to target' : dg.k === 'avoid' ? ' player to avoid' : ' late-round dart'} in the draft guide, confidence ${dg.c}/10${
+    const from = dg.s && !/^draft guide/.test(dg.s) ? `for JJ (${dg.s})` : 'in the draft guide';
+    const title = `${dg.a ? 'A' : 'Was a'}${dg.k === 'target' ? ' player to target' : dg.k === 'avoid' ? ' player to avoid' : ' late-round dart'} ${from}, confidence ${dg.c}/10${
       dg.a ? '' : ' (since taken off the list)'}: ${dg.n}${dg.w ? ` Watch: ${dg.w}.` : ''}`;
     return `<span class="pill p-guide g-${esc(dg.k)}${dg.a ? '' : ' g-off'}" title="${esc(title)}">${esc(dg.k)} ${dg.c}</span>`;
   }
@@ -3744,7 +3745,8 @@
     const bid = (L, name, add, over) => {
       const F = W.faab[L.cfg.id];
       if (!L.cfg.faab || !F || !F.data) return '';
-      const cfg = L.cfg, pts = p => SCC.projFor(S.proj, p.id, cfg) || 0, o = {budget: F.data.budget, left: F.data.left, bids: F.data.bids, heat: heat(name)};
+      const cfg = L.cfg, pts = p => SCC.projFor(S.proj, p.id, cfg) || 0, o = {budget: F.data.budget, left: F.data.left, bids: F.data.bids, heat: heat(name),
+        pos: add && add.pos}; // a kicker or defense is a stream: the bid is capped
       if (add && add.id && over && Object.keys(S.proj).length) o.gain = Math.round((pts(add) - pts(over)) * 10) / 10;
       const Tm = S.trade.teams[cfg.id];
       if (add && add.id && Tm && Tm.list && Object.keys(S.proj).length) {

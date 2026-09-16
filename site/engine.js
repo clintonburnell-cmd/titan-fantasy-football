@@ -2902,6 +2902,7 @@
      how many other teams he'd start for (of `teams` - 1), adds up to a quarter more when
      the whole league wants him. Whole dollars, at least $1, never more than what's left.
      o: {budget, left, bids, heat: 'hot'|'warm'|'cold', gain, rivals, teams}. */
+  var STREAM_CAP = 0.03;
   function faabBid(o) {
     var budget = Number(o.budget) || 0, left = o.left === undefined ? budget : Math.max(0, Number(o.left) || 0);
     if (!budget || !left) return {bid: 0, basis: 'none'};
@@ -2921,6 +2922,11 @@
       var r = Math.max(0, Math.min(others, Number(o.rivals) || 0));
       bid *= 1 + 0.25 * r / others;
       if (r) why.push(r + ' other ' + (r === 1 ? 'team' : 'teams') + ' would start him');
+    }
+    // A kicker or defense is a stream, never worth more than STREAM_CAP of the budget ("three bucks at most", Late-Round).
+    if (o.pos === 'K' || o.pos === 'DEF') {
+      var cap = Math.max(1, Math.round(budget * STREAM_CAP));
+      if (bid > cap) { bid = cap; why.push('a stream: never more than ' + Math.round(STREAM_CAP * 100) + '% of the budget'); }
     }
     return {bid: Math.max(1, Math.min(left, Math.round(bid))), basis: league ? 'league' : 'budget', why: why};
   }

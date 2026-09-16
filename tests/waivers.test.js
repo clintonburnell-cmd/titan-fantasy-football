@@ -13,6 +13,9 @@ const warm = SCC.faabBid({budget: 100, left: 80, bids: history, heat: 'warm'});
 const cold = SCC.faabBid({budget: 100, left: 80, bids: history, heat: 'cold'});
 check(hot.basis === 'league' && hot.bid === 15 && warm.bid === 7 && cold.bid === 2,
   `from the league's own winning bids: hot $${hot.bid} (75th percentile), warm $${warm.bid} (median), cold $${cold.bid}`);
+check(SCC.faabBid({budget: 100, left: 80, bids: history, heat: 'hot', pos: 'DEF'}).bid === 3 && SCC.faabBid({budget: 100, bids: [], heat: 'hot', pos: 'K'}).bid === 3 &&
+  /never more than 3%/.test(SCC.faabBid({budget: 100, bids: [], heat: 'hot', pos: 'DEF'}).why.join()) && SCC.faabBid({budget: 100, bids: [], heat: 'hot', pos: 'RB'}).bid === 12,
+  'a kicker or defense bid never tops 3% of the budget (a stream), whatever the heat; other positions are untouched');
 check(SCC.faabBid({budget: 100, left: 80, bids: [3], heat: 'hot'}).bid === 12 && SCC.faabBid({budget: 100, bids: [], heat: 'warm'}).bid === 5 &&
   SCC.faabBid({budget: 100, bids: [], heat: 'cold'}).basis === 'budget', 'with too few bids to go on, a share of the budget (12%, 5%, 1%)');
 check(SCC.faabBid({budget: 100, left: 6, bids: history, heat: 'hot'}).bid === 6 && SCC.faabBid({budget: 100, left: 0, heat: 'hot'}).bid === 0 &&

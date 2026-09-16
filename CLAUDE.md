@@ -486,7 +486,12 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   `n` thesis, `w` what to watch), shown by `guidePill` (`.p-guide`) on the Value report, the Data dump and the
   Trade tab's `valueTag`. The guide is paid content for personal use: the digest lives in titan-analytics
   `reports/` (out of git), only reaches Firestore `lab/` (owner only), and never the Waiver Wire or any public
-  page; never quote the PDF's text in a repo. The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
+  page; never quote the PDF's text in a repo. Entries carry `s` (v1.59.0), the source: the draft guide, or an
+  in-season show ("Q&A 2026-09-15"), and the pill's title says which; titan-analytics `lateround_fetch.py`
+  transcribes each week's new Late-Round audio into its `reports/lateround/` for the next session to digest into
+  the digest and the notes files (`D:\Claude\titan-fantasy-football-late-round-*.md`). From that Q&A: `SCC.faabBid`
+  caps a kicker's or defense's bid at `STREAM_CAP` (3%) of the budget (`o.pos`), and the Value report's claims put
+  free agents at the owner's thin positions first. The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
   sideways (`.vr-scroll`) with the player column pinned; its header row follows the page down to the table's end
   (`pinValueHeads` moves it on scroll: sticky can't follow the page out of a box that scrolls sideways). Never add
   FantasyCalc's numbers to anything someone other than the owner can see. The rows carry `rs` (a back's rush share)
