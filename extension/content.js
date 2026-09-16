@@ -110,8 +110,8 @@
       .note { color: #6b7280; font-size: 12px; margin: 8px 0 0; }
       a { color: #1f4fb8; }
       .foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 10px; font-size: 12px; color: #6b7280; }
-      details.trade { margin-top: 10px; border-top: 1px solid #eef1f5; padding-top: 6px; }
-      details.trade summary { cursor: pointer; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #6b7280; font-weight: 700; }
+      details.trade { margin: 8px 0 4px; border: 1px solid #c7d9ff; background: #f5f8ff; border-radius: 10px; padding: 8px 10px; }
+      details.trade summary { cursor: pointer; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: #1f4fb8; font-weight: 700; }
       .side { margin-top: 8px; }
       .side label { display: block; font-size: 11px; color: #6b7280; margin-bottom: 3px; }
       .side input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d9dee7; border-radius: 8px; font: inherit; }
@@ -226,10 +226,9 @@
     let body;
     if (!V) body = `<p class="note">Not connected to Titan yet. Open the extension's popup and choose Connect to Titan.</p>`;
     else if (!L && !DL) body = `<p class="note">Titan's reports don't cover this league (they cover your Sleeper leagues each Tuesday).</p>`;
-    else body = section('Start', DL && DL.start, 'start') + section('Claims', (L && L.add) || [], 'add') + section('Pickups (data dump)', (DL && DL.add) || [], 'add')
+    else body = tradeSection() + section('Start', DL && DL.start, 'start') + section('Claims', (L && L.add) || [], 'add') + section('Pickups (data dump)', (DL && DL.add) || [], 'add')
       + section('Buy low', (L && L.buy) || [], 'buy') + section('Sell high or keep', (L && L.sell) || [], 'sell') + section('Watch', (DL && DL.watch) || [], 'watch')
       + (L && L.need ? `<p class="note">${esc(L.need)}</p>` : '')
-      + tradeSection()
       + `<div class="foot"><span>Week ${esc(V.week)}${V.through ? ' · ' + esc(V.through) : ''}</span><a href="${APP}value" target="_blank" rel="noopener">Open in Titan</a></div>`;
     const name = (L && L.name) || (DL && DL.name) || 'this league';
     host.shadowRoot.innerHTML = `<style>${panelStyles()}</style><div class="box${S.open ? '' : ' closed'}">
