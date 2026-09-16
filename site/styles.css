@@ -452,6 +452,13 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .p-ok { background: var(--ok-soft); color: var(--ok); }
 .p-swap { background: var(--swap-bg); color: var(--swap-ink); }
 .p-stop { background: var(--stop); color: #fff; }
+/* The draft guide's take (owner): target, avoid or dart with its confidence; hollow once he's off the list. */
+.p-guide { border: 1.5px solid transparent; text-transform: capitalize; }
+.p-guide.g-target { background: var(--ok-soft); color: var(--ok); border-color: var(--ok-soft); }
+.p-guide.g-avoid { background: var(--swap-bg); color: var(--swap-ink); border-color: var(--swap-bg); }
+.p-guide.g-dart { background: var(--surface-2); color: var(--text); border-color: var(--line); }
+.p-guide.g-off { background: transparent; color: var(--faint); border-color: var(--line); }
+.vr-p .p-guide { margin-right: 6px; }
 
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; }

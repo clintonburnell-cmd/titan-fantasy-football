@@ -924,7 +924,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // would. Its first league is the test league (so the league dropdown can pick it), in a dynasty superflex format.
   const lid = await ev(`((JSON.parse(localStorage.getItem('titan.snapshot.v1') || '{}').leagues || [])[0] || {cfg: {}}).cfg.id || ''`);
   const vrow = (s, n, p, buy, sell, keep) => ({s, n, p, t: 'KC', proj: 12.3, val: 12, fp: 10, fpoe: -2.1, snap: 0.8, tgt: 0.2, rz: 1, ur: 12, mr: 30, gap: 18, tr: 5, ch: null, buy, sell,
-    keep: !!keep});
+    keep: !!keep, dg: n === 'Buy Guy' ? {k: 'target', c: 7, a: true, n: 'A real role at a discount.', w: 'route share'} : n === 'Sell Guy' ? {k: 'avoid', c: 9, a: false, n: 'Priced too early.', w: ''} : null});
   const RD = 'redraft-1qb-12teams-1ppr', DY = 'dynasty-2qb-10teams-1ppr';
   const vlg = (id, name, fmt, own) => ({id, fmt, name, own, teams: ['Rival Team (rival)', 'My Team (me)'], caveat: '',
     format: fmt === RD ? 'Redraft, 12 teams, PPR' : 'Dynasty, 10 teams, PPR, superflex', need: 'Your team by position: QB 1st, RB 11th of 12. Thin at RB.',
@@ -990,6 +990,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const np = await ev(`[...document.querySelectorAll('.vr-lg[open] .vr-np')].map(x => x.className.trim() + ':' + x.textContent.replace(/\\s+/g, ' ').trim()).join(' | ')`);
   check(np === 'vr-np deep:QB1stprojection2ndyour listdeep | vr-np thin:RB11thprojection9thyour listthin' && await ev(`/among the league's 12 teams/.test(document.querySelector('.vr-nn').textContent)`),
     'your team by position shows as colored position pills: your rank, your rank by your own list, thin or deep: ' + np);
+  const guide = await ev(`[...document.querySelectorAll('tr[data-vp] .p-guide')].slice(0, 2).map(x => x.className.replace(/\\s+/g, ' ').trim() + ':' + x.textContent + ':' + x.title.slice(0, 40)).join(' | ')`);
+  check(guide === 'pill p-guide g-target:target 7:A player to target in the draft guide, c | pill p-guide g-avoid g-off:avoid 9:Was a player to avoid in the draft guide',
+    'the draft guide\'s take shows as a pill with its confidence, hollow once he\'s off the list, the thesis on hover: ' + guide);
   const dropPill = await ev(`(document.querySelector('.vr-drop') || {}).textContent || ''`);
   check(dropPill === 'drop Drop Guy' && await ev(`document.body.textContent.includes('Drop Drop Guy (WR, KC) for him')`),
     'a claim says who to drop for him, as a pill beside the name and in its reason: ' + dropPill);

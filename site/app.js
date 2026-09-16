@@ -2489,7 +2489,7 @@
   // where(row): who has him in the picked league (a Where column), or null under All leagues.
   function dumpTable(rows, filtered, where) {
     const next = r => (r.o === 'BYE' ? 'Bye' : `${r.h ? 'vs' : 'at'} ${esc(r.o || '')}`);
-    return reportTable(rows, [['Points', r => rt.n(r.fp)], ['Expected', r => rt.n(r.x)], ['Over expected', r => rt.sgn(r.oe)], ['Targets', r => rt.share(r.sh)],
+    return reportTable(rows, [['Guide', r => guidePill(r.dg)], ['Points', r => rt.n(r.fp)], ['Expected', r => rt.n(r.x)], ['Over expected', r => rt.sgn(r.oe)], ['Targets', r => rt.share(r.sh)],
       ['Carries', r => rt.share(r.rs)], ['Next', next, 'vr-w'], ['Matchup', r => easeRank(r.mu)], ['Team pts', r => rt.n(r.imp)], ['Adjusted', r => rt.n(r.adj)], ['Next 4', r => easeRank(r.n4)],
       ['Playoffs', r => easeRank(r.po)]], r => [(r.p || '') + (r.xr || ''), r.t].filter(Boolean).join(' · '), filtered, where);
   }
@@ -2674,6 +2674,14 @@
   }
   // A league move's verdict (k: keep, or sell), when it has one.
   const moveTag = m => ('k' in m ? `<span class="pill ${m.k ? 'p-swap' : 'p-stop'}">${m.k ? 'keep' : 'sell'}</span> ` : '');
+  /* The draft guide's take on a player (dg on the owner's Value and Data dump rows: k target | avoid | dart, c confidence
+     out of 10, a still on the list, n the thesis, w what to watch this season), as a pill; hollow once he's off the list. */
+  function guidePill(dg) {
+    if (!dg || !dg.k) return '';
+    const title = `${dg.a ? 'A' : 'Was a'}${dg.k === 'target' ? ' player to target' : dg.k === 'avoid' ? ' player to avoid' : ' late-round dart'} in the draft guide, confidence ${dg.c}/10${
+      dg.a ? '' : ' (since taken off the list)'}: ${dg.n}${dg.w ? ` Watch: ${dg.w}.` : ''}`;
+    return `<span class="pill p-guide g-${esc(dg.k)}${dg.a ? '' : ' g-off'}" title="${esc(title)}">${esc(dg.k)} ${dg.c}</span>`;
+  }
 
   // where(row): who has him in the picked league (a Where column), or null under All leagues.
   function valueTable(rows, filtered, where) {
@@ -2692,7 +2700,7 @@
       const s = `${Math.round(t * 100)}% tgt · ${y.toFixed(1)} yds`;
       return now ? s : `<span class="muted" title="Last season">${s}</span>`;
     };
-    return reportTable(rows, [['Projection', r => rt.n(r.proj)], ['Points', r => rt.n(r.fp)], ['Over usage', r => rt.sgn(r.fpoe)], ['Snaps', r => rt.share(r.snap)],
+    return reportTable(rows, [['Guide', r => guidePill(r.dg)], ['Projection', r => rt.n(r.proj)], ['Points', r => rt.n(r.fp)], ['Over usage', r => rt.sgn(r.fpoe)], ['Snaps', r => rt.share(r.snap)],
       ['Routes', routes], ['Per route', perRoute],
       ['Target share', r => rt.share(r.tgt)], ['Rush share', r => (r.p === 'RB' ? rt.share(r.rs) : '')], ['Red zone', r => rt.n(r.rz)], ['Goal line', goal], ['Garbage time', gt],
       ['By projection', r => rt.rank(r.p, r.ur)], ['Market', r => rt.rank(r.p, r.mr)],
@@ -2789,7 +2797,10 @@
       tight end's role is read by route share when it's in, a receiver or tight end running routes on under 40% of dropbacks is never a buy-low, and
       the points tend to follow the routes. <b>Rush share</b> is a back's share of his team's carries. <b>Goal line</b> is a back's share of his team's carries inside the 10, or a
       pass catcher's end-zone targets a game: touchdowns that come with that work hold up, so a sell-high on touchdowns reads keep when it's there.
-      <b>Over usage</b> is this season's points a game
+      <b>Guide</b> is the draft guide's take on him (a player to target, to avoid, or a late-round dart, with its confidence out of 10; hollow once
+      the market caught up and he came off the list): hover for the thesis and what to watch this season. A buy the guide agrees with (a target)
+      or a sell it agrees with (an avoid) ranks higher by its confidence; a call it argued against still stands, since the usage is the evidence,
+      but ranks lower and says so. <b>Over usage</b> is this season's points a game
       minus expected: big positives tend to fall back and big negatives to recover. <b>By projection</b> and <b>market</b> are his place at his position by
       projection and by FantasyCalc's trade value; a <b>gap</b> of +10 means the market ranks him ten spots lower. A call needs that gap in value
       terms too (what the market pays at his projected rank against what it pays for him, a quarter apart at least), so a few spots at the top of a
@@ -4269,6 +4280,7 @@
     const tr = Number(x && x.tr) || 0, tds = row.fpoe > 0 && row.td !== null && row.td !== undefined && 6 * row.td >= 0.5 * row.fpoe;
     if (tr > 0 && tds) h += '<span class="tmom">price rising on TDs</span>';
     else if (tr < 0 && row.ur && row.mr && row.ur < row.mr) h += '<span class="tmom">price falling, usage steady</span>';
+    h += guidePill(row.dg); // the draft guide's take, with its thesis and what to watch on hover
     return h ? `<span class="ttags">${h}</span>` : '';
   }
 

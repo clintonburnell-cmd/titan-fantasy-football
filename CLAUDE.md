@@ -457,7 +457,12 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   colors (`.pos[data-pos]`); older reports carry only the sentence `L.need`. titan-analytics reads the owner's
   season lists out of Firestore (`fetch-season.js`, firebase-tools' login, `users/{uid}/seasonRanks`, the account
   whose `account.userId` is the owner's Sleeper id) before each run; a claim needs his list to agree, and QB/TE
-  claims need a drastic gap. The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
+  claims need a drastic gap. Value and Data dump rows carry `dg` (v1.54.0, titan-analytics v1.9.0): the owner's
+  private digest of his Late-Round Draft Guide (`k` target | avoid | dart, `c` confidence /10, `a` still listed,
+  `n` thesis, `w` what to watch), shown by `guidePill` (`.p-guide`) on the Value report, the Data dump and the
+  Trade tab's `valueTag`. The guide is paid content for personal use: the digest lives in titan-analytics
+  `reports/` (out of git), only reaches Firestore `lab/` (owner only), and never the Waiver Wire or any public
+  page; never quote the PDF's text in a repo. The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
   sideways (`.vr-scroll`) with the player column pinned; its header row follows the page down to the table's end
   (`pinValueHeads` moves it on scroll: sticky can't follow the page out of a box that scrolls sideways). Never add
   FantasyCalc's numbers to anything someone other than the owner can see. The rows carry `rs` (a back's rush share)
