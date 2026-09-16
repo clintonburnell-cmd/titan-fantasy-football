@@ -46,4 +46,12 @@ const def = tags({pos: 'DEF', team: 'TB'});
 check(def[0] === '@ CIN' && def.includes('amber:CIN expected 27 pts') && SCC.gameTags(ctx, {pos: 'QB', team: 'KC'}).length === 0 &&
   SCC.gameTags(null, {pos: 'QB', team: 'CIN'}).length === 0, 'a defense sees the opponent\'s expected points; no context, no tags: ' + def.join(' | '));
 
+section('the game\'s pull on a projection');
+// Four sides priced, averaging 22.5: a team expected to score 27 is a fifth above that, so +8% (0.4 of the difference); 18 is -8%; 36 caps at +10%.
+const lines = {teams: {CIN: {implied: 27}, TB: {implied: 18}, KC: {implied: 22.5}, LAC: {implied: 22.5}, NYJ: {implied: 36}, MIA: {implied: 9}}};
+const tilt = t => Math.round(SCC.impliedTilt(lines, t) * 1000) / 1000;
+check(tilt('CIN') === 0.08 && tilt('TB') === -0.08 && tilt('KC') === 0 && tilt('NYJ') === 0.1 && tilt('MIA') === -0.1 && tilt('WSH') === 0,
+  'a team expected to score 27 against an average side\'s 22.5 lifts its players 8%, 18 drops them 8%, never past 10% either way; no line, no tilt');
+check(SCC.impliedTilt(ctx, 'CIN') === 0 && SCC.impliedTilt(null, 'CIN') === 0, 'fewer than four sides priced, or no context: no tilt');
+
 T.done();

@@ -229,7 +229,10 @@ One note per screen or feature.
   ceilings, of the starters yet to play).
 - The matchup tilt (v1.42.0): `analyze` hands `SCC.analyzeAll` a `tilt(p, cfg)` (`tiltFor`: the projection in the
   league's scoring, +8% against the eight softest defenses to his position, -8% against the eight toughest, from the
-  game context) and `analyzeLeague` lets a bench player take a close call's spot when his tilted projection beats
+  game context, plus the game's own pull since v1.50.0, `SCC.impliedTilt`: his team's expected points from the
+  betting line against the average side this week, 0.4 of the difference and never past ±10%, so a team expected to
+  score 27 against an average 22.5 lifts its players 8%; a close call's note also says which team is expected to
+  score more when it's 4+ points apart, `impliedOf`) and `analyzeLeague` lets a bench player take a close call's spot when his tilted projection beats
   the starter's by `TILT_MARGIN` (1.5); the card says so (`L.tilts`, "Matchup tilt"). Only close calls (within
   `CLOSE` ranks) can flip; everything else follows the rankings. The server's frozen record has no tilt, so Results
   can differ from the app on those spots. `loadContext` re-runs `analyze` once the context is in.
@@ -442,7 +445,14 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   and `gt` (his share of touches in garbage time) since titan-analytics v1.5.0, the Late-Round digest
   (`D:\Claude\titan-fantasy-football-late-round-1126-notes.md`, outside the repo): garbage time counts a quarter
   toward usage, last season's weight in the blend goes by how much one week says about a position (WR and QB most,
-  RB least), and a player with 40% of his touches in garbage time is never a buy.
+  RB least), and a player with 40% of his touches in garbage time is never a buy. Since titan-analytics v1.6.0 (seven
+  episodes read together, `D:\Claude\titan-fantasy-football-late-round-themes-notes.md`) the rows also carry `gl` (a
+  back's share of his team's carries inside the 10), `ez` (a pass catcher's end-zone targets a game; the Goal line
+  column) and `pl` (his team's plays a game; a week's usage is steadied halfway toward a normal count), a touchdown
+  scorer with the goal-line work reads keep, a tight end's role shift is read by target share, and young players
+  with no last season who already hold a real role join the risers. The Data dump's rows carry `imp` (his team's
+  expected points from the betting line, the Team pts column) and `sp` (its spread, negative when favored): its
+  adjusted number follows the game after the matchup, and a back on a big favorite gets a little more.
 
 ## Server, ESPN and alerts
 

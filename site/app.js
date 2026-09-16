@@ -267,16 +267,17 @@
 
   /* The matchup tilt on close calls (SCC.analyzeLeague's opts.tilt): a player's projection in the league's scoring
      moved by how soft his opponent is to his position (the game context's points-allowed ranks: the softest eight
-     up to +8%, the toughest eight down to -8%). Null until the projections and the context are in, so the
-     server's frozen record (no tilt) and the app agree except on these close calls. */
+     up to +8%, the toughest eight down to -8%) and by the game itself (SCC.impliedTilt: his team's expected points
+     from the betting line against the average side this week, up to 10% either way). Null until the projections
+     and the context are in, so the server's frozen record (no tilt) and the app agree except on these close calls. */
   const TILT = 0.08;
   function tiltFor() {
-    if (!S.ctx.data || !S.ctx.data.dvp || !Object.keys(S.proj).length) return null;
+    if (!S.ctx.data || !S.ctx.data.teams || !Object.keys(S.proj).length) return null;
     return cfg => p => {
       const proj = SCC.projFor(S.proj, p.id, cfg);
       if (proj === null || proj === undefined) return null;
       const r = dvpRank(p);
-      return proj * (1 + (r && r <= 8 ? TILT : r && r >= 25 ? -TILT : 0));
+      return proj * (1 + (r && r <= 8 ? TILT : r && r >= 25 ? -TILT : 0) + SCC.impliedTilt(S.ctx.data, p.team));
     };
   }
 
@@ -1049,6 +1050,11 @@
     return U.list || [];
   }
   const spreadFor = (p, cfg) => SCC.spreadOf(statWeeks(), p.id, p.pos, SCC.projFor(S.proj, p.id, cfg));
+  // The points a player's team is expected to score this week (the betting line, from the game context), or null.
+  function impliedOf(p) {
+    const C = S.ctx.data, t = C && C.teams && C.teams[SCC.teamAbbr(p.team)];
+    return t && t.implied ? t.implied : null;
+  }
   // How soft a player's matchup is: his opponent's rank for points given up to his position (1 gives up the most), from the game context.
   function dvpRank(p) {
     const C = S.ctx.data, t = C && C.teams && C.teams[SCC.teamAbbr(p.team)];
@@ -1083,6 +1089,8 @@
       else s += `${esc(floorer.name)} has the higher floor (${fmt(fl.floor)} to ${fmt(fl.ceiling)}), ${esc(ceiler.name)} the higher ceiling (${fmt(ce.floor)} to ${fmt(ce.ceiling)}).`;
       const ra = dvpRank(starter), rb = dvpRank(bench);
       if (ra && rb && ra !== rb) s += ` ${esc((ra < rb ? starter : bench).name)} has the softer matchup (${nth(Math.min(ra, rb))} most given up to ${esc(starter.pos)}s, against ${nth(Math.max(ra, rb))}).`;
+      const ia = impliedOf(starter), ib = impliedOf(bench);
+      if (ia && ib && Math.abs(ia - ib) >= 4) s += ` ${esc((ia > ib ? starter : bench).name)}'s team is expected to score more (${Math.max(ia, ib)} points to ${Math.min(ia, ib)}).`;
       if (pa !== null && floorer !== ceiler) {
         if (pa >= FAV) s += ` <em>You're the favorite this week (${pa}%), so the higher floor is the safer start.</em>`;
         else if (pa <= DOG) s += ` <em>You're the underdog this week (${pa}%), so the higher ceiling gives you the better shot.</em>`;
@@ -2474,7 +2482,7 @@
   function dumpTable(rows, filtered, where) {
     const next = r => (r.o === 'BYE' ? 'Bye' : `${r.h ? 'vs' : 'at'} ${esc(r.o || '')}`);
     return reportTable(rows, [['Points', r => rt.n(r.fp)], ['Expected', r => rt.n(r.x)], ['Over expected', r => rt.sgn(r.oe)], ['Targets', r => rt.share(r.sh)],
-      ['Carries', r => rt.share(r.rs)], ['Next', next, 'vr-w'], ['Matchup', r => easeRank(r.mu)], ['Adjusted', r => rt.n(r.adj)], ['Next 4', r => easeRank(r.n4)],
+      ['Carries', r => rt.share(r.rs)], ['Next', next, 'vr-w'], ['Matchup', r => easeRank(r.mu)], ['Team pts', r => rt.n(r.imp)], ['Adjusted', r => rt.n(r.adj)], ['Next 4', r => easeRank(r.n4)],
       ['Playoffs', r => easeRank(r.po)]], r => [(r.p || '') + (r.xr || ''), r.t].filter(Boolean).join(' · '), filtered, where);
   }
 
@@ -2564,7 +2572,10 @@
       where on the field) usually scores a game, and <b>over expected</b> is his points a game minus that: big positives tend to fall back and big negatives to
       recover. <b>Matchup</b> ranks next week's opponent by the adjusted points it allows a game at his position (1 is the softest). <b>Adjusted</b> starts from
       his expected points, steadied by your value report's projection while the season is young, and moves toward the matchup, less while the defense's sample
-      is small, and by position: a defense's record against running backs moves the number most, against quarterbacks and tight ends least. <b>Next 4</b> and <b>playoffs</b> rank his schedule ahead at his position (1 is the easiest; the fantasy playoffs are weeks 15 to 17). A real role
+      is small, and by position: a defense's record against running backs moves the number most, against quarterbacks and tight ends least. Then the game
+      itself (<b>team pts</b>, the points his team is expected to score from the betting line): a team expected to score more than the average side this
+      week lifts its players (quarterbacks most, backs least), a back on a team favored by a touchdown or more gets a little more, and on a big underdog a
+      little less. <b>Next 4</b> and <b>playoffs</b> rank his schedule ahead at his position (1 is the easiest; the fantasy playoffs are weeks 15 to 17). A real role
       is a top-24 QB, top-40 RB, top-60 WR or top-20 TE by expected points. Start ideas swap in a bench player 2 or more adjusted points ahead of a starter,
       and pickups are free agents 1 or more ahead of the weakest starter they could replace, with a bigger margin while the season is young (4 and 3
       after one game). Players Sleeper lists as out, doubtful or on IR get no start or pickup
@@ -2658,8 +2669,10 @@
   function valueTable(rows, filtered, where) {
     // Garbage time: his share of touches with the game decided, shown once it's a fifth or more (those count a quarter toward usage).
     const gt = r => (r.gt === null || r.gt === undefined ? '–' : r.gt >= 0.2 ? `<span class="amber">${Math.round(r.gt * 100)}%</span>` : Math.round(r.gt * 100) + '%');
+    // Goal line: a back's share of his team's carries inside the 10; a pass catcher's end-zone targets a game.
+    const goal = r => (r.p === 'RB' ? rt.share(r.gl) : r.p === 'QB' ? '' : rt.n(r.ez));
     return reportTable(rows, [['Projection', r => rt.n(r.proj)], ['Points', r => rt.n(r.fp)], ['Over usage', r => rt.sgn(r.fpoe)], ['Snaps', r => rt.share(r.snap)],
-      ['Target share', r => rt.share(r.tgt)], ['Rush share', r => (r.p === 'RB' ? rt.share(r.rs) : '')], ['Red zone', r => rt.n(r.rz)], ['Garbage time', gt],
+      ['Target share', r => rt.share(r.tgt)], ['Rush share', r => (r.p === 'RB' ? rt.share(r.rs) : '')], ['Red zone', r => rt.n(r.rz)], ['Goal line', goal], ['Garbage time', gt],
       ['By projection', r => rt.rank(r.p, r.ur)], ['Market', r => rt.rank(r.p, r.mr)],
       ['Gap', r => rt.sgn(r.gap, 0)], ['Rank change', r => rt.sgn(r.ch, 0)]], r => [r.p, r.t].filter(Boolean).join(' · '), filtered, where);
   }
@@ -2732,7 +2745,10 @@
       sample is small (most for receivers and quarterbacks, least for backs: one week says the most about a back's role and the least about a
       receiver's), plus the part of what he's scored above or below his usage over the last two seasons that carries. A touch in <b>garbage time</b>
       (the fourth quarter with the game decided) counts a quarter toward his usage, and a player with 40% or more of his touches there is never a
-      buy-low. <b>Rush share</b> is a back's share of his team's carries. <b>Over usage</b> is this season's points a game
+      buy-low, and a week's usage is steadied halfway toward a normal play count, so a team that ran 86 plays doesn't make a role look bigger than
+      it is. <b>Rush share</b> is a back's share of his team's carries. <b>Goal line</b> is a back's share of his team's carries inside the 10, or a
+      pass catcher's end-zone targets a game: touchdowns that come with that work hold up, so a sell-high on touchdowns reads keep when it's there.
+      <b>Over usage</b> is this season's points a game
       minus expected: big positives tend to fall back and big negatives to recover. <b>By projection</b> and <b>market</b> are his place at his position by
       projection and by FantasyCalc's trade value; a <b>gap</b> of +10 means the market ranks him ten spots lower. A call needs that gap in value
       terms too (what the market pays at his projected rank against what it pays for him, a quarter apart at least), so a few spots at the top of a

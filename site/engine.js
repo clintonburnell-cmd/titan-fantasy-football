@@ -776,6 +776,22 @@
     return {home: round1((game.total - game.spread) / 2), away: round1((game.total + game.spread) / 2)};
   }
 
+  /* The game's pull on a player's projection, as a share to add to one: his team's expected points
+     against the average side this week (the betting lines in the game context), ENV_TILT of the
+     difference and never past ENV_CAP either way. A team expected to score 27 when the average
+     side is expected to score 22.5 lifts its players 8%; one expected to score 18 drops them 8%.
+     Zero without a line for his game, or with fewer than four sides priced. */
+  var ENV_TILT = 0.4, ENV_CAP = 0.1;
+  function impliedTilt(ctx, team) {
+    var teams = ctx && ctx.teams, t = teams && teams[teamAbbr(team)];
+    if (!t || !t.implied) return 0;
+    var all = [], k;
+    for (k in teams) if (teams[k] && teams[k].implied) all.push(teams[k].implied);
+    if (all.length < 4) return 0;
+    var avg = all.reduce(function (a, b) { return a + b; }, 0) / all.length;
+    return Math.max(-ENV_CAP, Math.min(ENV_CAP, ENV_TILT * (t.implied / avg - 1)));
+  }
+
   /* Fantasy points (full PPR) each defense gives up to each position per game, from nflverse's
      weekly player stats (rows as splitRows gives them, header first; regular season only),
      ranked 1 (gives up the most: a soft matchup) down. {teams: {TEAM: {QB: {avg, rank}, ...}}, weeks}. */
@@ -2894,7 +2910,7 @@
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, impliedValue: impliedValue, spanPoints: spanPoints,
     flexShares: flexShares, ageFactor: ageFactor,
     draftFromSleeper: draftFromSleeper, draftGrades: draftGrades,
-    impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags, scheduleStrength: scheduleStrength, transactionsFrom: transactionsFrom,
+    impliedTotals: impliedTotals, impliedTilt: impliedTilt, dvpFrom: dvpFrom, gameTags: gameTags, scheduleStrength: scheduleStrength, transactionsFrom: transactionsFrom,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks, combineRanks: combineRanks,
     weeklyMap: weeklyMap, rankCounts: rankCounts, DEFAULT_POS: DEFAULT_POS, defaultRanks: defaultRanks, rankingsBy: rankingsBy,
     alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,
