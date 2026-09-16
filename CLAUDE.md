@@ -461,6 +461,12 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   `value-latest` or `dump-latest`, `briefingFor` (pure, tested) writes one push (the counts and the top sells, buys
   and claims, or starts and pickups) and `deliver` sends it to the owner's devices (the account with the
   `titanOwner` claim, `ownerUid`), keyed `brief|week|value` or `brief|week|dump` so a re-post says nothing new.
+  Two things cost an evening on 2026-09-15, both worth knowing for any new event trigger. The first deploy failed
+  while Eventarc's service agent permissions were still propagating; the retry created the function but left the
+  Cloud Run service without `roles/run.invoker` for the compute service account, so Pub/Sub could not call it and
+  every event was dropped with nothing logged anywhere (the owner granted it; a redeploy keeps it). And Firestore
+  fires no event for a write that leaves the document unchanged, so re-posting the same report file is silent: to
+  test, rebuild the report (a new `at`) and then upload. Every way out of the handler now logs why.
 - Alerts: `SCC.alertsFor` decides (pure, tested), `alertUser` and `deliver` in `functions/index.js`
   send Firebase Cloud Messaging data messages to the tokens in `users/{uid}/private/alerts`, and
   `sw.js` shows them. Keep each alert's key stable, or people get repeats: `out|week|league|player|tag`

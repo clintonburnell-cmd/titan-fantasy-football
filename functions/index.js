@@ -736,17 +736,21 @@ async function ownerUid() {
 exports.ownerBriefing = onDocumentWritten({document: 'lab/{doc}', region: 'us-central1', memory: '256MiB', timeoutSeconds: 60}, async event => {
   const doc = event.params.doc;
   if (doc !== 'value-latest' && doc !== 'dump-latest') return;
+  // Every way out says why: a trigger that goes quiet is impossible to tell apart from one that never ran.
+  const stop = why => { logger.info(`owner briefing (${doc}): ${why}`); };
   const data = event.data && event.data.after && event.data.after.data();
-  if (!data || !data.json) return;
+  if (!data) return stop('the write left no document');
+  if (!data.json) return stop(`no json field (fields: ${Object.keys(data).join(', ') || 'none'})`);
   let R;
-  try { R = JSON.parse(data.json); } catch (e) { return; }
+  try { R = JSON.parse(data.json); } catch (e) { return stop('the report would not parse: ' + e.message); }
   const a = briefingFor(doc, R);
-  if (!a) return;
-  const uid = await ownerUid();
-  if (!uid) return;
+  if (!a) return stop(`nothing to say about week ${R && R.week}`);
+  const uid = await ownerUid().catch(e => { logger.warn('owner briefing: could not look up the owner: ' + e.message); return null; });
+  if (!uid) return stop('no account carries the titanOwner claim');
   const ref = db.collection('users').doc(uid).collection('private').doc('alerts');
   const alerts = (await ref.get()).data();
-  if (!alerts || !alerts.tokens || !Object.keys(alerts.tokens).length || (alerts.sent || {})[a.key]) return;
+  if (!alerts || !alerts.tokens || !Object.keys(alerts.tokens).length) return stop('the owner has no device with alerts on');
+  if ((alerts.sent || {})[a.key]) return stop(`already sent (${a.key})`);
   const sent = Object.assign({}, alerts.sent || {});
   sent[a.key] = 1;
   const n = await deliver(ref, [a], sent);
