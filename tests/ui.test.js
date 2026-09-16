@@ -1041,7 +1041,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const ddOrder = await ev(`[...document.querySelectorAll('.vr-lg h3')].map(h => [...h.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim()).join(' | ')`);
   check(ddOrder === 'Dump Test League | Another Dump League',
     'its leagues come in the same order as every other tab (the app\'s leagues first), not by name: ' + ddOrder);
-  check(await ev(`[...document.querySelectorAll('.subtabs [data-go]')].map(b => b.textContent).join('|') === 'Weekly import|Season|Import multiple|Compare|Value|Data dump'`),
+  check(await ev(`[...document.querySelectorAll('.subtabs [data-go]')].map(b => b.textContent).join('|') === 'Weekly import|Season import|Import multiple|Compare|Value|Data dump'`),
     'Data dump is its own screen under Rankings, right after Value');
   check(await ev(`(() => { const nav = document.querySelector('.subtabs'), n = nav.getBoundingClientRect(), b = nav.querySelector('[aria-current="page"]').getBoundingClientRect();
     return b.left >= n.left - 1 && b.right <= n.right + 1; })()`), 'on a phone the sub-tab row scrolls so Data dump shows in full');

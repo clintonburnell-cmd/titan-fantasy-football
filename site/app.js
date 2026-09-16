@@ -45,7 +45,7 @@
     {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'season', 'multi', 'lab', 'value', 'dump']},
     {id: 'results', name: 'Results', tabs: ['score']}
   ];
-  const SUB_NAMES = {ranks: 'Weekly import', season: 'Season', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', score: 'Results', sos: 'Schedule'};
+  const SUB_NAMES = {ranks: 'Weekly import', season: 'Season import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', score: 'Results', sos: 'Schedule'};
   const OWNER_TABS = ['lab', 'value', 'dump']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else)
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
@@ -4175,7 +4175,7 @@
           const c = (byId[t.id] || {})[p] || {};
           return c.rank ? `<td class="ps g-${c.grade}">${nth(c.rank)}</td>` : '<td class="ps">–</td>';
         }).join('')}</tr>`).join('')}</tbody></table>
-      <p class="fine">Each team's best lineup this season by ${seasonListFor(cfg) ? 'your season rankings (Rankings, Season)' : 'Sleeper\'s projections'}, position by position, counting its best bench player a little.
+      <p class="fine">Each team's best lineup this season by ${seasonListFor(cfg) ? 'your season rankings (Rankings, Season import)' : 'Sleeper\'s projections'}, position by position, counting its best bench player a little.
         Green is well above the league's average at that position (deep), red well below (thin).${cfg.kind === 'Dynasty' ? ' This season only: it doesn\'t weigh age.' : ''}</p></section>`;
   }
 
@@ -4789,7 +4789,7 @@
     if (!plain) {
       h += `<p class="fine">Each pick is weighed against its spot: what that pick would get if this draft were held again today, with every player going
         in order of value${D.type === 'auction' ? ' (in an auction, the spots follow price)' : ''}. ${mineD
-          ? 'Values follow your season rankings (Rankings, Season), on the market\'s scale; players your list leaves out keep ' + (fc ? 'FantasyCalc\'s' : 'Titan\'s') + ' values. '
+          ? 'Values follow your season rankings (Rankings, Season import), on the market\'s scale; players your list leaves out keep ' + (fc ? 'FantasyCalc\'s' : 'Titan\'s') + ' values. '
           : ''}${fc
           ? 'Values are FantasyCalc\'s trade values for this league\'s format.'
           : 'Values are Titan\'s own: a player\'s projected points this season above a replacement starter at his position, in this league\'s scoring.'}
