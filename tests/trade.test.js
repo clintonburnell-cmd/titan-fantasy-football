@@ -239,6 +239,32 @@ section('the lineup goal: trades that add points to the starting lineup, and the
   check(noPts.length === 0, 'an idea that adds no points to the lineup is no idea under the lineup goal, whatever the values say');
   check(SCC.tradeIdeas(me4, [p4], Object.assign({goal: 'lineup', weeks: 100}, o4)).length === 0,
     'a lineup gain under a point a week doesn\'t buy a loss of value: the swap must gain by your own numbers too');
+  // The position guard: QB, RB, RB, WR, FLEX. Trading my only real WR for a third back adds points (the flex) but guts WR.
+  const V5 = {q: 1000, ra: 3000, rb: 2000, wa: 1500, wb: 300, qp: 1000, rc: 1500};
+  const P5 = {q: 100, ra: 200, rb: 150, wa: 120, wb: 40, qp: 100, rc: 200};
+  const me5 = {id: 'me', roster: [P('q', 'QB'), P('ra', 'RB'), P('rb', 'RB'), P('wa', 'WR'), P('wb', 'WR')]};
+  const p5 = {id: 'P5', name: 'P5', roster: [P('qp', 'QB'), P('rc', 'RB')]};
+  const o5 = {value: p => V5[p.id] || 0, points: p => P5[p.id] || 0, slots: ['QB', 'RB', 'RB', 'WR', 'FLEX'], waiver: 50, goal: 'lineup', weeks: 16};
+  const open = SCC.tradeIdeas(me5, [p5], o5), guarded = SCC.tradeIdeas(me5, [p5], Object.assign({guard: true, myDeep: ['RB']}, o5));
+  check(open.some(x => ids(x.give) === 'wa' && ids(x.get) === 'rc') && !guarded.some(x => ids(x.give) === 'wa' && ids(x.get) === 'rc'),
+    'with the guard on, an idea that weakens a starting position you aren\'t deep at (WR here) is out, even though it adds points: '
+    + guarded.map(x => ids(x.give) + ' for ' + ids(x.get)).join(', '));
+  check(SCC.tradeIdeas(me5, [p5], Object.assign({guard: true, myDeep: ['RB', 'WR']}, o5)).some(x => ids(x.give) === 'wa' && ids(x.get) === 'rc'),
+    'deep at WR, the same idea is allowed: depth is what you trade from');
+  check(JSON.stringify(SCC.positionPoints(me5.roster, o5.slots, o5.points)) === '{"QB":100,"RB":350,"WR":160}',
+    'positionPoints adds the best lineup up by position, a flex player at his own position: ' + JSON.stringify(SCC.positionPoints(me5.roster, o5.slots, o5.points)));
+  // Both upgrades: by my numbers their back and receiver are better than mine (two positions up); by the public projections
+  // (theirPoints) they gain too, and the market calls it even. That package ranks first and says why.
+  const V6 = {q: 1000, ra: 3000, wa: 1500, qp: 1000, rp: 2900, wp: 1600};
+  const mine6 = {q: 100, ra: 180, wa: 110, qp: 100, rp: 200, wp: 130}, pub6 = {q: 100, ra: 205, wa: 125, qp: 100, rp: 190, wp: 115};
+  const me6 = {id: 'me', roster: [P('q', 'QB'), P('ra', 'RB'), P('wa', 'WR')]};
+  const p6 = {id: 'P6', name: 'P6', roster: [P('qp', 'QB'), P('rp', 'RB'), P('wp', 'WR')]};
+  const both = SCC.tradeIdeas(me6, [p6], {value: p => V6[p.id] || 0, points: p => mine6[p.id] || 0, theirPoints: p => pub6[p.id] || 0,
+    slots: ['QB', 'RB', 'WR'], waiver: 50, goal: 'lineup', weeks: 16, guard: true});
+  check(both.length >= 1 && ids(both[0].give) === 'ra,wa' && ids(both[0].get) === 'rp,wp' && both[0].ups.join() === 'RB,WR' && both[0].myPts === 40 && both[0].theirPts === 25 &&
+    both[0].why[0] === 'upgrades your RB and WR by your numbers',
+    'a package that upgrades two of your positions by your rankings while the partner gains by the public projections leads, and says so: '
+    + both.map(x => ids(x.give) + ' for ' + ids(x.get) + ' ' + x.ups.join('+') + ' ' + x.theirPts).join(' | '));
   // Partners who fit: from positionStrength's grades. Team T is thin at RB where I'm deep, and deep at WR where I'm thin; team U matches me.
   const PS = {positions: ['QB', 'RB', 'WR'], teams: [
     {id: 'me', byPos: {QB: {z: 0, grade: 'mid'}, RB: {z: 1.2, grade: 'deep'}, WR: {z: -1.0, grade: 'thin'}}},

@@ -374,7 +374,12 @@ One note per screen or feature.
   from the owner's season rankings when he has a list for the league's kind (v1.55.0: `seasonIn(cfg, 'proj')`
   maps the list onto the season projections' points, his order and their spacing; `seasonProjFor` is the map
   `spanFor` reads, at PPR 0 since it's already in the league's scoring; `pointsSource` says which), else
-  Sleeper's projections; the ideas card and the lineup table say which. They get a +1 to `accept` ("comes from their
+  Sleeper's projections; the ideas card and the lineup table say which. The partner's lineup is judged by
+  `theirPoints` (the public projections, `spanForPublic`) while yours follows your rankings (v1.56.0); with
+  `guard` on, an idea may not weaken a starting position you aren't deep at (`myDeep`, `SCC.positionPoints`,
+  `GUARD_WEEKLY` 0.5 a week), and the positions it strengthens are its `ups` (an idea upgrading more than one
+  ranks higher, `UPGRADE_BONUS`, and says "upgrades your RB and WR by your numbers": the owner's "both upgrades"
+  edge). They get a +1 to `accept` ("comes from their
   depth at WR") when everything you get is at a position the partner is deep at (`deep`, from
   `positionStrength` like `thin`). `SCC.tradePartners(meId, PS)` (pure, tested) lists the partners whose
   rosters fit yours (thin where you're deep, deep where you're thin, `PARTNER_GAP` 0.6 z apart) and the

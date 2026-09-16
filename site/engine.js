@@ -491,10 +491,28 @@
      reasons: +1 when the trade fills a position they're thin at, +1 when they get the single
      most valuable player in it, +1 when a rebuilder gets picks or a contender gets a player for
      picks, -1 when they'd give two starters for one. It tilts the order by 15% a point. */
-  var LINEUP_BIG = 1.0, LINEUP_VALUE = 20;
+  var LINEUP_BIG = 1.0, LINEUP_VALUE = 20, GUARD_WEEKLY = 0.5, UPGRADE_BONUS = 0.1;
+  /* A roster's best lineup by `pts`, added up by position (a flex player counts at his own position):
+     {QB: points, RB: points, ...}. Players on IR or the taxi squad and draft picks stay out. */
+  function positionPoints(roster, slots, pts) {
+    var pool = (roster || []).filter(function (p) { return !p.held && p.pos !== 'PICK'; })
+      .map(function (p) { return {id: p.id, pos: p.pos, pts: Number(pts(p)) || 0}; });
+    var out = {};
+    bestByPoints(pool, (slots || []).filter(function (s) { return !NOT_STARTERS[s]; })).forEach(function (p) {
+      if (p) out[p.pos] = (out[p.pos] || 0) + p.pts;
+    });
+    return out;
+  }
   function tradeIdeas(me, others, opts) {
     var value = opts.value, slots = opts.slots || [], waiver = opts.waiver || 0, max = opts.max || 6, top = opts.top || 12;
     var edge = typeof opts.edge === 'function' ? opts.edge : null, points = typeof opts.points === 'function' ? opts.points : null;
+    // The partner's lineup is judged by what they see (opts.theirPoints, the public projections) when that differs from
+    // your numbers (opts.points, your season rankings' points): a package that upgrades you by your rankings and them by
+    // the market is the edge. Your starting positions (opts.guard): an idea may not weaken a position you're not deep at
+    // (opts.myDeep) by more than GUARD_WEEKLY points a week; positions it strengthens are its `ups`, and an idea that
+    // upgrades more than one position ranks higher (UPGRADE_BONUS a position past the first).
+    var theirPoints = typeof opts.theirPoints === 'function' ? opts.theirPoints : points, guard = !!opts.guard && !!points;
+    var myDeep = opts.myDeep || [];
     var thin = opts.thin || {}, deep = opts.deep || {}, stance = opts.stance || {}, myStance = stance[String(me.id)] || 'mid';
     // The lineup goal (opts.goal 'lineup', with points): the point of a trade is a starting lineup that scores more,
     // so an idea must raise the rest-of-season points of the best lineup. It still has to gain value by your own
@@ -512,6 +530,8 @@
     var strength = function (roster) { return lineupPoints(roster, slots, value); };
     var mine = edge ? function (roster) { return lineupPoints(roster, slots, function (p) { return value(p) + (Number(edge(p)) || 0); }); } : strength;
     var byPoints = points ? function (roster) { return lineupPoints(roster, slots, points); } : null;
+    var byTheirPoints = theirPoints ? function (roster) { return lineupPoints(roster, slots, theirPoints); } : null;
+    var myPosBase = points ? positionPoints(me.roster, slots, points) : null;
     var combos = function (list) {
       var out = list.map(function (p) { return [p]; });
       for (var i = 0; i < list.length; i++) for (var j = i + 1; j < list.length; j++) out.push([list[i], list[j]]);
@@ -533,7 +553,7 @@
       var theirStance = stance[String(o.id)] || 'mid';
       var giveCombos = theirStance === 'rebuilder' ? (myWithPicks = myWithPicks || combos(pool(me, true))) : myPlayers;
       var theirBase = strength(o.roster), theirCombos = combos(pool(o, myStance === 'rebuilder' && theirStance === 'contender')), theirStarters = startersOf(o.roster);
-      var theirPtsBase = byPoints ? byPoints(o.roster) : 0, holes = thin[String(o.id)] || [], rich = deep[String(o.id)] || [];
+      var theirPtsBase = byTheirPoints ? byTheirPoints(o.roster) : 0, holes = thin[String(o.id)] || [], rich = deep[String(o.id)] || [];
       giveCombos.forEach(function (give) {
         theirCombos.forEach(function (get) {
           // Picks for picks says nothing about either lineup.
@@ -542,13 +562,24 @@
           if (!R.fair) return;
           var after = without(me.roster, give).concat(get), gain = strength(after) - myBase, trueGain = mine(after) - myTrue;
           var theirAfter = without(o.roster, get).concat(give), myPts = 0, theirPts = 0;
+          var ups = [];
           if (byPoints) {
             myPts = round2(byPoints(after) - myPtsBase);
             if (lineup ? myPts <= 0 : myPts < 0) return;
-            theirPts = round2(byPoints(theirAfter) - theirPtsBase);
+            theirPts = round2(byTheirPoints(theirAfter) - theirPtsBase);
+            // Position by position: what the trade does to your starters at each, by your numbers.
+            var posAfter = positionPoints(after, slots, points), tol = GUARD_WEEKLY * weeks, weakened = false, pos;
+            for (pos in myPosBase) if (myPosBase.hasOwnProperty(pos)) {
+              var dpos = (posAfter[pos] || 0) - myPosBase[pos];
+              if (dpos > tol) ups.push(pos);
+              else if (dpos < -tol && myDeep.indexOf(pos) < 0) weakened = true;
+            }
+            for (pos in posAfter) if (posAfter.hasOwnProperty(pos) && !myPosBase.hasOwnProperty(pos) && posAfter[pos] > tol) ups.push(pos);
+            if (guard && weakened) return;
           }
           if (trueGain <= 0 && !(lineup && myPts / weeks >= LINEUP_BIG)) return;
           var why = [], accept = 0;
+          if (ups.length > 1) why.push('upgrades your ' + ups.join(' and ') + ' by your numbers');
           var fills = give.filter(function (p) { return holes.indexOf(p.pos) >= 0; }).map(function (p) { return p.pos; });
           if (fills.length) { accept++; why.push('fills their hole at ' + fills.filter(function (p, i) { return fills.indexOf(p) === i; }).join(' and ')); }
           var spare = get.filter(function (p) { return !isPick(p) && rich.indexOf(p.pos) >= 0; }).map(function (p) { return p.pos; });
@@ -561,7 +592,7 @@
           else if (theirStance === 'contender' && get.some(isPick) && !give.some(isPick)) { accept++; why.push('they\'re contending, and this brings a player now'); }
           ideas.push({partner: o, give: give, get: get, verdict: R, myGain: round2(gain), trueGain: round2(trueGain),
             theirGain: round2(strength(theirAfter) - theirBase), edge: edge ? Math.round(sumOf(get, edge) - sumOf(give, edge)) : 0,
-            myPts: myPts, theirPts: theirPts, accept: accept, why: why});
+            myPts: myPts, theirPts: theirPts, ups: ups, accept: accept, why: why});
         });
       });
     });
@@ -570,7 +601,7 @@
     var score = lineup ? function (x) {
         var ppw = x.myPts / weeks + 0.25 * Math.max(0, Math.min(x.theirPts, x.myPts)) / weeks;
         var value = myTrue ? (x.trueGain + 0.5 * Math.min(x.theirGain, x.trueGain)) / myTrue : 0;
-        return (ppw + LINEUP_VALUE * value) * (1 + 0.15 * x.accept);
+        return (ppw + LINEUP_VALUE * value) * (1 + 0.15 * x.accept) * (1 + UPGRADE_BONUS * Math.max(0, x.ups.length - 1));
       } : function (x) { return (x.trueGain + 0.5 * Math.min(x.theirGain, x.trueGain)) * (1 + 0.15 * x.accept); };
     var helps = lineup ? function (x) { return x.theirPts >= 0; } : function (x) { return x.theirGain >= 0; };
     ideas.sort(function (a, b) { return helps(b) - helps(a) || score(b) - score(a); });
@@ -2948,7 +2979,7 @@
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel, scoringDeltas: scoringDeltas, scoringNotes: scoringNotes,
     SEASON_FORMATS: SEASON_FORMATS, seasonFormat: seasonFormat, seasonValues: seasonValues,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues, positionStrength: positionStrength,
-    lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, tradePartners: tradePartners, impliedValue: impliedValue, spanPoints: spanPoints,
+    lineupPoints: lineupPoints, positionPoints: positionPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, tradePartners: tradePartners, impliedValue: impliedValue, spanPoints: spanPoints,
     flexShares: flexShares, ageFactor: ageFactor,
     draftFromSleeper: draftFromSleeper, draftGrades: draftGrades,
     impliedTotals: impliedTotals, impliedTilt: impliedTilt, dvpFrom: dvpFrom, gameTags: gameTags, scheduleStrength: scheduleStrength, transactionsFrom: transactionsFrom,

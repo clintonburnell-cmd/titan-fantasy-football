@@ -4314,6 +4314,12 @@
     return S.seasonMemo[key];
   }
   const pointsSource = cfg => (seasonIn(cfg, 'proj') ? 'season' : 'sleeper');
+  // The same span by the public projections alone (what a trade partner sees), whatever your season list says.
+  function spanForPublic(cfg, from, to) {
+    const sp = S.trade.season && S.trade.season.map;
+    if (!sp || !Object.keys(sp).length) return null;
+    return p => SCC.spanPoints(sp, p.id, cfg, from, to, SCC.byeOf(p.team));
+  }
   function spanFor(cfg, from, to, tilt) {
     const sp = seasonProjFor(cfg);
     if (!sp) return null;
@@ -4459,8 +4465,12 @@
     Tm.list.forEach(t => { byName[String(t.id)] = t.name; });
     const partners = PS ? SCC.tradePartners(me.id, PS).map(x => Object.assign({name: byName[x.id] || 'A team'}, x)) : [];
     const weeks = Math.max(1, LAST_REG_WEEK - (S.snap.week || 1) + 1);
+    // The partner's lineup is judged by the public projections (what they see); yours by your season rankings' points
+    // (spanFor). An idea may not weaken a starting position you aren't deep at (guard, myDeep).
+    const theirPoints = pointsSource(d.cfg) === 'season' ? spanForPublic(d.cfg, S.snap.week, LAST_REG_WEEK) : undefined;
     S.trade.ideas[d.cfg.id] = {list: SCC.tradeIdeas(me, Tm.list.filter(t => !t.mine), {value, slots: d.cfg.lineup, waiver: V.waiver, max: 8,
-      edge: edge || undefined, points: points || undefined, thin, deep, stance, goal: points ? 'lineup' : undefined, weeks}), edge: !!edge,
+      edge: edge || undefined, points: points || undefined, theirPoints: theirPoints || undefined, thin, deep, stance, goal: points ? 'lineup' : undefined, weeks,
+      guard: true, myDeep: deep[String(me.id)] || []}), edge: !!edge,
       edgeSource: edge ? edge.source : '', points: !!points, pointsSource: points ? pointsSource(d.cfg) : '', stance: Object.keys(stance).length > 0, partners, weeks};
     render();
   }
@@ -4477,7 +4487,7 @@
         <button type="button" class="btn small ghost" data-action="trade-find">Look again</button></div></div>
       <p class="fine">${I.points
           ? `The goal is a starting lineup that scores more: fair trades (FantasyCalc's values within 5%) of one or two pieces each way that add rest-of-season points to your best lineup${
-              I.pointsSource === 'season' ? ' (points by your season rankings: your order, the projections\' spacing)' : ''} and gain value by your own numbers, ranked by both (a 5% gain in value counts like a point a week). A two-for-one that turns your depth into a starter and adds a point a week or more counts even when it gives up a little value.`
+              I.pointsSource === 'season' ? ' (points by your season rankings: your order, the projections\' spacing; the other team\'s side is judged by the public projections, what they see)' : ''} and gain value by your own numbers, ranked by both (a 5% gain in value counts like a point a week). An idea never weakens a starting position you aren't deep at, and one that upgrades more than one of your positions by your numbers ranks higher: a package that reads as an even swap to them and two upgrades to you is the edge. A two-for-one that turns your depth into a starter and adds a point a week or more counts even when it gives up a little value.`
           : 'Fair trades (FantasyCalc\'s values within 5%) of one or two pieces each way that make your starting lineup stronger by value, and theirs too where possible.'}${I.edgeSource === 'season'
           ? ' Your season rankings count on your side, so a swap of equally priced players you rank differently from the market is an idea.'
           : I.edge ? ' Your Value report\'s usage edge counts on your side, so a swap of equally priced players the market misjudges is an idea.' : ''}${I.stance
