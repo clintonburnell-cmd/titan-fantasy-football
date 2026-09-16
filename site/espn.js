@@ -373,8 +373,12 @@
         aPts: Number(m.home.totalPoints) || 0, bPts: Number(m.away.totalPoints) || 0,
         done: m.winner ? m.winner !== 'UNDECIDED' : Number(m.matchupPeriodId) < Number(week)});
     });
-    return {teams: teamsOf(json || {}).map(function (t) { return {id: String(t.id), name: SCC.teamLabel(t.name, t.manager)}; }), games: games,
-      playoffTeams: Number(sched.playoffTeamCount) || 6};
+    var divOf = {};
+    ((json && json.teams) || []).forEach(function (t) { divOf[String(t.id)] = Number(t.divisionId); });
+    return {teams: teamsOf(json || {}).map(function (t) {
+      // The team's division (ESPN numbers them from 0, Titan from 1), for the playoff seeds.
+      return {id: String(t.id), name: SCC.teamLabel(t.name, t.manager), division: isFinite(divOf[String(t.id)]) ? divOf[String(t.id)] + 1 : 0};
+    }), games: games, playoffTeams: Number(sched.playoffTeamCount) || 6};
   }
 
   function slimSchedule(json) {
@@ -386,7 +390,7 @@
         return {matchupPeriodId: m.matchupPeriodId, winner: m.winner || '', home: side(m.home), away: side(m.away)};
       }),
       teams: ((json && json.teams) || []).map(function (t) {
-        return {id: t.id, name: t.name || '', location: t.location || '', nickname: t.nickname || '', owners: t.owners || []};
+        return {id: t.id, name: t.name || '', location: t.location || '', nickname: t.nickname || '', owners: t.owners || [], divisionId: t.divisionId};
       }),
       // Members name each team's manager: "Team name (account name)" on Standings.
       members: ((json && json.members) || []).map(function (m) {
@@ -456,6 +460,87 @@
       json = await transport({leagueId: String(id), season: String(season), kind: 'draft'});
     }
     return draftFrom(json, players);
+  }
+
+  /* A league's completed transactions this season (view=mTransactions2), for the Transactions tab. ESPN
+     gives player ids only, so the players involved are named from ESPN's player list, as the draft is.
+     readTransactions answers with what transactionsFrom reads (Titan's server uses it for private
+     leagues); fetchTransactions is the app's. The shape here is ESPN's as best known (a trade is
+     TRADE_ACCEPT with an ADD item per player carrying fromTeamId and toTeamId; a claim is WAIVER or
+     FREEAGENT with ADD and DROP items): anything else is left out rather than misread. */
+  var TX_KIND = {TRADE_ACCEPT: 'trade', WAIVER: 'waiver', FREEAGENT: 'free_agent'};
+  async function readTransactions(id, season, opts) {
+    opts = opts || {};
+    var browser = typeof window !== 'undefined';
+    var res = await fetchT(BASE + season + '/segments/0/leagues/' + id + '?view=mTransactions2&view=mTeam',
+      browser ? {cache: 'no-store', credentials: 'omit'} : {headers: opts.creds && opts.creds.s2 ? {Cookie: cookieHeader(opts.creds)} : {}});
+    if (!res.ok) throw new Error(res.status === 401 || res.status === 403 ? 'private' : 'ESPN answered ' + res.status);
+    var json = await res.json();
+    var list = (json.transactions || []).filter(function (t) { return t && TX_KIND[t.type] && t.status === 'EXECUTED'; }).map(function (t) {
+      return {id: t.id, type: t.type, teamId: t.teamId, bidAmount: Number(t.bidAmount) || 0, processDate: Number(t.processDate) || 0,
+        scoringPeriodId: Number(t.scoringPeriodId) || 0, items: (t.items || []).map(function (x) {
+          return {type: x.type, playerId: x.playerId, fromTeamId: x.fromTeamId, toTeamId: x.toTeamId};
+        })};
+    });
+    var ids = {};
+    list.forEach(function (t) { t.items.forEach(function (x) { if (Number(x.playerId) > 0) ids[x.playerId] = 1; }); });
+    var pool = [];
+    if (Object.keys(ids).length) {
+      var filter = {'x-fantasy-filter': JSON.stringify({filterIds: {value: Object.keys(ids).map(Number)}})};
+      var pr = await fetchT(BASE + season + '/' + POOL, browser ? {credentials: 'omit', headers: filter} : {headers: filter});
+      if (pr.ok) pool = ((await pr.json()) || []).map(function (p) { return {id: p.id, fullName: p.fullName || '', defaultPositionId: p.defaultPositionId, proTeamId: p.proTeamId}; });
+    }
+    return {transactions: list, pool: pool, teams: teamsOf(json).map(function (t) { return {id: t.id, name: SCC.teamLabel(t.name, t.manager)}; })};
+  }
+
+  // readTransactions' answer in the shape of SCC.transactionsFrom (the Transactions tab), newest first; the person's team is `myTeamId`.
+  function transactionsFrom(json, players, myTeamId, opts) {
+    json = json || {};
+    players = players || {};
+    opts = opts || {};
+    var byId = {}, names = {}, idx = indexPlayers(players);
+    (json.pool || []).forEach(function (p) { byId[p.id] = p; });
+    (json.teams || []).forEach(function (t) { names[String(t.id)] = t.name; });
+    var who = function (playerId) {
+      var pl = byId[playerId] || {}, pos = POS[pl.defaultPositionId] || '?', nfl = SCC.teamAbbr(TEAM[pl.proTeamId] || '');
+      var name = pos === 'DEF' ? nfl + ' D/ST' : cleanName(pl.fullName) || ('ESPN player ' + playerId);
+      var sid = matchSleeper(idx, players, name, pos, nfl);
+      return {id: sid || ('espn:' + playerId), name: sid && pos !== 'DEF' ? players[sid][0] : name, pos: pos, team: nfl};
+    };
+    var team = function (id) { return names[String(id)] || ('Team ' + id); };
+    return (json.transactions || []).filter(function (t) {
+      return TX_KIND[t.type] && (!opts.fromWeek || !t.scoringPeriodId || t.scoringPeriodId >= opts.fromWeek);
+    }).map(function (t) {
+      var sides = {}, order = [];
+      var side = function (id) {
+        id = String(id);
+        if (!sides[id]) { sides[id] = {roster: id, name: team(id), adds: [], drops: [], picks: [], budgetIn: 0, budgetOut: 0}; order.push(id); }
+        return sides[id];
+      };
+      if (t.type !== 'TRADE_ACCEPT' && Number(t.teamId) > 0) side(t.teamId);
+      (t.items || []).forEach(function (x) {
+        if (!(Number(x.playerId) > 0)) return;
+        var p = who(x.playerId);
+        if (x.type === 'ADD' || x.type === 'TRADE') {
+          if (Number(x.toTeamId) > 0) side(x.toTeamId).adds.push(p);
+          if (t.type === 'TRADE_ACCEPT' && Number(x.fromTeamId) > 0) side(x.fromTeamId).drops.push(p);
+        } else if (x.type === 'DROP' && Number(x.fromTeamId) > 0) side(x.fromTeamId).drops.push(p);
+      });
+      return {id: String(t.id || ''), kind: TX_KIND[t.type], at: Number(t.processDate) || 0, week: Number(t.scoringPeriodId) || 0,
+        bid: t.type === 'WAIVER' && t.bidAmount ? Number(t.bidAmount) : null, mine: order.indexOf(String(myTeamId)) >= 0,
+        sides: order.map(function (id) { return sides[id]; })};
+    }).filter(function (t) { return t.sides.some(function (s) { return s.adds.length || s.drops.length; }); })
+      .sort(function (a, b) { return b.at - a.at; });
+  }
+
+  async function fetchTransactions(id, season, players, myTeamId, opts) {
+    var json;
+    try { json = await readTransactions(id, season); }
+    catch (e) {
+      if (typeof window === 'undefined' || !transport) throw e;
+      json = await transport({leagueId: String(id), season: String(season), kind: 'transactions'});
+    }
+    return transactionsFrom(json, players, myTeamId, opts);
   }
 
   /* ESPN's latest NFL news (the public feed behind espn.com/nfl), newest first, trimmed
@@ -559,6 +644,7 @@
     fetchMatchup: fetchMatchup, matchupFrom: matchupFrom, toSleeper: toSleeper, fetchNews: fetchNews, newsFrom: newsFrom,
     readSchedule: readSchedule, fetchSchedule: fetchSchedule, scheduleFrom: scheduleFrom, slimSchedule: slimSchedule,
     fetchScoreboard: fetchScoreboard, scoreboardFrom: scoreboardFrom, readDraft: readDraft, draftFrom: draftFrom, fetchDraft: fetchDraft,
+    readTransactions: readTransactions, transactionsFrom: transactionsFrom, fetchTransactions: fetchTransactions,
     SLOT: SLOT, POS: POS, TEAM: TEAM
   };
 

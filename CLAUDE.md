@@ -84,7 +84,8 @@ How the pieces fit, and what keeps them working.
   Sleeper's numbers; 6-point passing TDs, TE premium (`bonus_rec_te`, which Sleeper projects as the tight
   end's catches), first downs, bonuses and ESPN's -2 interceptions count where a league scores them.
   Sleeper leagues get `scoring` from `scoring_settings`; ESPN leagues from `scoringOf` (stat ids mapped, a
-  per-position `pointsOverrides` on receptions becoming `bonus_rec_*`); Yahoo has none yet. Pass the league
+  per-position `pointsOverrides` on receptions becoming `bonus_rec_*`); Yahoo leagues from `settingsFrom`
+  (`YAHOO_STAT`: Yahoo's stat ids in Sleeper's keys, stat 16 being one two-point stat for all three, v1.45.0). Pass the league
   (`cfg`) to `projFor`/`defaultRanks`, not `cfg.ppr`: a number still works but drops the rest. The week's
   record (`freezeWeek`) carries each league's `scoring`; `rankingsBy` builds one map per distinct scoring;
   `describeLeague` names 6-pt pass TDs and TE premium (`scoringNotes`). Cached projections are v2 keys.
@@ -232,7 +233,12 @@ One note per screen or feature.
   score, so the header's score row hides.
 - The Standings tab (`SCC.standings`): records, all-play, luck, power and playoff odds from 5,000
   seeded simulations (each team scores around its mean with its own swing: the spread of its weekly
-  scores blended with the league's, `SD_PRIOR` games' worth, clamped 8 to 45); schedules from `API.leagueSchedule` (Sleeper matchups, or ESPN via
+  scores blended with the league's, `SD_PRIOR` games' worth, clamped 8 to 45). Divisions (v1.45.0): each
+  team carries its `division` (Sleeper's roster `settings.division`; ESPN's `divisionId` + 1) and the league
+  its `seedType` (Sleeper's `playoff_seed_type`: 0 division winners take the top seeds, 1 they're in but seeded
+  by record, 2 divisions ignored; ESPN 0); with two or more divisions each division's best record takes a spot
+  (`seedsFrom`), the table's ★ marks today's division leaders (`divWinner`), and `simOpts` hands the same
+  settings to the playoff picture; schedules from `API.leagueSchedule` (Sleeper matchups, or ESPN via
   `ESPN.fetchSchedule`; private ESPN leagues through `espnLeague` kind `schedule`).
 - Position strength (`SCC.positionStrength`, pure and tested): each team's best lineup this season
   by Sleeper's season projections (never FantasyCalc's, so everyone sees it), starters added up by
@@ -244,7 +250,11 @@ One note per screen or feature.
 - The Transactions tab (tab id `moves`, address `/app/transactions`): each Sleeper league's last three
   weeks of completed transactions (`API.leagueTransactions` → `SCC.transactionsFrom`), reloaded every
   five minutes while the tab is open. A league picker (`S.ui.movesLeague`, remembered) narrows the list; the kind chips'
-  counts follow it. ESPN transactions aren't read yet (their format hasn't been checked on a real league).
+  counts follow it. ESPN leagues too (v1.45.0): `ESPN.readTransactions` (`view=mTransactions2`, the players named from
+  ESPN's player list as the draft is; private leagues through `espnLeague` kind `transactions`) and
+  `ESPN.transactionsFrom` (trades are `TRADE_ACCEPT` with an ADD item per player carrying both teams; claims `WAIVER`
+  or `FREEAGENT` with ADD and DROP items; anything else is left out). Written to ESPN's format as best known and tested
+  on a made-up answer: **not yet checked against a real ESPN league**; the owner's ESPN test league is the place to look.
 - The Waivers tab: the waiver plan (`planCard`, from `SCC.waiverPlan`, pure and tested: claims from the
   rankings' wire targets `L.wire`, at most three a league, and a drop for each: the bench player with the
   lowest season value (`planValue`: Titan's value, then season projected points, so a star on bye is
@@ -306,7 +316,9 @@ One note per screen or feature.
   replacement starter at the position, from Sleeper's season projections via
   `API.fetchSeasonProjections`, never derived from FantasyCalc), draft picks without a number, and
   the verdict as percent changes (`tradeDisplay`, `tradeSummary`). In a dynasty league they also get
-  a note (`.tdyn`) that Titan's values are this season only, without age or future seasons. Both
+  a note (`.tdyn`) that Titan's values are this season's projections tilted by age (`titanValues` opts `dynasty`,
+  `SCC.ageFactor`, `AGE_CURVE`: judgement, backs fade from 27, receivers from 30, quarterbacks hold to the mid-thirties;
+  the player list's v3 keeps each player's age, `trimPlayers` index 4). Both
   rosters sort by value, position, or position then value (`TRADE_SORTS`, `S.ui.tradeSort`, position
   headers when grouped), and every player shows the colored position tag (`pos()`). The partner's
   roster card is headed by a second partner picker (`.tp-select`, same `data-ui="tradePartner"`), and
@@ -436,6 +448,10 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   each inline script (the theme snippet on every page, the website's forward, the app's boot script). Changing an
   inline script changes its hash: recompute (the hashes are the base64 sha256 of the text between the script
   tags) and update the header, or the logs fill with reports. Enforce it only after a few weeks of clean logs.
+- The owner's briefing (`ownerBriefing`, v1.45.0): a Firestore trigger on `lab/{doc}`; when titan-analytics posts
+  `value-latest` or `dump-latest`, `briefingFor` (pure, tested) writes one push (the counts and the top sells, buys
+  and claims, or starts and pickups) and `deliver` sends it to the owner's devices (the account with the
+  `titanOwner` claim, `ownerUid`), keyed `brief|week|value` or `brief|week|dump` so a re-post says nothing new.
 - Alerts: `SCC.alertsFor` decides (pure, tested), `alertUser` and `deliver` in `functions/index.js`
   send Firebase Cloud Messaging data messages to the tokens in `users/{uid}/private/alerts`, and
   `sw.js` shows them. Keep each alert's key stable, or people get repeats: `out|week|league|player|tag`

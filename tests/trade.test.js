@@ -27,6 +27,14 @@ section('Titan\'s own value (the Trade tab for everyone but Titan\'s owner)');
   const teams = [{id: 1, roster: [{id: '11', pos: 'RB'}, {id: '12', pos: 'RB'}, {id: '1', pos: 'QB'}]}, {id: 2, roster: [{id: '13', pos: 'RB'}, {id: '2', pos: 'QB'}, {id: 'w', pos: 'WR'}]}];
   const fs = SCC.flexShares(teams, ['QB', 'RB', 'FLEX'], p => ({11: 20, 12: 15, 13: 10, w: 12, 1: 30, 2: 30})[p.id] || 0);
   check(JSON.stringify(fs) === '{"FLEX":{"RB":0.5,"WR":0.5}}', 'flex shares from how the league\'s teams fill their flex spots: ' + JSON.stringify(fs));
+  // Dynasty: the same backs with ages (R One 23, R Two 29): youth lifts, age cuts, and the replacement line moves with them.
+  const aged = Object.assign({}, pl, {11: ['R One', 'RB', 'KC', 0, 23], 12: ['R Two', 'RB', 'BUF', 0, 29]});
+  const dyn = SCC.titanValues(sp, aged, cfgTv, {dynasty: true}), flat = SCC.titanValues(sp, aged, cfgTv);
+  check(SCC.ageFactor('RB', 23) === 1.15 && SCC.ageFactor('RB', 29) === 0.65 && SCC.ageFactor('WR', 27) === 1 && SCC.ageFactor('QB', 36) === 0.8 && SCC.ageFactor('RB', 0) === 1,
+    'the age curve: young backs up, backs past 28 down, receivers hold to 29, quarterbacks to the mid-thirties, no age no tilt');
+  check(dyn[11] > flat[11] && dyn[12] < flat[12] && dyn[1] === flat[1], `in a dynasty league R One (23) is worth more and R Two (29) less (${flat[11]}→${dyn[11]}, ${flat[12]}→${dyn[12]}); ageless players hold`);
+  check(SCC.playerInfo({'9': ['A B', 'RB', 'KC', 2, 24]}, '9').age === 24 && SCC.trimPlayers({'9': {first_name: 'A', last_name: 'B', position: 'RB', team: 'KC', age: 24}})['9'][4] === 24,
+    'the player list keeps each player\'s age');
 }
 
 section('league format');

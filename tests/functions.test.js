@@ -42,6 +42,18 @@ function fakeUser(db) {
   section('helpers');
   check(job.ranksFor({1: rows}, 1) === rows && job.ranksFor({1: rows}, 3) === rows && job.ranksFor({2: ['x']}, 1)[0] === 'x' && job.ranksFor({}, 1).length === 0,
     'ranksFor: that week, else the latest earlier week, else the only week, else none');
+  // The owner's briefing, from the Value report and Data dump the owner's PC posts.
+  const VR = {week: 2, main: 'rd', tiles: [['leagues', 3], ['sell-high moves', 4], ['buy-low targets', 5], ['claims', 2]],
+    formats: {rd: {sells: [{n: 'Sell Guy', keep: true}, {n: 'Sell Two'}], buys: [{n: 'Buy Guy'}]}},
+    leagues: [{name: 'L1', add: [{n: 'Claim Guy'}]}, {name: 'L2', add: [{n: 'Claim Guy'}, {n: 'Claim Two'}]}, {name: 'L3', add: []}]};
+  const vb = job.briefingFor('value-latest', VR);
+  check(vb.key === 'brief|2|value' && vb.url === '/app/value' && /^Week 2 Value report is in$/.test(vb.title) &&
+    /^4 sells, 5 buys and 2 claims across 3 leagues\. Sell high or keep: Sell Guy \(keep\), Sell Two\. Buy low: Buy Guy\. Claims: Claim Guy, Claim Two$/.test(vb.body),
+    'the Value report briefing: the counts, then the top sells (keep marked), buys and claims: ' + vb.body);
+  const dbf = job.briefingFor('dump-latest', {week: 2, tiles: [['ideas', 9]], leagues: [{name: 'L1', start: [{n: 'A over B'}], add: [{n: 'Add Guy'}]}]});
+  check(dbf.key === 'brief|2|dump' && dbf.url === '/app/data-dump' && /^9 ideas across 1 leagues\. Start: A over B \(L1\)\. Pick up: Add Guy$/.test(dbf.body),
+    'the Data dump briefing: ' + dbf.body);
+  check(job.briefingFor('value-latest', null) === null && job.briefingFor('config', VR) === null, 'nothing for an empty report or another document');
 
   section('trade values (FantasyCalc, cached by Titan\'s server)');
   const tvFormat = job.valuesFormat({dynasty: '0', qbs: '2', teams: '10', ppr: '0.5'});

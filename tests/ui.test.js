@@ -43,6 +43,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     (r % 2 ? L1.teams : L1.teams.slice().reverse()).forEach((t, i) => dpicks.push({overallPickNumber: dpicks.length + 1, roundId: r, roundPickNumber: i + 1,
       teamId: t.id, playerId: t.roster.entries[r - 1].playerId, keeper: false, bidAmount: 0}));
   }
+  // ESPN's transactions (view=mTransactions2): one free-agent pickup by team 1 an hour ago, the player from its roster.
+  const TX = JSON.stringify({transactions: [{id: 'tx1', type: 'FREEAGENT', status: 'EXECUTED', teamId: 1, processDate: Date.now() - 3600e3, scoringPeriodId: 1,
+    items: [{type: 'ADD', playerId: L1.teams[0].roster.entries[0].playerId, fromTeamId: -1, toTeamId: 1}]}], teams: L1.teams, members: L1.members});
   const DRAFT = JSON.stringify({seasonId: 2026, settings: {size: L1.teams.length, draftSettings: {type: 'SNAKE', keeperCount: 0}},
     draftDetail: {drafted: true, inProgress: false, picks: dpicks}});
   const POOL = JSON.stringify([].concat(...L1.teams.map(t => t.roster.entries.map(e => {
@@ -160,7 +163,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         return;
       }
       const pool = /\/players\?/.test(url), ok = pool || url.includes('/leagues/' + L1.id);
-      const body = pool ? POOL : !ok ? '{}' : /mBoxscore/.test(url) ? BOX : /mMatchupScore/.test(url) ? SCHED : /mDraftDetail/.test(url) ? DRAFT : JSON.stringify(L1);
+      const body = pool ? POOL : !ok ? '{}' : /mBoxscore/.test(url) ? BOX : /mMatchupScore/.test(url) ? SCHED : /mDraftDetail/.test(url) ? DRAFT
+        : /mTransactions2/.test(url) ? TX : JSON.stringify(L1);
       send('Fetch.fulfillRequest', {requestId: m.params.requestId, responseCode: ok ? 200 : 401, responseHeaders: headers,
         body: Buffer.from(body).toString('base64')});
     }
@@ -538,9 +542,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   T.section('the Transactions tab');
   await tab('moves');
-  check(await waitFor(`/ESPN leagues aren't in this list yet/.test(document.getElementById('view').textContent) && document.querySelectorAll('[data-moves]').length === 4 &&
-    !document.querySelector('[data-ui="movesLeague"]')`, 5000),
-    'the Transactions tab has its kind filters (the league dropdown at the top picks the league), and says ESPN leagues aren\'t read yet');
+  check(await waitFor(`document.querySelectorAll('[data-moves]').length === 4 && !document.querySelector('[data-ui="movesLeague"]') &&
+    document.querySelectorAll('.txlist li').length === 1 && /Free agent/.test(document.querySelector('.txlist').textContent) &&
+    !/aren't in this list yet/.test(document.getElementById('view').textContent)`, 10000),
+    'the Transactions tab has its kind filters (the league dropdown at the top picks the league) and reads the ESPN league\'s moves: ' +
+      (await text('.txlist')).replace(/\s+/g, ' ').slice(0, 100));
   check(await ev(`location.pathname === '/app/transactions' && document.title.startsWith('Transactions')`), 'it has its own address: /app/transactions');
 
   T.section('the Waivers tab');

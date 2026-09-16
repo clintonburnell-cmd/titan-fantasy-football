@@ -3220,14 +3220,14 @@
   async function loadMoves(d) {
     const id = d.cfg.id, had = S.moves[id];
     S.moves[id] = Object.assign({}, had, {busy: true});
-    try { S.moves[id] = {list: await API.leagueTransactions(d.cfg, d.rosterId, S.snap.week, 3), at: Date.now()}; }
+    try { S.moves[id] = {list: await API.leagueTransactions(d.cfg, d.rosterId, S.snap.week, 3, S.snap.season), at: Date.now()}; }
     catch (e) { S.moves[id] = Object.assign({}, had, {busy: false, error: (e && e.message) || String(e), at: Date.now()}); }
     if (S.ui.tab === 'moves') render();
   }
   // While the tab is open, each league's list reloads once it's five minutes old.
   setInterval(() => {
     if (DEMO || S.ui.tab !== 'moves' || document.hidden || !S.snap || S.busy) return;
-    (S.snap.leagues || []).filter(d => onSleeper(d.cfg)).forEach(d => {
+    (S.snap.leagues || []).filter(d => d.cfg.platform !== 'yahoo').forEach(d => {
       const M = S.moves[d.cfg.id];
       if (M && !M.busy && Date.now() - (M.at || 0) > MOVES_EVERY) loadMoves(d);
     });
@@ -3253,7 +3253,8 @@
   function screenMoves() {
     if (DEMO) return demoOnly('Transactions', 'The Transactions tab lists every trade, pickup and drop in your real leagues.');
     if (!S.snap) return emptyState();
-    const leagues = S.snap.leagues || [], sleeper = leagues.filter(d => onSleeper(d.cfg));
+    // Sleeper's and ESPN's leagues (Yahoo's transactions come next).
+    const leagues = S.snap.leagues || [], sleeper = leagues.filter(d => d.cfg.platform !== 'yahoo');
     sleeper.forEach(d => {
       const M = S.moves[d.cfg.id];
       if (!M || (!M.busy && Date.now() - (M.at || 0) > MOVES_EVERY)) loadMoves(d);
@@ -3272,11 +3273,11 @@
       Moves involving your team are marked.</p>
       <div class="chips" role="group" aria-label="Filter transactions">${[['all', 'All'], ['trade', 'Trades'], ['adds', 'Adds & drops'], ['mine', 'Yours']].map(([k, label]) =>
         `<button class="chip" data-moves="${k}" aria-pressed="${f === k}">${label} ${pool.filter(tests[k]).length}</button>`).join('')}</div>`;
-    if (leagues.length > sleeper.length) h += '<p class="fine">ESPN leagues aren\'t in this list yet: it reads Sleeper\'s transaction history.</p>';
+    if (leagues.length > sleeper.length) h += '<p class="fine">Yahoo leagues aren\'t in this list yet.</p>';
     if (failed.length) h += `<div class="banner stop">Couldn't load the moves in ${esc(failed.map(d => d.cfg.key).join(', '))}. Tap Refresh to try again.</div>`;
     if (!shown.length) {
       h += loading ? '<div class="empty-note">Loading your leagues\' transactions…</div>'
-        : `<div class="empty-note">${sleeper.length ? (f === 'all' ? 'No moves in your leagues over the last three weeks.' : 'Nothing like that over the last three weeks.') : 'Link a Sleeper account to see your leagues\' moves.'}</div>`;
+        : `<div class="empty-note">${sleeper.length ? (f === 'all' ? 'No moves in your leagues over the last three weeks.' : 'Nothing like that over the last three weeks.') : 'Link a Sleeper account or add an ESPN league to see your leagues\' moves.'}</div>`;
     } else {
       h += `<ul class="card txlist">${shown.map(moveRow).join('')}</ul>`;
       const total = pool.filter(tests[f]).length;
@@ -3682,10 +3683,12 @@
     Tm.list.forEach(t => { proj[t.id] = SCC.lineupPoints(t.roster, cfg.lineup, p => SCC.projFor(S.proj, p.id, cfg) || 0); });
     const key = [sched.games.filter(g => g.done).length, Object.keys(S.proj).length, S.snap.week].join('|');
     if (!St.result || St.key !== key) {
-      Object.assign(St, {key, result: SCC.standings(sched.teams, sched.games, proj, {playoffTeams: cfg.playoffTeams || sched.playoffTeams, sims: 5000, seed: 7})});
+      Object.assign(St, {key, result: SCC.standings(sched.teams, sched.games, proj, simOpts(cfg, sched, 5000, 7))});
     }
     return St.result;
   }
+  // The simulation's settings for a league: its playoff spots and how divisions seed them (the teams carry their divisions).
+  const simOpts = (cfg, sched, sims, seed) => ({playoffTeams: cfg.playoffTeams || sched.playoffTeams, seedType: cfg.seedType || 0, sims, seed});
 
   /* The playoff picture: what this week's games mean for your odds. Each game still to play this week is run both
      ways through the standings simulation (fewer sims than the table's), and the difference in your playoff chance
@@ -3699,7 +3702,7 @@
     if (!games.length || R.left === 0) return '';
     const proj = {};
     Tm.list.forEach(t => { proj[t.id] = SCC.lineupPoints(t.roster, cfg.lineup, p => SCC.projFor(S.proj, p.id, cfg) || 0); });
-    const opts = {playoffTeams: cfg.playoffTeams || sched.playoffTeams, sims: PICTURE_SIMS, seed: 11};
+    const opts = simOpts(cfg, sched, PICTURE_SIMS, 11);
     const odds = forced => {
       const list = sched.games.map(g => (g === forced.g ? Object.assign({}, g, {done: true, aPts: forced.aWins ? 1 : 0, bPts: forced.aWins ? 0 : 1}) : g));
       const t = SCC.standings(sched.teams, list, proj, opts).teams.find(x => x.id === mineId);
@@ -3766,7 +3769,7 @@
     }
     h += picture;
     const cell = t => `<tr class="${t.id === mineId ? 'mine' : ''}${t.seed === R.spots ? ' cut' : ''}"><td class="tnum">${t.seed}</td>
-      <td class="st-team">${esc(t.name)}</td><td>${recordOf(t)}</td><td class="st-opt tnum">${fmt(t.pf)}</td>
+      <td class="st-team">${esc(t.name)}${t.divWinner ? ' <span class="st-div" title="Leads its division">★</span>' : ''}</td><td>${recordOf(t)}</td><td class="st-opt tnum">${fmt(t.pf)}</td>
       <td class="st-opt">${t.allPlay.w}-${t.allPlay.l}${t.allPlay.t ? '-' + t.allPlay.t : ''}</td>
       <td class="tnum st-opt${t.luck > 0.5 ? ' good' : t.luck < -0.5 ? ' amber' : ''}">${t.games ? signed(t.luck) : '–'}</td>
       <td class="tnum st-opt">${t.powerRank}</td>
@@ -3776,7 +3779,8 @@
         <tbody>${R.teams.map(cell).join('')}</tbody></table></div>
       <p class="fine">${R.spots} teams make the playoffs; the dashed line is the cut. The odds come from ${thousands(R.sims)} simulations of the
         ${R.left} games left: each team scores around its average so far, blended with this week's projected lineup, give or take its own
-        usual swing (steadied by the league's while few games are played). Division winners aren't modeled. All-play is a team's record if it had played every team every week, and
+        usual swing (steadied by the league's while few games are played). ${R.divisions ? `Each of the ${R.divisions} divisions' best record takes a playoff spot${
+        cfg.seedType === 1 ? ', seeded by record' : ', seeded first'} (the ★ marks today's division leaders).` : 'This league has no divisions.'} All-play is a team's record if it had played every team every week, and
         luck is how many more (or fewer) wins it has than that record would give. Power ranks all-play, points per game and projected
         strength together.</p>` + strengthTable(strengthOf(cfg, Tm.list), R, mineId, cfg);
   }
@@ -3815,7 +3819,7 @@
     // The rest of this season (byes out), the flex spots shared out the way this league's teams fill them once they're in.
     const teams = (S.trade.teams[cfg.id] || {}).list, week = S.snap.week, k = `${cfg.id}|${week}|${teams ? 'league' : ''}`;
     if (!S.trade.tv[k]) {
-      S.trade.tv[k] = SCC.titanValues(sp, playerList(), cfg, {from: week, to: Math.max(LAST_REG_WEEK, week),
+      S.trade.tv[k] = SCC.titanValues(sp, playerList(), cfg, {from: week, to: Math.max(LAST_REG_WEEK, week), dynasty: cfg.kind === 'Dynasty',
         shares: teams ? SCC.flexShares(teams, cfg.lineup, p => SCC.projFor(sp, p.id, cfg) || 0) : undefined});
     }
     const m = S.trade.tv[k];
@@ -4005,8 +4009,8 @@
           (byes out) above a replacement starter at his position, in this league's scoring, the flex spots shared out the way this league's teams
           fill them.`}</p>${!fcShown() && d.cfg.kind === 'Dynasty'
         // Titan's value is one season's projections: in a dynasty league that misses age and the years ahead, so say so.
-        ? `<div class="banner swap tdyn"><b>Dynasty league:</b> the numbers beside players come from this season's projections only.
-          They don't account for age or future seasons, so young players and rookies can look worth less than they are to a dynasty team.
+        ? `<div class="banner swap tdyn"><b>Dynasty league:</b> the numbers beside players are this season's projections tilted by age (young players
+          up, running backs from 27 and receivers from 30 down), a rough stand-in for the seasons ahead: a rookie's real dynasty worth can still be more.
           Who wins still comes from FantasyCalc's dynasty trade values.</div>` : ''}`;
     const retry = '<button class="link" data-action="trade-retry">Try again</button>';
     if (T && T.error) return h + `<div class="banner stop">${esc(T.error)} ${retry}</div>`;

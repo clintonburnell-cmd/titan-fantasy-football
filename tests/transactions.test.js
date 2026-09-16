@@ -29,6 +29,30 @@ check(claim.kind === 'waiver' && !claim.mine && claim.bid === 17 && claim.sides[
   claim.sides[0].adds[0].name === 'Waiver Wonder' && claim.sides[0].drops[0].pos === 'TE', 'a waiver claim: who added and dropped whom, for how much');
 check(tx.find(x => x.id === 'f1').at === 1000 && SCC.transactionsFrom(null, {}, players, 1).length === 0, 'the time comes from when it went through (or was made); nothing, nothing');
 
+section('an ESPN league\'s transactions');
+{
+  const ESPNJS = T.app('espn.js');
+  // ESPN's answer (view=mTransactions2) as readTransactions trims it: a trade, a waiver claim, a lineup move (left out) and a pending claim.
+  const json = {
+    transactions: [
+      {id: 'e1', type: 'TRADE_ACCEPT', processDate: 3000, scoringPeriodId: 2, items: [{type: 'ADD', playerId: 101, fromTeamId: 2, toTeamId: 1}, {type: 'ADD', playerId: 102, fromTeamId: 1, toTeamId: 2}]},
+      {id: 'e2', type: 'WAIVER', teamId: 3, bidAmount: 17, processDate: 5000, scoringPeriodId: 2, items: [{type: 'ADD', playerId: 103, fromTeamId: -1, toTeamId: 3}, {type: 'DROP', playerId: 104, fromTeamId: 3, toTeamId: -1}]},
+      {id: 'e3', type: 'FREEAGENT', teamId: 1, processDate: 1000, scoringPeriodId: 1, items: [{type: 'ADD', playerId: 104, fromTeamId: -1, toTeamId: 1}]}],
+    pool: [{id: 101, fullName: 'Star Back', defaultPositionId: 2, proTeamId: 12}, {id: 102, fullName: 'Deep Wideout', defaultPositionId: 3, proTeamId: 2},
+      {id: 103, fullName: 'Waiver Wonder', defaultPositionId: 2, proTeamId: 15}, {id: 104, fullName: 'Cut Guy', defaultPositionId: 4, proTeamId: 20}],
+    teams: [{id: 1, name: 'Me'}, {id: 2, name: 'Pat\'s Team'}, {id: 3, name: 'Third Team'}]};
+  const ex = ESPNJS.transactionsFrom(json, players, 1);
+  check(ex.map(x => x.id).join() === 'e2,e1,e3', 'an ESPN league: trades, waiver claims and free-agent moves, newest first');
+  const et = ex.find(x => x.id === 'e1'), eme = et.sides.find(s => s.roster === '1'), epat = et.sides.find(s => s.roster === '2');
+  check(et.kind === 'trade' && et.mine && et.week === 2 && eme.adds.map(p => p.name).join() === 'Star Back' && eme.drops.map(p => p.name).join() === 'Deep Wideout' &&
+    epat.adds[0].id === '11' && epat.name === 'Pat\'s Team', 'a trade: each side\'s adds and drops from the ADD items\' from and to teams, players matched to Sleeper\'s');
+  const ec = ex.find(x => x.id === 'e2');
+  check(ec.kind === 'waiver' && ec.bid === 17 && !ec.mine && ec.sides[0].name === 'Third Team' && ec.sides[0].adds[0].name === 'Waiver Wonder' && ec.sides[0].drops[0].pos === 'TE',
+    'a waiver claim: who added and dropped whom, for how much');
+  check(ESPNJS.transactionsFrom(json, players, 1, {fromWeek: 2}).length === 2 && ESPNJS.transactionsFrom({}, players, 1).length === 0,
+    'from a week on; nothing from nothing');
+}
+
 section('loading a league\'s moves');
 (async () => {
   API.store.set(API.PLAYERS_KEY, {ts: Date.now(), map: players});

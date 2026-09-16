@@ -57,6 +57,12 @@ check(Y.yourLeagues(leaguesJson, null).every(l => l.team === null) && Y.leaguesF
     'the league: lineup in Sleeper\'s order (W/R/T is FLEX), your team\'s logo and page');
   check(SCC.describeLeague(cfg) === 'Yahoo · 4 teams · Half PPR · Redraft' && Y.leagueCfg(slim, {[cfg.id]: {active: false}}).active === false,
     'described as a Yahoo league; the person\'s switch is kept');
+  // The rest of a league's scoring: 6-point passing TDs, -2 interceptions and a 2-point stat, as differences from Sleeper's standard.
+  const six = {fantasy_content: {league: [[{league_key: '472.l.9'}, {name: 'Six'}], {settings: [{roster_positions: [],
+    stat_modifiers: {stats: [{stat: {stat_id: 5, value: '6'}}, {stat: {stat_id: 6, value: '-2'}}, {stat: {stat_id: 11, value: '1'}}, {stat: {stat_id: 16, value: '2'}}, {stat: {stat_id: 4, value: '0.04'}}]}}]}]}};
+  const sixCfg = Y.leagueCfg(Y.leagueFrom(six, null, ''), {});
+  check(sixCfg.ppr === 1 && sixCfg.scoring.pass_td === 2 && sixCfg.scoring.pass_int === -1 && sixCfg.scoring.pass_yd === undefined && sixCfg.scoring.rush_2pt === undefined &&
+    /6-pt pass TD/.test(SCC.describeLeague(sixCfg)), 'a league\'s scoring beyond receptions reaches the league (6-point passing TDs, -2 interceptions; standard values drop out): ' + JSON.stringify(sixCfg.scoring));
 
   section('your roster, matched to Sleeper\'s players');
   const d = Y.buildLeague(cfg, slim, players);

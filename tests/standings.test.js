@@ -45,6 +45,23 @@ const sum = R.teams.reduce((s, t) => s + t.playoffs, 0);
 check(Math.abs(sum - 2) < 1e-9 && R.teams.every(t => t.playoffs >= 0 && t.playoffs <= 1), 'the playoff odds add up to the playoff spots (2)');
 const again = SCC.standings(teams, games, {}, {playoffTeams: 2, sims: 4000, seed: 3});
 check(again.teams.map(t => t.playoffs).join() === R.teams.map(t => t.playoffs).join(), 'the same league gives the same odds');
+// Divisions: A and B in one, C and D in the other. D is 1-2 with the fewest points, but leads nothing... C leads its division at 2-1;
+// with two playoff spots and two divisions, the two division leaders (A, C) are in whatever the order says.
+{
+  const divTeams = teams.map(t => Object.assign({division: t.id === 'A' || t.id === 'B' ? 1 : 2}, t));
+  const played = games.map(x => Object.assign({}, x, {done: true, aPts: x.done ? x.aPts : 100, bPts: x.done ? x.bPts : 90}));
+  const D0 = SCC.standings(divTeams, played, {}, {playoffTeams: 2, sims: 200, seed: 3, seedType: 0});
+  const seeds = D0.teams.map(t => t.id + (t.divWinner ? '*' : '')).join();
+  check(D0.divisions === 2 && D0.teams.filter(t => t.divWinner).length === 2 && D0.teams.slice(0, 2).every(t => t.divWinner) &&
+    D0.teams.filter(t => t.playoffs === 1).length === 2 && D0.teams.filter(t => t.playoffs === 1).every(t => t.divWinner),
+    'with the season played out, each division\'s leader takes a spot and the leaders are seeded first: ' + seeds);
+  const D2 = SCC.standings(divTeams, played, {}, {playoffTeams: 2, sims: 200, seed: 3, seedType: 2});
+  check(D2.divisions === 0 && !D2.teams.some(t => t.divWinner) && D2.teams.slice(0, 2).every(t => t.playoffs === 1),
+    'seed type 2 ignores divisions: the two best records are in');
+  const D1 = SCC.standings(divTeams, played, {}, {playoffTeams: 3, sims: 200, seed: 3, seedType: 1});
+  check(D1.divisions === 2 && D1.teams.filter(t => t.playoffs === 1).length === 3 && D1.teams.filter(t => t.playoffs === 1).filter(t => t.divWinner).length === 2 &&
+    D1.teams.map(t => t.wins + t.ties / 2).every((w, i, arr) => i === 0 || w <= arr[i - 1]), 'seed type 1: the leaders are in but everyone is seeded by record');
+}
 // B scored 100, 130 and 60: the streakiest team; A 120, 110 and 100 the steadiest. Each keeps its own swing, steadied by the league's.
 check(by('B').sd > by('A').sd && by('A').sd >= 8 && by('B').sd <= 45 && R.teams.every(t => t.sd > 0),
   `each team's own swing goes into its odds (A ${by('A').sd}, B ${by('B').sd})`);

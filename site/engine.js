@@ -139,8 +139,8 @@
       if (!/^\d+$/.test(id)) continue;
       var p = full[id];
       if (!p || !PLAYER_POS[p.position]) continue;
-      // Name, position, team, and his place on the team's depth chart (0: none), for backup alerts.
-      map[id] = [fullName(p) || ('id ' + id), p.position, p.team || '', Number(p.depth_chart_order) || 0];
+      // Name, position, team, his place on the team's depth chart (0: none, for backup alerts) and his age (0: unknown, for dynasty values).
+      map[id] = [fullName(p) || ('id ' + id), p.position, p.team || '', Number(p.depth_chart_order) || 0, Number(p.age) || 0];
     }
     return map;
   }
@@ -151,7 +151,7 @@
   function playerInfo(players, id) {
     var key = String(id);
     var e = players && players[key];
-    if (e) return {name: e[0], pos: e[1], team: e[2], depth: e[3] || 0};
+    if (e) return {name: e[0], pos: e[1], team: e[2], depth: e[3] || 0, age: e[4] || 0};
     if (!/^\d+$/.test(key) && key.indexOf(':') < 0) return {name: key + ' D/ST', pos: 'DEF', team: key};
     return {name: 'id ' + key, pos: '?', team: ''};
   }
@@ -192,6 +192,9 @@
         rounds: Number(s.draft_rounds) || 0, // draft rounds, for a dynasty league's picks (Trade tab)
         // The playoffs (Standings) and the waiver budget, when the league bids for players (Waivers).
         playoffStart: Number(s.playoff_week_start) || 0, playoffTeams: Number(s.playoff_teams) || 0,
+        // Divisions and how they seed the playoffs (standings): Sleeper's playoff_seed_type, 0 division winners take the
+        // top seeds, 1 division winners are in but seeded by record, 2 divisions are ignored.
+        divisions: Number(s.divisions) || 0, seedType: s.playoff_seed_type === undefined || s.playoff_seed_type === null ? 0 : Number(s.playoff_seed_type),
         faab: Number(s.waiver_type) === 2 ? Number(s.waiver_budget) || 0 : 0,
         // Waivers' plan and reminder: the day waivers run (Sleeper counts from Monday, so 2, its default, is
         // Wednesday; they process about 3 AM Eastern), whether they run daily, and the bench size (an open spot needs no drop).
@@ -298,9 +301,26 @@
      opts: {from, to}: count only weeks from..to (each player's bye left out: a trade is a
        rest-of-season decision, and a player who's missed games keeps his per-game worth);
        the whole season when absent. {shares}: the league's own flex shares (flexShares)
-       instead of FLEX_SHARE. */
+       instead of FLEX_SHARE. {dynasty}: tilt each player's points by his age (ageFactor), since
+       a dynasty team owns the seasons ahead: young players up, older ones down. */
   var FLEX_SHARE = {FLEX: {RB: 0.45, WR: 0.45, TE: 0.1}, WRRB_FLEX: {RB: 0.5, WR: 0.5}, REC_FLEX: {WR: 0.8, TE: 0.2},
     SUPER_FLEX: {QB: 0.9, RB: 0.05, WR: 0.05}};
+  /* How a dynasty team should weigh a player's age, by position: running backs fade from 27 and are
+     worth little past 29; receivers and tight ends hold to 29 and fade after; quarterbacks hold to
+     the mid-thirties. Judgement, not fitted; no age (0) means no tilt. */
+  var AGE_CURVE = {
+    RB: [[24, 1.15], [26, 1.0], [27, 0.9], [28, 0.8], [99, 0.65]],
+    WR: [[25, 1.15], [29, 1.0], [30, 0.9], [99, 0.75]],
+    TE: [[26, 1.15], [30, 1.0], [31, 0.9], [99, 0.75]],
+    QB: [[30, 1.05], [34, 1.0], [99, 0.8]]
+  };
+  function ageFactor(pos, age) {
+    var curve = AGE_CURVE[pos];
+    age = Number(age) || 0;
+    if (!curve || !age) return 1;
+    for (var i = 0; i < curve.length; i++) if (age <= curve[i][0]) return curve[i][1];
+    return 1;
+  }
   function titanValues(seasonProj, players, cfg, opts) {
     opts = opts || {};
     var teams = Number(cfg.teams) || 12, starts = {}, byPos = {}, out = {}, shares = opts.shares || {};
@@ -318,6 +338,7 @@
       var info = playerInfo(players, id);
       if (!starts[info.pos]) continue;
       var pts = span ? spanPoints(seasonProj, id, cfg, opts.from, opts.to, byeOf(info.team)) : projFor(seasonProj, id, cfg) || 0;
+      if (opts.dynasty) pts *= ageFactor(info.pos, info.age);
       (byPos[info.pos] = byPos[info.pos] || []).push({id: id, pts: pts});
     }
     Object.keys(byPos).forEach(function (pos) {
@@ -798,8 +819,10 @@
        actual wins minus the wins that all-play rate would have given.
      - The games left are simulated `sims` times: each team scores around its expected
        points (its average so far, with this week's projection counting like four games),
-       give or take the league's usual swing (18% of an average score). Division winners
-       aren't modeled.
+       give or take its own usual swing, steadied by the league's.
+     - Divisions (each team's `division`, when the league has two or more): the best record
+       in each division takes a playoff spot; opts.seedType 0 (Sleeper's default, ESPN's way)
+       seeds the winners first, 1 seeds them by record among everyone, 2 ignores divisions.
      - Power ranks all-play rate, points per game and expected points, each against the
        league (before any games, expected points alone). */
   function standings(teams, games, proj, opts) {
@@ -807,7 +830,7 @@
     proj = proj || {};
     var ids = teams.map(function (t) { return String(t.id); }), T = {}, byWeek = {};
     teams.forEach(function (t) {
-      T[String(t.id)] = {id: String(t.id), name: t.name, w: 0, l: 0, t: 0, pf: 0, pa: 0, g: 0, apW: 0, apL: 0, apT: 0};
+      T[String(t.id)] = {id: String(t.id), name: t.name, w: 0, l: 0, t: 0, pf: 0, pa: 0, g: 0, apW: 0, apL: 0, apT: 0, division: Number(t.division) || 0};
     });
     (games || []).forEach(function (m) {
       var a = T[String(m.a)], b = T[String(m.b)];
@@ -855,6 +878,21 @@
 
     var left = (games || []).filter(function (m) { return !m.done && T[String(m.a)] && T[String(m.b)]; });
     var n = Math.max(1, opts.sims || 5000), spots = Math.min(opts.playoffTeams || 6, ids.length), rand = seeded(opts.seed || 7);
+    // Divisions: each one's best record is in. Seeds by opts.seedType (0 winners first, 1 by record, 2 no divisions).
+    var seedType = Number(opts.seedType) || 0, divList = [];
+    ids.forEach(function (i) { var d = T[i].division; if (d && divList.indexOf(d) < 0) divList.push(d); });
+    var useDivs = seedType !== 2 && divList.length >= 2 && spots >= divList.length;
+    /* The playoff order from a standings order (best first): the division winners (the first of each division)
+       take a spot each, the rest of the spots go by the order; seedType 0 puts the winners at the top. */
+    var seedsFrom = function (order) {
+      if (!useDivs) return order;
+      var won = {}, winners = [];
+      order.forEach(function (i) { var d = T[i].division; if (d && !won[d]) { won[d] = 1; winners.push(i); } });
+      var others = order.filter(function (i) { return !won[i] || winners.indexOf(i) < 0; }).filter(function (i) { return winners.indexOf(i) < 0; });
+      var rest = others.slice(0, Math.max(0, spots - winners.length)), out = others.slice(Math.max(0, spots - winners.length));
+      var inside = seedType === 0 ? winners.concat(rest) : order.filter(function (i) { return winners.indexOf(i) >= 0 || rest.indexOf(i) >= 0; });
+      return inside.concat(out);
+    };
     ids.forEach(function (i) { T[i].inN = 0; T[i].topN = 0; T[i].winSum = 0; });
     for (var k = 0; k < n; k++) {
       var w = {}, pf = {};
@@ -865,7 +903,7 @@
         pf[a] += ap; pf[b] += bp;
         w[ap > bp ? a : b]++;
       });
-      ids.slice().sort(function (x, y) { return w[y] - w[x] || pf[y] - pf[x]; }).forEach(function (i, at) {
+      seedsFrom(ids.slice().sort(function (x, y) { return w[y] - w[x] || pf[y] - pf[x]; })).forEach(function (i, at) {
         if (at < spots) T[i].inN++;
         if (at === 0) T[i].topN++;
         T[i].winSum += w[i];
@@ -881,16 +919,25 @@
     var zE = z(ids.map(function (i) { return T[i].mean; }));
     var out = ids.map(function (i, j) {
       var t = T[i], apG = t.apW + t.apL + t.apT;
-      return {id: i, name: t.name, wins: t.w, losses: t.l, ties: t.t, games: t.g, pf: round2(t.pf), pa: round2(t.pa), sd: round2(t.sd),
+      return {id: i, name: t.name, division: t.division, wins: t.w, losses: t.l, ties: t.t, games: t.g, pf: round2(t.pf), pa: round2(t.pa), sd: round2(t.sd),
         allPlay: {w: t.apW, l: t.apL, t: t.apT}, luck: apG ? round2(t.w + t.t / 2 - (t.apW + t.apT / 2) / apG * t.g) : 0,
         expected: round2(t.mean), power: played.length ? 0.5 * zA[j] + 0.3 * zP[j] + 0.2 * zE[j] : zE[j],
-        playoffs: t.inN / n, top: t.topN / n, projWins: round2(t.winSum / n)};
+        playoffs: t.inN / n, top: t.topN / n, projWins: round2(t.winSum / n), divWinner: false};
     });
     out.slice().sort(function (a, b) { return b.power - a.power; }).forEach(function (r, x) { r.powerRank = x + 1; });
-    // Standings order: wins, then points; before any games (all even), projected strength.
-    out.sort(function (a, b) { return (b.wins + b.ties / 2) - (a.wins + a.ties / 2) || b.pf - a.pf || b.power - a.power; })
-      .forEach(function (r, x) { r.seed = x + 1; });
-    return {teams: out, spots: spots, sims: n, left: left.length};
+    // Standings order: wins, then points; before any games (all even), projected strength. Then the playoff seeds
+    // as the league would draw them today (division winners in, by seedType).
+    out.sort(function (a, b) { return (b.wins + b.ties / 2) - (a.wins + a.ties / 2) || b.pf - a.pf || b.power - a.power; });
+    var byId = {};
+    out.forEach(function (r) { byId[r.id] = r; });
+    var seedOrder = seedsFrom(out.map(function (r) { return r.id; }));
+    if (useDivs) {
+      var won = {};
+      out.forEach(function (r) { if (r.division && !won[r.division]) { won[r.division] = 1; r.divWinner = true; } });
+    }
+    var ordered = seedOrder.map(function (id) { return byId[id]; });
+    ordered.forEach(function (r, x) { r.seed = x + 1; });
+    return {teams: ordered, spots: spots, sims: n, left: left.length, divisions: useDivs ? divList.length : 0};
   }
 
   function slotLabel(slot) { return SLOT_LABEL[slot] || slot; }
@@ -2774,7 +2821,7 @@
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel, scoringDeltas: scoringDeltas, scoringNotes: scoringNotes,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues, positionStrength: positionStrength,
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, impliedValue: impliedValue, spanPoints: spanPoints,
-    flexShares: flexShares,
+    flexShares: flexShares, ageFactor: ageFactor,
     draftFromSleeper: draftFromSleeper, draftGrades: draftGrades,
     impliedTotals: impliedTotals, dvpFrom: dvpFrom, gameTags: gameTags, scheduleStrength: scheduleStrength, transactionsFrom: transactionsFrom,
     splitRows: splitRows, parseRanks: parseRanks, positionHint: positionHint, mergeRanks: mergeRanks, combineRanks: combineRanks,

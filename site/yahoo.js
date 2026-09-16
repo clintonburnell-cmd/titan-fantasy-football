@@ -104,8 +104,17 @@
     });
   }
 
+  /* Yahoo's football stat ids, in Sleeper's scoring keys (the rest of a league's scoring, beyond receptions,
+     as SCC.scoringDeltas reads it). 16 is one two-point stat for passing, rushing and receiving. */
+  var YAHOO_STAT = {4: 'pass_yd', 5: 'pass_td', 6: 'pass_int', 9: 'rush_yd', 10: 'rush_td', 12: 'rec_yd', 13: 'rec_td', 18: 'fum_lost',
+    19: 'fgm_0_19', 20: 'fgm_20_29', 21: 'fgm_30_39', 22: 'fgm_40_49', 23: 'fgm_50p', 29: 'xpm', 31: 'sack', 32: 'int', 33: 'fum_rec',
+    34: 'def_td', 35: 'safe', 36: 'blk_kick', 50: 'pts_allow_0', 51: 'pts_allow_1_6', 52: 'pts_allow_7_13', 53: 'pts_allow_14_20',
+    54: 'pts_allow_21_27', 55: 'pts_allow_28_34', 56: 'pts_allow_35p'};
+  var YAHOO_2PT = ['pass_2pt', 'rush_2pt', 'rec_2pt'];
+
   /* A league's settings, from /league/{key}/settings: its lineup spots, points per
-     catch (Yahoo's stat 11 is receptions), the playoffs and whether it bids for players. */
+     catch (Yahoo's stat 11 is receptions), the rest of its scoring as differences from
+     Sleeper's standard, the playoffs and whether it bids for players. */
   function settingsFrom(json) {
     var lg = ((json || {}).fantasy_content || {}).league;
     var m = details(lg), s = flat(subs(lg).settings);
@@ -113,14 +122,16 @@
       var r = x.roster_position || x;
       return {pos: String(r.position || ''), count: Number(r.count) || 0};
     });
-    var rec = 0;
+    var rec = 0, asSleeper = {};
     (((s.stat_modifiers || {}).stats) || []).forEach(function (x) {
-      var st = x.stat || x;
-      if (Number(st.stat_id) === 11) rec = Number(st.value) || 0;
+      var st = x.stat || x, id = Number(st.stat_id), v = Number(st.value) || 0;
+      if (id === 11) rec = v;
+      else if (id === 16) YAHOO_2PT.forEach(function (k) { asSleeper[k] = v; });
+      else if (YAHOO_STAT[id]) asSleeper[YAHOO_STAT[id]] = v;
     });
     return {key: String(m.league_key || ''), id: String(m.league_id || ''), name: clean(m.name) || 'Yahoo league',
       url: https(m.url), logo: https(m.logo_url), teams: Number(m.num_teams) || 0, season: String(m.season || ''),
-      week: Number(m.current_week) || 0, positions: positions, ppr: rec,
+      week: Number(m.current_week) || 0, positions: positions, ppr: rec, scoring: SCC ? SCC.scoringDeltas(asSleeper) : {},
       playoffStart: Number(s.playoff_start_week) || 0, playoffTeams: Number(s.num_playoff_teams) || 0,
       faab: String(s.uses_faab) === '1' || s.uses_faab === true};
   }
@@ -174,7 +185,7 @@
     var mine = (l.rosters || []).filter(function (t) { return t.key === l.teamKey; })[0] || {};
     return {id: id, platform: 'yahoo', yahooKey: l.key, teamKey: l.teamKey || '', key: l.name, name: l.name,
       pic: mine.logo || l.logo || '', url: mine.url || l.url || '', lineup: lineupOf(l.positions || []),
-      teams: l.teams || (l.rosters || []).length, ppr: l.ppr || 0, kind: 'Redraft', bestBall: false, status: '',
+      teams: l.teams || (l.rosters || []).length, ppr: l.ppr || 0, scoring: l.scoring || {}, kind: 'Redraft', bestBall: false, status: '',
       playoffStart: l.playoffStart || 0, playoffTeams: l.playoffTeams || 0, faab: 0,
       active: pref.active !== undefined ? !!pref.active : true, exposure: true};
   }

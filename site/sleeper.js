@@ -14,8 +14,8 @@
 
   var API = 'https://api.sleeper.app/v1';
   var SCHEDULE = 'https://api.sleeper.app/schedule/nfl/regular/';
-  var PLAYERS_KEY = 'titan.players.v2'; // v2 keeps each player's depth chart order (backup alerts)
-  var OLD_PLAYERS_KEYS = ['titan.players.v1'];
+  var PLAYERS_KEY = 'titan.players.v3'; // v2 added each player's depth chart order (backup alerts), v3 his age (dynasty values)
+  var OLD_PLAYERS_KEYS = ['titan.players.v1', 'titan.players.v2'];
   // Names, positions and teams barely move week to week, and the full list is
   // ~14 MB, so it is kept for a few days. Injuries are pulled fresh every refresh.
   var PLAYERS_TTL = 3 * 24 * 3600 * 1000;
@@ -547,7 +547,13 @@
   /* A Sleeper league's completed transactions over the last `weeks` weeks (trades, waiver
      claims, free-agent moves, commissioner moves), with team names, for the Transactions
      tab (SCC.transactionsFrom). Players Titan hasn't met yet are looked up by id. */
-  async function leagueTransactions(lg, rosterId, week, weeks) {
+  async function leagueTransactions(lg, rosterId, week, weeks, season) {
+    if (lg.platform === 'yahoo') throw new Error('Yahoo transactions are coming next');
+    // An ESPN league: its transactions this season (ESPN.fetchTransactions), the last `weeks` weeks.
+    if (lg.platform === 'espn') {
+      var players = await loadPlayers();
+      return ESPN.fetchTransactions(lg.espnId, season, players, lg.teamId, {fromWeek: Math.max(1, Number(week) - (weeks || 3) + 1)});
+    }
     var paths = ['/rosters', '/users'];
     for (var w = Math.max(1, Number(week) - (weeks || 3) + 1); w <= Number(week); w++) paths.push('/transactions/' + w);
     var got = await Promise.all(paths.map(function (p, i) {
@@ -617,7 +623,8 @@
     });
     return {teams: (got[0] || []).map(function (x) {
       var u = who[x.owner_id] || {};
-      return {id: String(x.roster_id), name: SCC.teamLabel(u.metadata && u.metadata.team_name, u.display_name, 'Team ' + x.roster_id)};
+      return {id: String(x.roster_id), name: SCC.teamLabel(u.metadata && u.metadata.team_name, u.display_name, 'Team ' + x.roster_id),
+        division: Number((x.settings || {}).division) || 0}; // the roster's division, for the playoff seeds
     }), games: games, playoffTeams: Number(lg.playoffTeams) || 6};
   }
 

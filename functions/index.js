@@ -9,6 +9,7 @@
  */
 const {onSchedule} = require('firebase-functions/v2/scheduler');
 const {onCall, onRequest, HttpsError} = require('firebase-functions/v2/https');
+const {onDocumentWritten} = require('firebase-functions/v2/firestore');
 const {defineSecret} = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 const crypto = require('crypto');
@@ -359,6 +360,11 @@ exports.espnLeague = onCall({region: 'us-central1', memory: '256MiB', maxInstanc
     try { return await ESPN.readDraft(String(leagueId), String(season), {creds: login}); }
     catch (e) { throw new HttpsError(e.message === 'private' ? 'permission-denied' : 'unavailable', e.message === 'private' ? 'private' : e.message); }
   }
+  // The league's completed transactions this season (the Transactions tab).
+  if (kind === 'transactions') {
+    try { return await ESPN.readTransactions(String(leagueId), String(season), {creds: login}); }
+    catch (e) { throw new HttpsError(e.message === 'private' ? 'permission-denied' : 'unavailable', e.message === 'private' ? 'private' : e.message); }
+  }
   // This week's head-to-head: both lineups (null when there's no matchup).
   if (matchup) return ESPN.fetchMatchup(String(leagueId), String(season), Number(week), Number(teamId), {creds: login});
   // Live scores: one team's points so far this week.
@@ -685,6 +691,68 @@ function plainGet(req, res, allowed) {
   return true;
 }
 
+/* The owner's Tuesday briefing: when the owner's PC posts the Value report or the Data dump (lab/value-latest,
+   lab/dump-latest, titan-analytics' upload.js), one push to the owner's devices with the week's top calls, so the
+   week's moves are on the phone without opening the app. The owner is the one account with the titanOwner claim.
+   The alert's key names the report and its week, so a re-post of the same week says nothing new. */
+const BRIEF_MAX = 3;
+function briefingFor(doc, R) {
+  if (!R || !R.week) return null;
+  const first = (list, n) => (list || []).slice(0, n).map(m => m.n).filter(Boolean);
+  if (doc === 'value-latest') {
+    const tiles = {};
+    (R.tiles || []).forEach(t => { tiles[t[0]] = t[1]; });
+    const F = (R.formats || {})[R.main] || {}, leagues = R.leagues || [];
+    const sells = (F.sells || []).slice(0, BRIEF_MAX).map(r => `${r.n}${r.keep ? ' (keep)' : ''}`), buys = first(F.buys, BRIEF_MAX);
+    const claims = [];
+    leagues.forEach(L => (L.add || []).forEach(m => { if (claims.length < BRIEF_MAX && !claims.includes(m.n)) claims.push(m.n); }));
+    const bits = [sells.length && `Sell high or keep: ${sells.join(', ')}`, buys.length && `Buy low: ${buys.join(', ')}`,
+      claims.length && `Claims: ${claims.join(', ')}`].filter(Boolean);
+    return {key: `brief|${R.week}|value`, title: `Week ${R.week} Value report is in`,
+      body: `${tiles['sell-high moves'] || 0} sells, ${tiles['buy-low targets'] || 0} buys and ${tiles.claims || 0} claims across ${leagues.length} leagues. ${bits.join('. ')}`.trim(),
+      url: '/app/value'};
+  }
+  if (doc === 'dump-latest') {
+    const tiles = {};
+    (R.tiles || []).forEach(t => { tiles[t[0]] = t[1]; });
+    const leagues = R.leagues || [], starts = [], adds = [];
+    leagues.forEach(L => {
+      (L.start || []).forEach(m => { if (starts.length < BRIEF_MAX) starts.push(`${m.n} (${L.name})`); });
+      (L.add || []).forEach(m => { if (adds.length < BRIEF_MAX && !adds.includes(m.n)) adds.push(m.n); });
+    });
+    const bits = [starts.length && `Start: ${starts.join('; ')}`, adds.length && `Pick up: ${adds.join(', ')}`].filter(Boolean);
+    return {key: `brief|${R.week}|dump`, title: `Week ${R.week} Data dump ideas are in`,
+      body: `${tiles.ideas || 0} ideas across ${leagues.length} leagues. ${bits.join('. ')}`.trim(), url: '/app/data-dump'};
+  }
+  return null;
+}
+let ownerCache = null;
+async function ownerUid() {
+  if (ownerCache) return ownerCache;
+  const page = await getAuth().listUsers(1000);
+  const u = page.users.find(x => x.customClaims && x.customClaims.titanOwner);
+  return (ownerCache = u ? u.uid : null);
+}
+exports.ownerBriefing = onDocumentWritten({document: 'lab/{doc}', region: 'us-central1', memory: '256MiB', timeoutSeconds: 60}, async event => {
+  const doc = event.params.doc;
+  if (doc !== 'value-latest' && doc !== 'dump-latest') return;
+  const data = event.data && event.data.after && event.data.after.data();
+  if (!data || !data.json) return;
+  let R;
+  try { R = JSON.parse(data.json); } catch (e) { return; }
+  const a = briefingFor(doc, R);
+  if (!a) return;
+  const uid = await ownerUid();
+  if (!uid) return;
+  const ref = db.collection('users').doc(uid).collection('private').doc('alerts');
+  const alerts = (await ref.get()).data();
+  if (!alerts || !alerts.tokens || !Object.keys(alerts.tokens).length || (alerts.sent || {})[a.key]) return;
+  const sent = Object.assign({}, alerts.sent || {});
+  sent[a.key] = 1;
+  const n = await deliver(ref, [a], sent);
+  logger.info(`owner briefing: ${a.title}${n ? '' : ' (no device took it)'}`);
+});
+
 /* Content-Security-Policy-Report-Only reports (firebase.json sends the policy on every page, report-uri /api/csp):
    browsers post what the policy would have blocked. Each report is logged at info, never as an error (the "Titan
    server problems" alert watches errors), so the policy can be tightened from the logs before it's ever enforced. */
@@ -941,7 +1009,7 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
   }
 });
 
-exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest,
+exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest, briefingFor,
   yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll, latestScores, newsForAlerts, labSnapshot, formatFromKey,
   setSend: fn => { sendPush = fn; },
   setCreds: store => { creds = store; }, espnCredsFor, espnLeaguesOf, plainGet,
