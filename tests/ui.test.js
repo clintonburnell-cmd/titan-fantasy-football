@@ -988,7 +988,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const wh = await ev(`[...document.querySelectorAll('tr[data-vp]')].slice(0, 3).map(r => r.cells[0].querySelector('b').textContent + ': ' + r.cells[1].textContent).join(' | ')`);
   check(wh === 'Buy Guy: Yours | Sell Guy: Rival Team (rival) | Dynasty Guy: Free agent', 'and a Where column says who has each player there: ' + wh);
   const np = await ev(`[...document.querySelectorAll('.vr-lg[open] .vr-np')].map(x => x.className.trim() + ':' + x.textContent.replace(/\\s+/g, ' ').trim()).join(' | ')`);
-  check(np === 'vr-np deep:QB1styours 2nddeep | vr-np thin:RB11thyours 9ththin' && await ev(`/of 12 teams/.test(document.querySelector('.vr-nn').textContent)`),
+  check(np === 'vr-np deep:QB1stprojection2ndyour listdeep | vr-np thin:RB11thprojection9thyour listthin' && await ev(`/among the league's 12 teams/.test(document.querySelector('.vr-nn').textContent)`),
     'your team by position shows as colored position pills: your rank, your rank by your own list, thin or deep: ' + np);
   const dropPill = await ev(`(document.querySelector('.vr-drop') || {}).textContent || ''`);
   check(dropPill === 'drop Drop Guy' && await ev(`document.body.textContent.includes('Drop Drop Guy (WR, KC) for him')`),

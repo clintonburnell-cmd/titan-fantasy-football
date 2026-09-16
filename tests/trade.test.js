@@ -219,6 +219,36 @@ section('two for two, and draft picks for rebuilders');
   check(SCC.tradeIdeas(me3, [rb], Object.assign({stance: {Rb: 'contender'}}, o3)).length === 0, 'a contender isn\'t offered picks');
 }
 
+section('the lineup goal: trades that add points to the starting lineup, and the partners who fit');
+{
+  // One spot each. My starting WR is a young name the market prices at 2,000 who scores 100; their bench WR is an old
+  // hand priced 1,950 who scores 180. Swapping them is fair by the market and costs me 50 of value, but it adds 80
+  // rest-of-season points to my lineup: nothing by value, the idea under the lineup goal.
+  const V4 = {q: 1000, ra: 3000, wa: 2000, qp: 1000, rp: 600, wx: 2600, wo: 1950};
+  const P4 = {q: 100, ra: 200, wa: 100, qp: 100, rp: 50, wx: 210, wo: 180};
+  const me4 = {id: 'me', roster: [P('q', 'QB'), P('ra', 'RB'), P('wa', 'WR')]};
+  const p4 = {id: 'P4', name: 'P4', roster: [P('qp', 'QB'), P('rp', 'RB'), P('wx', 'WR'), P('wo', 'WR')]};
+  const o4 = {value: p => V4[p.id] || 0, points: p => P4[p.id] || 0, slots: ['QB', 'RB', 'WR'], waiver: 50};
+  const byValue = SCC.tradeIdeas(me4, [p4], o4), byLineup = SCC.tradeIdeas(me4, [p4], Object.assign({goal: 'lineup', deep: {P4: ['WR']}}, o4));
+  check(byValue.length === 0, 'by value alone, a swap that costs 50 of value is no idea');
+  check(byLineup.length === 1 && ids(byLineup[0].give) === 'wa' && ids(byLineup[0].get) === 'wo' && byLineup[0].myPts === 80 && byLineup[0].theirPts === 0 &&
+    byLineup[0].myGain === -50 && byLineup[0].why.join('; ') === 'comes from their depth at WR; they get the best player in it' && byLineup[0].accept === 2,
+    'with the lineup goal, the same swap is the idea: +80 rest-of-season points to my lineup for 50 of value, and it says it comes from their depth: '
+    + byLineup.map(x => ids(x.give) + ' for ' + ids(x.get) + ' ' + x.myPts + ' ' + x.why.join(';')).join(', '));
+  const noPts = SCC.tradeIdeas(me4, [p4], Object.assign({goal: 'lineup'}, o4, {points: p => (p.id === 'wo' ? 90 : P4[p.id] || 0)}));
+  check(noPts.length === 0, 'an idea that adds no points to the lineup is no idea under the lineup goal, whatever the values say');
+  // Partners who fit: from positionStrength's grades. Team T is thin at RB where I'm deep, and deep at WR where I'm thin; team U matches me.
+  const PS = {positions: ['QB', 'RB', 'WR'], teams: [
+    {id: 'me', byPos: {QB: {z: 0, grade: 'mid'}, RB: {z: 1.2, grade: 'deep'}, WR: {z: -1.0, grade: 'thin'}}},
+    {id: 'T', byPos: {QB: {z: 0, grade: 'mid'}, RB: {z: -0.9, grade: 'thin'}, WR: {z: 0.8, grade: 'deep'}}},
+    {id: 'U', byPos: {QB: {z: 0.1, grade: 'mid'}, RB: {z: 1.0, grade: 'deep'}, WR: {z: -0.8, grade: 'thin'}}}]};
+  const partners = SCC.tradePartners('me', PS);
+  check(partners.length === 1 && partners[0].id === 'T' && partners[0].need.join() === 'RB' && partners[0].spare.join() === 'WR' && partners[0].fit === 3.9,
+    'a partner fits when they\'re thin where I\'m deep (they need RB) and deep where I\'m thin (they can spare WR); a team built like mine doesn\'t: '
+    + JSON.stringify(partners));
+  check(SCC.tradePartners('zz', PS).length === 0 && SCC.tradePartners('me', null).length === 0, 'no team of mine, or no strength table: no partners');
+}
+
 // sleeper.js reading a league's teams, with Sleeper's answers made up here (no network).
 section('a dynasty Sleeper league\'s teams and picks');
 (async () => {

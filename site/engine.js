@@ -494,7 +494,12 @@
   function tradeIdeas(me, others, opts) {
     var value = opts.value, slots = opts.slots || [], waiver = opts.waiver || 0, max = opts.max || 6, top = opts.top || 12;
     var edge = typeof opts.edge === 'function' ? opts.edge : null, points = typeof opts.points === 'function' ? opts.points : null;
-    var thin = opts.thin || {}, stance = opts.stance || {}, myStance = stance[String(me.id)] || 'mid';
+    var thin = opts.thin || {}, deep = opts.deep || {}, stance = opts.stance || {}, myStance = stance[String(me.id)] || 'mid';
+    // The lineup goal (opts.goal 'lineup', with points): the point of a trade is a starting lineup that scores more,
+    // so an idea must raise the rest-of-season points of the best lineup, may cost a little value (a two-for-one that
+    // consolidates depth into a starter is the classic contender's trade; the market's verdict still keeps it fair),
+    // and ideas rank by the points gained. Without it, by value gained (the older behaviour).
+    var lineup = opts.goal === 'lineup' && !!points;
     var pool = function (team, withPicks) {
       var list = (team.roster || []).concat(withPicks ? team.picks || [] : []);
       return list.filter(function (p) { return (p.pos !== 'PICK' || withPicks) && value(p) > 0; })
@@ -525,7 +530,7 @@
       var theirStance = stance[String(o.id)] || 'mid';
       var giveCombos = theirStance === 'rebuilder' ? (myWithPicks = myWithPicks || combos(pool(me, true))) : myPlayers;
       var theirBase = strength(o.roster), theirCombos = combos(pool(o, myStance === 'rebuilder' && theirStance === 'contender')), theirStarters = startersOf(o.roster);
-      var theirPtsBase = byPoints ? byPoints(o.roster) : 0, holes = thin[String(o.id)] || [];
+      var theirPtsBase = byPoints ? byPoints(o.roster) : 0, holes = thin[String(o.id)] || [], rich = deep[String(o.id)] || [];
       giveCombos.forEach(function (give) {
         theirCombos.forEach(function (get) {
           // Picks for picks says nothing about either lineup.
@@ -533,16 +538,20 @@
           var R = tradeVerdict(items(give), items(get), waiver);
           if (!R.fair) return;
           var after = without(me.roster, give).concat(get), gain = strength(after) - myBase, trueGain = mine(after) - myTrue;
-          if (trueGain <= 0) return;
+          if (!lineup && trueGain <= 0) return;
           var theirAfter = without(o.roster, get).concat(give), myPts = 0, theirPts = 0;
           if (byPoints) {
             myPts = round2(byPoints(after) - myPtsBase);
-            if (myPts < 0) return;
+            if (lineup ? myPts <= 0 : myPts < 0) return;
             theirPts = round2(byPoints(theirAfter) - theirPtsBase);
           }
           var why = [], accept = 0;
           var fills = give.filter(function (p) { return holes.indexOf(p.pos) >= 0; }).map(function (p) { return p.pos; });
           if (fills.length) { accept++; why.push('fills their hole at ' + fills.filter(function (p, i) { return fills.indexOf(p) === i; }).join(' and ')); }
+          var spare = get.filter(function (p) { return !isPick(p) && rich.indexOf(p.pos) >= 0; }).map(function (p) { return p.pos; });
+          if (spare.length && spare.length === get.filter(function (p) { return !isPick(p); }).length) {
+            accept++; why.push('comes from their depth at ' + spare.filter(function (p, i) { return spare.indexOf(p) === i; }).join(' and '));
+          }
           if (maxOf(give) > maxOf(get)) { accept++; why.push('they get the best player in it'); }
           if (get.length === 2 && give.length === 1 && get.every(function (p) { return theirStarters[p.id]; })) { accept--; why.push('asks two of their starters for one'); }
           if (theirStance === 'rebuilder' && give.some(isPick)) { accept++; why.push('they\'re rebuilding, and this brings picks'); }
@@ -553,9 +562,12 @@
         });
       });
     });
-    // Trades that leave both lineups stronger come first: the other side is likelier to say yes.
-    var score = function (x) { return (x.trueGain + 0.5 * Math.min(x.theirGain, x.trueGain)) * (1 + 0.15 * x.accept); };
-    ideas.sort(function (a, b) { return (b.theirGain >= 0) - (a.theirGain >= 0) || score(b) - score(a); });
+    // Trades that leave both lineups stronger come first: the other side is likelier to say yes. With the lineup
+    // goal, "stronger" is points and the order is the points you gain (a fair price is the constraint, not the prize).
+    var score = lineup ? function (x) { return (x.myPts + 0.25 * Math.max(0, Math.min(x.theirPts, x.myPts))) * (1 + 0.15 * x.accept); }
+      : function (x) { return (x.trueGain + 0.5 * Math.min(x.theirGain, x.trueGain)) * (1 + 0.15 * x.accept); };
+    var helps = lineup ? function (x) { return x.theirPts >= 0; } : function (x) { return x.theirGain >= 0; };
+    ideas.sort(function (a, b) { return helps(b) - helps(a) || score(b) - score(a); });
     var perTeam = {}, wanted = {}, out = [];
     ideas.forEach(function (x) {
       if (out.length >= max || (perTeam[x.partner.id] || 0) >= 2 || x.get.some(function (p) { return wanted[p.id]; })) return;
@@ -564,6 +576,29 @@
       out.push(x);
     });
     return out;
+  }
+
+  /* The trade partners whose rosters fit yours, from positionStrength's grades: a partner needs a
+     position where they're thin and you're clearly stronger (`need`: what you can spare them), and
+     can spare one where they're deep and you're clearly weaker (`spare`: what you want). Clearly is
+     PARTNER_GAP standard deviations apart (z). `fit` adds up those gaps; partners with none are left
+     out, the best fit first. [{id, need, spare, fit}]. */
+  var PARTNER_GAP = 0.6;
+  function tradePartners(meId, PS) {
+    var teams = (PS && PS.teams) || [], positions = (PS && PS.positions) || [];
+    var me = teams.filter(function (t) { return String(t.id) === String(meId); })[0];
+    if (!me) return [];
+    var z = function (t, pos) { return (t.byPos[pos] || {}).z || 0; }, grade = function (t, pos) { return (t.byPos[pos] || {}).grade || 'mid'; };
+    return teams.filter(function (t) { return t !== me; }).map(function (t) {
+      var need = [], spare = [], fit = 0;
+      positions.forEach(function (pos) {
+        if (pos === 'K' || pos === 'DEF') return;
+        var d = z(me, pos) - z(t, pos);
+        if (grade(t, pos) === 'thin' && d >= PARTNER_GAP) { need.push(pos); fit += d; }
+        if (grade(t, pos) === 'deep' && -d >= PARTNER_GAP) { spare.push(pos); fit -= d; }
+      });
+      return {id: String(t.id), need: need, spare: spare, fit: round2(fit)};
+    }).filter(function (x) { return x.fit > 0; }).sort(function (a, b) { return b.fit - a.fit || (b.need.length + b.spare.length) - (a.need.length + a.spare.length); });
   }
 
   /* A roster's best starting lineup by projected points, for the Trade tab's before and
@@ -2907,7 +2942,7 @@
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel, scoringDeltas: scoringDeltas, scoringNotes: scoringNotes,
     SEASON_FORMATS: SEASON_FORMATS, seasonFormat: seasonFormat, seasonValues: seasonValues,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues, positionStrength: positionStrength,
-    lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, impliedValue: impliedValue, spanPoints: spanPoints,
+    lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, tradePartners: tradePartners, impliedValue: impliedValue, spanPoints: spanPoints,
     flexShares: flexShares, ageFactor: ageFactor,
     draftFromSleeper: draftFromSleeper, draftGrades: draftGrades,
     impliedTotals: impliedTotals, impliedTilt: impliedTilt, dvpFrom: dvpFrom, gameTags: gameTags, scheduleStrength: scheduleStrength, transactionsFrom: transactionsFrom,

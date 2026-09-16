@@ -364,8 +364,16 @@ One note per screen or feature.
   values already count stars for more, so don't add a star bonus) plus FantasyCalc's roster-spot
   adjustment: a waiver pickup (`SCC.waiverValue`, about the 300th-best player) per spot freed. Trade
   ideas (`SCC.tradeIdeas`): fair 1-2 player trades that raise the value of your best starters
-  (`lineupPoints` with values, not one week's projections), at most two per partner. The ideas card
-  is one line until Find trades, and Clear folds it back. The edge (v1.39.0, the owner's ask for "an edge in statistical
+  (`lineupPoints` with values, not one week's projections), at most two per partner. Since v1.53.0 the app
+  asks for the lineup goal (`goal: 'lineup'`, with rest-of-season `points`; the owner: "the goal is to
+  find the most optimal starting lineup... make playoffs and win"): an idea must add rest-of-season points
+  to your best lineup, may cost a little value (a two-for-one that turns depth into a starter; the market's
+  verdict still keeps it fair), ranks by the points gained, and gets a +1 to `accept` ("comes from their
+  depth at WR") when everything you get is at a position the partner is deep at (`deep`, from
+  `positionStrength` like `thin`). `SCC.tradePartners(meId, PS)` (pure, tested) lists the partners whose
+  rosters fit yours (thin where you're deep, deep where you're thin, `PARTNER_GAP` 0.6 z apart) and the
+  card shows the top four above the ideas, each idea leading with the points it adds (and per week,
+  `I.weeks`). The ideas card is one line until Find trades, and Clear folds it back. The edge (v1.39.0, the owner's ask for "an edge in statistical
   trades"): the market's values alone can't find one (every fair trade is one the market calls even), so the Trade tab
   reads the numbers behind the market. For the owner, the Value report's rows for the league's format (`valueRowsFor`,
   `S.value.rows`, loaded on the Trade tab too) give each player's usage edge (`edgeFor`: `SCC.impliedValue` from the

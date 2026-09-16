@@ -2745,10 +2745,12 @@
       if (!L.ranks) return `<p class="fine">${esc(L.need)}</p>`;
       const pills = ['QB', 'RB', 'WR', 'TE'].filter(p => L.ranks[p]).map(p => {
         const r = L.ranks[p], tone = r.thin ? 'thin' : r.deep ? 'deep' : '';
-        return `<span class="vr-np ${tone}" title="${esc(L.need)}"><span class="pos" data-pos="${p}">${p}</span><b>${nth(r.p)}</b>${
-          r.m ? `<small>yours ${nth(r.m)}</small>` : ''}${tone ? `<em>${tone}</em>` : ''}</span>`;
+        return `<span class="vr-np ${tone}" title="${esc(L.need)}"><span class="pos" data-pos="${p}">${p}</span><b>${nth(r.p)}</b><small>projection</small>${
+          r.m ? `<b>${nth(r.m)}</b><small>your list</small>` : ''}${tone ? `<em>${tone}</em>` : ''}</span>`;
       }).join('');
-      return `<div class="vr-need">${pills}<small class="vr-nn">of ${L.n} teams${L.list ? ' · by projection and by your ' + esc(seasonLabel(L.list)) + ' list' : ''}</small></div>`;
+      return `<div class="vr-need">${pills}<small class="vr-nn">Where your starters rank among the league's ${L.n} teams at each position: by this report's
+        projections, and by your ${L.list ? esc(seasonLabel(L.list)) + ' list (Rankings, Season import)' : 'season list, once you save one'}. ${
+        L.list ? 'Thin and deep follow your list, and so do the buys and sells.' : 'Thin and deep decide where the buys and sells look.'}</small></div>`;
     };
     // Leagues in the same order as every other tab (snapOrder); the format chips pick the lists below, not the order.
     const shown = one ? [one] : snapOrder(R.leagues || []);
@@ -4402,12 +4404,21 @@
     if (!me || !V || !V.idx) return;
     const value = p => (SCC.playerValue(V.idx, p) || {}).v || 0;
     // Where each partner is thin (so an idea that fills the hole ranks higher), the usage edge (owner) and rest-of-season points.
-    const PS = strengthOf(d.cfg, Tm.list), thin = {};
-    if (PS) PS.teams.forEach(t => { thin[t.id] = PS.positions.filter(p => (t.byPos[p] || {}).grade === 'thin'); });
+    const PS = strengthOf(d.cfg, Tm.list), thin = {}, deep = {};
+    if (PS) PS.teams.forEach(t => {
+      thin[t.id] = PS.positions.filter(p => (t.byPos[p] || {}).grade === 'thin');
+      deep[t.id] = PS.positions.filter(p => (t.byPos[p] || {}).grade === 'deep');
+    });
     const edge = edgeFor(d.cfg, V), points = spanFor(d.cfg, S.snap.week, LAST_REG_WEEK), stance = (stanceOf(d) || {}).map || {};
-    S.trade.ideas[d.cfg.id] = {list: SCC.tradeIdeas(me, Tm.list.filter(t => !t.mine), {value, slots: d.cfg.lineup, waiver: V.waiver, max: 6,
-      edge: edge || undefined, points: points || undefined, thin, stance}), edge: !!edge, edgeSource: edge ? edge.source : '', points: !!points,
-      stance: Object.keys(stance).length > 0};
+    // The goal is a starting lineup that scores more: with rest-of-season points in, ideas rank by the points they add to
+    // your best lineup (a fair price is the constraint), and the partners whose rosters fit yours are listed first.
+    const byName = {};
+    Tm.list.forEach(t => { byName[String(t.id)] = t.name; });
+    const partners = PS ? SCC.tradePartners(me.id, PS).map(x => Object.assign({name: byName[x.id] || 'A team'}, x)) : [];
+    S.trade.ideas[d.cfg.id] = {list: SCC.tradeIdeas(me, Tm.list.filter(t => !t.mine), {value, slots: d.cfg.lineup, waiver: V.waiver, max: 8,
+      edge: edge || undefined, points: points || undefined, thin, deep, stance, goal: points ? 'lineup' : undefined}), edge: !!edge,
+      edgeSource: edge ? edge.source : '', points: !!points, stance: Object.keys(stance).length > 0, partners,
+      weeks: Math.max(1, LAST_REG_WEEK - (S.snap.week || 1) + 1)};
     render();
   }
 
@@ -4421,19 +4432,26 @@
     const head = `<div class="tideas-h"><h3>Trade ideas</h3><div class="tideas-b">
         <button type="button" class="btn small ghost" data-action="trade-ideas-clear">Clear</button>
         <button type="button" class="btn small ghost" data-action="trade-find">Look again</button></div></div>
-      <p class="fine">Fair trades (FantasyCalc's values within 5%) of one or two pieces each way that make your starting lineup
-        stronger by value${I.points ? ' without lowering its rest-of-season points' : ''}, and theirs too where possible.${I.edgeSource === 'season'
+      <p class="fine">${I.points
+          ? 'The goal is a starting lineup that scores more: fair trades (FantasyCalc\'s values within 5%) of one or two pieces each way that add the most rest-of-season points to your best lineup, and to theirs where possible. A two-for-one that turns your depth into a starter counts even when it gives up a little value.'
+          : 'Fair trades (FantasyCalc\'s values within 5%) of one or two pieces each way that make your starting lineup stronger by value, and theirs too where possible.'}${I.edgeSource === 'season'
           ? ' Your season rankings count on your side, so a swap of equally priced players you rank differently from the market is an idea.'
           : I.edge ? ' Your Value report\'s usage edge counts on your side, so a swap of equally priced players the market misjudges is an idea.' : ''}${I.stance
           ? ' Draft picks come in for teams that are rebuilding (their playoff odds), and from contenders when you are.' : ''}
         Ideas the other side is likelier to take (a hole of theirs filled, the best player theirs) come first.</p>`;
-    if (!I.list.length) return `<section class="card pad tideas">${head}<p class="empty-note">No fair trade in this league makes your starting lineup stronger right now.</p></section>`;
+    // The partners whose rosters fit yours: thin where you're deep (what you can spare them), deep where you're thin (what you want).
+    const partnersBlock = (I.partners || []).length ? `<div class="tpartners"><h4>Partners who fit</h4><ul>${I.partners.slice(0, 4).map(x => `<li><b>${esc(x.name)}</b>: ${[
+        x.need.length ? `thin at ${x.need.join(' and ')}, where you're deep` : '', x.spare.length ? `deep at ${x.spare.join(' and ')}, where you're thin` : ''
+      ].filter(Boolean).join('; ')}</li>`).join('')}</ul></div>` : '';
+    if (!I.list.length) return `<section class="card pad tideas">${head}${partnersBlock}<p class="empty-note">No fair trade in this league ${I.points ? 'adds points to your starting lineup' : 'makes your starting lineup stronger'} right now.</p></section>`;
     const names = list => list.map(p => `${esc(p.name)}${disp.num(p) ? ` <small>${disp.num(p)}</small>` : ''}`).join(' + ');
     const change = n => `<span class="${n > 0 ? 'good' : n < 0 ? 'amber' : ''}">${(n > 0 ? '+' : n < 0 ? '−' : '') + thousands(Math.abs(n))}</span>`;
     const pts = n => `<span class="${n > 0 ? 'good' : n < 0 ? 'amber' : ''}">${n ? signed(n) : '±0'}</span>`;
-    return `<section class="card pad tideas">${head}<ol class="idea-list">${I.list.map((x, i) => `<li class="idea">
+    const weekly = n => (I.weeks ? ` (${signed(Math.round(n / I.weeks * 10) / 10)} a week)` : '');
+    return `<section class="card pad tideas">${head}${partnersBlock}<ol class="idea-list">${I.list.map((x, i) => `<li class="idea">
         <div class="idea-t"><b>With ${esc(x.partner.name)}</b><span>You give ${names(x.give)} · you get ${names(x.get)}</span>
-          <small>Your starters ${change(x.myGain)} · theirs ${change(x.theirGain)}${I.points ? ` · rest of season ${pts(x.myPts)} pts for you, ${pts(x.theirPts)} for them` : ''}${
+          <small>${I.points ? `Your lineup ${pts(x.myPts)} pts rest of season${weekly(x.myPts)}, theirs ${pts(x.theirPts)} · value: your starters ${change(x.myGain)}, theirs ${change(x.theirGain)}`
+            : `Your starters ${change(x.myGain)} · theirs ${change(x.theirGain)}`}${
             I.edge && disp.fc ? ` · ${I.edgeSource === 'season' ? 'season rankings edge' : 'usage edge'} ${change(x.edge)}` : ''}</small>${(x.why || []).length ? `<small class="iwhy">${x.why.map(esc).join(' · ')}</small>` : ''}</div>
         <button type="button" class="btn small ghost" data-idea="${i}">Open</button></li>`).join('')}</ol></section>`;
   }

@@ -489,6 +489,11 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .vr-np.deep { border-color: var(--ok); }
 .vr-np.deep em { background: var(--ok); color: var(--bg); }
 .vr-nn { color: var(--faint); flex-basis: 100%; }
+/* Trade ideas: the partners whose rosters fit yours, above the ideas. */
+.tpartners { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.tpartners h4 { margin: 0 0 6px; font-size: .82rem; }
+.tpartners ul { margin: 0; padding-left: 18px; font-size: .84rem; color: var(--muted); }
+.tpartners li { margin: 2px 0; }
 .season-legend .sdot { margin-right: 4px; }
 
 .banner { border-radius: 12px; padding: 10px 14px; font-size: .88rem; border: 1px solid transparent; }
