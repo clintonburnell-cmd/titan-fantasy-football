@@ -491,15 +491,18 @@
      reasons: +1 when the trade fills a position they're thin at, +1 when they get the single
      most valuable player in it, +1 when a rebuilder gets picks or a contender gets a player for
      picks, -1 when they'd give two starters for one. It tilts the order by 15% a point. */
+  var LINEUP_BIG = 1.0, LINEUP_VALUE = 20;
   function tradeIdeas(me, others, opts) {
     var value = opts.value, slots = opts.slots || [], waiver = opts.waiver || 0, max = opts.max || 6, top = opts.top || 12;
     var edge = typeof opts.edge === 'function' ? opts.edge : null, points = typeof opts.points === 'function' ? opts.points : null;
     var thin = opts.thin || {}, deep = opts.deep || {}, stance = opts.stance || {}, myStance = stance[String(me.id)] || 'mid';
     // The lineup goal (opts.goal 'lineup', with points): the point of a trade is a starting lineup that scores more,
-    // so an idea must raise the rest-of-season points of the best lineup, may cost a little value (a two-for-one that
-    // consolidates depth into a starter is the classic contender's trade; the market's verdict still keeps it fair),
-    // and ideas rank by the points gained. Without it, by value gained (the older behaviour).
-    var lineup = opts.goal === 'lineup' && !!points;
+    // so an idea must raise the rest-of-season points of the best lineup. It still has to gain value by your own
+    // numbers (the market's price plus your season rankings' or the usage's edge, trueGain), except a consolidation
+    // that adds LINEUP_BIG points a week or more, which may cost a little value (the market's verdict keeps it fair).
+    // Ideas rank by both: the points gained a week plus the value gained as a share of your lineup's (LINEUP_VALUE
+    // points a week per whole share: a 5% gain in value counts like a point a week). Without the goal, by value alone.
+    var lineup = opts.goal === 'lineup' && !!points, weeks = Math.max(1, Number(opts.weeks) || 16);
     var pool = function (team, withPicks) {
       var list = (team.roster || []).concat(withPicks ? team.picks || [] : []);
       return list.filter(function (p) { return (p.pos !== 'PICK' || withPicks) && value(p) > 0; })
@@ -538,13 +541,13 @@
           var R = tradeVerdict(items(give), items(get), waiver);
           if (!R.fair) return;
           var after = without(me.roster, give).concat(get), gain = strength(after) - myBase, trueGain = mine(after) - myTrue;
-          if (!lineup && trueGain <= 0) return;
           var theirAfter = without(o.roster, get).concat(give), myPts = 0, theirPts = 0;
           if (byPoints) {
             myPts = round2(byPoints(after) - myPtsBase);
             if (lineup ? myPts <= 0 : myPts < 0) return;
             theirPts = round2(byPoints(theirAfter) - theirPtsBase);
           }
+          if (trueGain <= 0 && !(lineup && myPts / weeks >= LINEUP_BIG)) return;
           var why = [], accept = 0;
           var fills = give.filter(function (p) { return holes.indexOf(p.pos) >= 0; }).map(function (p) { return p.pos; });
           if (fills.length) { accept++; why.push('fills their hole at ' + fills.filter(function (p, i) { return fills.indexOf(p) === i; }).join(' and ')); }
@@ -564,8 +567,11 @@
     });
     // Trades that leave both lineups stronger come first: the other side is likelier to say yes. With the lineup
     // goal, "stronger" is points and the order is the points you gain (a fair price is the constraint, not the prize).
-    var score = lineup ? function (x) { return (x.myPts + 0.25 * Math.max(0, Math.min(x.theirPts, x.myPts))) * (1 + 0.15 * x.accept); }
-      : function (x) { return (x.trueGain + 0.5 * Math.min(x.theirGain, x.trueGain)) * (1 + 0.15 * x.accept); };
+    var score = lineup ? function (x) {
+        var ppw = x.myPts / weeks + 0.25 * Math.max(0, Math.min(x.theirPts, x.myPts)) / weeks;
+        var value = myTrue ? (x.trueGain + 0.5 * Math.min(x.theirGain, x.trueGain)) / myTrue : 0;
+        return (ppw + LINEUP_VALUE * value) * (1 + 0.15 * x.accept);
+      } : function (x) { return (x.trueGain + 0.5 * Math.min(x.theirGain, x.trueGain)) * (1 + 0.15 * x.accept); };
     var helps = lineup ? function (x) { return x.theirPts >= 0; } : function (x) { return x.theirGain >= 0; };
     ideas.sort(function (a, b) { return helps(b) - helps(a) || score(b) - score(a); });
     var perTeam = {}, wanted = {}, out = [];

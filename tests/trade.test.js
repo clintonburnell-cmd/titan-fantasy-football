@@ -237,6 +237,8 @@ section('the lineup goal: trades that add points to the starting lineup, and the
     + byLineup.map(x => ids(x.give) + ' for ' + ids(x.get) + ' ' + x.myPts + ' ' + x.why.join(';')).join(', '));
   const noPts = SCC.tradeIdeas(me4, [p4], Object.assign({goal: 'lineup'}, o4, {points: p => (p.id === 'wo' ? 90 : P4[p.id] || 0)}));
   check(noPts.length === 0, 'an idea that adds no points to the lineup is no idea under the lineup goal, whatever the values say');
+  check(SCC.tradeIdeas(me4, [p4], Object.assign({goal: 'lineup', weeks: 100}, o4)).length === 0,
+    'a lineup gain under a point a week doesn\'t buy a loss of value: the swap must gain by your own numbers too');
   // Partners who fit: from positionStrength's grades. Team T is thin at RB where I'm deep, and deep at WR where I'm thin; team U matches me.
   const PS = {positions: ['QB', 'RB', 'WR'], teams: [
     {id: 'me', byPos: {QB: {z: 0, grade: 'mid'}, RB: {z: 1.2, grade: 'deep'}, WR: {z: -1.0, grade: 'thin'}}},

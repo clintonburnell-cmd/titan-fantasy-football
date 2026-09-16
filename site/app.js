@@ -4431,10 +4431,10 @@
     const byName = {};
     Tm.list.forEach(t => { byName[String(t.id)] = t.name; });
     const partners = PS ? SCC.tradePartners(me.id, PS).map(x => Object.assign({name: byName[x.id] || 'A team'}, x)) : [];
+    const weeks = Math.max(1, LAST_REG_WEEK - (S.snap.week || 1) + 1);
     S.trade.ideas[d.cfg.id] = {list: SCC.tradeIdeas(me, Tm.list.filter(t => !t.mine), {value, slots: d.cfg.lineup, waiver: V.waiver, max: 8,
-      edge: edge || undefined, points: points || undefined, thin, deep, stance, goal: points ? 'lineup' : undefined}), edge: !!edge,
-      edgeSource: edge ? edge.source : '', points: !!points, stance: Object.keys(stance).length > 0, partners,
-      weeks: Math.max(1, LAST_REG_WEEK - (S.snap.week || 1) + 1)};
+      edge: edge || undefined, points: points || undefined, thin, deep, stance, goal: points ? 'lineup' : undefined, weeks}), edge: !!edge,
+      edgeSource: edge ? edge.source : '', points: !!points, stance: Object.keys(stance).length > 0, partners, weeks};
     render();
   }
 
@@ -4449,7 +4449,7 @@
         <button type="button" class="btn small ghost" data-action="trade-ideas-clear">Clear</button>
         <button type="button" class="btn small ghost" data-action="trade-find">Look again</button></div></div>
       <p class="fine">${I.points
-          ? 'The goal is a starting lineup that scores more: fair trades (FantasyCalc\'s values within 5%) of one or two pieces each way that add the most rest-of-season points to your best lineup, and to theirs where possible. A two-for-one that turns your depth into a starter counts even when it gives up a little value.'
+          ? 'The goal is a starting lineup that scores more: fair trades (FantasyCalc\'s values within 5%) of one or two pieces each way that add rest-of-season points to your best lineup and gain value by your own numbers, ranked by both (a 5% gain in value counts like a point a week). A two-for-one that turns your depth into a starter and adds a point a week or more counts even when it gives up a little value.'
           : 'Fair trades (FantasyCalc\'s values within 5%) of one or two pieces each way that make your starting lineup stronger by value, and theirs too where possible.'}${I.edgeSource === 'season'
           ? ' Your season rankings count on your side, so a swap of equally priced players you rank differently from the market is an idea.'
           : I.edge ? ' Your Value report\'s usage edge counts on your side, so a swap of equally priced players the market misjudges is an idea.' : ''}${I.stance

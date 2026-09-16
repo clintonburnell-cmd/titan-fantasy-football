@@ -367,8 +367,10 @@ One note per screen or feature.
   (`lineupPoints` with values, not one week's projections), at most two per partner. Since v1.53.0 the app
   asks for the lineup goal (`goal: 'lineup'`, with rest-of-season `points`; the owner: "the goal is to
   find the most optimal starting lineup... make playoffs and win"): an idea must add rest-of-season points
-  to your best lineup, may cost a little value (a two-for-one that turns depth into a starter; the market's
-  verdict still keeps it fair), ranks by the points gained, and gets a +1 to `accept` ("comes from their
+  to your best lineup and still gain value by your own numbers (`trueGain`), except a consolidation that
+  adds `LINEUP_BIG` (1) point a week or more, which may cost a little value (the market's verdict keeps it
+  fair); ideas rank by points a week plus `LINEUP_VALUE` (20) × the value gain as a share of the lineup's value
+  (v1.54.2; v1.53.0 ranked by points alone and the owner said the ideas "got worse"), and get a +1 to `accept` ("comes from their
   depth at WR") when everything you get is at a position the partner is deep at (`deep`, from
   `positionStrength` like `thin`). `SCC.tradePartners(meId, PS)` (pure, tested) lists the partners whose
   rosters fit yours (thin where you're deep, deep where you're thin, `PARTNER_GAP` 0.6 z apart) and the
