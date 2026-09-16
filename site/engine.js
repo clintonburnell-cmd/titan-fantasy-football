@@ -227,6 +227,76 @@
     return {dynasty: cfg.kind === 'Dynasty', qbs: qbs, teams: teams, ppr: p >= 0.75 ? 1 : p >= 0.25 ? 0.5 : 0};
   }
 
+  /* ------------------------------------------------------- season rankings */
+
+  /* The kinds of league a person's season rankings are kept for: redraft or dynasty (keeper leagues count as
+     redraft, as FantasyCalc prices them), one QB or two (superflex and true 2QB value players almost alike),
+     each with an optional TE Premium list for leagues that pay tight ends extra per catch. */
+  var SEASON_FORMATS = [
+    {base: 'redraft-1qb', label: '1QB Redraft'},
+    {base: 'redraft-sf', label: 'Superflex Redraft'},
+    {base: 'dynasty-1qb', label: '1QB Dynasty'},
+    {base: 'dynasty-sf', label: 'Superflex Dynasty'}
+  ];
+  /* Which season list a league uses: {base, tep, key}. TE Premium is any extra points per tight end catch
+     (Sleeper's bonus_rec_te, ESPN's reception override for tight ends: both reach cfg.scoring). */
+  function seasonFormat(cfg) {
+    var f = tradeFormat(cfg || {}), sc = (cfg && cfg.scoring) || {};
+    var base = (f.dynasty ? 'dynasty' : 'redraft') + '-' + (f.qbs === 2 ? 'sf' : '1qb'), tep = Number(sc.bonus_rec_te) > 0;
+    return {base: base, tep: tep, key: base + (tep ? '-tep' : '')};
+  }
+
+  /* A person's season rankings as values in the market's own scale: their order, the market's spacing. rows: the
+     parsed list ({name, pos, rank}); pool: the players the market values ([{id, name, pos, v}]). The Nth player in
+     the person's order takes the market's Nth-highest value, so a player they rank above the market is worth more to
+     them and one they rank below is worth less, in numbers a trade can weigh. A list ranked within each position
+     (its ranks repeat across positions), or opts.byPosition, maps within each position instead. Players the list
+     doesn't name keep their market value. Draft picks aren't ranked.
+     {byId: {id: value}, order: {id: place in the person's list, 1 best}, matched, listed, byPosition}. */
+  function seasonValues(rows, pool, opts) {
+    opts = opts || {};
+    rows = (rows || []).filter(function (r) { return r && r.name && r.pos !== 'PICK'; });
+    pool = (pool || []).filter(function (p) { return p && p.id && p.pos !== 'PICK'; });
+    var byKey = {}, byName = {};
+    pool.forEach(function (p) {
+      var n = norm(p.name);
+      byKey[n + '|' + p.pos] = p;
+      (byName[n] = byName[n] || []).push(p);
+    });
+    var ranks = rows.map(function (r) { return Number(r.rank); }).filter(function (x) { return isFinite(x); });
+    var distinct = {};
+    ranks.forEach(function (x) { distinct[x] = 1; });
+    var byPosition = !!opts.byPosition || (ranks.length > 1 && Object.keys(distinct).length < ranks.length * 0.9);
+    var sorted = rows.slice().sort(function (a, b) {
+      var x = Number(a.rank), y = Number(b.rank);
+      return (isFinite(x) ? x : 1e9) - (isFinite(y) ? y : 1e9);
+    });
+    var seen = {}, list = [];
+    sorted.forEach(function (r) {
+      var n = norm(r.name), p = byKey[n + '|' + r.pos] || (byName[n] && byName[n].length === 1 ? byName[n][0] : null);
+      if (!p || seen[p.id]) return;
+      seen[p.id] = 1;
+      list.push(p);
+    });
+    var desc = function (ps) { return ps.map(function (p) { return Math.max(0, Number(p.v) || 0); }).sort(function (a, b) { return b - a; }); };
+    var byId = {}, order = {};
+    pool.forEach(function (p) { byId[p.id] = Math.max(0, Number(p.v) || 0); });
+    list.forEach(function (p, i) { order[p.id] = i + 1; });
+    if (byPosition) {
+      var curves = {}, at = {};
+      pool.forEach(function (p) { (curves[p.pos] = curves[p.pos] || []).push(p); });
+      Object.keys(curves).forEach(function (pos) { curves[pos] = desc(curves[pos]); });
+      list.forEach(function (p) {
+        var c = curves[p.pos] || [], i = at[p.pos] = (at[p.pos] || 0) + 1;
+        byId[p.id] = c[i - 1] !== undefined ? c[i - 1] : 0;
+      });
+    } else {
+      var curve = desc(pool);
+      list.forEach(function (p, i) { byId[p.id] = curve[i] !== undefined ? curve[i] : 0; });
+    }
+    return {byId: byId, order: order, matched: list.length, listed: rows.length, byPosition: byPosition};
+  }
+
   // FantasyCalc's values (as Titan's server trims them: s Sleeper id, e ESPN id, v value) by id.
   function valueIndex(list) {
     var bySleeper = {}, byEspn = {};
@@ -2819,6 +2889,7 @@
     norm: norm, teamAbbr: teamAbbr, byeOf: byeOf, byesFromSchedule: byesFromSchedule, setByes: setByes,
     fullName: fullName, trimPlayers: trimPlayers, playerInfo: playerInfo,
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel, scoringDeltas: scoringDeltas, scoringNotes: scoringNotes,
+    SEASON_FORMATS: SEASON_FORMATS, seasonFormat: seasonFormat, seasonValues: seasonValues,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues, positionStrength: positionStrength,
     lineupPoints: lineupPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, impliedValue: impliedValue, spanPoints: spanPoints,
     flexShares: flexShares, ageFactor: ageFactor,

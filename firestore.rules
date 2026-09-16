@@ -17,6 +17,10 @@ service cloud.firestore {
     match /users/{uid}/ranks/{week} {
       allow read, write: if own(uid) && week.matches('^[0-9]{1,2}$');
     }
+    // Season rankings, one per kind of league: redraft or dynasty, 1QB or superflex, optionally TE Premium.
+    match /users/{uid}/seasonRanks/{format} {
+      allow read, write: if own(uid) && format.matches('^(redraft|dynasty)-(1qb|sf)(-tep)?$');
+    }
     // Each week's frozen record of Titan's calls: the server job writes it, the app only reads it.
     match /users/{uid}/history/{week} {
       allow read: if own(uid);

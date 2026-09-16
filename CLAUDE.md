@@ -302,6 +302,21 @@ One note per screen or feature.
   the earlier weeks one at a time (`loadSeason`, through `scoreFor`) and keeps each finished week on
   the device (`KEY.season`, tied to the leagues and that week's rankings). Its chart's columns use
   `--chart-bar`, checked with the dataviz palette checks in both themes; a table sits behind it.
+- Season rankings (`screenSeason`, tab `season`, `/app/season`, under Rankings after Import; v1.48.0, the owner's ask): a
+  person's own rest-of-season or dynasty list for each kind of league (`SCC.SEASON_FORMATS`: 1QB or superflex, redraft or
+  dynasty, each with a TE Premium list; `SCC.seasonFormat(cfg)` picks a league's `key` from `tradeFormat` and
+  `cfg.scoring.bonus_rec_te`). A league uses its TE Premium list when it pays tight ends extra and one is saved, else its
+  format's Standard list (`seasonListFor`). `SCC.seasonValues` (pure, tested) turns the list into values on a market's
+  scale: the person's Nth player takes the market's Nth-highest value (a list ranked within each position maps within the
+  position), and unlisted players keep their market value. **The market still decides what's fair** (the owner's call):
+  `tradeVerdict` is unchanged, and the season list only feeds the edge (`edgeFor`, source 'season', ahead of the owner's
+  Value report). `seasonIn(cfg, scale)` memoizes by list and market: 'fc' (FantasyCalc's, the trade math for everyone
+  and what the owner sees), 'tv' (Titan's own, what everyone else sees), 'tvpos' (Titan's within each position, Position
+  strength). Never show a non-owner a number from the 'fc' scale: the edge line gives them a percent. Also used by the
+  waiver plan's drops (`planValue`: a listed player beats any unlisted one, `seasonRankOf`), draft grades and
+  `strengthOf` (so `leagueAdvice`, trade fit and trade ideas follow it too). Stored as `KEY.seasonRanks` and synced to
+  `users/{uid}/seasonRanks/{format}` (rules, index exemption on `rows`, `Plan.ranksPlan` newer-wins, `pushSeason`).
+  The owner's sample (a Late-Round rest-of-season export) is paid: never commit one; tests build their lists from the stubbed values.
 - Import multiple sources (`screenMulti`): `SCC.combineRanks` (pure, tested) combines each position on
   its own (a source missing a player counts him one below its last there, weights 1x to 3x) and fits RB,
   WR and TE onto one FLEX list from the sources that have an overall list (`opts.curve`, Titan's default

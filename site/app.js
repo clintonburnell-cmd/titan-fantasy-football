@@ -16,17 +16,17 @@
   // the demo can't overwrite someone's leagues or rankings.
   const DEMO = new URLSearchParams(location.search).has('demo');
   const KEY = DEMO
-    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1'}
-    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1'};
+    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1', seasonRanks: 'titan.demo.seasonranks.v1'}
+    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1', seasonRanks: 'titan.seasonranks.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'score', 'news', 'trade', 'moves', 'ranks', 'multi', 'lab', 'value', 'dump', 'settings'];
+  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'score', 'news', 'trade', 'moves', 'ranks', 'season', 'multi', 'lab', 'value', 'dump', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
-    sos: 'Schedule strength', score: 'Results', news: 'News', ranks: 'Rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump',
+    sos: 'Schedule strength', score: 'Results', news: 'News', ranks: 'Rankings', season: 'Season rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump',
     trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
   const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes', sos: 'schedule',
-    score: 'results', news: 'news', ranks: 'rankings', multi: 'multiple', lab: 'compare', value: 'value', dump: 'data-dump', trade: 'trade', moves: 'transactions',
+    score: 'results', news: 'news', ranks: 'rankings', season: 'season', multi: 'multiple', lab: 'compare', value: 'value', dump: 'data-dump', trade: 'trade', moves: 'transactions',
     settings: 'settings'};
   const tabFromPath = () => {
     const m = location.pathname.match(/^\/app\/([a-z-]+)\/?$/);
@@ -42,10 +42,10 @@
     {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
     {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes', 'sos']},
     // Compare (lab), Value and Data dump are Titan's owner's only: they show only on the owner's account.
-    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'multi', 'lab', 'value', 'dump']},
+    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'season', 'multi', 'lab', 'value', 'dump']},
     {id: 'results', name: 'Results', tabs: ['score']}
   ];
-  const SUB_NAMES = {ranks: 'Import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', score: 'Results', sos: 'Schedule'};
+  const SUB_NAMES = {ranks: 'Import', season: 'Season', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', score: 'Results', sos: 'Schedule'};
   const OWNER_TABS = ['lab', 'value', 'dump']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else)
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
@@ -108,6 +108,11 @@
   const S = {
     account: store.get(KEY.account),
     ranks: store.get(KEY.ranks) || {weeks: {}},
+    // Season rankings, one list per kind of league (SCC.SEASON_FORMATS, each with a TE Premium list): the Season screen.
+    seasonRanks: Object.assign({formats: {}}, store.get(KEY.seasonRanks) || {}),
+    sdraft: {base: '', tep: false, text: '', file: '', parsed: null}, // the Season screen's unsaved import
+    sview: '', // the season list open for viewing
+    seasonMemo: {}, // season values already worked out (seasonIn), by list and market
     snap: store.get(KEY.snap),
     ui: Object.assign({tab: 'lineups', filter: 'all', league: 'all'}, store.get(KEY.ui) || {}),
     busy: false,
@@ -1978,6 +1983,115 @@
       </section>`;
   }
 
+  /* The Season screen (Rankings → Season): four kinds of league, each with a TE Premium list, the leagues each list serves,
+     what's saved, and an import like the weekly one. A file needs each player's position; an overall rank or a rank within
+     each position both work (SCC.seasonValues tells them apart). */
+  function parseSeason(text) {
+    if (!String(text || '').trim()) return null;
+    const P = SCC.parseRanks(text, {});
+    if (P.needsPosition) return Object.assign({}, P, {rows: [], error: 'This file has no position column. Season rankings need each player\'s position, so export the overall list, or add a Pos column.'});
+    return P;
+  }
+  function seasonDraftPreview() {
+    const D = S.sdraft, key = D.base + (D.tep ? '-tep' : ''), P = D.parsed, saved = seasonEntry(key);
+    const label = `Save as your ${seasonLabel(key)} rankings${saved ? ' (replaces saved)' : ''}`;
+    const save = `<button class="btn" data-action="season-save" ${P && P.rows && P.rows.length ? '' : 'disabled'}>${esc(label)}</button>`;
+    if (!P) return save;
+    if (P.error) return `<div class="banner stop">${esc(P.error)}</div>${save}`;
+    const ranks = P.rows.map(r => Number(r.rank)).filter(x => isFinite(x)), distinct = new Set(ranks).size;
+    const how = distinct < ranks.length * 0.9 ? 'ranked within each position' : 'ranked overall';
+    return `<div class="banner ok"><b>${P.rows.length} players read</b> · ${esc(countsText(P.rows))} · ${how}</div>${save}`;
+  }
+  function paintSeasonDraft() {
+    const el = $('sdraft-preview');
+    if (el) el.innerHTML = seasonDraftPreview();
+  }
+  function saveSeason() {
+    const D = S.sdraft, P = D.parsed, key = D.base + (D.tep ? '-tep' : '');
+    if (!P || !P.rows || !P.rows.length) return;
+    S.seasonRanks.formats[key] = {rows: P.rows.map(r => ({name: r.name, pos: r.pos, team: r.team || '', rank: r.rank, tier: has(r.tier) ? r.tier : ''})),
+      savedAt: Date.now(), source: D.file || 'paste'};
+    if (!store.set(KEY.seasonRanks, S.seasonRanks)) { delete S.seasonRanks.formats[key]; toast('Could not save. Browser storage is full or blocked.'); return; }
+    pushSeason(key);
+    S.seasonMemo = {};
+    S.trade.ideas = {}; // found with the old values
+    Object.assign(S.sdraft, {text: '', file: '', parsed: null});
+    const users = seasonUsers(key);
+    render();
+    toast(`Your ${seasonLabel(key)} rankings are saved (${plural(P.rows.length, 'player')}).${users.length ? ` ${plural(users.length, 'league')} use${users.length === 1 ? 's' : ''} them.` : ''}`);
+  }
+  function deleteSeason(key) {
+    if (!seasonEntry(key) || !confirm(`Delete your ${seasonLabel(key)} season rankings?`)) return;
+    delete S.seasonRanks.formats[key];
+    store.set(KEY.seasonRanks, S.seasonRanks);
+    pushSeason(key);
+    S.seasonMemo = {};
+    S.trade.ideas = {};
+    if (S.sview === key) S.sview = '';
+    render();
+  }
+  function screenSeason() {
+    const leagues = (S.snap && S.snap.leagues) || [];
+    const D = S.sdraft;
+    // Opens on the kind of league most of the person's leagues are.
+    if (!D.base) {
+      const n = {};
+      leagues.forEach(d => { const f = SCC.seasonFormat(d.cfg); n[f.base] = (n[f.base] || 0) + 1; });
+      D.base = Object.keys(n).sort((a, b) => n[b] - n[a])[0] || 'redraft-1qb';
+    }
+    const key = D.base + (D.tep ? '-tep' : ''), E = seasonEntry(key), users = seasonUsers(key);
+    const inBase = base => leagues.filter(d => SCC.seasonFormat(d.cfg).base === base).length;
+    const tepLeagues = leagues.filter(d => { const f = SCC.seasonFormat(d.cfg); return f.base === D.base && f.tep; });
+    let h = `<p class="lede">Season rankings set your own trade values. Save a list for each kind of league you play, and every league uses the one
+        that matches it: one QB or superflex, redraft or dynasty, and TE Premium when it pays tight ends extra per catch. Your rankings decide who's worth
+        more to you; the market still decides what's a fair offer, so trade ideas look for players you rank above their price.</p>
+      <p class="fine">They're used for trades (your values beside players, the edge on each trade, Find trades), the waiver plan's drops, draft grades and
+        Position strength. ${S.sync.user ? 'They sync to your devices through your Google sign-in, and only you can see them.'
+          : 'They\'re kept on this device. Sign in on Settings to sync them to your other devices.'}</p>
+      <div class="chips" role="group" aria-label="Kind of league">${SCC.SEASON_FORMATS.map(f => {
+        const have = seasonEntry(f.base) || seasonEntry(f.base + '-tep'), n = inBase(f.base);
+        return `<button type="button" class="chip" data-sfmt="${f.base}" aria-pressed="${f.base === D.base}">${esc(f.label)}${n ? ` · ${n}` : ''}${have ? ' ✓' : ''}</button>`;
+      }).join('')}</div>
+      <div class="chips" role="group" aria-label="TE Premium"><button type="button" class="chip" data-step="0" aria-pressed="${!D.tep}">Standard${
+        seasonEntry(D.base) ? ' ✓' : ''}</button><button type="button" class="chip" data-step="1" aria-pressed="${D.tep}">TE Premium${seasonEntry(D.base + '-tep') ? ' ✓' : ''}</button></div>`;
+    const names = list => andList(list.map(c => esc(c.key)));
+    let used;
+    if (D.tep) {
+      used = !tepLeagues.length ? 'None of your leagues of this kind pays a TE premium, so a list here waits until one does.'
+        : E ? `Used by ${names(tepLeagues.map(d => d.cfg))}.`
+        : `Your TE-premium ${esc(seasonLabel(D.base))} ${tepLeagues.length === 1 ? 'league' : 'leagues'} (${names(tepLeagues.map(d => d.cfg))}) use${
+          tepLeagues.length === 1 ? 's' : ''} the Standard list until you save one here.`;
+    } else {
+      used = users.length ? `Used by ${names(users)}.` : 'None of your leagues is this kind yet, so a list here waits until one is.';
+    }
+    h += `<section class="card pad season-slot"><h3>${esc(seasonLabel(key))}</h3><p class="fine">${used}</p>`;
+    if (E) {
+      h += `<div class="saved-row"><span><b>${plural(E.rows.length, 'player')}</b><small>${esc(countsText(E.rows))} · saved ${esc(when(E.savedAt))}${
+        E.source ? ' from ' + esc(E.source) : ''}</small></span><span class="saved-btns"><button class="btn ghost small" data-action="season-view" data-key="${key}">${
+        S.sview === key ? 'Hide' : 'View'}</button><button class="btn ghost small" data-action="season-del" data-key="${key}">Delete</button></span></div>`;
+      if (S.sview === key) {
+        const top = E.rows.slice().sort((a, b) => (Number(a.rank) || 1e9) - (Number(b.rank) || 1e9));
+        h += `<ol class="roster season-list">${top.map(r => `<li class="row"><span class="slot">${esc(r.rank)}</span>${pos(r.pos)}<span class="who"><b>${esc(r.name)}</b><small>${
+          esc([r.team, has(r.tier) && 'tier ' + r.tier].filter(Boolean).join(' · '))}</small></span></li>`).join('')}</ol>`;
+      }
+    }
+    h += `<div class="bar"><label class="btn ghost file">Choose CSV file<input type="file" accept=".csv,.tsv,.txt,text/csv" data-sdraft="file" hidden></label></div>
+      <label class="field block"><span>…or paste them as CSV, or copied straight out of a spreadsheet</span>
+        <textarea data-sdraft="text" rows="6" spellcheck="false" placeholder="Overall,Player,Position,Team&#10;1,Jahmyr Gibbs,RB,DET">${esc(D.text)}</textarea></label>
+      <div id="sdraft-preview" class="draft">${seasonDraftPreview()}</div></section>
+      <details class="card pad help"><summary>How it works</summary>
+        <p>Any rankings list with each player's position works: a rest-of-season list for redraft, a dynasty list for dynasty. An overall rank
+          (like an Overall column) or a rank within each position both read.</p>
+        <p>Titan turns your ranks into values on the market's own scale: your 1st player takes the market's highest value, your 2nd the next, and so
+          on. A player you rank above the market is worth more to you than his price, one you rank below is worth less, and a trade's edge is the
+          difference. Players your list leaves out keep their market value, so they add no edge either way. What's a fair offer still comes from the
+          market, so the trades Titan suggests are ones the other manager can accept.</p>
+        <p>Each league uses the list for its kind: one QB or superflex (superflex and true 2QB value players almost alike), redraft or dynasty (keeper
+          leagues count as redraft), and its TE Premium list when it pays tight ends extra per catch, else the Standard list of its kind.</p>
+      </details>`;
+    return h;
+  }
+
   // One saved week's rankings, a position at a time.
   function ranksViewer() {
     const w = S.view.week, e = S.ranks.weeks[w];
@@ -3009,6 +3123,9 @@
     if (S.sync.api && S.sync.user && S.account) S.sync.api.pushAccount(S.account);
   }
 
+  function pushSeason(key) {
+    if (S.sync.api && S.sync.user && S.sync.api.pushSeason) S.sync.api.pushSeason(key, S.seasonRanks.formats[key] || null);
+  }
   function pushWeek(w) {
     if (S.sync.api && S.sync.user) S.sync.api.pushWeek(w, S.ranks.weeks[w] || null);
   }
@@ -3202,7 +3319,7 @@
 
   // The bridge sync.js talks to. The app never depends on it being there.
   window.TitanApp = {
-    local: () => ({account: S.account, ranks: S.ranks}),
+    local: () => ({account: S.account, ranks: S.ranks, seasonRanks: S.seasonRanks}),
     setOwner(is) {
       if (S.owner.is === !!is) return;
       S.owner = {is: !!is, busy: false, data: null, error: ''};
@@ -3226,6 +3343,17 @@
       if (newUser) { S.snap = null; S.A = null; store.del(KEY.snap); }
       render();
       if (newUser || newPrefs) refresh();
+    },
+    applySeasonRanks(changes) {
+      Object.keys(changes).forEach(k => {
+        if (changes[k]) S.seasonRanks.formats[k] = changes[k];
+        else delete S.seasonRanks.formats[k];
+      });
+      store.set(KEY.seasonRanks, S.seasonRanks);
+      S.seasonMemo = {};
+      S.trade.ideas = {};
+      render();
+      toast('Season rankings updated from your account.');
     },
     applyRanks(changes) {
       Object.keys(changes).forEach(w => {
@@ -3450,6 +3578,9 @@
 
   // A season-long value for the plan's drops (SCC.waiverPlan): Titan's value (points above a replacement starter), then season projected points.
   function planValue(cfg, p) {
+    // On the person's season list for this kind of league: kept over anyone who isn't, and the better his rank the longer.
+    const at = seasonRankOf(cfg, p);
+    if (at !== null) return 1e9 - at;
     const sp = S.trade.season && S.trade.season.map;
     if (!sp || !Object.keys(sp).length) return 0;
     const id = p.id || idByName(playerList(), p.name);
@@ -3491,7 +3622,7 @@
           ? `<option value=""${picked === '' ? ' selected' : ''}>Nobody (you have an open spot)</option>` : ''}${opts.map(p =>
           `<option value="${esc(p.id)}"${p.id === picked ? ' selected' : ''}>${esc(p.name)} (${esc(rl(p) || p.pos)})${p === c.drop ? ', Titan\'s pick' : ''}</option>`).join('')}</select>`;
         const notes = [c.thin && `${c.drop.name} is your only backup ${c.drop.pos}, but so is everyone else you could spare.`,
-          c.keep && `Titan values ${c.drop.name} more over the season than ${c.add.name}. Worth a second look.`].filter(Boolean);
+          c.keep && `${seasonListFor(cfg) ? 'Your season rankings value' : 'Titan values'} ${c.drop.name} more over the season than ${c.add.name}. Worth a second look.`].filter(Boolean);
         const alts = c.alts.length ? ` · or ${c.alts.map(a => `${esc(a.name)} <small>${esc(rl(a))}</small>`).join(', ')}` : '';
         return `<li class="wclaim${done ? ' done' : ''}">${headshot(add, true)}<div class="wc-main">
           <div class="wc-add"><b${pcAttr(add)}>${esc(c.add.name)}</b> <small>${esc([c.add.pos, c.add.team, rl(c.add)].filter(Boolean).join(' · '))}</small>${bid(x.league, c.add.name, add, c.over)}</div>
@@ -3505,7 +3636,7 @@
         whenRun ? `<span class="wmeta">· ${esc(whenRun)}</span>` : ''}<span class="wlg-open">${openSite(cfg)}</span></div><ol class="wclaims">${rows}</ol></li>`;
     });
     return `<section class="card pad wsec wplan"><div class="wplan-h"><h3>Your waiver plan</h3><span class="wmeta">${ticked} of ${plural(total, 'claim')} done</span></div>
-      <p class="fine">Each claim is a free agent your rankings rate above one of your starters. The drop is the bench player Titan values least over the
+      <p class="fine">Each claim is a free agent your rankings rate above one of your starters. The drop is the bench player valued least (by your season rankings where you've saved them, else Titan's values) over the
         season that you can spare: never someone on IR, and never your only backup at a position you start. Change it if you like, and tick Done once
         the claim is in. Tap a name for his stats.</p><ul class="wlist">${cards.join('')}</ul></section>`;
   }
@@ -3888,18 +4019,84 @@
     S.trade.tv = {};
     if (['trade', 'standings', 'waivers', 'lineups', 'rosters'].includes(S.ui.tab)) render();
   }
-  function titanValueFor(cfg) {
+  // Titan's own values for a league ({k, m: {playerId: value}}), or null until this season's projections are in.
+  function titanValueMap(cfg) {
     const sp = S.trade.season && S.trade.season.map;
-    if (!sp || !Object.keys(sp).length) return () => null;
+    if (!sp || !Object.keys(sp).length) return null;
     S.trade.tv = S.trade.tv || {};
     // The rest of this season (byes out), the flex spots shared out the way this league's teams fill them once they're in.
-    const teams = (S.trade.teams[cfg.id] || {}).list, week = S.snap.week, k = `${cfg.id}|${week}|${teams ? 'league' : ''}`;
+    const teams = (S.trade.teams[cfg.id] || {}).list, week = S.snap.week, k = `${cfg.id}|${week}|${teams ? 'league' : ''}|${Object.keys(sp).length}`;
     if (!S.trade.tv[k]) {
       S.trade.tv[k] = SCC.titanValues(sp, playerList(), cfg, {from: week, to: Math.max(LAST_REG_WEEK, week), dynasty: cfg.kind === 'Dynasty',
         shares: teams ? SCC.flexShares(teams, cfg.lineup, p => SCC.projFor(sp, p.id, cfg) || 0) : undefined});
     }
-    const m = S.trade.tv[k];
-    return p => (p && p.pos !== 'PICK' && m[p.id] !== undefined ? m[p.id] : null);
+    return {k, m: S.trade.tv[k]};
+  }
+  function titanValueFor(cfg) {
+    const T = titanValueMap(cfg);
+    if (!T) return () => null;
+    return p => (p && p.pos !== 'PICK' && T.m[p.id] !== undefined ? T.m[p.id] : null);
+  }
+
+  /* ---- Season rankings (Rankings → Season): a person's own rest-of-season or dynasty rankings, one list for each kind
+     of league (SCC.SEASON_FORMATS: 1QB or superflex, redraft or dynasty, each with a TE Premium list), turned into their
+     own values on the market's scale (SCC.seasonValues: their order, the market's spacing). The market still decides
+     what's fair; their values decide what they gain, so trade ideas look for players they rank above the price. The
+     values also pick the waiver plan's drops, grade drafts and rank Position strength. Saved on the device and synced
+     (users/{uid}/seasonRanks/{format}). */
+  const seasonEntry = key => (S.seasonRanks.formats || {})[key] || null;
+  const seasonLabel = key => ((SCC.SEASON_FORMATS.find(f => f.base === key.replace(/-tep$/, '')) || {}).label || key) + (/-tep$/.test(key) ? ' TE Premium' : '');
+  // The list a league uses: its TE Premium list when it pays tight ends extra and one is saved, else its format's plain list.
+  function seasonListFor(cfg) {
+    if (!cfg) return null;
+    const f = SCC.seasonFormat(cfg);
+    if (f.tep && seasonEntry(f.key)) return {key: f.key, entry: seasonEntry(f.key)};
+    return seasonEntry(f.base) ? {key: f.base, entry: seasonEntry(f.base)} : null;
+  }
+  // The leagues a slot's list serves (a TE Premium slot: the league's TE-premium leagues of that format).
+  function seasonUsers(slot) {
+    const tep = /-tep$/.test(slot), base = slot.replace(/-tep$/, '');
+    return ((S.snap && S.snap.leagues) || []).map(d => d.cfg).filter(cfg => {
+      const f = SCC.seasonFormat(cfg);
+      return f.base === base && (tep ? f.tep : !f.tep || !seasonEntry(f.key));
+    });
+  }
+  /* A league's season values in a market's scale, kept until the list or the market changes: 'fc' FantasyCalc's (the
+     trade math for everyone, and what the owner sees), 'tv' Titan's own (what everyone else sees), 'tvpos' Titan's own
+     ranked within each position (Position strength). {byId, order, ...} (SCC.seasonValues) or null. */
+  function seasonIn(cfg, scale) {
+    const L = seasonListFor(cfg);
+    if (!L) return null;
+    let pool, sig;
+    if (scale === 'fc') {
+      const tk = tradeKey(SCC.tradeFormat(cfg)), V = S.trade.values[tk];
+      if (!V || !V.idx) return null;
+      V.pool = V.pool || Object.values(V.idx.bySleeper).filter(x => x.p !== 'PICK' && x.s).map(x => ({id: x.s, name: x.n, pos: x.p, v: x.v}));
+      pool = V.pool;
+      sig = `fc|${tk}|${V.at || 0}`;
+    } else {
+      const T = titanValueMap(cfg);
+      if (!T) return null;
+      sig = `${scale}|${T.k}`;
+      const players = playerList();
+      pool = Object.keys(T.m).map(id => { const i = SCC.playerInfo(players, id); return {id, name: i.name, pos: i.pos, v: T.m[id]}; });
+    }
+    const key = `${L.key}|${L.entry.savedAt}|${sig}`;
+    if (!S.seasonMemo[key]) S.seasonMemo[key] = SCC.seasonValues(L.entry.rows, pool, {byPosition: scale === 'tvpos'});
+    return S.seasonMemo[key];
+  }
+  // Where a player sits on the league's season list (his rank there, lower is better), by name and position; null if he isn't on it.
+  function seasonRankOf(cfg, p) {
+    const L = seasonListFor(cfg);
+    if (!L || !p || !p.name) return null;
+    const key = `rank|${L.key}|${L.entry.savedAt}`;
+    if (!S.seasonMemo[key]) {
+      const m = {};
+      L.entry.rows.forEach(r => { const k = SCC.norm(r.name) + '|' + r.pos; if (m[k] === undefined && isFinite(Number(r.rank))) m[k] = Number(r.rank); });
+      S.seasonMemo[key] = m;
+    }
+    const at = S.seasonMemo[key][SCC.norm(p.name) + '|' + p.pos];
+    return at === undefined ? null : at;
   }
   /* Where the teams in a league are deep or thin (SCC.positionStrength), by this season's
      projections (Sleeper's, never FantasyCalc's): the Standings table and the Trade tab's
@@ -3907,6 +4104,12 @@
   function strengthOf(cfg, teams) {
     const sp = S.trade.season && S.trade.season.map;
     if (!sp || !Object.keys(sp).length || !teams || !teams.length) return null;
+    // With season rankings for this kind of league, each player counts at his value by them (Titan's scale, within his position).
+    const mine = seasonIn(cfg, 'tvpos');
+    if (mine) {
+      const tv = titanValueFor(cfg);
+      return SCC.positionStrength(teams, cfg.lineup, p => (mine.byId[p.id] !== undefined ? mine.byId[p.id] : tv(p) || 0));
+    }
     return SCC.positionStrength(teams, cfg.lineup, p => SCC.projFor(sp, p.id, cfg) || 0);
   }
 
@@ -3923,7 +4126,7 @@
           const c = (byId[t.id] || {})[p] || {};
           return c.rank ? `<td class="ps g-${c.grade}">${nth(c.rank)}</td>` : '<td class="ps">–</td>';
         }).join('')}</tr>`).join('')}</tbody></table>
-      <p class="fine">Each team's best lineup this season by Sleeper's projections, position by position, counting its best bench player a little.
+      <p class="fine">Each team's best lineup this season by ${seasonListFor(cfg) ? 'your season rankings (Rankings, Season)' : 'Sleeper\'s projections'}, position by position, counting its best bench player a little.
         Green is well above the league's average at that position (deep), red well below (thin).${cfg.kind === 'Dynasty' ? ' This season only: it doesn\'t weigh age.' : ''}</p></section>`;
   }
 
@@ -3976,12 +4179,22 @@
   /* The usage edge on a player's market value: what the market would pay if it agreed with the Value report's usage
      numbers (SCC.impliedValue) minus what it pays. The owner's only (FantasyCalc's scale); null until both are in. */
   function edgeFor(cfg, V) {
+    if (!V || !V.idx) return null;
+    // Season rankings (anyone with a list for this kind of league): a player's value by them against his price.
+    const mine = seasonIn(cfg, 'fc');
+    if (mine) {
+      const f = p => (mine.order[p.id] ? mine.byId[p.id] - ((SCC.playerValue(V.idx, p) || {}).v || 0) : 0);
+      f.source = 'season';
+      return f;
+    }
     const rows = valueRowsFor(cfg);
-    if (!rows || !V || !V.idx || !fcShown()) return null;
-    return p => {
+    if (!rows || !fcShown()) return null;
+    const f = p => {
       const r = rows[p.id], v = (SCC.playerValue(V.idx, p) || {}).v || 0;
       return r && v && r.vgap !== null && r.vgap !== undefined ? SCC.impliedValue(v, r.vgap) - v : 0;
     };
+    f.source = 'value';
+    return f;
   }
 
   /* The Value report's call on a trade row (owner): buy, keep or sell, and a momentum note pairing FantasyCalc's
@@ -4020,7 +4233,10 @@
   function tradeDisplay(cfg, V) {
     const fc = fcShown(), tv = titanValueFor(cfg);
     const fcv = p => (V && V.idx ? (SCC.playerValue(V.idx, p) || {}).v : 0) || 0;
-    return {fc, tv, num: p => { const n = fc ? fcv(p) : tv(p); return n === null || (fc && !n) ? '' : thousands(n); }};
+    // The person's own value (their season rankings) in the scale they see: FantasyCalc's for the owner, Titan's for everyone else.
+    const mine = seasonIn(cfg, fc ? 'fc' : 'tv');
+    const yours = p => (mine && p && p.pos !== 'PICK' && mine.order[p.id] ? mine.byId[p.id] : null);
+    return {fc, tv, yours, season: !!mine, num: p => { const n = fc ? fcv(p) : tv(p); return n === null || (fc && !n) ? '' : thousands(n); }};
   }
 
   async function loadTradeValues(f) {
@@ -4080,6 +4296,8 @@
         <label class="field"><span>Trade partner</span><select data-ui="tradePartner"${teams.length ? '' : ' disabled'}>${partnerOptions}</select></label>
         <button type="button" class="btn ghost small treset" data-action="trade-reset"${canReset ? '' : ' disabled'}>Clear all</button>
       </div>
+      ${seasonListFor(d.cfg) ? `<p class="fine tseason">Your ${esc(seasonLabel(seasonListFor(d.cfg).key))} season rankings set your own values here: "yours" beside a
+        player you rank well apart from the market, and the edge on each trade. <button class="link" data-go="season">Season rankings</button></p>` : ''}
       <p class="fine">${fcShown() ? `Values for ${esc(formatName(f))}: what players like these go for in real trades.`
         : `Weighed for ${esc(formatName(f))}. The number beside each player is Titan's own value: his projected points for the rest of this season
           (byes out) above a replacement starter at his position, in this league's scoring, the flex spots shared out the way this league's teams
@@ -4127,7 +4345,8 @@
     if (PS) PS.teams.forEach(t => { thin[t.id] = PS.positions.filter(p => (t.byPos[p] || {}).grade === 'thin'); });
     const edge = edgeFor(d.cfg, V), points = spanFor(d.cfg, S.snap.week, LAST_REG_WEEK), stance = (stanceOf(d) || {}).map || {};
     S.trade.ideas[d.cfg.id] = {list: SCC.tradeIdeas(me, Tm.list.filter(t => !t.mine), {value, slots: d.cfg.lineup, waiver: V.waiver, max: 6,
-      edge: edge || undefined, points: points || undefined, thin, stance}), edge: !!edge, points: !!points, stance: Object.keys(stance).length > 0};
+      edge: edge || undefined, points: points || undefined, thin, stance}), edge: !!edge, edgeSource: edge ? edge.source : '', points: !!points,
+      stance: Object.keys(stance).length > 0};
     render();
   }
 
@@ -4142,8 +4361,9 @@
         <button type="button" class="btn small ghost" data-action="trade-ideas-clear">Clear</button>
         <button type="button" class="btn small ghost" data-action="trade-find">Look again</button></div></div>
       <p class="fine">Fair trades (FantasyCalc's values within 5%) of one or two pieces each way that make your starting lineup
-        stronger by value${I.points ? ' without lowering its rest-of-season points' : ''}, and theirs too where possible.${I.edge
-          ? ' Your Value report\'s usage edge counts on your side, so a swap of equally priced players the market misjudges is an idea.' : ''}${I.stance
+        stronger by value${I.points ? ' without lowering its rest-of-season points' : ''}, and theirs too where possible.${I.edgeSource === 'season'
+          ? ' Your season rankings count on your side, so a swap of equally priced players you rank differently from the market is an idea.'
+          : I.edge ? ' Your Value report\'s usage edge counts on your side, so a swap of equally priced players the market misjudges is an idea.' : ''}${I.stance
           ? ' Draft picks come in for teams that are rebuilding (their playoff odds), and from contenders when you are.' : ''}
         Ideas the other side is likelier to take (a hole of theirs filled, the best player theirs) come first.</p>`;
     if (!I.list.length) return `<section class="card pad tideas">${head}<p class="empty-note">No fair trade in this league makes your starting lineup stronger right now.</p></section>`;
@@ -4153,7 +4373,7 @@
     return `<section class="card pad tideas">${head}<ol class="idea-list">${I.list.map((x, i) => `<li class="idea">
         <div class="idea-t"><b>With ${esc(x.partner.name)}</b><span>You give ${names(x.give)} · you get ${names(x.get)}</span>
           <small>Your starters ${change(x.myGain)} · theirs ${change(x.theirGain)}${I.points ? ` · rest of season ${pts(x.myPts)} pts for you, ${pts(x.theirPts)} for them` : ''}${
-            I.edge && disp.fc ? ` · usage edge ${change(x.edge)}` : ''}</small>${(x.why || []).length ? `<small class="iwhy">${x.why.map(esc).join(' · ')}</small>` : ''}</div>
+            I.edge && disp.fc ? ` · ${I.edgeSource === 'season' ? 'season rankings edge' : 'usage edge'} ${change(x.edge)}` : ''}</small>${(x.why || []).length ? `<small class="iwhy">${x.why.map(esc).join(' · ')}</small>` : ''}</div>
         <button type="button" class="btn small ghost" data-idea="${i}">Open</button></li>`).join('')}</ol></section>`;
   }
 
@@ -4217,11 +4437,19 @@
     }).join('');
   }
 
+  // A player's own value by the person's season rankings, beside the market's, when the two are at least a tenth apart.
+  function yoursTag(disp, p, market) {
+    const y = disp.yours(p);
+    if (y === null || Math.abs(y - market) < 0.1 * Math.max(y, market, 1)) return '';
+    return `<small class="tyours ${y > market ? 'good' : 'amber'}" title="Your value, by your season rankings">yours ${thousands(y)}</small>`;
+  }
+
   // One team's players, most valuable first, then its draft picks. Tapping one puts it in the trade, or takes it out.
   function tradeRoster(cfg, team, which, val, disp, partnerSel) {
     const picked = S.trade.pick[which], picks = tradePicks(cfg, team, which, val, picked, disp);
     // Value is whichever shows: FantasyCalc's for the owner, Titan's for everyone else.
-    const order = r => disp.fc ? (r.x || {}).v || 0 : r.t || 0;
+    // Sorted by the person's own value where their season rankings give one.
+    const order = r => { const y = disp.yours(r.p); return y !== null ? y : disp.fc ? (r.x || {}).v || 0 : r.t || 0; };
     const sort = TRADE_SORTS.some(x => x[0] === S.ui.tradeSort) ? S.ui.tradeSort : 'value';
     const byValue = (a, b) => order(b) - order(a), byName = (a, b) => a.p.name.localeCompare(b.p.name);
     const byPos = (a, b) => posOrder(a.p.pos) - posOrder(b.p.pos);
@@ -4240,7 +4468,7 @@
       <div class="trows">${rows.map((r, i) => { const {p, x} = r; return `${head(r, i)}<button type="button" class="trow" data-trade="${which}" data-pid="${esc(p.id)}" aria-pressed="${picked.includes(p.id)}">
         ${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.team || '')}${
           disp.fc && x && x.pr ? ' · ' + esc(p.pos + x.pr) : ''}</small>${disp.fc ? valueTag(vrows[p.id], x) : ''}</span>
-        <span class="tval">${disp.num(p) || '–'}${disp.fc && x && x.tr ? `<small class="${x.tr > 0 ? 'good' : 'amber'}" title="Change over the last 30 days">${
+        <span class="tval">${disp.num(p) || '–'}${yoursTag(disp, p, disp.fc ? (x || {}).v || 0 : r.t || 0)}${disp.fc && x && x.tr ? `<small class="${x.tr > 0 ? 'good' : 'amber'}" title="Change over the last 30 days">${
           x.tr > 0 ? '▲' : '▼'} ${thousands(Math.abs(x.tr))}</small>` : ''}</span></button>`; }).join('')}${picks}</div></section>`;
   }
 
@@ -4290,7 +4518,19 @@
      (projected points above a replacement starter), which never show FantasyCalc's numbers. */
   function edgeLine(cfg, give, get, R, disp) {
     if (!give.length || !get.length) return '';
-    const E = edgeFor(cfg, S.trade.values[tradeKey(SCC.tradeFormat(cfg))]);
+    const V = S.trade.values[tradeKey(SCC.tradeFormat(cfg))], E = edgeFor(cfg, V);
+    if (E && E.source === 'season') {
+      // By the person's season rankings. The owner sees it in FantasyCalc's numbers; everyone else as a share of the trade, never those numbers.
+      const e = Math.round(get.reduce((s, p) => s + E(p), 0) - give.reduce((s, p) => s + E(p), 0));
+      const price = list => list.reduce((s, p) => s + ((SCC.playerValue(V.idx, p) || {}).v || 0), 0);
+      const share = Math.round(Math.abs(e) / Math.max(price(give), price(get), 1) * 100);
+      const size = disp.fc ? thousands(Math.abs(e)) : share + '%';
+      return `<p class="tedge">${e > 0 && (disp.fc || share >= 1) ? `<b class="good">Season rankings edge +${size}.</b> By your season rankings you get more than you give${
+          R.fair ? ': the market calls it fair, your rankings favor you.' : '.'}`
+        : e < 0 && (disp.fc || share >= 1) ? `<b class="amber">Season rankings edge −${size}.</b> By your season rankings you give more than you get${
+          R.fair ? ': the market calls it fair, your rankings favor them.' : '.'}`
+        : 'Your season rankings see this trade about the way the market does.'}</p>`;
+    }
     if (E) {
       const e = Math.round(get.reduce((s, p) => s + E(p), 0) - give.reduce((s, p) => s + E(p), 0));
       return `<p class="tedge">${e > 0 ? `<b class="good">Usage edge +${thousands(e)}.</b> By your Value report the players you get are worth more than their price, and the ones you give less: the market is paying you.`
@@ -4477,7 +4717,8 @@
     if (fc ? !V.idx : !Object.keys(sp.map || {}).length) {
       return body(`<div class="banner stop">Titan couldn't load ${fc ? 'the trade values' : 'this season\'s projections'}, so it can't grade the draft right now. ${retry}</div>`);
     }
-    const G = SCC.draftGrades(D, fc ? p => (SCC.playerValue(V.idx, p) || {}).v || 0 : titanValueFor(d.cfg));
+    const base = fc ? p => (SCC.playerValue(V.idx, p) || {}).v || 0 : titanValueFor(d.cfg), mineD = seasonIn(d.cfg, fc ? 'fc' : 'tv');
+    const G = SCC.draftGrades(D, mineD ? p => (mineD.order[p.id] ? mineD.byId[p.id] : base(p)) : base);
     const T = S.trade.teams[d.cfg.id], names = {};
     let mine = '';
     ((T && T.list) || []).forEach(t => { names[t.id] = t.name; if (t.mine) mine = t.id; });
@@ -4498,7 +4739,9 @@
     h += view === 'board' ? draftBoard(G, D, f) : draftTeams(G, f);
     if (!plain) {
       h += `<p class="fine">Each pick is weighed against its spot: what that pick would get if this draft were held again today, with every player going
-        in order of value${D.type === 'auction' ? ' (in an auction, the spots follow price)' : ''}. ${fc
+        in order of value${D.type === 'auction' ? ' (in an auction, the spots follow price)' : ''}. ${mineD
+          ? 'Values follow your season rankings (Rankings, Season), on the market\'s scale; players your list leaves out keep ' + (fc ? 'FantasyCalc\'s' : 'Titan\'s') + ' values. '
+          : ''}${fc
           ? 'Values are FantasyCalc\'s trade values for this league\'s format.'
           : 'Values are Titan\'s own: a player\'s projected points this season above a replacement starter at his position, in this league\'s scoring.'}
         Grades compare each team with the rest of the league. Keepers aren't graded.</p>`;
@@ -4554,7 +4797,7 @@
 
   const SCREENS = {
     lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
-    sos: screenSos, score: screenScore, ranks: screenRanks, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`,
+    sos: screenSos, score: screenScore, ranks: screenRanks, season: screenSeason, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`,
     dump: () => `<div class="vr-page">${screenDump()}</div>`, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
 
@@ -4663,6 +4906,16 @@
     const done = ok => toast(ok ? 'Copied. Paste it wherever you set your lineup.' : 'Titan couldn\'t copy on this device.');
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(b.dataset.copy).then(() => done(true), () => done(false));
     else done(false);
+  });
+  // The Season screen's format and TE Premium chips.
+  view.addEventListener('click', e => {
+    const c = e.target.closest('[data-sfmt],[data-step]');
+    if (!c) return;
+    if (c.dataset.sfmt) S.sdraft.base = c.dataset.sfmt;
+    if (c.dataset.step) S.sdraft.tep = c.dataset.step === '1';
+    Object.assign(S.sdraft, {text: '', file: '', parsed: null});
+    S.sview = '';
+    render();
   });
   view.addEventListener('click', e => {
     const c = e.target.closest('[data-sos-pos]');
@@ -4783,6 +5036,9 @@
     else if (a === 'yahoo-link') yahooSignIn();
     else if (a === 'yahoo-unlink') yahooForget();
     else if (a === 'yahoo-refresh') { Object.assign(S.yahoo, {data: null, error: '', note: ''}); render(); }
+    else if (a === 'season-save') saveSeason();
+    else if (a === 'season-del') deleteSeason(t.dataset.key);
+    else if (a === 'season-view') { S.sview = S.sview === t.dataset.key ? '' : t.dataset.key; render(); }
     else if (a === 'ranks-save') saveRanks();
     else if (a === 'ranks-del') deleteRanks(Number(t.dataset.week));
     else if (a === 'lab-run') { S.labAt = 0; loadLab(); render(); }
@@ -4891,6 +5147,15 @@
         render();
       });
     }
+    else if (t.dataset.sdraft === 'file' && t.files && t.files[0]) {
+      const f = t.files[0];
+      f.text().then(txt => {
+        Object.assign(S.sdraft, {text: txt, file: f.name, parsed: parseSeason(txt)});
+        const ta = view.querySelector('textarea[data-sdraft="text"]');
+        if (ta) ta.value = txt;
+        paintSeasonDraft();
+      });
+    }
     else if (t.dataset.draft === 'file' && t.files && t.files[0]) {
       const f = t.files[0];
       f.text().then(txt => {
@@ -4940,6 +5205,9 @@
     } else if ('rosterSearch' in t.dataset) {
       S.rosterQuery = t.value;
       applyRosterSearch();
+    } else if (t.dataset.sdraft === 'text') {
+      Object.assign(S.sdraft, {text: t.value, file: '', parsed: parseSeason(t.value)});
+      paintSeasonDraft();
     } else if (t.dataset.draft === 'text') {
       S.draft.text = t.value;
       S.draft.file = '';

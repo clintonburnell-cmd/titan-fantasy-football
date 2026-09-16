@@ -37,6 +37,35 @@ section('Titan\'s own value (the Trade tab for everyone but Titan\'s owner)');
     'the player list keeps each player\'s age');
 }
 
+section('season rankings');
+{
+  const std = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF'];
+  // A 12-team PPR redraft league, and one like Studs and Duds: dynasty, superflex, +0.75 a tight end catch.
+  const redraft = SCC.seasonFormat({lineup: std, teams: 12, ppr: 1, kind: 'Redraft', scoring: {}});
+  const studs = SCC.seasonFormat({lineup: std.concat('SUPER_FLEX'), teams: 10, ppr: 1, kind: 'Dynasty', scoring: {bonus_rec_te: 0.75}});
+  check(redraft.key === 'redraft-1qb' && !redraft.tep && studs.key === 'dynasty-sf-tep' && studs.base === 'dynasty-sf' && studs.tep,
+    `each league finds its list: ${redraft.key}, and a dynasty superflex TE-premium league ${studs.key}`);
+  check(SCC.seasonFormat({lineup: ['QB', 'QB', 'RB'], kind: 'Keeper'}).key === 'redraft-sf' && SCC.seasonFormat({lineup: std, kind: 'Dynasty', scoring: {bonus_rec_te: 0}}).key === 'dynasty-1qb' &&
+    SCC.SEASON_FORMATS.map(f => f.base).join() === 'redraft-1qb,redraft-sf,dynasty-1qb,dynasty-sf',
+    'two QB spots count as superflex, keeper leagues as redraft, and no tight end bonus means no TE Premium; four formats');
+
+  // The market: five players worth 1000 down to 200. The person ranks the market's 4th-best player first.
+  const pool = [{id: 'a', name: 'Alpha Back', pos: 'RB', v: 1000}, {id: 'b', name: 'Bravo Wide', pos: 'WR', v: 800}, {id: 'c', name: 'James Cook III', pos: 'RB', v: 600},
+    {id: 'd', name: 'Delta End', pos: 'TE', v: 400}, {id: 'e', name: 'Echo Arm', pos: 'QB', v: 200}, {id: 'pk', name: '2027 1st', pos: 'PICK', v: 900}];
+  const mine = [{name: 'Delta End', pos: 'TE', rank: 1}, {name: 'Alpha Back', pos: 'RB', rank: 2}, {name: 'James Cook', pos: 'RB', rank: 3}, {name: 'Nobody Here', pos: 'WR', rank: 4}];
+  const S1 = SCC.seasonValues(mine, pool);
+  check(S1.byId.d === 1000 && S1.byId.a === 800 && S1.byId.c === 600 && !S1.byPosition,
+    'an overall list: the person\'s 1st takes the market\'s highest value, their 2nd the next (their order, the market\'s spacing)');
+  check(S1.byId.b === 800 && S1.byId.e === 200 && S1.byId.pk === undefined && S1.matched === 3 && S1.listed === 4 && S1.order.d === 1 && S1.order.c === 3,
+    'players the list doesn\'t name keep their market value, draft picks aren\'t ranked, "James Cook" finds James Cook III, a stranger matches nobody');
+  // Ranked within each position (every position starts at 1): the person's RB1 takes the market's best RB value.
+  const byPos = [{name: 'James Cook', pos: 'RB', rank: 1}, {name: 'Alpha Back', pos: 'RB', rank: 2}, {name: 'Bravo Wide', pos: 'WR', rank: 1}, {name: 'Delta End', pos: 'TE', rank: 1}];
+  const S2 = SCC.seasonValues(byPos, pool);
+  check(S2.byPosition && S2.byId.c === 1000 && S2.byId.a === 600 && S2.byId.b === 800 && S2.byId.d === 400,
+    'a list ranked within each position maps within the position: their RB1 takes the best RB value, their RB2 the next');
+  check(SCC.seasonValues([], pool).matched === 0 && SCC.seasonValues(null, null).matched === 0, 'no list, or nothing to match, changes nothing');
+}
+
 section('league format');
 const std = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF'];
 const f = SCC.tradeFormat({lineup: std, teams: 12, ppr: 1, kind: 'Redraft'});

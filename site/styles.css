@@ -1100,6 +1100,11 @@ body.app-page :is(.stand .tnum, .stand .st-odds b) { font-variant-numeric: tabul
 .tl-t tbody th { font-weight: 600; color: var(--muted); }
 .tedge, .tbye, .tstance { font-size: .9rem; }
 .st-div { color: var(--accent-2); font-size: .8em; }
+/* Season rankings: a player's own value beside the market's on the Trade tab, and the Season screen's saved list. */
+.tval .tyours { display: block; font-size: .7rem; font-weight: 700; }
+.season-slot .saved-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--line); }
+.season-slot .saved-row small { display: block; color: var(--muted); }
+.season-list { max-height: 26rem; overflow: auto; border-top: 1px solid var(--line); }
 /* The advice at the top of a league's card on Lineups and Rosters (leagueAdvice): inside the card's own 14px gutter. */
 .lg-advice { margin: 0 14px 10px; padding: 8px 10px; border-radius: 10px; background: var(--chip); font-size: .86rem; line-height: 1.45; }
 .lg-advice .lg-move { color: var(--accent-2); font-weight: 600; }

@@ -65,7 +65,7 @@ website (such as alerts) to pass review.
 ## Screens
 
 Titan's screens sit in six sections: Lineups, Matchup, League (Standings, Rosters, Trade,
-Transactions), Players (Waivers, News, Exposure, Byes), Rankings (Import, Import multiple, and for Titan's owner
+Transactions), Players (Waivers, News, Exposure, Byes), Rankings (Import, Season, Import multiple, and for Titan's owner
 Compare and Value report) and Results,
 with Settings behind the gear. On phones they're a bar along the bottom; on computers, a menu whose sections drop
 down their screens. Each section opens on the screen you used there last, badges show lineup changes
@@ -384,6 +384,7 @@ No build step and no dependencies. It runs on any static host.
 | `v1.19.1` | The Players dot works like a notification: it marks waiver pickups you haven't seen on Waivers yet, clears once you open Waivers, and comes back only for a new pickup (remembered on each device) |
 | `v1.19.2` | Trade tab: both rosters sort by value, by position, or by position then value (with position headers when grouped, remembered), and every player shows Titan's colored position tag on the rosters, in the trade and in Who has him? |
 | `v1.19.3` | Position strength: every team's rank at each position by its best lineup this season (Sleeper's projections, a little credit for bench depth), shown on Standings with the top third green and the bottom third red, and on the Trade tab as "Where you both stand" for you and your partner, with the good fits called out; the Trade tab also gets Clear all and a partner picker on the partner's roster card |
+| `v1.48.0` | Season rankings (Rankings, Season): save your own rest-of-season or dynasty rankings for each kind of league (1QB or superflex, redraft or dynasty, each with a TE Premium list), and each league uses the one that matches it. Your rankings set your own player values on the market's scale while the market still decides what's fair, so trade ideas hunt for players you rank above their price; they also pick the waiver plan's drops, grade drafts and rank Position strength |
 | `v1.47.2` | Open in Sleeper on Android phones opens the league on sleeper.com instead of an app link: Sleeper's app won't take league links, so the old app link sent phones to the Play Store even with Sleeper installed |
 | `v1.47.1` | The owner's briefing says in the logs why it sent nothing, so a quiet trigger can be told apart from one that never ran (the first live briefings went out for week 2) |
 | `v1.47.0` | Every league card on Lineups and Rosters opens with where your roster is deep or thin, your playoff odds and seed, and what the two suggest: trade from your depth, fix a hole on waivers, patch it before the playoffs, or sell veterans when the odds are long |

@@ -44,6 +44,8 @@ provider.setCustomParameters({prompt: 'select_account'});
 
 const userDoc = uid => doc(db, 'users', uid);
 const weekDoc = (uid, w) => doc(db, 'users', uid, 'ranks', String(w));
+// Season rankings, one document per kind of league (redraft-1qb, dynasty-sf-tep, ...).
+const seasonDoc = (uid, key) => doc(db, 'users', uid, 'seasonRanks', key);
 // That a person saved an ESPN login (the SWID and when), for private ESPN leagues. The login itself
 // (espn_s2) is kept by Titan's server where no browser can read it (functions/index.js, espnCreds).
 const espnDoc = uid => doc(db, 'users', uid, 'private', 'espn');
@@ -109,7 +111,18 @@ async function reconcile(uid) {
   if (Object.keys(plan.pull).length) App.applyRanks(plan.pull);
   await Promise.all(plan.push.map(w => setDoc(weekDoc(uid, w), App.local().ranks.weeks[w])));
 
+  // Season rankings, the same way (an app from before season rankings has none to offer).
+  const localSeason = App.local().seasonRanks;
+  if (localSeason) {
+    const remoteSeason = {};
+    (await getDocs(collection(db, 'users', uid, 'seasonRanks'))).forEach(d => { remoteSeason[d.id] = d.data(); });
+    const sp = Plan.ranksPlan(localSeason.formats, remoteSeason);
+    if (Object.keys(sp.pull).length) App.applySeasonRanks(sp.pull);
+    await Promise.all(sp.push.map(k => setDoc(seasonDoc(uid, k), App.local().seasonRanks.formats[k])));
+  }
+
   listen(uid);
+  listenSeason(uid);
   App.setSync({state: 'on', at: Date.now()});
 }
 
@@ -133,6 +146,24 @@ function listen(uid) {
       }
     });
     if (Object.keys(changes).length) App.applyRanks(changes);
+    App.setSync({at: Date.now()});
+  }, pause));
+}
+
+function listenSeason(uid) {
+  if (!App.local().seasonRanks) return;
+  listeners.push(onSnapshot(collection(db, 'users', uid, 'seasonRanks'), s => {
+    if (s.metadata.hasPendingWrites) return;
+    const changes = {};
+    s.docChanges().forEach(c => {
+      const mine = App.local().seasonRanks.formats[c.doc.id];
+      if (c.type === 'removed') {
+        if (Plan.acceptRemoteDelete(mine, c.doc.data())) changes[c.doc.id] = null;
+      } else if (Plan.acceptRemoteWeek(mine, c.doc.data())) {
+        changes[c.doc.id] = c.doc.data();
+      }
+    });
+    if (Object.keys(changes).length) App.applySeasonRanks(changes);
     App.setSync({at: Date.now()});
   }, pause));
 }
@@ -206,6 +237,12 @@ const api = {
   pushAccount(account) {
     const u = auth.currentUser;
     if (u && account) return setDoc(userDoc(u.uid), {account}, {merge: true}).catch(saveFailed);
+  },
+
+  pushSeason(key, entry) {
+    const u = auth.currentUser;
+    if (!u) return;
+    return (entry ? setDoc(seasonDoc(u.uid, key), entry) : deleteDoc(seasonDoc(u.uid, key))).catch(saveFailed);
   },
 
   pushWeek(week, entry) {

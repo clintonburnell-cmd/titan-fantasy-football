@@ -5,6 +5,7 @@
     {"collectionGroup": "history", "fieldPath": "weeks", "indexes": []},
     {"collectionGroup": "ranks", "fieldPath": "rows", "indexes": []},
     {"collectionGroup": "ranks", "fieldPath": "multi", "indexes": []},
+    {"collectionGroup": "seasonRanks", "fieldPath": "rows", "indexes": []},
     {"collectionGroup": "tradeValues", "fieldPath": "values", "indexes": []},
     {"collectionGroup": "lab", "fieldPath": "formats", "indexes": []},
     {"collectionGroup": "lab", "fieldPath": "json", "indexes": []},

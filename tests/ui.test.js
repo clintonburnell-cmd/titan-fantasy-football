@@ -545,6 +545,35 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await ev(`/nflverse/.test(document.getElementById('view').textContent) && !!document.querySelector('a[href="https://github.com/nflverse"]')`),
     'ESPN, the National Weather Service and nflverse are credited');
 
+  T.section('season rankings');
+  await tab('season');
+  check(await waitFor(`location.pathname === '/app/season' && document.querySelectorAll('[data-sfmt]').length === 4 && document.querySelectorAll('[data-step]').length === 2 &&
+    document.querySelector('[data-sfmt="redraft-1qb"]').getAttribute('aria-pressed') === 'true' && /Used by Titan Test League/.test(document.querySelector('.season-slot').textContent)`, 5000),
+    'Season rankings sit under Rankings at /app/season: four kinds of league and a TE Premium choice, opening on your league\'s kind (1QB Redraft), which it names');
+  // A list the market would disagree with: every valued player in the league, least valuable first.
+  const seasonCsv = 'Overall,Player,Position,Team\n' + JSON.parse(VALUES).values.slice().reverse().map((v, i) => `${i + 1},"${v.n}",${v.p},${v.t}`).join('\n');
+  await ev(`(() => { const t = document.querySelector('textarea[data-sdraft="text"]'); t.value = ${JSON.stringify(seasonCsv)};
+    t.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
+  check(await waitFor(`/players read/.test(document.getElementById('sdraft-preview').textContent) && /ranked overall/.test(document.getElementById('sdraft-preview').textContent) &&
+    !document.querySelector('[data-action="season-save"]').disabled`, 3000), 'pasting a list previews it: how many players, and that it\'s ranked overall');
+  await ev(`document.querySelector('[data-action="season-save"]').click(); true`);
+  check(await waitFor(`/saved/.test(document.querySelector('.season-slot').textContent) && document.querySelector('[data-sfmt="redraft-1qb"]').textContent.includes('✓') &&
+    !!JSON.parse(localStorage.getItem('titan.seasonranks.v1') || '{}').formats['redraft-1qb']`, 3000), 'saving keeps the list on the device, and ticks its kind of league');
+  await tab('trade');
+  await ev(`(() => { const s = document.querySelector('[data-ui="tradePartner"]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
+  check(await waitFor(`document.querySelectorAll('.tteam').length === 2 && !!document.querySelector('.tseason') && document.querySelectorAll('.tteam .tyours').length > 0`, 20000),
+    'on the Trade tab your season rankings set your own values: a note says so, and "yours" shows beside players you rank apart from the market');
+  await ev(`document.querySelector('.tteam [data-trade="give"]').click(); true`);
+  await ev(`document.querySelector('.tteam [data-trade="get"]').click(); true`);
+  const seasonEdge = await ev(`(() => { const e = document.querySelector('.trade-sum .tedge'); return e ? e.textContent.replace(/\\s+/g, ' ').trim() : ''; })()`);
+  check(/season rankings/i.test(seasonEdge) && !/\d,\d{3}/.test(seasonEdge),
+    'the trade\'s edge reads by your season rankings, as a share and never in FantasyCalc\'s numbers (not the owner): ' + seasonEdge.slice(0, 120));
+  await ev(`document.querySelector('[data-action="trade-reset"]').click(); true`);
+  await tab('season');
+  await ev(`document.querySelector('[data-action="season-del"]').click(); true`);
+  check(await waitFor(`!document.querySelector('[data-action="season-del"]') && !JSON.parse(localStorage.getItem('titan.seasonranks.v1') || '{}').formats['redraft-1qb']`, 3000),
+    'Delete removes the list (after a confirmation)');
+
   T.section('the Transactions tab');
   await tab('moves');
   check(await waitFor(`document.querySelectorAll('[data-moves]').length === 4 && !document.querySelector('[data-ui="movesLeague"]') &&
@@ -635,7 +664,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'Import multiple sources opens under Rankings, at /app/multiple');
   check(await ev(`document.querySelector('#tabs [data-tab="lab"]').hidden && !document.querySelector('.subtabs [data-go="lab"]') &&
     document.querySelector('#tabs [data-tab="value"]').hidden && !document.querySelector('.subtabs [data-go="value"]') &&
-    document.querySelectorAll('.subtabs [data-go]').length === 2`), 'Compare rankings and the value report stay hidden from everyone but Titan\'s owner');
+    document.querySelectorAll('.subtabs [data-go]').length === 3`), 'Compare rankings and the value report stay hidden from everyone but Titan\'s owner (Import, Season and Import multiple show)');
   // Two sources: the sample rankings, and the same with its top three QBs reordered (A: q0 q1 q2, B: q1 q2 q0).
   const csvA = T.sampleRanks(), linesA = csvA.split(/\r?\n/);
   const qbLines = linesA.map((l, i) => [l.split(','), i]).filter(([c]) => c[1] === 'QB').slice(0, 3);
@@ -936,7 +965,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     , dumpReport: async () => ({json: ${JSON.stringify(JSON.stringify(DR))}})}); window.TitanApp.setOwner(true); true`);
   await tab('value');
   check(await waitFor(`location.pathname === '/app/value' && document.querySelectorAll('.vr-lg').length === 2 && document.querySelectorAll('.vr-moves li').length === 6 &&
-    document.querySelectorAll('.subtabs [data-go]').length === 5`, 5000), 'the owner sees it under Rankings, at /app/value: each league\'s sells, buys and claims');
+    document.querySelectorAll('.subtabs [data-go]').length === 6`, 5000), 'the owner sees it under Rankings, at /app/value: each league\'s sells, buys and claims');
   check(await ev(`document.querySelectorAll('[data-vfmt]').length === 2 && /Buy Guy/.test(${vsec(0)}) &&
     [...document.querySelectorAll('.vr-t th')].every(th => th.textContent !== 'Where')`), 'under All leagues, the lists are in the format most leagues play, with a chip for each format');
   check(await ev(`/Sell high or keep/.test(document.getElementById('view').textContent) && document.querySelectorAll('.vr-moves .pill.p-swap').length === 1 &&
@@ -1007,7 +1036,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const ddOrder = await ev(`[...document.querySelectorAll('.vr-lg h3')].map(h => [...h.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim()).join(' | ')`);
   check(ddOrder === 'Dump Test League | Another Dump League',
     'its leagues come in the same order as every other tab (the app\'s leagues first), not by name: ' + ddOrder);
-  check(await ev(`[...document.querySelectorAll('.subtabs [data-go]')].map(b => b.textContent).join('|') === 'Import|Import multiple|Compare|Value|Data dump'`),
+  check(await ev(`[...document.querySelectorAll('.subtabs [data-go]')].map(b => b.textContent).join('|') === 'Import|Season|Import multiple|Compare|Value|Data dump'`),
     'Data dump is its own screen under Rankings, right after Value');
   check(await ev(`(() => { const nav = document.querySelector('.subtabs'), n = nav.getBoundingClientRect(), b = nav.querySelector('[aria-current="page"]').getBoundingClientRect();
     return b.left >= n.left - 1 && b.right <= n.right + 1; })()`), 'on a phone the sub-tab row scrolls so Data dump shows in full');
@@ -1048,7 +1077,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // Screenshots of every screen at phone and computer widths (TITAN_SHOTS only), to compare a change to the whole app's look.
   if (process.env.TITAN_SHOTS) {
     T.section('a tour of every screen (screenshots only)');
-    const TOUR = ['lineups', 'matchup', 'standings', 'rosters', 'trade', 'moves', 'waivers', 'news', 'exposure', 'byes', 'sos', 'score', 'ranks', 'multi', 'settings'];
+    const TOUR = ['lineups', 'matchup', 'standings', 'rosters', 'trade', 'moves', 'waivers', 'news', 'exposure', 'byes', 'sos', 'score', 'ranks', 'season', 'multi', 'settings'];
     for (const [w, h, dpr, mobile] of [[390, 844, 2, true], [1280, 900, 1, false]]) {
       await send('Emulation.setDeviceMetricsOverride', {width: w, height: h, deviceScaleFactor: dpr, mobile});
       for (const t of TOUR) {
