@@ -11,3 +11,6 @@ tests/.cache/
 
 # The owner's private resume notes (status and to-dos); firebase.json keeps it off the website too
 RESUME.md
+
+# The Chrome extension's packages (its dist/ and engine.js copy are committed so the folder loads unpacked as is)
+extension/node_modules/

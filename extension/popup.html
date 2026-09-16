@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Titan for Sleeper</title>
+<style>
+  :root { color-scheme: light dark; --ink: #1c2330; --muted: #6b7280; --line: #e5e7eb; --brand: #1f6feb; --ok: #15803d; --bad: #b91c1c; --bg: #fff; --soft: #f3f4f6; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #e5e7eb; --muted: #9ca3af; --line: #374151; --bg: #111827; --soft: #1f2937; --ok: #4ade80; --bad: #f87171; } }
+  body { margin: 0; width: 320px; font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  header img { width: 28px; height: 28px; }
+  header b { font-size: 15px; }
+  main { padding: 12px 14px; display: grid; gap: 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { font: inherit; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  button:disabled { opacity: .6; cursor: default; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  label { display: flex; align-items: center; gap: 8px; }
+  footer { padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  footer a { color: var(--brand); }
+</style>
+</head>
+<body>
+<header><img src="icons/icon-48.png" alt=""><b>Titan for Sleeper</b></header>
+<main>
+  <div id="status" class="muted">Checking…</div>
+  <div class="row" id="actions"></div>
+  <div id="report" class="muted"></div>
+  <label><input type="checkbox" id="pills" checked> Tag player names on Sleeper's pages</label>
+  <label><input type="checkbox" id="panel" checked> Show the Titan panel on league pages</label>
+</main>
+<footer>Only you see your calls: the reports are read from your Titan account. <a href="https://titanfantasyfootball.com/app/" target="_blank" rel="noopener">Open Titan</a></footer>
+<script src="popup.js"></script>
+</body>
+</html>

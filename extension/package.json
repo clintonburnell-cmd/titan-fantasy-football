@@ -1,0 +1,13 @@
+{
+  "name": "titan-for-sleeper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Build tooling for the Titan for Sleeper Chrome extension: bundles the Firebase SDK into dist/ and copies Titan's engine.",
+  "scripts": {
+    "build": "esbuild src/firebase-ext.js --bundle --format=esm --minify --target=chrome120 --outfile=dist/firebase.js && node -e \"require('fs').copyFileSync('../site/engine.js', 'engine.js')\""
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "firebase": "^12.19.0"
+  }
+}

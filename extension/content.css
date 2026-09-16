@@ -1,0 +1,11 @@
+/* Titan for Sleeper: the pills next to player names and the league panel (the panel's own styles live in its shadow root). */
+.titan-pill {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+  font: 600 11px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: .01em; vertical-align: middle;
+  background: #eaf2ff; color: #1f4fb8; border: 1px solid #c7d9ff; cursor: help; white-space: nowrap; text-transform: none;
+}
+.titan-pill.t-buy { background: #e6f6ec; color: #15803d; border-color: #b7e4c7; }
+.titan-pill.t-sell { background: #fdecec; color: #b91c1c; border-color: #f5c2c2; }
+.titan-pill.t-keep { background: #fff4e0; color: #b45309; border-color: #fcd9a0; }
+.titan-pill .t-edge { font-weight: 700; }
+.titan-pill .t-tag { opacity: .85; }

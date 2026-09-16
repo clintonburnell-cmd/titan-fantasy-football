@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Connect Titan to the extension</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/site.css">
+<style>
+  main.connect { max-width: 34rem; margin: 3rem auto; padding: 0 1rem; }
+  .connect .card { border: 1px solid var(--line, #e5e7eb); border-radius: 12px; padding: 1.25rem; }
+  .connect .status { margin-top: 1rem; }
+  .connect .ok { color: #15803d; } .connect .bad { color: #b91c1c; }
+</style>
+</head>
+<body>
+<main class="connect">
+  <div class="card">
+    <h1>Connect Titan to the Sleeper extension</h1>
+    <p>Sign in with the Google account you use for Titan. This page hands the extension a sign-in of its own; your
+      password never leaves Google, and Titan never sees it.</p>
+    <p><button id="go" class="btn primary" type="button">Sign in with Google</button></p>
+    <p id="status" class="status"></p>
+    <p class="fine">Nothing to connect? This page only works when it's opened from the Titan for Sleeper extension's popup.</p>
+  </div>
+</main>
+<script type="module" src="/ext/connect.js"></script>
+</body>
+</html>

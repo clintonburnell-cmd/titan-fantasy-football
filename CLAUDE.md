@@ -40,6 +40,7 @@ and `tests/` are never published. The paths below are inside `site/`; URLs are u
 | `sync.js` | Google sign-in, Firestore sync, the saved ESPN login, the private-ESPN transport, the Yahoo link (ES module) |
 | `yahoo.js` | Yahoo Fantasy's nested answers read into Titan's shapes (being built; see Rules) |
 | `syncplan.js` | Which copy wins when syncing (pure) |
+| `extension/` | Titan for Sleeper, a Chrome extension loaded unpacked for the owner (its README has the build and load steps): pills after player names and a league panel on sleeper.com from the owner-only reports; signs in through `site/ext/connect.html`; never writes to Sleeper |
 | `functions/index.js` | `freezeCalls` (every 15 minutes on game days), `espnLeague` and `espnLogin` (private ESPN leagues and the saved login), `deleteMyAccount`, the `/api` feeds |
 | `tests/` | `node tests/run.js` (`T.ROOT` is `site/`; the server tests reach `functions/` through `T.ROOT/..` since v1.59.1, and they skip, not fail, when `functions/node_modules` is missing: a `skip` line in the run means they didn't run) |
 
