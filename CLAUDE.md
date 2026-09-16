@@ -438,7 +438,11 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   no verdict. The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
   sideways (`.vr-scroll`) with the player column pinned; its header row follows the page down to the table's end
   (`pinValueHeads` moves it on scroll: sticky can't follow the page out of a box that scrolls sideways). Never add
-  FantasyCalc's numbers to anything someone other than the owner can see.
+  FantasyCalc's numbers to anything someone other than the owner can see. The rows carry `rs` (a back's rush share)
+  and `gt` (his share of touches in garbage time) since titan-analytics v1.5.0, the Late-Round digest
+  (`D:\Claude\titan-fantasy-football-late-round-1126-notes.md`, outside the repo): garbage time counts a quarter
+  toward usage, last season's weight in the blend goes by how much one week says about a position (WR and QB most,
+  RB least), and a player with 40% of his touches in garbage time is never a buy.
 
 ## Server, ESPN and alerts
 

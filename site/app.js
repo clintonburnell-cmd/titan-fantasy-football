@@ -2656,8 +2656,11 @@
 
   // where(row): who has him in the picked league (a Where column), or null under All leagues.
   function valueTable(rows, filtered, where) {
+    // Garbage time: his share of touches with the game decided, shown once it's a fifth or more (those count a quarter toward usage).
+    const gt = r => (r.gt === null || r.gt === undefined ? '–' : r.gt >= 0.2 ? `<span class="amber">${Math.round(r.gt * 100)}%</span>` : Math.round(r.gt * 100) + '%');
     return reportTable(rows, [['Projection', r => rt.n(r.proj)], ['Points', r => rt.n(r.fp)], ['Over usage', r => rt.sgn(r.fpoe)], ['Snaps', r => rt.share(r.snap)],
-      ['Target share', r => rt.share(r.tgt)], ['Red zone', r => rt.n(r.rz)], ['By projection', r => rt.rank(r.p, r.ur)], ['Market', r => rt.rank(r.p, r.mr)],
+      ['Target share', r => rt.share(r.tgt)], ['Rush share', r => (r.p === 'RB' ? rt.share(r.rs) : '')], ['Red zone', r => rt.n(r.rz)], ['Garbage time', gt],
+      ['By projection', r => rt.rank(r.p, r.ur)], ['Market', r => rt.rank(r.p, r.mr)],
       ['Gap', r => rt.sgn(r.gap, 0)], ['Rank change', r => rt.sgn(r.ch, 0)]], r => [r.p, r.t].filter(Boolean).join(' · '), filtered, where);
   }
 
@@ -2726,7 +2729,10 @@
         `<button type="button" class="chip" data-vpos="${p}" aria-pressed="${vp === p}">${p === 'ALL' ? 'All' : p}</button>`).join('')}</div>${valueTable(F.all || [], true, where)}</section>`;
     h += `<details class="card pad vr-how"><summary>How it works</summary><p class="fine"><b>Projection</b> is expected fantasy points a game from a player's
       usage (targets, carries, throws, field position and depth, from nflverse's ffopportunity model), blended with last season's while this season's
-      sample is small, plus 40% of what he's scored above or below his usage over the last two seasons. <b>Over usage</b> is this season's points a game
+      sample is small (most for receivers and quarterbacks, least for backs: one week says the most about a back's role and the least about a
+      receiver's), plus the part of what he's scored above or below his usage over the last two seasons that carries. A touch in <b>garbage time</b>
+      (the fourth quarter with the game decided) counts a quarter toward his usage, and a player with 40% or more of his touches there is never a
+      buy-low. <b>Rush share</b> is a back's share of his team's carries. <b>Over usage</b> is this season's points a game
       minus expected: big positives tend to fall back and big negatives to recover. <b>By projection</b> and <b>market</b> are his place at his position by
       projection and by FantasyCalc's trade value; a <b>gap</b> of +10 means the market ranks him ten spots lower. A call needs that gap in value
       terms too (what the market pays at his projected rank against what it pays for him, a quarter apart at least), so a few spots at the top of a
