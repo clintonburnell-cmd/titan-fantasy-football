@@ -279,12 +279,14 @@
       var x = Number(a.rank), y = Number(b.rank);
       return (isFinite(x) ? x : 1e9) - (isFinite(y) ? y : 1e9);
     });
-    var seen = {}, list = [];
+    var seen = {}, list = [], tierOf = {}, tiered = false;
     sorted.forEach(function (r) {
       var n = norm(r.name), p = byKey[n + '|' + r.pos] || (byName[n] && byName[n].length === 1 ? byName[n][0] : null);
       if (!p || seen[p.id]) return;
       seen[p.id] = 1;
       list.push(p);
+      var t = Number(r.tier);
+      if (r.tier !== '' && r.tier !== null && r.tier !== undefined && isFinite(t)) { tierOf[p.id] = t; tiered = true; }
     });
     var desc = function (ps) { return ps.map(function (p) { return Math.max(0, Number(p.v) || 0); }).sort(function (a, b) { return b - a; }); };
     var byId = {}, order = {};
@@ -302,8 +304,24 @@
       var curve = desc(pool);
       list.forEach(function (p, i) { byId[p.id] = curve[i] !== undefined ? curve[i] : 0; });
     }
-    return {byId: byId, order: order, matched: list.length, listed: rows.length, byPosition: byPosition};
+    // Tiers over rankings: with tiers on the list, players in the same tier (at the same position when the list is
+    // ranked within positions) are pulled TIER_FLATTEN of the way to their tier's average, so tier-mates trade about
+    // even and the real cliffs sit between tiers; a little of the order inside a tier is kept.
+    if (tiered) {
+      var groups = {};
+      list.forEach(function (p) {
+        if (tierOf[p.id] === undefined) return;
+        var k = (byPosition ? p.pos + '|' : '') + tierOf[p.id];
+        (groups[k] = groups[k] || []).push(p.id);
+      });
+      Object.keys(groups).forEach(function (k) {
+        var ids = groups[k], mean = ids.reduce(function (s, id) { return s + byId[id]; }, 0) / ids.length;
+        ids.forEach(function (id) { byId[id] = Math.round(byId[id] + TIER_FLATTEN * (mean - byId[id])); });
+      });
+    }
+    return {byId: byId, order: order, matched: list.length, listed: rows.length, byPosition: byPosition, tiered: tiered};
   }
+  var TIER_FLATTEN = 0.75;
 
   // FantasyCalc's values (as Titan's server trims them: s Sleeper id, e ESPN id, v value) by id.
   function valueIndex(list) {
@@ -1916,6 +1934,14 @@
      his position ranked within CLOSE spots of him, neither locked, hurt or on bye. The weakest
      starters pair first (a bench player's real rival is the lowest-ranked starter at his position),
      one pair per starter (the nearest bench player), each bench player once. [{starter, bench}]. */
+  /* Whether two players are close by the rankings: with tiers on both (the weekly rankings' tier column), the same
+     tier is close whatever the rank gap and a different tier never is (tiers over rankings); without, within CLOSE
+     ranks of each other. */
+  function closeByRank(a, b) {
+    var ta = Number(a.tier), tb = Number(b.tier);
+    var tiered = a.tier !== '' && a.tier !== null && a.tier !== undefined && isFinite(ta) && b.tier !== '' && b.tier !== null && b.tier !== undefined && isFinite(tb);
+    return tiered ? ta === tb : Math.abs(a.rank - b.rank) <= CLOSE;
+  }
   function closeCallPairs(opt, roster) {
     var starting = {}, out = [], taken = {};
     (opt || []).forEach(function (o) { if (o.p) starting[o.p.id] = 1; });
@@ -1930,7 +1956,7 @@
       var s = o.p;
       var best = null;
       bench.forEach(function (b) {
-        if (taken[b.id] || b.pos !== s.pos || Math.abs(b.rank - s.rank) > CLOSE) return;
+        if (taken[b.id] || b.pos !== s.pos || !closeByRank(b, s)) return;
         if (!best || Math.abs(b.rank - s.rank) < Math.abs(best.rank - s.rank)) best = b;
       });
       if (best) { taken[best.id] = 1; out.push({starter: s, bench: best}); }
@@ -3012,7 +3038,7 @@
     gameStates: gameStates, weekProgress: weekProgress,
     rankKey: rankKey, rankLabel: rankLabel, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
-    closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs,
+    closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,

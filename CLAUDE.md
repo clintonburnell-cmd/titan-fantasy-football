@@ -220,7 +220,8 @@ One note per screen or feature.
   While a later week draws, `LV` holds it and `kickText`, `teamKick`, `projOf` and `ctxLine` read it; game lines,
   weather, live notes and the game tiles are this week's only.
 - Close calls on Lineups (`closeNotes`, v1.41.0): for each starter with a bench player at his position within `CLOSE`
-  ranks (`SCC.closeCallPairs`, pure, tested), a note gives both players' floor and ceiling (`SCC.spreadOf`: the
+  ranks, or, when both carry a tier from the weekly rankings, in the same tier whatever the rank gap and never across
+  tiers (`SCC.closeByRank`, v1.58.0) (`SCC.closeCallPairs`, pure, tested), a note gives both players' floor and ceiling (`SCC.spreadOf`: the
   projection give or take the player's usual swing, his PPR points over the last three finished weeks from
   `loadUsage`, `statWeeks`, blended with his position's usual `SPREAD_CV`), who has the softer matchup (`dvpRank`
   from the game context) and a lean from the win chance (`winChance`, from the Matchup data, loaded quietly): the
@@ -309,7 +310,10 @@ One note per screen or feature.
   person's own rest-of-season or dynasty list for each kind of league (`SCC.SEASON_FORMATS`: 1QB or superflex, redraft or
   dynasty, each with a TE Premium list; `SCC.seasonFormat(cfg)` picks a league's `key` from `tradeFormat` and
   `cfg.scoring.bonus_rec_te`). A league uses its TE Premium list when it pays tight ends extra and one is saved, else its
-  format's Standard list (`seasonListFor`). Each chip carries a status dot (`seasonDot`, `.sdot`; v1.51.2): green with a
+  format's Standard list (`seasonListFor`). Tiers count (v1.58.0): with a tier column on the list, `SCC.seasonValues`
+  pulls tier-mates `TIER_FLATTEN` (0.75) of the way to their tier's mean value (within the position when the list is
+  ranked that way) and reports `tiered`, so tier-mates trade about even and the cliffs sit between tiers; every scale
+  (`fc`, `tv`, `tvpos`, `proj`) gets it. Each chip carries a status dot (`seasonDot`, `.sdot`; v1.51.2): green with a
   list saved, amber when the person's leagues use that kind and none is saved (they follow the market until then), hollow
   grey when none of their leagues is that kind, with a legend (`.season-legend`) under the chips; amber, not red, so a
   kind they don't play never nags. `SCC.seasonValues` (pure, tested) turns the list into values on a market's

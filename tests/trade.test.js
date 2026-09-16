@@ -64,6 +64,11 @@ section('season rankings');
   check(S2.byPosition && S2.byId.c === 1000 && S2.byId.a === 600 && S2.byId.b === 800 && S2.byId.d === 400,
     'a list ranked within each position maps within the position: their RB1 takes the best RB value, their RB2 the next');
   check(SCC.seasonValues([], pool).matched === 0 && SCC.seasonValues(null, null).matched === 0, 'no list, or nothing to match, changes nothing');
+  // Tiers over rankings: Delta End and Alpha Back share tier 1 (values 1000 and 800), so both move three quarters of the way to 900;
+  // James Cook sits alone in tier 2 and keeps 600. A list without tiers is untouched (S1 above).
+  const tiered = SCC.seasonValues(mine.map((r, i) => Object.assign({}, r, {tier: i < 2 ? 1 : 2})), pool);
+  check(tiered.tiered && tiered.byId.d === 925 && tiered.byId.a === 875 && tiered.byId.c === 600 && !S1.tiered,
+    `with tiers, tier-mates are pulled toward their tier's average (1000 and 800 become 925 and 875), a tier of one stays: ${JSON.stringify(tiered.byId)}`);
 }
 
 section('league format');

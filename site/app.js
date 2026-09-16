@@ -2102,6 +2102,10 @@
           on. A player you rank above the market is worth more to you than his price, one you rank below is worth less, and a trade's edge is the
           difference. Players your list leaves out keep their market value, so they add no edge either way. What's a fair offer still comes from the
           market, so the trades Titan suggests are ones the other manager can accept.</p>
+        <p>Tiers count, when your list has a Tier column: players in the same tier are pulled three quarters of the way to their tier's average value
+          (and rest-of-season points), so two tier-mates trade about even and the real cliffs sit between tiers. A trade only reads as an upgrade
+          when it crosses a tier up on your list. On your weekly rankings, tiers decide the close calls on Lineups the same way: two players in the
+          same tier are a close call whatever their rank gap; different tiers never are.</p>
         <p>Each league uses the list for its kind: one QB or superflex (superflex and true 2QB value players almost alike), redraft or dynasty (keeper
           leagues count as redraft), and its TE Premium list when it pays tight ends extra per catch, else the Standard list of its kind.</p>
       </details>`;

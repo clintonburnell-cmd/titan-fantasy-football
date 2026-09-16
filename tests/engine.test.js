@@ -500,6 +500,12 @@ section('floor and ceiling, and the close calls in a lineup');
   const pairs = SCC.closeCallPairs(opt, roster);
   check(pairs.length === 1 && pairs[0].starter.id === 'r2' && pairs[0].bench.id === 'r3',
     'a close call is a bench player at the starter\'s position within 12 ranks who could play: not one ruled out, locked or on bye, and not a 30-rank gap');
+  // Tiers over rankings: with tiers on both players, the same tier is a close call whatever the rank gap, a different tier never is.
+  const tOpt = [{slot: 'RB', p: P('r1', 'RB', 5, {tier: 1})}, {slot: 'WR', p: P('w1', 'WR', 10, {tier: 2})}];
+  const tRoster = tOpt.map(o => o.p).concat([P('r5', 'RB', 25, {tier: 1}), P('w4', 'WR', 12, {tier: 3})]);
+  const tPairs = SCC.closeCallPairs(tOpt, tRoster);
+  check(tPairs.length === 1 && tPairs[0].starter.id === 'r1' && tPairs[0].bench.id === 'r5' && SCC.closeByRank({rank: 1, tier: ''}, {rank: 9, tier: 2}),
+    'with tiers, the RB5 and RB25 in tier 1 are a close call and the WR10 (tier 2) and WR12 (tier 3) aren\'t; without a tier on both, ranks decide');
   // The matchup tilt: two RB spots, RB8 starting, RB12 on the bench; with the matchups counted the bench back projects 3 more.
   const d = () => ({cfg: {key: 'T', lineup: ['RB', 'RB']}, roster: [P('r1', 'RB', 5, {start: true, slot: 'RB'}), P('r2', 'RB', 8, {start: true, slot: 'RB'}), P('r3', 'RB', 12)],
     takenNorm: {}, takenAbbr: {}, started: {}});
