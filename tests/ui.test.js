@@ -574,6 +574,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const seasonEdge = await ev(`(() => { const e = document.querySelector('.trade-sum .tedge'); return e ? e.textContent.replace(/\\s+/g, ' ').trim() : ''; })()`);
   check(/season rankings/i.test(seasonEdge) && !/\d,\d{3}/.test(seasonEdge),
     'the trade\'s edge reads by your season rankings, as a share and never in FantasyCalc\'s numbers (not the owner): ' + seasonEdge.slice(0, 120));
+  check(await waitFor(`/by your season rankings: each player you rank gets the points/.test((document.querySelector('.tlineup .fine') || {}).textContent || '')`, 20000),
+    'the rest-of-season and playoff points come from your season rankings (your order, the projections\' spacing), and the table says so');
   await ev(`document.querySelector('[data-action="trade-reset"]').click(); true`);
   await tab('season');
   await ev(`document.querySelector('[data-action="season-del"]').click(); true`);

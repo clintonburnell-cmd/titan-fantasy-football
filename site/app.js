@@ -4137,7 +4137,8 @@
   }
   /* A league's season values in a market's scale, kept until the list or the market changes: 'fc' FantasyCalc's (the
      trade math for everyone, and what the owner sees), 'tv' Titan's own (what everyone else sees), 'tvpos' Titan's own
-     ranked within each position (Position strength). {byId, order, ...} (SCC.seasonValues) or null. */
+     ranked within each position (Position strength), 'proj' the season's projected points in the league's scoring (the
+     Trade tab's rest-of-season points: your order, the projections' spacing). {byId, order, ...} (SCC.seasonValues) or null. */
   function seasonIn(cfg, scale) {
     const L = seasonListFor(cfg);
     if (!L) return null;
@@ -4148,6 +4149,12 @@
       V.pool = V.pool || Object.values(V.idx.bySleeper).filter(x => x.p !== 'PICK' && x.s).map(x => ({id: x.s, name: x.n, pos: x.p, v: x.v}));
       pool = V.pool;
       sig = `fc|${tk}|${V.at || 0}`;
+    } else if (scale === 'proj') {
+      const sp = S.trade.season && S.trade.season.map;
+      if (!sp || !Object.keys(sp).length) return null;
+      const players = playerList();
+      pool = Object.keys(sp).map(id => { const i = SCC.playerInfo(players, id); return {id, name: i.name, pos: i.pos, v: SCC.projFor(sp, id, cfg) || 0}; }).filter(p => p.name);
+      sig = `proj|${cfg.id}|${Object.keys(sp).length}`;
     } else {
       const T = titanValueMap(cfg);
       if (!T) return null;
@@ -4156,7 +4163,8 @@
       pool = Object.keys(T.m).map(id => { const i = SCC.playerInfo(players, id); return {id, name: i.name, pos: i.pos, v: T.m[id]}; });
     }
     const key = `${L.key}|${L.entry.savedAt}|${sig}`;
-    if (!S.seasonMemo[key]) S.seasonMemo[key] = SCC.seasonValues(L.entry.rows, pool, {byPosition: scale === 'tvpos'});
+    // Points are mapped within each position ('proj', like 'tvpos'): an overall curve would hand a back a quarterback's points.
+    if (!S.seasonMemo[key]) S.seasonMemo[key] = SCC.seasonValues(L.entry.rows, pool, {byPosition: scale === 'tvpos' || scale === 'proj'});
     return S.seasonMemo[key];
   }
   // Where a player sits on the league's season list (his rank there, lower is better), by name and position; null if he isn't on it.
@@ -4288,10 +4296,29 @@
      out), for the Trade tab's rest of season and playoff weeks. `tilt(p)` scales a player's points. Null until the
      season projections are in. */
   const LAST_REG_WEEK = 17;
-  function spanFor(cfg, from, to, tilt) {
+  /* The season's projected points the Trade tab works from: with your season rankings for this kind of league, each
+     player you rank gets the points of the player the projections rank where you rank him (your order, the projections'
+     spacing, within positions when your list is ranked that way; players off your list keep their projection), as a
+     projection map spanPoints can read. Without a list, Sleeper's projections as they are. Null until they're in. */
+  function seasonProjFor(cfg) {
     const sp = S.trade.season && S.trade.season.map;
     if (!sp || !Object.keys(sp).length) return null;
-    return p => { const pts = SCC.spanPoints(sp, p.id, cfg, from, to, SCC.byeOf(p.team)); return tilt ? Math.round(pts * tilt(p) * 100) / 100 : pts; };
+    const own = seasonIn(cfg, 'proj');
+    if (!own) return sp;
+    const L = seasonListFor(cfg), key = `projmap|${L.key}|${L.entry.savedAt}|${cfg.id}|${Object.keys(sp).length}`;
+    if (!S.seasonMemo[key]) {
+      const m = {};
+      Object.keys(sp).forEach(id => { m[id] = [own.byId[id] !== undefined ? own.byId[id] : SCC.projFor(sp, id, cfg) || 0, 0]; });
+      S.seasonMemo[key] = m;
+    }
+    return S.seasonMemo[key];
+  }
+  const pointsSource = cfg => (seasonIn(cfg, 'proj') ? 'season' : 'sleeper');
+  function spanFor(cfg, from, to, tilt) {
+    const sp = seasonProjFor(cfg);
+    if (!sp) return null;
+    // The map is already in this league's scoring (seasonProjFor), so it's read with a plain PPR of 0.
+    return p => { const pts = SCC.spanPoints(sp, p.id, seasonIn(cfg, 'proj') ? 0 : cfg, from, to, SCC.byeOf(p.team)); return tilt ? Math.round(pts * tilt(p) * 100) / 100 : pts; };
   }
   const playoffSpan = cfg => { const s = Number(cfg.playoffStart) || 15; return [s, Math.min(LAST_REG_WEEK, s + 2)]; };
   // The owner's Data dump ranks each player's fantasy-playoff schedule (1 the easiest of 32): a tilt of up to 10% either way.
@@ -4434,7 +4461,7 @@
     const weeks = Math.max(1, LAST_REG_WEEK - (S.snap.week || 1) + 1);
     S.trade.ideas[d.cfg.id] = {list: SCC.tradeIdeas(me, Tm.list.filter(t => !t.mine), {value, slots: d.cfg.lineup, waiver: V.waiver, max: 8,
       edge: edge || undefined, points: points || undefined, thin, deep, stance, goal: points ? 'lineup' : undefined, weeks}), edge: !!edge,
-      edgeSource: edge ? edge.source : '', points: !!points, stance: Object.keys(stance).length > 0, partners, weeks};
+      edgeSource: edge ? edge.source : '', points: !!points, pointsSource: points ? pointsSource(d.cfg) : '', stance: Object.keys(stance).length > 0, partners, weeks};
     render();
   }
 
@@ -4449,7 +4476,8 @@
         <button type="button" class="btn small ghost" data-action="trade-ideas-clear">Clear</button>
         <button type="button" class="btn small ghost" data-action="trade-find">Look again</button></div></div>
       <p class="fine">${I.points
-          ? 'The goal is a starting lineup that scores more: fair trades (FantasyCalc\'s values within 5%) of one or two pieces each way that add rest-of-season points to your best lineup and gain value by your own numbers, ranked by both (a 5% gain in value counts like a point a week). A two-for-one that turns your depth into a starter and adds a point a week or more counts even when it gives up a little value.'
+          ? `The goal is a starting lineup that scores more: fair trades (FantasyCalc's values within 5%) of one or two pieces each way that add rest-of-season points to your best lineup${
+              I.pointsSource === 'season' ? ' (points by your season rankings: your order, the projections\' spacing)' : ''} and gain value by your own numbers, ranked by both (a 5% gain in value counts like a point a week). A two-for-one that turns your depth into a starter and adds a point a week or more counts even when it gives up a little value.`
           : 'Fair trades (FantasyCalc\'s values within 5%) of one or two pieces each way that make your starting lineup stronger by value, and theirs too where possible.'}${I.edgeSource === 'season'
           ? ' Your season rankings count on your side, so a swap of equally priced players you rank differently from the market is an idea.'
           : I.edge ? ' Your Value report\'s usage edge counts on your side, so a swap of equally priced players the market misjudges is an idea.' : ''}${I.stance
@@ -4589,7 +4617,8 @@
     return `<div class="tlineup"><table class="tl-t"><thead><tr><th scope="col"><span class="sr-only">Period</span></th><th scope="col">Your starters</th>
       <th scope="col">${esc(partner.name)}'s</th></tr></thead><tbody>${cols.map(row).join('')}</tbody></table>
       <p class="fine">Projected points for each team's best lineup, before and after the trade: this week, the rest of the regular season and the
-        fantasy-playoff weeks (season projections, byes out${tilt ? ', the playoff weeks tilted by each player\'s playoff schedule from your Data dump' : ''}).</p></div>`;
+        fantasy-playoff weeks (${pointsSource(cfg) === 'season' ? 'by your season rankings: each player you rank gets the points of the player the projections rank where you rank him'
+          : 'season projections'}, byes out${tilt ? ', the playoff weeks tilted by each player\'s playoff schedule from your Data dump' : ''}).</p></div>`;
   }
 
   /* Bye cover after a trade: the weeks from now on where your roster couldn't fill a starting spot (SCC.byeNeeds, each

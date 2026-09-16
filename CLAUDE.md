@@ -370,7 +370,11 @@ One note per screen or feature.
   to your best lineup and still gain value by your own numbers (`trueGain`), except a consolidation that
   adds `LINEUP_BIG` (1) point a week or more, which may cost a little value (the market's verdict keeps it
   fair); ideas rank by points a week plus `LINEUP_VALUE` (20) × the value gain as a share of the lineup's value
-  (v1.54.2; v1.53.0 ranked by points alone and the owner said the ideas "got worse"), and get a +1 to `accept` ("comes from their
+  (v1.54.2; v1.53.0 ranked by points alone and the owner said the ideas "got worse"). The points themselves come
+  from the owner's season rankings when he has a list for the league's kind (v1.55.0: `seasonIn(cfg, 'proj')`
+  maps the list onto the season projections' points, his order and their spacing; `seasonProjFor` is the map
+  `spanFor` reads, at PPR 0 since it's already in the league's scoring; `pointsSource` says which), else
+  Sleeper's projections; the ideas card and the lineup table say which. They get a +1 to `accept` ("comes from their
   depth at WR") when everything you get is at a position the partner is deep at (`deep`, from
   `positionStrength` like `thin`). `SCC.tradePartners(meId, PS)` (pure, tested) lists the partners whose
   rosters fit yours (thin where you're deep, deep where you're thin, `PARTNER_GAP` 0.6 z apart) and the
