@@ -2038,6 +2038,11 @@
     if (S.sview === key) S.sview = '';
     render();
   }
+  // The status dot on a Season chip: green with a list saved, amber when your leagues use this kind and there's no list
+  // yet (they follow the market until there is), grey when none of your leagues is this kind.
+  const seasonDot = (saved, needed) => `<span class="sdot ${saved ? 'good' : needed ? 'amber' : 'none'}" title="${
+    saved ? 'A list is saved' : needed ? 'Your leagues use this kind; no list saved yet' : 'None of your leagues is this kind'}"></span>`;
+
   function screenSeason() {
     const leagues = (S.snap && S.snap.leagues) || [];
     const D = S.sdraft;
@@ -2058,10 +2063,13 @@
           : 'They\'re kept on this device. Sign in on Settings to sync them to your other devices.'}</p>
       <div class="chips" role="group" aria-label="Kind of league">${SCC.SEASON_FORMATS.map(f => {
         const have = seasonEntry(f.base) || seasonEntry(f.base + '-tep'), n = inBase(f.base);
-        return `<button type="button" class="chip" data-sfmt="${f.base}" aria-pressed="${f.base === D.base}">${esc(f.label)}${n ? ` · ${n}` : ''}${have ? ' ✓' : ''}</button>`;
+        return `<button type="button" class="chip" data-sfmt="${f.base}" aria-pressed="${f.base === D.base}">${seasonDot(!!have, n > 0)}${esc(f.label)}${n ? ` · ${n}` : ''}</button>`;
       }).join('')}</div>
-      <div class="chips" role="group" aria-label="TE Premium"><button type="button" class="chip" data-step="0" aria-pressed="${!D.tep}">Standard${
-        seasonEntry(D.base) ? ' ✓' : ''}</button><button type="button" class="chip" data-step="1" aria-pressed="${D.tep}">TE Premium${seasonEntry(D.base + '-tep') ? ' ✓' : ''}</button></div>`;
+      <div class="chips" role="group" aria-label="TE Premium"><button type="button" class="chip" data-step="0" aria-pressed="${!D.tep}">${
+        seasonDot(!!seasonEntry(D.base), inBase(D.base) > 0)}Standard</button><button type="button" class="chip" data-step="1" aria-pressed="${D.tep}">${
+        seasonDot(!!seasonEntry(D.base + '-tep'), tepLeagues.length > 0)}TE Premium</button></div>
+      <p class="fine season-legend"><span class="sdot good"></span> list saved &nbsp; <span class="sdot amber"></span> your leagues use this kind, no list yet
+        &nbsp; <span class="sdot none"></span> none of your leagues is this kind</p>`;
     const names = list => andList(list.map(c => esc(c.key)));
     let used;
     if (D.tep) {

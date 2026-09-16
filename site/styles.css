@@ -469,6 +469,15 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   border-radius: 999px; padding: 6px 12px; font-size: .82rem; font-weight: 600; cursor: pointer;
 }
 .chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
+/* The status dot on a Season chip (and its legend): green with a list saved, amber when your leagues use this kind and
+   none is saved, hollow grey when none of your leagues is this kind. */
+.sdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; border: 1.5px solid transparent; }
+.sdot.good { background: var(--ok); border-color: var(--ok); }
+.sdot.amber { background: var(--swap); border-color: var(--swap); }
+.sdot.none { background: transparent; border-color: var(--faint); }
+.chip[aria-pressed="true"] .sdot.none { border-color: var(--bg); opacity: .6; }
+.season-legend { margin: -2px 0 10px; }
+.season-legend .sdot { margin-right: 4px; }
 
 .banner { border-radius: 12px; padding: 10px 14px; font-size: .88rem; border: 1px solid transparent; }
 .banner.stop { background: var(--stop-soft); border-color: rgb(226 87 76 / .35); }

@@ -557,8 +557,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`/players read/.test(document.getElementById('sdraft-preview').textContent) && /ranked overall/.test(document.getElementById('sdraft-preview').textContent) &&
     !document.querySelector('[data-action="season-save"]').disabled`, 3000), 'pasting a list previews it: how many players, and that it\'s ranked overall');
   await ev(`document.querySelector('[data-action="season-save"]').click(); true`);
-  check(await waitFor(`/saved/.test(document.querySelector('.season-slot').textContent) && document.querySelector('[data-sfmt="redraft-1qb"]').textContent.includes('✓') &&
-    !!JSON.parse(localStorage.getItem('titan.seasonranks.v1') || '{}').formats['redraft-1qb']`, 3000), 'saving keeps the list on the device, and ticks its kind of league');
+  check(await waitFor(`/saved/.test(document.querySelector('.season-slot').textContent) && !!document.querySelector('[data-sfmt="redraft-1qb"] .sdot.good') &&
+    !!document.querySelector('[data-step="0"] .sdot.good') && !!document.querySelector('.season-legend') &&
+    !!JSON.parse(localStorage.getItem('titan.seasonranks.v1') || '{}').formats['redraft-1qb']`, 3000),
+    'saving keeps the list on the device, and its kind of league and the Standard chip get the green dot (with a legend under the chips)');
   await tab('trade');
   await ev(`(() => { const s = document.querySelector('[data-ui="tradePartner"]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
   check(await waitFor(`document.querySelectorAll('.tteam').length === 2 && !!document.querySelector('.tseason') && document.querySelectorAll('.tteam .tyours').length > 0`, 20000),

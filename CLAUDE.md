@@ -309,7 +309,10 @@ One note per screen or feature.
   person's own rest-of-season or dynasty list for each kind of league (`SCC.SEASON_FORMATS`: 1QB or superflex, redraft or
   dynasty, each with a TE Premium list; `SCC.seasonFormat(cfg)` picks a league's `key` from `tradeFormat` and
   `cfg.scoring.bonus_rec_te`). A league uses its TE Premium list when it pays tight ends extra and one is saved, else its
-  format's Standard list (`seasonListFor`). `SCC.seasonValues` (pure, tested) turns the list into values on a market's
+  format's Standard list (`seasonListFor`). Each chip carries a status dot (`seasonDot`, `.sdot`; v1.51.2): green with a
+  list saved, amber when the person's leagues use that kind and none is saved (they follow the market until then), hollow
+  grey when none of their leagues is that kind, with a legend (`.season-legend`) under the chips; amber, not red, so a
+  kind they don't play never nags. `SCC.seasonValues` (pure, tested) turns the list into values on a market's
   scale: the person's Nth player takes the market's Nth-highest value (a list ranked within each position maps within the
   position), and unlisted players keep their market value. **The market still decides what's fair** (the owner's call):
   `tradeVerdict` is unchanged, and the season list only feeds the edge (`edgeFor`, source 'season', ahead of the owner's
