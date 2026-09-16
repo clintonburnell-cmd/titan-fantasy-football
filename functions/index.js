@@ -726,6 +726,18 @@ function briefingFor(doc, R) {
   }
   return null;
 }
+/* Whether the owner's season lists (users/{uid}/seasonRanks, each with savedAt) have gone stale: Late-Round's
+   rest-of-season rankings, which the owner imports as his lists, refresh every Tuesday, so a list STALE_DAYS old or
+   more (or none at all) gets a line in the Tuesday briefing. '' when they're fresh. */
+const STALE_DAYS = 6;
+function seasonStale(lists, now = Date.now()) {
+  const entries = Object.entries(lists || {}).filter(([, v]) => v && v.savedAt);
+  if (!entries.length) return 'No season lists saved yet: import the rest-of-season rankings under Season import.';
+  const old = entries.map(([k, v]) => ({k, days: Math.floor((now - v.savedAt) / 86400000)})).filter(x => x.days >= STALE_DAYS);
+  if (!old.length) return '';
+  const which = old.length === entries.length ? 'Your season lists are' : `Your ${old.map(x => x.k).join(', ')} season ${old.length === 1 ? 'list is' : 'lists are'}`;
+  return `${which} ${Math.max(...old.map(x => x.days))} days old: the Tuesday rest-of-season update is out, so re-import it under Season import.`;
+}
 let ownerCache = null;
 async function ownerUid() {
   if (ownerCache) return ownerCache;
@@ -751,6 +763,15 @@ exports.ownerBriefing = onDocumentWritten({document: 'lab/{doc}', region: 'us-ce
   const alerts = (await ref.get()).data();
   if (!alerts || !alerts.tokens || !Object.keys(alerts.tokens).length) return stop('the owner has no device with alerts on');
   if ((alerts.sent || {})[a.key]) return stop(`already sent (${a.key})`);
+  if (doc === 'value-latest') {
+    // The Tuesday briefing also says when the owner's season lists have gone stale (the rankings behind them refresh Tuesdays).
+    try {
+      const lists = {};
+      (await db.collection('users').doc(uid).collection('seasonRanks').get()).forEach(d => { lists[d.id] = d.data(); });
+      const stale = seasonStale(lists);
+      if (stale) a.body = `${a.body} ${stale}`.trim();
+    } catch (e) { logger.warn('owner briefing: could not read the season lists: ' + e.message); }
+  }
   const sent = Object.assign({}, alerts.sent || {});
   sent[a.key] = 1;
   const n = await deliver(ref, [a], sent);
@@ -1013,7 +1034,7 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
   }
 });
 
-exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest, briefingFor,
+exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest, briefingFor, seasonStale,
   yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll, latestScores, newsForAlerts, labSnapshot, formatFromKey,
   setSend: fn => { sendPush = fn; },
   setCreds: store => { creds = store; }, espnCredsFor, espnLeaguesOf, plainGet,

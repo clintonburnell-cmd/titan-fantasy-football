@@ -41,7 +41,7 @@ and `tests/` are never published. The paths below are inside `site/`; URLs are u
 | `yahoo.js` | Yahoo Fantasy's nested answers read into Titan's shapes (being built; see Rules) |
 | `syncplan.js` | Which copy wins when syncing (pure) |
 | `functions/index.js` | `freezeCalls` (every 15 minutes on game days), `espnLeague` and `espnLogin` (private ESPN leagues and the saved login), `deleteMyAccount`, the `/api` feeds |
-| `tests/` | `node tests/run.js` |
+| `tests/` | `node tests/run.js` (`T.ROOT` is `site/`; the server tests reach `functions/` through `T.ROOT/..` since v1.59.1, and they skip, not fail, when `functions/node_modules` is missing: a `skip` line in the run means they didn't run) |
 
 ## Never
 
@@ -491,7 +491,9 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   transcribes each week's new Late-Round audio into its `reports/lateround/` for the next session to digest into
   the digest and the notes files (`D:\Claude\titan-fantasy-football-late-round-*.md`). From that Q&A: `SCC.faabBid`
   caps a kicker's or defense's bid at `STREAM_CAP` (3%) of the budget (`o.pos`), and the Value report's claims put
-  free agents at the owner's thin positions first. The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
+  free agents at the owner's thin positions first. The owner's season lists are Late-Round's rest-of-season CSV,
+  which refreshes every Tuesday: the `ownerBriefing` push for the Value report appends `seasonStale` (functions,
+  pure, tested; `STALE_DAYS` 6) when a list is stale or none is saved, as the cue to re-import (v1.59.1). The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
   sideways (`.vr-scroll`) with the player column pinned; its header row follows the page down to the table's end
   (`pinValueHeads` moves it on scroll: sticky can't follow the page out of a box that scrolls sideways). Never add
   FantasyCalc's numbers to anything someone other than the owner can see. The rows carry `rs` (a back's rush share)

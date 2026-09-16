@@ -8,7 +8,7 @@ const {execSync} = require('child_process');
 const T = require('./lib');
 const {check, section} = T;
 
-const FN = path.join(T.ROOT, 'functions');
+const FN = path.join(T.ROOT, '..', 'functions'); // the repo's functions/ (T.ROOT is site/ since v1.44.0)
 if (!fs.existsSync(path.join(FN, 'node_modules', 'firebase-functions'))) {
   T.skip('functions/node_modules is missing (run npm install in functions/)');
   process.exit(0);
@@ -54,6 +54,12 @@ function fakeUser(db) {
   check(dbf.key === 'brief|2|dump' && dbf.url === '/app/data-dump' && /^9 ideas across 1 leagues\. Start: A over B \(L1\)\. Pick up: Add Guy$/.test(dbf.body),
     'the Data dump briefing: ' + dbf.body);
   check(job.briefingFor('value-latest', null) === null && job.briefingFor('config', VR) === null, 'nothing for an empty report or another document');
+  // Stale season lists: the rankings behind them refresh Tuesdays, so a list six days old or more (or none) earns a line.
+  const msDay = 86400000, atT = 20 * msDay;
+  check(job.seasonStale({'redraft-1qb': {savedAt: atT - 2 * msDay}}, atT) === '' && /No season lists saved yet/.test(job.seasonStale({}, atT)) &&
+    /Your season lists are 8 days old/.test(job.seasonStale({'redraft-1qb': {savedAt: atT - 8 * msDay}}, atT)) &&
+    /Your dynasty-sf-tep season list is 7 days old/.test(job.seasonStale({'redraft-1qb': {savedAt: atT - msDay}, 'dynasty-sf-tep': {savedAt: atT - 7 * msDay}}, atT)),
+    'the briefing says when the season lists are stale (six days or more), which ones, or that none are saved');
 
   section('trade values (FantasyCalc, cached by Titan\'s server)');
   const tvFormat = job.valuesFormat({dynasty: '0', qbs: '2', teams: '10', ppr: '0.5'});
