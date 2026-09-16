@@ -928,6 +928,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const RD = 'redraft-1qb-12teams-1ppr', DY = 'dynasty-2qb-10teams-1ppr';
   const vlg = (id, name, fmt, own) => ({id, fmt, name, own, teams: ['Rival Team (rival)', 'My Team (me)'], caveat: '',
     format: fmt === RD ? 'Redraft, 12 teams, PPR' : 'Dynasty, 10 teams, PPR, superflex', need: 'Your team by position: QB 1st, RB 11th of 12. Thin at RB.',
+    ranks: {QB: {p: 1, m: 2, deep: true}, RB: {p: 11, m: 9, thin: true}}, n: 12, list: 'redraft-1qb',
     sell: [{n: 'Sell Guy', why: 'The market says WR10; his projection says WR30.', x: 'WR, KC', k: fmt === RD}],
     buy: [{n: 'Buy Guy', why: 'His projection says RB12; the market says RB30.', x: 'RB, KC'}],
     add: [{n: 'Claim Guy', why: 'He\'d start over Someone. Drop Drop Guy (WR, KC) for him: no trade value on the market.', x: 'TE, KC', d: 'Drop Guy'}]});
@@ -986,6 +987,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     /\\(Value Test League\\)/.test(${vsec(0)})`, 3000), 'picking a league shows just its moves, and the lists in its own format');
   const wh = await ev(`[...document.querySelectorAll('tr[data-vp]')].slice(0, 3).map(r => r.cells[0].querySelector('b').textContent + ': ' + r.cells[1].textContent).join(' | ')`);
   check(wh === 'Buy Guy: Yours | Sell Guy: Rival Team (rival) | Dynasty Guy: Free agent', 'and a Where column says who has each player there: ' + wh);
+  const np = await ev(`[...document.querySelectorAll('.vr-lg[open] .vr-np')].map(x => x.className.trim() + ':' + x.textContent.replace(/\\s+/g, ' ').trim()).join(' | ')`);
+  check(np === 'vr-np deep:QB1styours 2nddeep | vr-np thin:RB11thyours 9ththin' && await ev(`/of 12 teams/.test(document.querySelector('.vr-nn').textContent)`),
+    'your team by position shows as colored position pills: your rank, your rank by your own list, thin or deep: ' + np);
   const dropPill = await ev(`(document.querySelector('.vr-drop') || {}).textContent || ''`);
   check(dropPill === 'drop Drop Guy' && await ev(`document.body.textContent.includes('Drop Drop Guy (WR, KC) for him')`),
     'a claim says who to drop for him, as a pill beside the name and in its reason: ' + dropPill);

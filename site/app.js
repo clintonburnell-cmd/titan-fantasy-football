@@ -2738,12 +2738,24 @@
     h += `<div class="bar"><label class="field grow vr-search"><span>Find a player</span><input type="search" data-value-search
         placeholder="Name, team or position" value="${esc(V.q || '')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label></div>
       <p class="empty-note" data-value-none hidden>No player in this report matches that.</p>`;
+    // Where you stand at each position among the league's teams, in the position's colors: by projection, and by your
+    // own season list when one is saved (L.ranks, titan-analytics v1.8.0); thin and deep are what the calls go by.
+    // Older reports carry only the sentence (L.need).
+    const needPills = L => {
+      if (!L.ranks) return `<p class="fine">${esc(L.need)}</p>`;
+      const pills = ['QB', 'RB', 'WR', 'TE'].filter(p => L.ranks[p]).map(p => {
+        const r = L.ranks[p], tone = r.thin ? 'thin' : r.deep ? 'deep' : '';
+        return `<span class="vr-np ${tone}" title="${esc(L.need)}"><span class="pos" data-pos="${p}">${p}</span><b>${nth(r.p)}</b>${
+          r.m ? `<small>yours ${nth(r.m)}</small>` : ''}${tone ? `<em>${tone}</em>` : ''}</span>`;
+      }).join('');
+      return `<div class="vr-need">${pills}<small class="vr-nn">of ${L.n} teams${L.list ? ' · by projection and by your ' + esc(seasonLabel(L.list)) + ' list' : ''}</small></div>`;
+    };
     // Leagues in the same order as every other tab (snapOrder); the format chips pick the lists below, not the order.
     const shown = one ? [one] : snapOrder(R.leagues || []);
     h += `<h3 class="vr-h">${one ? 'Your moves' : 'Your moves, league by league'}</h3><div class="league-grid">${shown.map(L => {
       const count = L.sell.length + L.buy.length + L.add.length, cfg = cfgOf(L.id);
       return `<details class="card vr-lg"${count ? ' open' : ''}><summary class="card-h"><div><h3>${cfg ? leagueIcon(cfg) : ''}${esc(L.name)}</h3>
-        <p>${esc(L.format)} · ${plural(count, 'move')}</p></div></summary><div class="vr-body"><p class="fine">${esc(L.need)}</p>${
+        <p>${esc(L.format)} · ${plural(count, 'move')}</p></div></summary><div class="vr-body">${needPills(L)}${
         L.caveat ? `<p class="fine">${esc(L.caveat)}</p>` : ''}${group(L.sell, 'Sell high or keep, from your roster', 'sell')}${
         group(L.buy, 'Buy low from a rival', 'buy')}${group(L.add, 'Claim', 'add')}${count ? '' : '<p class="fine">Nothing stands out this week.</p>'}</div></details>`;
     }).join('')}</div>`;

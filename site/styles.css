@@ -477,6 +477,18 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .sdot.none { background: transparent; border-color: var(--faint); }
 .chip[aria-pressed="true"] .sdot.none { border-color: var(--bg); opacity: .6; }
 .season-legend { margin: -2px 0 10px; }
+/* The Value report's "your team by position" pills: the position's color, your rank, your rank by your own list, thin or deep. */
+.vr-need { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; }
+.vr-np { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border: 1px solid var(--line); border-radius: 999px; font-size: .82rem; }
+.vr-np .pos { width: auto; height: auto; padding: 2px 7px; border-radius: 6px; font-size: .66rem; }
+.vr-np b { font-weight: 800; }
+.vr-np small { color: var(--muted); }
+.vr-np em { font-style: normal; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; padding: 1px 6px; border-radius: 5px; }
+.vr-np.thin { border-color: var(--swap); }
+.vr-np.thin em { background: var(--swap); color: var(--bg); }
+.vr-np.deep { border-color: var(--ok); }
+.vr-np.deep em { background: var(--ok); color: var(--bg); }
+.vr-nn { color: var(--faint); flex-basis: 100%; }
 .season-legend .sdot { margin-right: 4px; }
 
 .banner { border-radius: 12px; padding: 10px 14px; font-size: .88rem; border: 1px solid transparent; }

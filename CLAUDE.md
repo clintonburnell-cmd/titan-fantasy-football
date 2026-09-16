@@ -443,7 +443,13 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   proven skill, sell otherwise; the Data dump's ideas and tables use the same tags, and a schedule-only sell lean has
   no verdict. A claim carries `d`, the drop it suggests (the bench player worth the least; titan-analytics
   `drop_pick`), shown as a `.vr-drop` pill beside the name (v1.51.1, the owner asked "I don't know who I would
-  drop"). The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
+  drop"). Each league card's "your team by position" is `L.ranks` (v1.52.0: per position `p`, the rank among the
+  league's teams by projection, `m` by the owner's own season list when one is saved, `thin`/`deep` as the calls
+  treat it, plus `n` teams and `list`, the list's key), drawn by `needPills` as `.vr-np` pills in the position's
+  colors (`.pos[data-pos]`); older reports carry only the sentence `L.need`. titan-analytics reads the owner's
+  season lists out of Firestore (`fetch-season.js`, firebase-tools' login, `users/{uid}/seasonRanks`, the account
+  whose `account.userId` is the owner's Sleeper id) before each run; a claim needs his list to agree, and QB/TE
+  claims need a drastic gap. The weighting lives in titan-analytics (its README, "How the numbers are made"); Titan only shows it. Each table sits in a box that scrolls
   sideways (`.vr-scroll`) with the player column pinned; its header row follows the page down to the table's end
   (`pinValueHeads` moves it on scroll: sticky can't follow the page out of a box that scrolls sideways). Never add
   FantasyCalc's numbers to anything someone other than the owner can see. The rows carry `rs` (a back's rush share)
