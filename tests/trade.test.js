@@ -253,6 +253,27 @@ section('the lineup goal: trades that add points to the starting lineup, and the
     'deep at WR, the same idea is allowed: depth is what you trade from');
   check(JSON.stringify(SCC.positionPoints(me5.roster, o5.slots, o5.points)) === '{"QB":100,"RB":350,"WR":160}',
     'positionPoints adds the best lineup up by position, a flex player at his own position: ' + JSON.stringify(SCC.positionPoints(me5.roster, o5.slots, o5.points)));
+  // Status: an incoming player who's out this week is said so, and the idea says what it costs this week and ranks lower for it.
+  check(SCC.missWeeks('Out (knee)') === 1 && SCC.missWeeks('IR') === 4 && SCC.missWeeks('Questionable (ankle)') === 0 && SCC.missWeeks('') === 0 && SCC.missWeeks('PUP') === 4,
+    'weeks a status says a player will miss: out a week, IR and PUP four, questionable none');
+  {
+    const V7 = {q: 1000, ra: 3000, wa: 2000, qp: 1000, rp: 600, wx: 2600, wo: 1950};
+    const P7 = {q: 100, ra: 200, wa: 100, qp: 100, rp: 50, wx: 210, wo: 180}, NOW7 = {q: 20, ra: 18, wa: 9, qp: 20, rp: 5, wx: 19, wo: 0};
+    const me7 = {id: 'me', roster: [P('q', 'QB'), P('ra', 'RB'), P('wa', 'WR')]};
+    const p7 = {id: 'P7', name: 'P7', roster: [P('qp', 'QB'), P('rp', 'RB'), P('wx', 'WR'), Object.assign(P('wo', 'WR'), {inj: 'Out (knee)'})]};
+    const hurt = SCC.tradeIdeas(me7, [p7], {value: p => V7[p.id] || 0, points: p => P7[p.id] || 0, slots: ['QB', 'RB', 'WR'], waiver: 50, goal: 'lineup', weeks: 16,
+      miss: p => SCC.missWeeks(p.inj), nowPoints: p => NOW7[p.id] || 0});
+    check(hurt.length === 1 && ids(hurt[0].get) === 'wo' && hurt[0].myNow === -9 && hurt[0].why.slice(0, 2).join('; ') === 'wo is out, about 1 week by his status; costs you 9 this week',
+      'an idea that brings in a player who\'s out says so, with the weeks his status implies and what it costs this week: ' + hurt.map(x => x.why.join('; ') + ' ' + x.myNow).join(' | '));
+  }
+  // Quarterbacks in a one-QB league: easy to fill, so they stay out of the ideas on both sides (opts.skipPos).
+  {
+    const V8 = {q: 1000, ra: 3000, qp: 1040, rp: 600}, P8 = {q: 100, ra: 200, qp: 130, rp: 50};
+    const me8 = {id: 'me', roster: [P('q', 'QB'), P('ra', 'RB')]}, p8 = {id: 'P8', name: 'P8', roster: [P('qp', 'QB'), P('rp', 'RB')]};
+    const o8 = {value: p => V8[p.id] || 0, points: p => P8[p.id] || 0, slots: ['QB', 'RB'], waiver: 50, goal: 'lineup', weeks: 16};
+    check(SCC.tradeIdeas(me8, [p8], o8).some(x => ids(x.give) === 'q' && ids(x.get) === 'qp') && SCC.tradeIdeas(me8, [p8], Object.assign({skipPos: ['QB']}, o8)).length === 0,
+      'a quarterback-for-quarterback swap is an idea by the numbers, but not with quarterbacks skipped (a one-QB league)');
+  }
   // Both upgrades: by my numbers their back and receiver are better than mine (two positions up); by the public projections
   // (theirPoints) they gain too, and the market calls it even. That package ranks first and says why.
   const V6 = {q: 1000, ra: 3000, wa: 1500, qp: 1000, rp: 2900, wp: 1600};

@@ -379,7 +379,13 @@ One note per screen or feature.
   `guard` on, an idea may not weaken a starting position you aren't deep at (`myDeep`, `SCC.positionPoints`,
   `GUARD_WEEKLY` 0.5 a week), and the positions it strengthens are its `ups` (an idea upgrading more than one
   ranks higher, `UPGRADE_BONUS`, and says "upgrades your RB and WR by your numbers": the owner's "both upgrades"
-  edge). They get a +1 to `accept` ("comes from their
+  edge). A player's status counts (v1.57.0): `SCC.missWeeks(inj)` is the rough timeframe his status implies
+  (`MISS_WEEKS`: Out/Doubtful 1, NA 2, Sus 3, IR/PUP 4, DNR 8; Sleeper has no return date), `spanFor` and
+  `spanForPublic` start his points that many weeks later, and `tradeIdeas` takes `miss(p)` and `nowPoints(p)` (this
+  week's projection, 0 for a player who's out) to say when an incoming player is out, carry `myNow` (this week's
+  lineup change), and rank an idea lower the more it costs this week (`NOW_COST` 0.05 a point, floor `NOW_FLOOR`
+  0.6). `skipPos` keeps positions out of both pools: the app passes `['QB']` in one-QB leagues (the owner
+  doesn't want QB-for-QB ideas; a quarterback is easy to find), and the card says so (`I.noQb`). They get a +1 to `accept` ("comes from their
   depth at WR") when everything you get is at a position the partner is deep at (`deep`, from
   `positionStrength` like `thin`). `SCC.tradePartners(meId, PS)` (pure, tested) lists the partners whose
   rosters fit yours (thin where you're deep, deep where you're thin, `PARTNER_GAP` 0.6 z apart) and the

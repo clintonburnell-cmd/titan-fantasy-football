@@ -4318,13 +4318,14 @@
   function spanForPublic(cfg, from, to) {
     const sp = S.trade.season && S.trade.season.map;
     if (!sp || !Object.keys(sp).length) return null;
-    return p => SCC.spanPoints(sp, p.id, cfg, from, to, SCC.byeOf(p.team));
+    return p => SCC.spanPoints(sp, p.id, cfg, from + SCC.missWeeks(p.inj), to, SCC.byeOf(p.team));
   }
   function spanFor(cfg, from, to, tilt) {
     const sp = seasonProjFor(cfg);
     if (!sp) return null;
-    // The map is already in this league's scoring (seasonProjFor), so it's read with a plain PPR of 0.
-    return p => { const pts = SCC.spanPoints(sp, p.id, seasonIn(cfg, 'proj') ? 0 : cfg, from, to, SCC.byeOf(p.team)); return tilt ? Math.round(pts * tilt(p) * 100) / 100 : pts; };
+    // The map is already in this league's scoring (seasonProjFor), so it's read with a plain PPR of 0. A player's status
+    // (out, IR...) pushes his first counted week back by the weeks it says he'll miss (SCC.missWeeks).
+    return p => { const pts = SCC.spanPoints(sp, p.id, seasonIn(cfg, 'proj') ? 0 : cfg, from + SCC.missWeeks(p.inj), to, SCC.byeOf(p.team)); return tilt ? Math.round(pts * tilt(p) * 100) / 100 : pts; };
   }
   const playoffSpan = cfg => { const s = Number(cfg.playoffStart) || 15; return [s, Math.min(LAST_REG_WEEK, s + 2)]; };
   // The owner's Data dump ranks each player's fantasy-playoff schedule (1 the easiest of 32): a tilt of up to 10% either way.
@@ -4470,8 +4471,13 @@
     const theirPoints = pointsSource(d.cfg) === 'season' ? spanForPublic(d.cfg, S.snap.week, LAST_REG_WEEK) : undefined;
     S.trade.ideas[d.cfg.id] = {list: SCC.tradeIdeas(me, Tm.list.filter(t => !t.mine), {value, slots: d.cfg.lineup, waiver: V.waiver, max: 8,
       edge: edge || undefined, points: points || undefined, theirPoints: theirPoints || undefined, thin, deep, stance, goal: points ? 'lineup' : undefined, weeks,
-      guard: true, myDeep: deep[String(me.id)] || []}), edge: !!edge,
-      edgeSource: edge ? edge.source : '', points: !!points, pointsSource: points ? pointsSource(d.cfg) : '', stance: Object.keys(stance).length > 0, partners, weeks};
+      guard: true, myDeep: deep[String(me.id)] || [], miss: p => SCC.missWeeks(p.inj),
+      // Quarterbacks stay out of the ideas in a one-QB league: easy to fill, so a QB-for-QB swap isn't worth the roster churn.
+      skipPos: SCC.tradeFormat(d.cfg).qbs === 1 ? ['QB'] : [],
+      // This week's projections, so an idea says what it costs you now (an incoming player who's out this week).
+      nowPoints: Object.keys(S.proj).length ? p => (p.inj && SCC.missWeeks(p.inj) ? 0 : SCC.projFor(S.proj, p.id, d.cfg) || 0) : undefined}), edge: !!edge,
+      edgeSource: edge ? edge.source : '', points: !!points, pointsSource: points ? pointsSource(d.cfg) : '', stance: Object.keys(stance).length > 0, partners, weeks,
+      noQb: SCC.tradeFormat(d.cfg).qbs === 1};
     render();
   }
 
@@ -4487,12 +4493,13 @@
         <button type="button" class="btn small ghost" data-action="trade-find">Look again</button></div></div>
       <p class="fine">${I.points
           ? `The goal is a starting lineup that scores more: fair trades (FantasyCalc's values within 5%) of one or two pieces each way that add rest-of-season points to your best lineup${
-              I.pointsSource === 'season' ? ' (points by your season rankings: your order, the projections\' spacing; the other team\'s side is judged by the public projections, what they see)' : ''} and gain value by your own numbers, ranked by both (a 5% gain in value counts like a point a week). An idea never weakens a starting position you aren't deep at, and one that upgrades more than one of your positions by your numbers ranks higher: a package that reads as an even swap to them and two upgrades to you is the edge. A two-for-one that turns your depth into a starter and adds a point a week or more counts even when it gives up a little value.`
+              I.pointsSource === 'season' ? ' (points by your season rankings: your order, the projections\' spacing; the other team\'s side is judged by the public projections, what they see)' : ''} and gain value by your own numbers, ranked by both (a 5% gain in value counts like a point a week). An idea never weakens a starting position you aren't deep at, and one that upgrades more than one of your positions by your numbers ranks higher: a package that reads as an even swap to them and two upgrades to you is the edge. A player's status counts: an out or IR player's points start after the weeks his status says he'll miss (out or doubtful a week, IR or PUP four, a suspension three), an idea says when a player it brings in is out, and one that costs you points this week ranks lower, so you keep winning while you improve. A two-for-one that turns your depth into a starter and adds a point a week or more counts even when it gives up a little value.`
           : 'Fair trades (FantasyCalc\'s values within 5%) of one or two pieces each way that make your starting lineup stronger by value, and theirs too where possible.'}${I.edgeSource === 'season'
           ? ' Your season rankings count on your side, so a swap of equally priced players you rank differently from the market is an idea.'
           : I.edge ? ' Your Value report\'s usage edge counts on your side, so a swap of equally priced players the market misjudges is an idea.' : ''}${I.stance
           ? ' Draft picks come in for teams that are rebuilding (their playoff odds), and from contenders when you are.' : ''}
-        Ideas the other side is likelier to take (a hole of theirs filled, the best player theirs) come first.</p>`;
+        Ideas the other side is likelier to take (a hole of theirs filled, the best player theirs) come first.${I.noQb
+          ? ' Quarterbacks stay out of the ideas here: this league starts one, and a quarterback is easy to find.' : ''}</p>`;
     // The partners whose rosters fit yours: thin where you're deep (what you can spare them), deep where you're thin (what you want).
     const partnersBlock = (I.partners || []).length ? `<div class="tpartners"><h4>Partners who fit</h4><ul>${I.partners.slice(0, 4).map(x => `<li><b>${esc(x.name)}</b>: ${[
         x.need.length ? `thin at ${x.need.join(' and ')}, where you're deep` : '', x.spare.length ? `deep at ${x.spare.join(' and ')}, where you're thin` : ''
@@ -4504,7 +4511,7 @@
     const weekly = n => (I.weeks ? ` (${signed(Math.round(n / I.weeks * 10) / 10)} a week)` : '');
     return `<section class="card pad tideas">${head}${partnersBlock}<ol class="idea-list">${I.list.map((x, i) => `<li class="idea">
         <div class="idea-t"><b>With ${esc(x.partner.name)}</b><span>You give ${names(x.give)} · you get ${names(x.get)}</span>
-          <small>${I.points ? `Your lineup ${pts(x.myPts)} pts rest of season${weekly(x.myPts)}, theirs ${pts(x.theirPts)} · value: your starters ${change(x.myGain)}, theirs ${change(x.theirGain)}`
+          <small>${I.points ? `Your lineup ${pts(x.myPts)} pts rest of season${weekly(x.myPts)}${x.myNow ? `, ${pts(x.myNow)} this week` : ''}, theirs ${pts(x.theirPts)} · value: your starters ${change(x.myGain)}, theirs ${change(x.theirGain)}`
             : `Your starters ${change(x.myGain)} · theirs ${change(x.theirGain)}`}${
             I.edge && disp.fc ? ` · ${I.edgeSource === 'season' ? 'season rankings edge' : 'usage edge'} ${change(x.edge)}` : ''}</small>${(x.why || []).length ? `<small class="iwhy">${x.why.map(esc).join(' · ')}</small>` : ''}</div>
         <button type="button" class="btn small ghost" data-idea="${i}">Open</button></li>`).join('')}</ol></section>`;
@@ -4600,7 +4607,7 @@
       <p>${which === 'give' ? esc(team.name) + ' · tap the players you\'d give' : 'Tap the players you\'d get'}</p></div></header>
       <div class="trows">${rows.map((r, i) => { const {p, x} = r; return `${head(r, i)}<button type="button" class="trow" data-trade="${which}" data-pid="${esc(p.id)}" aria-pressed="${picked.includes(p.id)}">
         ${headshot(p, true)}<span class="who"><b>${esc(p.name)}</b><small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.team || '')}${
-          disp.fc && x && x.pr ? ' · ' + esc(p.pos + x.pr) : ''}</small>${disp.fc ? valueTag(vrows[p.id], x) : ''}</span>
+          disp.fc && x && x.pr ? ' · ' + esc(p.pos + x.pr) : ''}${p.inj ? ` · <span class="bad-text" title="${esc(SCC.missWeeks(p.inj) ? 'About ' + SCC.missWeeks(p.inj) + (SCC.missWeeks(p.inj) === 1 ? ' week' : ' weeks') + ' out by his status' : 'Questionable: playable')}">${esc(p.inj)}</span>` : ''}</small>${disp.fc ? valueTag(vrows[p.id], x) : ''}</span>
         <span class="tval">${disp.num(p) || '–'}${yoursTag(disp, p, disp.fc ? (x || {}).v || 0 : r.t || 0)}${disp.fc && x && x.tr ? `<small class="${x.tr > 0 ? 'good' : 'amber'}" title="Change over the last 30 days">${
           x.tr > 0 ? '▲' : '▼'} ${thousands(Math.abs(x.tr))}</small>` : ''}</span></button>`; }).join('')}${picks}</div></section>`;
   }

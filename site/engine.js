@@ -14,6 +14,14 @@
   // Sleeper injury_status values that mean "do not start this week".
   // Questionable is playable, so it is flagged but never benched.
   var INJ_OUT = {Out: 1, Doubtful: 1, IR: 1, PUP: 1, Sus: 1, NA: 1, DNR: 1, COV: 1};
+  /* How many weeks from now a player's status says he'll miss, for the Trade tab's rest-of-season points and its
+     ideas: a rough timeframe by status (Sleeper gives no return date), so an out or IR player's points start later.
+     Questionable plays. `inj` is a roster player's status text ("Out (knee)"). */
+  var MISS_WEEKS = {Out: 1, Doubtful: 1, COV: 1, NA: 2, Sus: 3, IR: 4, PUP: 4, DNR: 8};
+  function missWeeks(inj) {
+    var s = String(inj || '').split(' ')[0];
+    return MISS_WEEKS[s] || 0;
+  }
 
   // 2026 byes, used only until the first refresh reads Sleeper's schedule.
   var BYE_FALLBACK = {ARI: 14, ATL: 11, BAL: 13, BUF: 7, CAR: 5, CHI: 10, CIN: 6, CLE: 11, DAL: 14, DEN: 10,
@@ -491,7 +499,7 @@
      reasons: +1 when the trade fills a position they're thin at, +1 when they get the single
      most valuable player in it, +1 when a rebuilder gets picks or a contender gets a player for
      picks, -1 when they'd give two starters for one. It tilts the order by 15% a point. */
-  var LINEUP_BIG = 1.0, LINEUP_VALUE = 20, GUARD_WEEKLY = 0.5, UPGRADE_BONUS = 0.1;
+  var LINEUP_BIG = 1.0, LINEUP_VALUE = 20, GUARD_WEEKLY = 0.5, UPGRADE_BONUS = 0.1, NOW_COST = 0.05, NOW_FLOOR = 0.6;
   /* A roster's best lineup by `pts`, added up by position (a flex player counts at his own position):
      {QB: points, RB: points, ...}. Players on IR or the taxi squad and draft picks stay out. */
   function positionPoints(roster, slots, pts) {
@@ -513,6 +521,12 @@
     // upgrades more than one position ranks higher (UPGRADE_BONUS a position past the first).
     var theirPoints = typeof opts.theirPoints === 'function' ? opts.theirPoints : points, guard = !!opts.guard && !!points;
     var myDeep = opts.myDeep || [];
+    // Status and this week (opts.miss(p): weeks a player's status says he'll miss, missWeeks; opts.nowPoints(p): this
+    // week's projection): an idea says when a player it brings in is out and for about how long, carries `myNow`
+    // (what it does to your lineup this week), and ranks lower the more it costs you this week (NOW_COST a point,
+    // never below NOW_FLOOR), so you keep winning while you improve.
+    var miss = typeof opts.miss === 'function' ? opts.miss : null, nowPoints = typeof opts.nowPoints === 'function' ? opts.nowPoints : null;
+    var byNow = nowPoints ? function (roster) { return lineupPoints(roster, slots, nowPoints); } : null, myNowBase = byNow ? byNow(me.roster) : 0;
     var thin = opts.thin || {}, deep = opts.deep || {}, stance = opts.stance || {}, myStance = stance[String(me.id)] || 'mid';
     // The lineup goal (opts.goal 'lineup', with points): the point of a trade is a starting lineup that scores more,
     // so an idea must raise the rest-of-season points of the best lineup. It still has to gain value by your own
@@ -521,9 +535,11 @@
     // Ideas rank by both: the points gained a week plus the value gained as a share of your lineup's (LINEUP_VALUE
     // points a week per whole share: a 5% gain in value counts like a point a week). Without the goal, by value alone.
     var lineup = opts.goal === 'lineup' && !!points, weeks = Math.max(1, Number(opts.weeks) || 16);
+    // Positions kept out of every idea, on both sides (opts.skipPos): a quarterback in a one-QB league is easy to fill.
+    var skipPos = opts.skipPos || [];
     var pool = function (team, withPicks) {
       var list = (team.roster || []).concat(withPicks ? team.picks || [] : []);
-      return list.filter(function (p) { return (p.pos !== 'PICK' || withPicks) && value(p) > 0; })
+      return list.filter(function (p) { return (p.pos !== 'PICK' || withPicks) && value(p) > 0 && skipPos.indexOf(p.pos) < 0; })
         .sort(function (a, b) { return value(b) - value(a); }).slice(0, top);
     };
     var isPick = function (p) { return p.pos === 'PICK'; };
@@ -578,8 +594,13 @@
             if (guard && weakened) return;
           }
           if (trueGain <= 0 && !(lineup && myPts / weeks >= LINEUP_BIG)) return;
-          var why = [], accept = 0;
+          var why = [], accept = 0, myNow = byNow ? round2(byNow(after) - myNowBase) : 0;
           if (ups.length > 1) why.push('upgrades your ' + ups.join(' and ') + ' by your numbers');
+          if (miss) get.forEach(function (p) {
+            var w = miss(p);
+            if (w > 0) why.push(p.name + ' is ' + String(p.inj || 'out').split(' (')[0].toLowerCase() + ', about ' + w + (w === 1 ? ' week' : ' weeks') + ' by his status');
+          });
+          if (byNow && myNow <= -1) why.push('costs you ' + round2(-myNow) + ' this week');
           var fills = give.filter(function (p) { return holes.indexOf(p.pos) >= 0; }).map(function (p) { return p.pos; });
           if (fills.length) { accept++; why.push('fills their hole at ' + fills.filter(function (p, i) { return fills.indexOf(p) === i; }).join(' and ')); }
           var spare = get.filter(function (p) { return !isPick(p) && rich.indexOf(p.pos) >= 0; }).map(function (p) { return p.pos; });
@@ -592,7 +613,7 @@
           else if (theirStance === 'contender' && get.some(isPick) && !give.some(isPick)) { accept++; why.push('they\'re contending, and this brings a player now'); }
           ideas.push({partner: o, give: give, get: get, verdict: R, myGain: round2(gain), trueGain: round2(trueGain),
             theirGain: round2(strength(theirAfter) - theirBase), edge: edge ? Math.round(sumOf(get, edge) - sumOf(give, edge)) : 0,
-            myPts: myPts, theirPts: theirPts, ups: ups, accept: accept, why: why});
+            myPts: myPts, theirPts: theirPts, myNow: myNow, ups: ups, accept: accept, why: why});
         });
       });
     });
@@ -601,7 +622,8 @@
     var score = lineup ? function (x) {
         var ppw = x.myPts / weeks + 0.25 * Math.max(0, Math.min(x.theirPts, x.myPts)) / weeks;
         var value = myTrue ? (x.trueGain + 0.5 * Math.min(x.theirGain, x.trueGain)) / myTrue : 0;
-        return (ppw + LINEUP_VALUE * value) * (1 + 0.15 * x.accept) * (1 + UPGRADE_BONUS * Math.max(0, x.ups.length - 1));
+        var now = Math.max(NOW_FLOOR, 1 - NOW_COST * Math.max(0, -x.myNow));
+        return (ppw + LINEUP_VALUE * value) * (1 + 0.15 * x.accept) * (1 + UPGRADE_BONUS * Math.max(0, x.ups.length - 1)) * now;
       } : function (x) { return (x.trueGain + 0.5 * Math.min(x.theirGain, x.trueGain)) * (1 + 0.15 * x.accept); };
     var helps = lineup ? function (x) { return x.theirPts >= 0; } : function (x) { return x.theirGain >= 0; };
     ideas.sort(function (a, b) { return helps(b) - helps(a) || score(b) - score(a); });
@@ -2979,7 +3001,7 @@
     leaguesFromSleeper: leaguesFromSleeper, describeLeague: describeLeague, slotLabel: slotLabel, scoringDeltas: scoringDeltas, scoringNotes: scoringNotes,
     SEASON_FORMATS: SEASON_FORMATS, seasonFormat: seasonFormat, seasonValues: seasonValues,
     tradeFormat: tradeFormat, valueIndex: valueIndex, playerValue: playerValue, waiverValue: waiverValue, tradeVerdict: tradeVerdict, titanValues: titanValues, positionStrength: positionStrength,
-    lineupPoints: lineupPoints, positionPoints: positionPoints, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, tradePartners: tradePartners, impliedValue: impliedValue, spanPoints: spanPoints,
+    lineupPoints: lineupPoints, positionPoints: positionPoints, missWeeks: missWeeks, draftPicks: draftPicks, standings: standings, tradeIdeas: tradeIdeas, tradePartners: tradePartners, impliedValue: impliedValue, spanPoints: spanPoints,
     flexShares: flexShares, ageFactor: ageFactor,
     draftFromSleeper: draftFromSleeper, draftGrades: draftGrades,
     impliedTotals: impliedTotals, impliedTilt: impliedTilt, dvpFrom: dvpFrom, gameTags: gameTags, scheduleStrength: scheduleStrength, transactionsFrom: transactionsFrom,
