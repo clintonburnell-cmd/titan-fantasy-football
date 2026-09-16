@@ -2538,8 +2538,8 @@
     h += `<div class="bar"><label class="field grow vr-search"><span>Find a player</span><input type="search" data-value-search
         placeholder="Name, team or position" value="${esc(V.q || '')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label></div>
       <p class="empty-note" data-value-none hidden>No player in this report matches that.</p>`;
-    // The chosen format's leagues first.
-    const shown = one ? [one] : [...(R.leagues || [])].sort((a, b) => (a.fmt !== fkey) - (b.fmt !== fkey) || String(a.name).localeCompare(String(b.name)));
+    // Leagues in the same order as every other tab (snapOrder); the format chips pick the lists below, not the order.
+    const shown = one ? [one] : snapOrder(R.leagues || []);
     h += `<h3 class="vr-h">${one ? 'Your moves' : 'Your moves, league by league'}</h3><div class="league-grid">${shown.map(L => {
       const count = L.sell.length + L.buy.length + L.add.length, cfg = cfgOf(L.id);
       return `<details class="card vr-lg"${count ? ' open' : ''}><summary class="card-h"><div><h3>${cfg ? leagueIcon(cfg) : ''}${esc(L.name)}</h3>
@@ -3742,6 +3742,34 @@
   const nth = n => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
   const recordOf = t => `${t.wins}-${t.losses}${t.ties ? '-' + t.ties : ''}`;
 
+  /* Your playoff odds in every league at once (Standings under All leagues): each league's schedule and teams load
+     quietly (loadStandings, loadTradeTeams) and its simulation runs (standingsResult); the rows fill in as they
+     arrive, best odds first, and a tap opens that league's full standings below. Yahoo leagues wait. */
+  function oddsOverview(leagues, openId) {
+    const rows = leagues.filter(d => d.cfg.platform !== 'yahoo').map(d => {
+      const cfg = d.cfg;
+      if (!S.stand[cfg.id]) loadStandings(d);
+      if (!S.trade.teams[cfg.id]) loadTradeTeams(d, true);
+      const St = S.stand[cfg.id], Tm = S.trade.teams[cfg.id];
+      const err = (St && St.error) || (Tm && Tm.error);
+      if (err) return {d, error: true};
+      const R = standingsResult(d);
+      if (!R) return {d};
+      const mineId = String(cfg.platform === 'espn' ? cfg.teamId : d.rosterId), me = R.teams.find(t => t.id === mineId);
+      return me ? {d, me, R} : {d, error: true};
+    });
+    const done = rows.filter(r => r.me).sort((a, b) => b.me.playoffs - a.me.playoffs), waiting = rows.filter(r => !r.me);
+    const inN = done.filter(r => r.me.playoffs >= 0.5).length;
+    const row = r => `<button type="button" class="po-row${r.d.cfg.id === openId ? ' open' : ''}" data-stand="${esc(r.d.cfg.id)}">
+      <span class="po-lg">${leagueIcon(r.d.cfg, 'xs')}<b>${esc(r.d.cfg.key)}</b><small>${r.me ? `${r.me.games ? recordOf(r.me) + ', ' : ''}${nth(r.me.seed)} of ${r.R.teams.length}${
+        r.me.divWinner ? ' ★' : ''} · about ${fmt(r.me.projWins)} wins` : r.error ? 'couldn\'t load' : 'loading…'}</small></span>
+      ${r.me ? `<span class="st-odds"><span class="odds-bar"><i style="width:${Math.round(r.me.playoffs * 100)}%"></i></span><b>${pct(r.me.playoffs)}</b></span>` : '<span class="st-odds"><b>–</b></span>'}</button>`;
+    return `<section class="card pad podds"><div class="card-h"><div><h3>Your playoff odds</h3><p>${done.length === rows.length
+      ? `On track in ${inN} of ${rows.length} leagues (a 50% chance or better)` : `Working out ${plural(waiting.length, 'league')}…`}</p></div></div>
+      <div class="po-list">${done.concat(waiting).map(row).join('')}</div>
+      <p class="fine">Each league's odds from its own standings simulation, best first; ★ marks a division you lead. Tap a league for its full standings.</p></section>`;
+  }
+
   function screenStandings() {
     if (DEMO) return demoOnly('Standings', 'Standings show your real leagues: records, power rankings, luck and each team\'s playoff odds.');
     if (!S.snap) return emptyState();
@@ -3754,7 +3782,8 @@
     if (!S.trade.teams[cfg.id]) loadTradeTeams(d);
     if (!S.trade.season) loadSeasonProj(); // for Position strength
     const St = S.stand[cfg.id], Tm = S.trade.teams[cfg.id];
-    let h = onePick(d, leagues);
+    // Under All leagues, your playoff odds in every league lead, then the league shown in full.
+    let h = (pickedLeague() === 'all' && leagues.length > 1 ? oddsOverview(leagues, cfg.id) : '') + onePick(d, leagues);
     const err = (St && St.error) || (Tm && Tm.error);
     if (err) return h + `<div class="banner stop">${esc(err)} <button class="link" data-action="stand-retry">Try again</button></div>`;
     if (!St || St.busy || !Tm || Tm.busy) return h + '<div class="empty-note">Loading the schedule and every team\'s roster…</div>';
@@ -4591,6 +4620,9 @@
   view.addEventListener('click', e => {
     const c = e.target.closest('[data-sos-pos]');
     if (c) { S.ui.sosPos = c.dataset.sosPos; saveUi(); render(); }
+    // The playoff odds overview: a league's row opens its full standings below.
+    const st = e.target.closest('[data-stand]');
+    if (st) { S.ui.standLeague = st.dataset.stand; saveUi(); render(); const at = view.querySelector('.stand'); if (at) at.scrollIntoView({behavior: 'smooth', block: 'start'}); }
   });
 
   // Copy and open: the link opens the site as usual while the trade goes to the clipboard.

@@ -231,6 +231,9 @@ One note per screen or feature.
   in `app.js`, which the card and the summary at the top share; the summary's filters are
   `MATCH_KINDS` (`S.ui.matchFilter`, chips `data-mfilter`). Opened, the scoreboard (`.board`) shows the
   score, so the header's score row hides.
+- Standings under All leagues (v1.46.0) leads with your playoff odds in every league (`oddsOverview`, `.podds`: each
+  league's schedule and teams load quietly and its simulation runs, rows fill in best odds first, a row
+  (`data-stand`) opens that league's full standings below, `S.ui.standLeague`).
 - The Standings tab (`SCC.standings`): records, all-play, luck, power and playoff odds from 5,000
   seeded simulations (each team scores around its mean with its own swing: the spread of its weekly
   scores blended with the league's, `SD_PRIOR` games' worth, clamped 8 to 45). Divisions (v1.45.0): each
@@ -403,8 +406,8 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   change both together (version 2: every format's lists under `formats`, `main` the format most leagues play, and
   each league's `fmt` and who has each valued player there, `own`; version 1 reports still show). It follows the league
   dropdown (`value` is in `LEAGUE_SCREENS`): a league picked there shows only its moves, the lists in its own format and
-  a Where column (Yours, the team, or Free agent); under All leagues, format chips (`S.ui.valueFmt`) pick the lists and
-  put that format's leagues first. A player search (`data-value-search`, `S.value.q`) and the position chips filter
+  a Where column (Yours, the team, or Free agent); under All leagues, format chips (`S.ui.valueFmt`) pick the lists,
+  and the leagues come in the app's own order (`snapOrder`, like every tab; the owner's ask, v1.46.0). A player search (`data-value-search`, `S.value.q`) and the position chips filter
   the moves and tables in place (`applyValueFilter`, which `render` re-applies). The sell-high lists are "Sell high or
   keep" (the owner's name for them, 2026-09-15): every sell-high row and move carries a verdict (`keep` on rows, `k` on
   moves; `callPill`, `moveTag`), keep (`.p-swap`) when the role is a real starter's or the points come from yards on a

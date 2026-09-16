@@ -1100,6 +1100,16 @@ body.app-page :is(.stand .tnum, .stand .st-odds b) { font-variant-numeric: tabul
 .tl-t tbody th { font-weight: 600; color: var(--muted); }
 .tedge, .tbye, .tstance { font-size: .9rem; }
 .st-div { color: var(--accent-2); font-size: .8em; }
+.podds { display: grid; gap: 8px; }
+.po-list { display: grid; }
+.po-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 8px 4px; border: 0; border-top: 1px solid var(--line);
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.po-row:first-child { border-top: 0; }
+.po-row.open { background: var(--chip); border-radius: 8px; }
+.po-lg { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.po-lg b { display: block; }
+.po-lg small { display: block; color: var(--muted); font-size: .76rem; }
+.po-row .st-odds { flex: none; }
 .idea-t .iwhy { color: var(--accent-2); }
 .ttags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 2px; }
 .ttags .pill { font-size: .64rem; padding: 0 6px; }

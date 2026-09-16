@@ -943,7 +943,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`document.querySelector('[data-vpos="ALL"]').click(); true`);
   await ev(`document.querySelector('[data-vfmt="${DY}"]').click(); true`);
   check(await waitFor(`/Dynasty Guy/.test(${vsec(0)}) && document.querySelector('[data-vfmt="${DY}"]').getAttribute('aria-pressed') === 'true' &&
-    /Value Test League/.test(document.querySelector('.vr-lg h3').textContent)`, 3000), 'a format chip switches the lists to that format, and puts its leagues first');
+    /Value Test League/.test(document.querySelector('.vr-lg h3').textContent)`, 3000), 'a format chip switches the lists to that format; the leagues keep the app\'s own order (yours first)');
   check(!!lid, 'the test league has an id to pick: ' + lid);
   await pickLeague(lid);
   check(await waitFor(`document.querySelectorAll('.vr-lg').length === 1 && !document.querySelector('[data-vfmt]') && /Dynasty Guy/.test(${vsec(0)}) &&
