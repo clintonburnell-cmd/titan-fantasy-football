@@ -2705,8 +2705,18 @@
       const s = `${Math.round(t * 100)}% tgt · ${y.toFixed(1)} yds`;
       return now ? s : `<span class="muted" title="Last season">${s}</span>`;
     };
-    return reportTable(rows, [['Guide', r => guidePill(r.dg)], ['Projection', r => rt.n(r.proj)], ['Points', r => rt.n(r.fp)], ['Over usage', r => rt.sgn(r.fpoe)], ['Snaps', r => rt.share(r.snap)],
-      ['Routes', routes], ['Per route', perRoute],
+    // Workload (the Late-Round playbook's counting stats): a back's carries and targets a game and his archetype; a passer's
+    // rushing points a game and touchdown rate; a receiver's yards a target. Late-Round: the playbook's note on him, as a pill.
+    const has = v => v !== null && v !== undefined;
+    const workload = r => {
+      if (r.p === 'RB') return has(r.car) && has(r.tg) ? `<span title="Opportunity a game: carries plus targets at what a target is worth in this scoring${has(r.opp) ? ` (${r.opp})` : ''}">${r.car.toFixed(1)} car · ${r.tg.toFixed(1)} tgt</span>${
+        r.rbk ? ` <span class="pill p-rbk" title="His archetype by his workload">${esc(r.rbk)}</span>` : ''}` : '–';
+      if (r.p === 'QB') return has(r.rp) ? `${r.rp.toFixed(1)} rush pts${has(r.tdr) ? ` · ${(r.tdr * 100).toFixed(1)}% TD` : ''}` : '–';
+      return has(r.ypt) ? `${r.ypt.toFixed(1)} yds/tgt` : '–';
+    };
+    const playbook = r => (r.pb ? `<span class="pill p-pb" title="${esc(r.pb)}">JJ</span>` : '');
+    return reportTable(rows, [['Guide', r => guidePill(r.dg)], ['Late-Round', playbook], ['Projection', r => rt.n(r.proj)], ['Points', r => rt.n(r.fp)], ['Over usage', r => rt.sgn(r.fpoe)], ['Snaps', r => rt.share(r.snap)],
+      ['Routes', routes], ['Per route', perRoute], ['Workload', workload],
       ['Target share', r => rt.share(r.tgt)], ['Rush share', r => (r.p === 'RB' ? rt.share(r.rs) : '')], ['Red zone', r => rt.n(r.rz)], ['Goal line', goal], ['Garbage time', gt],
       ['By projection', r => rt.rank(r.p, r.ur)], ['Market', r => rt.rank(r.p, r.mr)],
       ['Gap', r => rt.sgn(r.gap, 0)], ['Rank change', r => rt.sgn(r.ch, 0)]], r => [r.p, r.t].filter(Boolean).join(' · '), filtered, where);
@@ -2805,7 +2815,12 @@
       <b>Guide</b> is the draft guide's take on him (a player to target, to avoid, or a late-round dart, with its confidence out of 10; hollow once
       the market caught up and he came off the list): hover for the thesis and what to watch this season. A buy the guide agrees with (a target)
       or a sell it agrees with (an avoid) ranks higher by its confidence; a call it argued against still stands, since the usage is the evidence,
-      but ranks lower and says so. <b>Over usage</b> is this season's points a game
+      but ranks lower and says so. <b>Late-Round</b> is the playbook's note on him (hover: what JJ Zachariason's studies say about a player like
+      this, from 42 of his research episodes): each reason ranks a call it agrees with higher, ranks one it argues with lower, or blocks it.
+      <b>Workload</b> is the number behind it: a back's carries and targets a game and his archetype (a bell cow, a mini bell cow with 10-15
+      carries and 2+ targets, the workload that produces now; a two-down back; a pass-game specialist, a role that rarely holds a season now),
+      a passer's rushing points a game (the stickiest part of his line) and touchdown rate (6% or more falls back; 4.4% is normal), and a
+      receiver's yards a target (10.5 or more falls). <b>Over usage</b> is this season's points a game
       minus expected: big positives tend to fall back and big negatives to recover. <b>By projection</b> and <b>market</b> are his place at his position by
       projection and by FantasyCalc's trade value; a <b>gap</b> of +10 means the market ranks him ten spots lower. A call needs that gap in value
       terms too (what the market pays at his projected rank against what it pays for him, a quarter apart at least), so a few spots at the top of a

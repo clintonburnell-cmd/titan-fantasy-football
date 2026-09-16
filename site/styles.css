@@ -458,6 +458,8 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .p-guide.g-avoid { background: var(--swap-bg); color: var(--swap-ink); border-color: var(--swap-bg); }
 .p-guide.g-dart { background: var(--surface-2); color: var(--text); border-color: var(--line); }
 .p-guide.g-off { background: transparent; color: var(--faint); border-color: var(--line); }
+.p-rbk { background: var(--surface-2); color: var(--text); border: 1.5px solid var(--line); white-space: nowrap; }
+.p-pb { background: var(--ok-soft); color: var(--ok); border: 1.5px solid var(--ok-soft); cursor: help; }
 .vr-p .p-guide { margin-right: 6px; }
 
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
