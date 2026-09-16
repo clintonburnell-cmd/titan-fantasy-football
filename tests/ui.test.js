@@ -420,6 +420,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`(() => { const s = document.querySelector('[data-ui="tradePartner"]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
   check(await waitFor(`document.querySelectorAll('.tteam').length === 2 && document.querySelectorAll('.tteam .trow').length > 20`, 5000),
     'picking a partner shows both rosters');
+  check(await ev(`(() => { const bars = document.querySelectorAll('.tpick'), sum = document.querySelector('.trade-sum');
+    return bars.length === 2 && bars[1].classList.contains('tpick-trade') && !!sum && (bars[1].compareDocumentPosition(sum) & Node.DOCUMENT_POSITION_FOLLOWING) > 0 &&
+      document.querySelectorAll('[data-ui="tradePartner"]').length >= 2 && document.querySelectorAll('[data-ui="tradePartner"]')[1].value === document.querySelector('[data-ui="tradePartner"]').value; })()`),
+    'the league and partner pickers appear twice: at the top, and again right above the trade (the give/get box), in step');
   check(await waitFor(`/You are/.test((document.querySelector('.tfit') || {}).textContent || '')`, 20000),
     'with a partner picked, a card says where each team is thin or deep: ' + (await text('.tfit p')).replace(/\s+/g, ' ').slice(0, 110));
   check(await ev(`document.querySelectorAll('.tteam .trow .pos[data-pos]').length > 20 && !!document.querySelector('.tteam .trow .pos[data-pos="QB"]')`),

@@ -373,7 +373,10 @@ One note per screen or feature.
   `positionStrength` like `thin`). `SCC.tradePartners(meId, PS)` (pure, tested) lists the partners whose
   rosters fit yours (thin where you're deep, deep where you're thin, `PARTNER_GAP` 0.6 z apart) and the
   card shows the top four above the ideas, each idea leading with the points it adds (and per week,
-  `I.weeks`). The ideas card is one line until Find trades, and Clear folds it back. The edge (v1.39.0, the owner's ask for "an edge in statistical
+  `I.weeks`). The ideas card is one line until Find trades, and Clear folds it back. The Trade tab's League and
+  Trade partner pickers (`pickBar`, v1.54.1) render twice, at the top (with Clear all) and again right above the
+  trade summary and rosters (`.tpick-trade`); `data-ui="tradeLeague"` sets `S.ui.tradeLeague` (and `S.ui.league`
+  when the top dropdown names a league) and clears the partner. The edge (v1.39.0, the owner's ask for "an edge in statistical
   trades"): the market's values alone can't find one (every fair trade is one the market calls even), so the Trade tab
   reads the numbers behind the market. For the owner, the Value report's rows for the league's format (`valueRowsFor`,
   `S.value.rows`, loaded on the Trade tab too) give each player's usage edge (`edgeFor`: `SCC.impliedValue` from the

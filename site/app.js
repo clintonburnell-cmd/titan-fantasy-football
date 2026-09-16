@@ -4360,17 +4360,20 @@
     const P = S.trade.pick;
     if (P.league !== d.cfg.id || P.partner !== (partner ? partner.id : '')) Object.assign(P, {league: d.cfg.id, partner: partner ? partner.id : '', give: [], get: []});
 
-    // The partner picker sits at the top and, once a partner is picked, heads their roster card too.
+    // The league and partner pickers sit at the top and again above the trade itself (the give/get box and the rosters),
+    // so a long page never means scrolling back up to switch; once a partner is picked, the partner picker heads
+    // their roster card too. The league picker here mirrors the dropdown at the top when that names a league.
     const partnerOptions = `<option value="">Pick a team</option>${teams.filter(t => !t.mine).map(t =>
       `<option value="${esc(t.id)}"${t === partner ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}`;
+    const leagueOptions = leagues.map(x => `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('');
     const canReset = !!(partner || P.give.length || P.get.length || S.trade.ideas[d.cfg.id] || S.trade.q);
+    const pickBar = (where, extra) => `<div class="bar tpick tpick-${where}">
+        ${leagues.length > 1 ? `<label class="field"><span>League</span><select data-ui="tradeLeague">${leagueOptions}</select></label>` : ''}
+        <label class="field"><span>Trade partner</span><select data-ui="tradePartner"${teams.length ? '' : ' disabled'}>${partnerOptions}</select></label>${extra || ''}
+      </div>`;
     let h = `<p class="credit">${fcShown() ? 'Trade values' : 'Who wins is weighed with trade values'} by <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>${
       V && V.at ? `, updated ${esc(when(V.at))}` : ''}. Titan isn't affiliated with FantasyCalc.</p>
-      ${onePick(d, leagues)}
-      <div class="bar">
-        <label class="field"><span>Trade partner</span><select data-ui="tradePartner"${teams.length ? '' : ' disabled'}>${partnerOptions}</select></label>
-        <button type="button" class="btn ghost small treset" data-action="trade-reset"${canReset ? '' : ' disabled'}>Clear all</button>
-      </div>
+      ${pickBar('top', `<button type="button" class="btn ghost small treset" data-action="trade-reset"${canReset ? '' : ' disabled'}>Clear all</button>`)}
       ${seasonListFor(d.cfg) ? `<p class="fine tseason">Your ${esc(seasonLabel(seasonListFor(d.cfg).key))} season rankings set your own values here: "yours" beside a
         player you rank well apart from the market, and the edge on each trade. <button class="link" data-go="season">Season rankings</button></p>` : ''}
       <p class="fine">${fcShown() ? `Values for ${esc(formatName(f))}: what players like these go for in real trades.`
@@ -4398,6 +4401,7 @@
         <input type="search" data-trade-search placeholder="At least three letters" value="${esc(S.trade.q || '')}" autocomplete="off"
           autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="tsearch">${tradeSearchResults()}</div></section>`;
     h += tradeIdeasCard(d.cfg, disp) + draftCard(d.cfg);
+    h += pickBar('trade'); // the same pickers again, right above the trade
     if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth, V.waiver, disp);
     // How both rosters sort: by value, by position, or by position then value (remembered).
     const sort = TRADE_SORTS.some(x => x[0] === S.ui.tradeSort) ? S.ui.tradeSort : 'value';
@@ -5204,6 +5208,13 @@
     if (t.dataset.wdrop) { wPlan().drop[t.dataset.wdrop] = t.value; saveUi(); return; }
     if (t.dataset.ui === 'league') { S.ui.league = t.value; saveUi(); render(); }
     else if (t.dataset.ui === 'tradePartner') { S.ui.tradePartner = t.value; saveUi(); render(); }
+    else if (t.dataset.ui === 'tradeLeague') {
+      // The Trade tab's own league picker: the screen's pick, and the dropdown at the top too when that names a league.
+      S.ui.tradeLeague = t.value;
+      if (pickedLeague() !== 'all') S.ui.league = t.value;
+      S.ui.tradePartner = '';
+      saveUi(); render();
+    }
     else if (t.dataset.ui === 'lineWeek') { S.look.week = Number(t.value) || 0; S.look.error = ''; render(); }
     else if (t.dataset.alert) {
       if (S.alerts) S.alerts.prefs[t.dataset.alert] = t.checked;
