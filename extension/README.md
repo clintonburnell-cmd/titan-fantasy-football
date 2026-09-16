@@ -17,7 +17,13 @@ owner-only Value report and Data dump, read from his Titan account.
   the projection's edge), and the points a game, with a verdict (even within 8%, or who wins by how much). It is the
   pieces' own numbers, not your lineup's change; the link opens Titan's Trade tab for that (lineup points, partners,
   what the other side would accept). Sleeper's own trade screen isn't read (its markup isn't documented), so the
-  picks are typed.
+  picks are typed. With both sides picked, "Send this trade to Titan's trade analyzer" opens Titan's Trade tab with
+  the league and both sides filled in (`/app/trade?trade=<league>:<give ids>:<get ids>`; Titan finds the partner from
+  the players you'd get).
+- **Links into Titan** at the panel's foot: Lineups, Waivers and Value for the league on screen (`/app/<tab>?league=<id>`
+  picks that league in Titan's dropdown). The panel's own Start section is the Data dump's start ideas and its Claims
+  section the Value report's claims with a bid and a drop; the full recommended lineup and waiver plan (which need your
+  imported rankings and every roster) stay in Titan.
 - **The popup**: Connect to Titan, Refresh reports, Sign out, and switches for the pills and the panel.
 
 It never writes to Sleeper (no lineups, claims or trades are submitted): step 2, composing a trade on Sleeper's

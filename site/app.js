@@ -171,6 +171,31 @@
     q.delete('yahoo');
     if (location.protocol !== 'file:') history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
   }
+  /* A trade sent in from outside (the Titan for Sleeper extension's trade check): /app/trade?trade=<league id>:<give
+     ids>:<get ids>, player ids comma-separated. It waits in S.trade.pending until the Trade tab has that league's
+     teams, then fills the builder: the partner is whichever team has the players you'd get. */
+  const tradeIn = new URLSearchParams(location.search).get('trade');
+  // ?league=<id> opens the screen with that league picked in the dropdown (the extension's Lineups and Waivers links).
+  const leagueIn = new URLSearchParams(location.search).get('league');
+  if (leagueIn) {
+    S.ui.league = leagueIn;
+    const q = new URLSearchParams(location.search);
+    q.delete('league');
+    if (location.protocol !== 'file:') history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+  }
+  if (tradeIn) {
+    // The last two fields are the sides; the rest is the league id (ESPN's own carry a colon: espn:<id>).
+    const parts = tradeIn.split(':'), get = parts.length > 2 ? parts.pop() : '', give = parts.length > 1 ? parts.pop() : '', lg = parts.join(':');
+    const ids = s => (s || '').split(',').map(x => x.trim()).filter(Boolean);
+    if (lg) {
+      S.trade.pending = {league: lg, give: ids(give), get: ids(get)};
+      Object.assign(S.ui, {tab: 'trade', tradeLeague: lg});
+      if (pickedLeague() !== 'all') S.ui.league = lg;
+    }
+    const q = new URLSearchParams(location.search);
+    q.delete('trade');
+    if (location.protocol !== 'file:') history.replaceState(history.state, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+  }
   if (S.snap && S.account && S.snap.userId !== S.account.userId) { S.snap = null; store.del(KEY.snap); }
   // Yahoo's terms: its data is kept a day at most, so an older saved refresh loses its Yahoo
   // leagues (the next refresh brings them back).
@@ -4422,7 +4447,7 @@
       `<option value="${esc(t.id)}"${t === partner ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}`;
     const leagueOptions = leagues.map(x => `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('');
     const canReset = !!(partner || P.give.length || P.get.length || S.trade.ideas[d.cfg.id] || S.trade.q);
-    const pickBar = (where, extra) => `<div class="bar tpick tpick-${where}">
+    const pickBar = (where, extra) => `<div class="bar tpick tpick-${where}" data-league="${esc(d.cfg.id)}"${S.trade.pending ? ` data-pending="${esc(S.trade.pending.league)}"` : ''}>
         ${leagues.length > 1 ? `<label class="field"><span>League</span><select data-ui="tradeLeague">${leagueOptions}</select></label>` : ''}
         <label class="field"><span>Trade partner</span><select data-ui="tradePartner"${teams.length ? '' : ' disabled'}>${partnerOptions}</select></label>${extra || ''}
       </div>`;
@@ -4448,6 +4473,21 @@
     const val = p => SCC.playerValue(V.idx, p), worth = p => (val(p) || {}).v || 0, disp = tradeDisplay(d.cfg, V);
     // Players and, in dynasty leagues, draft picks.
     const assets = t => t.roster.concat(t.picks || []);
+    // A trade sent in from outside (S.trade.pending, see the address handling at the top): once this league's teams are
+    // here, the partner is the team holding the players you'd get, and both sides go into the builder.
+    const pend = S.trade.pending;
+    if (pend && pend.league === d.cfg.id) {
+      S.trade.pending = null;
+      const has = (t, id) => assets(t).some(p => String(p.id) === String(id));
+      const other = teams.find(t => !t.mine && pend.get.some(id => has(t, id))) || (partner || null);
+      if (other) {
+        S.ui.tradePartner = other.id;
+        Object.assign(P, {league: d.cfg.id, partner: other.id, give: pend.give.filter(id => has(me, id)), get: pend.get.filter(id => has(other, id))});
+        saveUi();
+        setTimeout(() => { render(); const sum = view.querySelector('.trade-sum'); if (sum) sum.scrollIntoView({behavior: 'smooth', block: 'start'}); }, 0);
+        return h + '<div class="empty-note">Setting up the trade…</div>';
+      }
+    }
     const give = P.give.map(id => assets(me).find(p => p.id === id)).filter(Boolean);
     const get = partner ? P.get.map(id => assets(partner).find(p => p.id === id)).filter(Boolean) : [];
     const PS = partner ? strengthOf(d.cfg, teams) : null;

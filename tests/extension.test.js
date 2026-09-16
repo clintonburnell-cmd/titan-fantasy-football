@@ -125,7 +125,8 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     check('a pill\'s hover carries the Late-Round note and the draft guide take', /Late-Round: 5.2 rushing points/.test(titles) && /Draft guide: target 2\/10/.test(titles), titles.slice(0, 200));
     check('the league panel names the league and its sections', /Titan · Test League/.test(panel) && /Start/.test(panel) && /Claims/.test(panel) && /Buy low/.test(panel) && /Sell high or keep/.test(panel), panel.slice(0, 300));
     check('the claim shows its drop and a bid from the league\'s winning bids', /drop Bench Guy/.test(panel) && /bid about \$\d+ of \$80 left/.test(panel), panel.slice(panel.indexOf('Claims'), panel.indexOf('Claims') + 220));
-    check('the panel carries the position note and a link to Titan', /Thin at RB/.test(panel) && /Open in Titan/.test(panel), '');
+    const foot = await P.evaluate('[...document.querySelector("titan-panel").shadowRoot.querySelectorAll(".foot a")].map(a => a.href).join(" ")', false);
+    check('the panel carries the position note and links to Titan\'s Lineups, Waivers and Value for this league', /Thin at RB/.test(panel) && /app\/lineups\?league=999/.test(foot) && /app\/waivers\?league=999/.test(foot), foot);
     // The trade check: type a name on each side, pick the suggestion, read the totals and the verdict.
     const sr = 'document.querySelector("titan-panel").shadowRoot';
     const type = async (side, text) => {
@@ -146,6 +147,8 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     const totals = await P.evaluate(`${sr}.querySelector('.totals').textContent`, false);
     // Give Allen (6000, even), get Mahomes (4000 with an 18% edge: worth 4878) and Warren (2000 with 31%: 2899): you win by about 23% of Titan's worth, and gain 10.4 points a game across the pieces.
     check('the trade check totals both sides and gives a verdict', /You win by 2[0-9]% of Titan's worth/.test(totals) && /gain 10\.4 points a game/.test(totals) && /Yougive6000/.test(totals.replace(/\s+/g, '')) && /Youget6000/.test(totals.replace(/\s+/g, '')), totals.slice(0, 260));
+    const send = await P.evaluate(`(${sr}.querySelector('a.send') || {}).href || ''`, false);
+    check('the trade can be sent to Titan\'s Trade tab with the league and both sides in the address', send === 'https://titanfantasyfootball.com/app/trade?trade=999:333:111,222', send);
     await P.evaluate(`${sr}.querySelector('button[data-remove="222"]').click()`, false);
     await sleep(200);
     const after1 = await P.evaluate(`${sr}.querySelector('.totals').textContent`, false);

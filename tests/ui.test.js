@@ -542,6 +542,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`!document.querySelector('dialog.dlg[open]') && location.pathname === '/app/trade' && !!document.querySelector('[data-action="draft-open"]')`, 3000),
     'Back closes it too (the Android app\'s Back button) and stays on the Trade tab');
 
+  // A trade sent in by address (the Sleeper extension's trade check): /app/trade?trade=<league>:<give ids>:<get ids>.
+  // The partner is whichever team holds the players you'd get; the builder fills, the address is cleaned up.
+  await ev(`(() => { const s = document.querySelector('[data-ui="tradePartner"]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
+  await waitFor(`document.querySelectorAll('.tteam').length === 2 && document.querySelectorAll('.tteam .trow[data-trade="get"]').length > 5`, 5000);
+  const sent = await ev(`(() => { const p = document.querySelector('[data-ui="tradePartner"]'); const rows = [...document.querySelectorAll('.tteam .trow')];
+    const give = rows.filter(r => r.dataset.trade === 'give').slice(0, 2).map(r => r.dataset.pid), get = rows.filter(r => r.dataset.trade === 'get').slice(0, 1).map(r => r.dataset.pid);
+    return {partner: p.value, give, get}; })()`);
+  // The app's id for an ESPN league is espn:<id> (espn.js, leagueCfg).
+  await send('Page.navigate', {url: `${ORIGIN}/app/trade?trade=${encodeURIComponent('espn:' + L1.id)}:${sent.give.join(',')}:${sent.get.join(',')}`});
+  const filled = await waitFor(`document.querySelectorAll('.trade-sum .tchip').length === 3 && document.querySelector('[data-ui="tradePartner"]').value === ${JSON.stringify(sent.partner)}`, 30000);
+  check(filled, 'a trade sent in by address fills the builder: the partner who holds the players you\'d get, two given and one got' + (filled ? '' : ': ' + JSON.stringify(await ev(`({chips: document.querySelectorAll('.trade-sum .tchip').length,
+      partner: (document.querySelector('[data-ui="tradePartner"]') || {}).value, want: ${JSON.stringify(sent)}, path: location.pathname,
+      league: (document.querySelector('.tpick') || {}).dataset && document.querySelector('.tpick').dataset.league, pending: (document.querySelector('.tpick') || {}).dataset && document.querySelector('.tpick').dataset.pending,
+      text: document.getElementById('view').textContent.replace(/\\s+/g, ' ').slice(0, 200)})`))));
+  check(await ev(`!location.search.includes('trade=')`), 'and the address is cleaned up afterwards');
+
   T.section('game context on Lineups');
   await tab('lineups');
   check(await waitFor(`[...document.querySelectorAll('.lineup .gctx')].some(s => /team expected 28.5 pts/.test(s.textContent) && /wind 20 mph/.test(s.textContent))`, 10000),

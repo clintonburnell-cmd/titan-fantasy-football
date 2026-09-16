@@ -126,6 +126,7 @@
       .totals b.win { color: #15803d; } .totals b.lose { color: #b91c1c; }
       .totals table { border-collapse: collapse; width: 100%; margin-top: 4px; }
       .totals td { padding: 2px 0; } .totals td.n { text-align: right; font-variant-numeric: tabular-nums; }
+      a.send { display: inline-block; margin-bottom: 4px; padding: 6px 10px; border-radius: 8px; background: #1f4fb8; color: #fff; text-decoration: none; font-weight: 700; }
     `;
   }
 
@@ -145,6 +146,10 @@
   function tradeTotals() {
     const sum = (side, f) => S.trade[side].map(sid => S.index.bySid.get(sid)).filter(Boolean).reduce((a, r) => a + (f(r) || 0), 0);
     if (!S.trade.give.length && !S.trade.get.length) return '<p class="note">Pick the players you\'d give and get: each side\'s market value, what Titan says they\'re worth, and the points a game.</p>';
+    const picked = S.trade.give.concat(S.trade.get).map(sid => S.index.bySid.get(sid)).filter(Boolean);
+    if (picked.length && picked.every(r => r.v === null || r.v === undefined)) {
+      return '<p class="note">This report was fetched before market values were added to it: open the extension\'s popup and press Refresh reports, then pick the players again.</p>';
+    }
     const give = {v: sum('give', r => r.v), w: sum('give', worth), p: sum('give', r => r.proj)};
     const get = {v: sum('get', r => r.v), w: sum('get', worth), p: sum('get', r => r.proj)};
     const dv = get.w - give.w, base = Math.max(give.w, get.w) || 1, share = dv / base;
@@ -161,8 +166,12 @@
 
   function tradeSection() {
     if (!S.index || !S.index.bySid.size) return '';
+    // Sending the picks to Titan's Trade tab: /app/trade?trade=<league>:<give ids>:<get ids>; Titan finds the partner from the get side.
+    const L = S.index.league, both = S.trade.give.length && S.trade.get.length;
+    const link = L && both ? `${APP}trade?trade=${encodeURIComponent(L.id)}:${S.trade.give.join(',')}:${S.trade.get.join(',')}` : `${APP}trade`;
     return `<details class="trade"${S.trade.give.length || S.trade.get.length ? ' open' : ''}><summary>Trade check</summary>${tradeSide('give', 'You give')}${tradeSide('get', 'You get')}${tradeTotals()}
-      <p class="note"><a href="${APP}trade" target="_blank" rel="noopener">Open Titan's Trade tab</a> for the full analysis (lineup points, partners, what they'd accept).</p></details>`;
+      <p class="note">${both ? `<a class="send" href="${link}" target="_blank" rel="noopener">Send this trade to Titan's trade analyzer</a> for the full analysis (your lineup's points, what they'd accept).`
+        : `<a href="${link}" target="_blank" rel="noopener">Open Titan's Trade tab</a> for the full analysis (lineup points, partners, what they'd accept). Pick both sides here to send them across.`}</p></details>`;
   }
 
   function wireTrade(root) {
@@ -229,7 +238,8 @@
     else body = tradeSection() + section('Start', DL && DL.start, 'start') + section('Claims', (L && L.add) || [], 'add') + section('Pickups (data dump)', (DL && DL.add) || [], 'add')
       + section('Buy low', (L && L.buy) || [], 'buy') + section('Sell high or keep', (L && L.sell) || [], 'sell') + section('Watch', (DL && DL.watch) || [], 'watch')
       + (L && L.need ? `<p class="note">${esc(L.need)}</p>` : '')
-      + `<div class="foot"><span>Week ${esc(V.week)}${V.through ? ' · ' + esc(V.through) : ''}</span><a href="${APP}value" target="_blank" rel="noopener">Open in Titan</a></div>`;
+      + `<div class="foot"><span>Week ${esc(V.week)}${V.through ? ' · ' + esc(V.through) : ''}</span><span>In Titan: ${
+        [['lineups', 'Lineups'], ['waivers', 'Waivers'], ['value', 'Value']].map(([t, n]) => `<a href="${APP}${t}?league=${encodeURIComponent(S.leagueId)}" target="_blank" rel="noopener">${n}</a>`).join(' · ')}</span></div>`;
     const name = (L && L.name) || (DL && DL.name) || 'this league';
     host.shadowRoot.innerHTML = `<style>${panelStyles()}</style><div class="box${S.open ? '' : ' closed'}">
       <div class="head" id="head"><span class="mark">T</span><b>Titan · ${esc(name)}</b><small>${S.open ? '▾' : '▴'}</small></div><div class="body">${body}</div></div>`;
