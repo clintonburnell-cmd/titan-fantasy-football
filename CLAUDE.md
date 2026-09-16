@@ -452,7 +452,15 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   scorer with the goal-line work reads keep, a tight end's role shift is read by target share, and young players
   with no last season who already hold a real role join the risers. The Data dump's rows carry `imp` (his team's
   expected points from the betting line, the Team pts column) and `sp` (its spread, negative when favored): its
-  adjusted number follows the game after the matchup, and a back on a big favorite gets a little more.
+  adjusted number follows the game after the matchup, and a back on a big favorite gets a little more. Since
+  titan-analytics v1.7.0 (Titan v1.51.0) the Value rows carry routes from nflverse's participation data (who was on
+  the field for each dropback): `rt` (route share, this season), `prt` (last season's), `tprr`/`yprr` (targets and
+  yards per route) and `ptprr`/`pyprr` (last season's), `hv` (the share of his routes with two or fewer receivers on
+  the field); the Routes and Per route columns show last season's in grey (`.muted`) until this season's is
+  published (the report's notes say so). Never write a Firestore rule that checks the document ID on a read of a
+  collection the app lists whole (`ranks`, `seasonRanks`): a list query can't be proved against an ID pattern and
+  comes back permission-denied (sync failed for everyone from the 2026-09-15 security release until v1.51.0); keep
+  ID patterns on writes.
 
 ## Server, ESPN and alerts
 

@@ -13,13 +13,16 @@ service cloud.firestore {
       allow read, delete: if own(uid);
       allow create, update: if own(uid) && request.resource.data.keys().hasOnly(['account', 'alertsOn', 'lastSeen']);
     }
-    // Each week's rankings.
+    // Each week's rankings. Reads don't check the ID: the app reads the whole collection at once, and a
+    // list query can't be proved against an ID pattern (it came back permission-denied, and sync failed).
     match /users/{uid}/ranks/{week} {
-      allow read, write: if own(uid) && week.matches('^[0-9]{1,2}$');
+      allow read: if own(uid);
+      allow write: if own(uid) && week.matches('^[0-9]{1,2}$');
     }
     // Season rankings, one per kind of league: redraft or dynasty, 1QB or superflex, optionally TE Premium.
     match /users/{uid}/seasonRanks/{format} {
-      allow read, write: if own(uid) && format.matches('^(redraft|dynasty)-(1qb|sf)(-tep)?$');
+      allow read: if own(uid);
+      allow write: if own(uid) && format.matches('^(redraft|dynasty)-(1qb|sf)(-tep)?$');
     }
     // Each week's frozen record of Titan's calls: the server job writes it, the app only reads it.
     match /users/{uid}/history/{week} {

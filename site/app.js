@@ -2671,7 +2671,19 @@
     const gt = r => (r.gt === null || r.gt === undefined ? '–' : r.gt >= 0.2 ? `<span class="amber">${Math.round(r.gt * 100)}%</span>` : Math.round(r.gt * 100) + '%');
     // Goal line: a back's share of his team's carries inside the 10; a pass catcher's end-zone targets a game.
     const goal = r => (r.p === 'RB' ? rt.share(r.gl) : r.p === 'QB' ? '' : rt.n(r.ez));
+    // Routes: his share of his team's dropbacks he ran a route on (this season's, or last season's in grey until
+    // nflverse publishes this season's), and per route: targets and yards.
+    const routes = r => (r.p === 'QB' ? '' : r.rt !== null && r.rt !== undefined ? rt.share(r.rt)
+      : r.prt !== null && r.prt !== undefined ? `<span class="muted" title="Last season">${rt.share(r.prt)}</span>` : '–');
+    const perRoute = r => {
+      if (r.p === 'QB' || r.p === 'RB') return '';
+      const now = r.tprr !== null && r.tprr !== undefined, t = now ? r.tprr : r.ptprr, y = now ? r.yprr : r.pyprr;
+      if (t === null || t === undefined || y === null || y === undefined) return '–';
+      const s = `${Math.round(t * 100)}% tgt · ${y.toFixed(1)} yds`;
+      return now ? s : `<span class="muted" title="Last season">${s}</span>`;
+    };
     return reportTable(rows, [['Projection', r => rt.n(r.proj)], ['Points', r => rt.n(r.fp)], ['Over usage', r => rt.sgn(r.fpoe)], ['Snaps', r => rt.share(r.snap)],
+      ['Routes', routes], ['Per route', perRoute],
       ['Target share', r => rt.share(r.tgt)], ['Rush share', r => (r.p === 'RB' ? rt.share(r.rs) : '')], ['Red zone', r => rt.n(r.rz)], ['Goal line', goal], ['Garbage time', gt],
       ['By projection', r => rt.rank(r.p, r.ur)], ['Market', r => rt.rank(r.p, r.mr)],
       ['Gap', r => rt.sgn(r.gap, 0)], ['Rank change', r => rt.sgn(r.ch, 0)]], r => [r.p, r.t].filter(Boolean).join(' · '), filtered, where);
@@ -2746,7 +2758,10 @@
       receiver's), plus the part of what he's scored above or below his usage over the last two seasons that carries. A touch in <b>garbage time</b>
       (the fourth quarter with the game decided) counts a quarter toward his usage, and a player with 40% or more of his touches there is never a
       buy-low, and a week's usage is steadied halfway toward a normal play count, so a team that ran 86 plays doesn't make a role look bigger than
-      it is. <b>Rush share</b> is a back's share of his team's carries. <b>Goal line</b> is a back's share of his team's carries inside the 10, or a
+      it is. <b>Routes</b> is his route share: the share of his team's dropbacks he was on the field for (nflverse's participation data; grey means
+      last season's, until this season's is published), and <b>per route</b> how often he's targeted and the yards he gains on each. A receiver's or
+      tight end's role is read by route share when it's in, a receiver or tight end running routes on under 40% of dropbacks is never a buy-low, and
+      the points tend to follow the routes. <b>Rush share</b> is a back's share of his team's carries. <b>Goal line</b> is a back's share of his team's carries inside the 10, or a
       pass catcher's end-zone targets a game: touchdowns that come with that work hold up, so a sell-high on touchdowns reads keep when it's there.
       <b>Over usage</b> is this season's points a game
       minus expected: big positives tend to fall back and big negatives to recover. <b>By projection</b> and <b>market</b> are his place at his position by
