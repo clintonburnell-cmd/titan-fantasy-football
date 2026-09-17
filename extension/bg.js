@@ -237,7 +237,8 @@ async function analyze() {
       // the latest kickoffs as in the app, and the nudge before kickoff knows when each player locks.
       const kicks = await weekKickoffs(week);
       if (kicks) snap.kickoffs = kicks;
-      const A = SCC.analyzeAll(snap, SCC.rankingsBy(rows, hasProj ? proj : null, players && players.map ? players.map : players), tilt ? {tilt} : undefined);
+      const A = SCC.analyzeAll(snap, SCC.rankingsBy(rows, hasProj ? proj : null, players && players.map ? players.map : players),
+        tilt ? {tilt, rankOf: p => SCC.matchupRank(tables, p.team, p.pos)} : undefined);
       const leagues = {};
       A.leagues.forEach(L => { leagues[String(L.cfg.id)] = trimLeague(L, week, proj, snap.games, kicks); });
       // This week's matchups, best effort: a failure leaves the lineups standing.

@@ -1975,7 +1975,11 @@
   function closeByRank(a, b) {
     var ta = Number(a.tier), tb = Number(b.tier);
     var tiered = a.tier !== '' && a.tier !== null && a.tier !== undefined && isFinite(ta) && b.tier !== '' && b.tier !== null && b.tier !== undefined && isFinite(tb);
-    return tiered ? ta === tb : Math.abs(a.rank - b.rank) <= CLOSE;
+    // A different tier is never close. The same tier is close only when the two are near each other as well: in a long
+    // file a tier holds dozens of players, and the order inside it is still the ranker saying who he prefers (v1.75.0,
+    // after WR46 and WR59 in the same tier were called a coin flip).
+    var near = Math.abs(a.rank - b.rank) <= CLOSE;
+    return tiered ? ta === tb && near : near;
   }
   function closeCallPairs(opt, roster) {
     var starting = {}, out = [], taken = {};
@@ -2374,12 +2378,21 @@
     var act = actualLineup(d.roster, slots);
     var opt = flexLate(optimal(d.roster, slots), act, d.kickAt || function () { return 0; });
     var tilt = opts && typeof opts.tilt === 'function' ? opts.tilt : null, tilts = [];
-    if (tilt && ranked) {
+    var rankOf = opts && typeof opts.rankOf === 'function' ? opts.rankOf : null;
+    if (tilt && rankOf && ranked) {
       closeCallPairs(opt, d.roster).forEach(function (pair) {
         var a = Number(tilt(pair.starter, d.cfg)), b = Number(tilt(pair.bench, d.cfg));
         if (!isFinite(a) || !isFinite(b) || b - a < TILT_MARGIN) return;
+        // Never move a player carrying an injury tag into the lineup over a healthy starter: the projection is written
+        // as though he plays, and it is not the projection's job to judge a hamstring (v1.75.0).
+        if (pair.bench.inj && !pair.starter.inj) return;
+        // And it is a MATCHUP tilt: the matchup has to be what favours him. Two players in the same spot on the
+        // matchup board differ only by projection, and the rankings already had their say on that (v1.75.0, after a
+        // WR ranked 28 spots lower was started on a six-point projection gap with identical matchups).
+        var mi = rankOf(pair.bench, d.cfg), mo = rankOf(pair.starter, d.cfg);
+        if (!(tiltFromRank(mi) > tiltFromRank(mo))) return;
         opt.forEach(function (o) { if (o.p && o.p.id === pair.starter.id) o.p = pair.bench; });
-        tilts.push({inn: pair.bench, out: pair.starter, by: round1(b - a)});
+        tilts.push({inn: pair.bench, out: pair.starter, by: round1(b - a), muIn: mi, muOut: mo});
       });
       if (tilts.length) opt = flexLate(opt, act, d.kickAt || function () { return 0; });
     }

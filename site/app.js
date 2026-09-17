@@ -319,7 +319,7 @@
     // The owner's matchup sheet feeds the tilt (matchRank), so it loads before the calls are made.
     if ((S.owner.is || S.owner.lab) && !S.mu.at && !S.mu.busy) loadMuData();
     const r = ranksFor(S.snap.week, S.proj), tilt = tiltFor();
-    S.A = SCC.analyzeAll(S.snap, rankingsOf(r, S.proj, playerList()), tilt ? {tilt: (p, cfg) => tilt(cfg)(p)} : undefined);
+    S.A = SCC.analyzeAll(S.snap, rankingsOf(r, S.proj, playerList()), tilt ? {tilt: (p, cfg) => tilt(cfg)(p), rankOf: p => matchRank(p)} : undefined);
     S.A.ranks = r;
     recordCalls(tilt);
   }
@@ -1142,8 +1142,9 @@
     h += `<h4 class="lu-h">${LV ? `Recommended lineup for week ${LV.week}` : 'Recommended lineup'}</h4><ol class="lineup lineup-rec">${
       rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg, L)).join('')}</ol>${compareLineups(L, rec)}${LV ? '' : closeNotes(L) + disagreeNotes(L)}`;
     (L.tilts || []).forEach(t => {
+      const mus = has(t.muIn) && has(t.muOut) ? ` (${nth(t.muIn)} softest to ${esc(t.inn.pos)}s against ${nth(t.muOut)})` : '';
       h += `<p class="note tilt"><b>Matchup tilt:</b> ${esc(t.inn.name)} starts over ${esc(t.out.name)}, who ranks higher (${esc(rl(t.out))} vs ${esc(rl(t.inn))}):
-        with the matchups counted (${esc(matchSource())}), ${esc(t.inn.name)} projects ${fmt(t.by)} more.</p>`;
+        his matchup${mus} is the softer one by ${esc(matchSource())}, and with it counted he projects ${fmt(t.by)} more.</p>`;
     });
     L.wire.forEach(w => {
       const tail = w.cur ? `, better than ${esc(w.cur.name)} (${esc(rl(w.cur))})`
@@ -1254,8 +1255,10 @@
     return SCC.disagreements(L.opt, L.roster, proj).map(({starter, bench, a, b}) => {
       const ba = SCC.rankBits(starter), bb = SCC.rankBits(bench), pair = (x, y, f) => (x !== null && y !== null ? f(x) + ' vs ' + f(y) : '');
       const nums = [pair(ba.overall, bb.overall, n => '#' + n), pair(ba.pos, bb.pos, n => starter.pos + n), pair(ba.tier, bb.tier, n => 'tier ' + n)].filter(Boolean).join(', ');
+      // His status matters to the reader: a projection is written as though he plays, so a tag is why it can be optimistic.
+      const tag = bench.inj ? ` ${esc(bench.name)} is ${esc(String(bench.inj))}, and the projection is written as though he plays.` : '';
       return `<p class="note disagree"><b>Projections disagree:</b> with the matchups counted, <b>${esc(bench.name)}</b> projects ${fmt(b)} against <b>${esc(starter.name)}</b>'s ${
-        fmt(a)}, while your rankings have ${esc(starter.name)} well ahead${nums ? ` (${esc(nums)})` : ''}. Titan follows your rankings here; worth a look if the news has moved since you imported them.</p>`;
+        fmt(a)}, while your rankings have ${esc(starter.name)} well ahead${nums ? ` (${esc(nums)})` : ''}.${tag} Titan follows your rankings here; worth a look if the news has moved since you imported them.</p>`;
     }).join('');
   }
 

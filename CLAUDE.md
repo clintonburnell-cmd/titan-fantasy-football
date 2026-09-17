@@ -238,7 +238,10 @@ One note per screen or feature.
   crew's) over the game context's ranks and falls back to it; `SCC.tiltFromRank` holds the shape, and the close-call
   note, the player card's read and the compare view read the same `matchRank`, so one number explains the call.
   Loading the sheet is part of `analyze`, and `loadMuData` re-runs `analyze` when it lands, as `loadContext` does. The
-  extension's worker passes the same tilt (v0.5.0). **Never widen the tilt to non-close calls:** his weekly rankings
+  extension's worker passes the same tilt. Three rules hold it in place since v1.75.0, after it started a Questionable
+  WR59 over a healthy WR46 on a six-point projection gap with matching matchups: the same tier is close only within
+  `CLOSE` ranks too (`closeByRank`), a player with an injury tag is never tilted in over a healthy starter, and the
+  flip needs `opts.rankOf` to say the bench player's matchup is the softer one (no `rankOf`, no flips). **Never widen the tilt to non-close calls:** his weekly rankings
   are matchup-aware already, so the sheet is a tiebreaker, not a second opinion. The bar moves only on what the graded
   close calls say. Also from the game context, plus the game's own pull since v1.50.0, `SCC.impliedTilt`: his team's expected points from the
   betting line against the average side this week, 0.4 of the difference and never past ±10%, so a team expected to

@@ -511,22 +511,36 @@ section('floor and ceiling, and the close calls in a lineup');
   const pairs = SCC.closeCallPairs(opt, roster);
   check(pairs.length === 1 && pairs[0].starter.id === 'r2' && pairs[0].bench.id === 'r3',
     'a close call is a bench player at the starter\'s position within 12 ranks who could play: not one ruled out, locked or on bye, and not a 30-rank gap');
-  // Tiers over rankings: with tiers on both players, the same tier is a close call whatever the rank gap, a different tier never is.
+  // Tiers over rankings: with tiers on both players, a different tier is never a close call, and the same tier counts only when the two are near each other too.
   const tOpt = [{slot: 'RB', p: P('r1', 'RB', 5, {tier: 1})}, {slot: 'WR', p: P('w1', 'WR', 10, {tier: 2})}];
-  const tRoster = tOpt.map(o => o.p).concat([P('r5', 'RB', 25, {tier: 1}), P('w4', 'WR', 12, {tier: 3})]);
+  const tRoster = tOpt.map(o => o.p).concat([P('r5', 'RB', 15, {tier: 1}), P('w4', 'WR', 12, {tier: 3})]);
   const tPairs = SCC.closeCallPairs(tOpt, tRoster);
   check(tPairs.length === 1 && tPairs[0].starter.id === 'r1' && tPairs[0].bench.id === 'r5' && SCC.closeByRank({rank: 1, tier: ''}, {rank: 9, tier: 2}),
-    'with tiers, the RB5 and RB25 in tier 1 are a close call and the WR10 (tier 2) and WR12 (tier 3) aren\'t; without a tier on both, ranks decide');
+    'with tiers, the RB5 and RB15 in tier 1 are a close call and the WR10 (tier 2) and WR12 (tier 3) aren\'t; without a tier on both, ranks decide');
+  // The same tier is not enough on its own: a long file's tier holds dozens, and the order inside it still means something.
+  check(!SCC.closeByRank({rank: 102, tier: 8}, {rank: 130, tier: 8}) && SCC.closeByRank({rank: 102, tier: 8}, {rank: 110, tier: 8}),
+    'in the same tier but 28 ranks apart is not a close call; eight ranks apart still is');
   // The matchup tilt: two RB spots, RB8 starting, RB12 on the bench; with the matchups counted the bench back projects 3 more.
   const d = () => ({cfg: {key: 'T', lineup: ['RB', 'RB']}, roster: [P('r1', 'RB', 5, {start: true, slot: 'RB'}), P('r2', 'RB', 8, {start: true, slot: 'RB'}), P('r3', 'RB', 12)],
     takenNorm: {}, takenAbbr: {}, started: {}});
-  const tilted = SCC.analyzeLeague(d(), {x: 1}, 2, {tilt: (p, cfg) => ({r1: 18, r2: 12, r3: 15})[p.id] * (cfg.key === 'T' ? 1 : 0)});
+  // The bench back's matchup has to be the softer one (rankOf), or there is nothing matchup about the tilt.
+  const soft = {r1: 15, r2: 20, r3: 4}, tiltFn = (p, cfg) => ({r1: 18, r2: 12, r3: 15})[p.id] * (cfg.key === 'T' ? 1 : 0);
+  const tilted = SCC.analyzeLeague(d(), {x: 1}, 2, {tilt: tiltFn, rankOf: p => soft[p.id]});
   check(tilted.tilts.length === 1 && tilted.tilts[0].inn.id === 'r3' && tilted.tilts[0].out.id === 'r2' && tilted.tilts[0].by === 3 &&
+    tilted.tilts[0].muIn === 4 && tilted.tilts[0].muOut === 20 &&
     tilted.opt.map(o => o.p.id).sort().join() === 'r1,r3' && tilted.moves.length === 1,
-    'on a close call the bench player with the better tilted projection (by 1.5 or more) takes the spot, and the card is told why');
-  const flat = SCC.analyzeLeague(d(), {x: 1}, 2, {tilt: p => ({r1: 18, r2: 12, r3: 13})[p.id]});
+    'on a close call a bench player with the softer matchup and the better tilted projection (by 1.5 or more) takes the spot, and the card is told which matchups');
+  const flat = SCC.analyzeLeague(d(), {x: 1}, 2, {tilt: p => ({r1: 18, r2: 12, r3: 13})[p.id], rankOf: p => soft[p.id]});
   check(flat.tilts.length === 0 && flat.moves.length === 0 && SCC.analyzeLeague(d(), {x: 1}, 2).tilts.length === 0,
     'a smaller tilt, or none, leaves the rankings\' call alone');
+  // The same matchup for both: a projection gap alone is the rankings' business, not the tilt's.
+  const same = SCC.analyzeLeague(d(), {x: 1}, 2, {tilt: tiltFn, rankOf: () => 16});
+  check(same.tilts.length === 0 && same.moves.length === 0, 'with the same matchup on both, a six-point projection gap flips nothing');
+  check(SCC.analyzeLeague(d(), {x: 1}, 2, {tilt: tiltFn}).tilts.length === 0, 'and with no matchup to read at all, the rankings simply stand');
+  // A hurt bench player never takes a healthy starter's spot on a projection written as though he plays.
+  const hurt = () => { const x = d(); x.roster[2] = P('r3', 'RB', 12, {inj: 'Questionable'}); return x; };
+  check(SCC.analyzeLeague(hurt(), {x: 1}, 2, {tilt: tiltFn, rankOf: p => soft[p.id]}).tilts.length === 0,
+    'a Questionable bench player is never tilted in over a healthy starter');
 }
 
 section('past the overall list: an estimated overall rank instead of the position-only sentinel (extendOverall)');
