@@ -2131,6 +2131,32 @@
     return {cols: cols, rows: rows, ranks: ranks};
   }
 
+  /* A player's matchup on the week's sheet (Match Up data): the rank for fantasy points his opponent gives up to his
+     position, 1 the softest of 32, from the Overview table's "FP/G <pos>" columns (parseMatchups's shape). `tables` is
+     one week of the sheet ({overview, passing, rushing}). Null when the sheet has no row or column for him. The same
+     measure as the game context's own ranks, from the owner's source, so either can feed the tilt. */
+  var MU_FP = {QB: 'FP/G QB', RB: 'FP/G RB', WR: 'FP/G WR', TE: 'FP/G TE'};
+  function matchupRank(tables, team, pos) {
+    var M = tables && tables.overview;
+    if (!M || !M.rows || !MU_FP[pos]) return null;
+    var i = M.cols.indexOf(MU_FP[pos]);
+    if (i < 0) return null;
+    var ab = teamAbbr(team), row = null;
+    for (var k = 0; k < M.rows.length; k++) if (M.rows[k].team === ab) { row = M.rows[k]; break; }
+    var v = row ? row.v[i] : null;
+    return v >= 1 && v <= 32 ? v : null;
+  }
+
+  /* How far a matchup rank moves a projection: the eight softest spots up to +MATCH_TILT, the eight toughest down as
+     far, the middle nothing. One shape whatever the rank's source (the owner's matchup sheet first, else the game
+     context's), so a close call flips on the same bar either way. */
+  var MATCH_TILT = 0.08;
+  function tiltFromRank(rank, max) {
+    var t = max === undefined || max === null ? MATCH_TILT : Number(max);
+    if (rank === null || rank === undefined || !isFinite(Number(rank))) return 0;
+    return rank <= 8 ? t : rank >= 25 ? -t : 0;
+  }
+
   function closeCalls(roster, slots, startedIds) {
     var wins = 0, total = 0;
     var starters = roster.filter(function (p) { return startedIds[p.id]; });
@@ -3253,7 +3279,7 @@
     rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
-    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups,
+    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,

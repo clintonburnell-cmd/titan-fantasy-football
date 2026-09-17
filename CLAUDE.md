@@ -233,8 +233,14 @@ One note per screen or feature.
   only with the person's own rankings for the week. Matchup's card shows each side's range (`rangeLine`: points so far plus the floors, and plus the
   ceilings, of the starters yet to play).
 - The matchup tilt (v1.42.0): `analyze` hands `SCC.analyzeAll` a `tilt(p, cfg)` (`tiltFor`: the projection in the
-  league's scoring, +8% against the eight softest defenses to his position, -8% against the eight toughest, from the
-  game context, plus the game's own pull since v1.50.0, `SCC.impliedTilt`: his team's expected points from the
+  league's scoring, +8% against the eight softest defenses to his position, -8% against the eight toughest, through
+  `matchRank`, which since v1.73.0 prefers the week's Match Up data sheet (`SCC.matchupRank`, the owner's and the lab
+  crew's) over the game context's ranks and falls back to it; `SCC.tiltFromRank` holds the shape, and the close-call
+  note, the player card's read and the compare view read the same `matchRank`, so one number explains the call.
+  Loading the sheet is part of `analyze`, and `loadMuData` re-runs `analyze` when it lands, as `loadContext` does. The
+  extension's worker passes the same tilt (v0.5.0). **Never widen the tilt to non-close calls:** his weekly rankings
+  are matchup-aware already, so the sheet is a tiebreaker, not a second opinion. The bar moves only on what the graded
+  close calls say. Also from the game context, plus the game's own pull since v1.50.0, `SCC.impliedTilt`: his team's expected points from the
   betting line against the average side this week, 0.4 of the difference and never past ±10%, so a team expected to
   score 27 against an average 22.5 lifts its players 8%; a close call's note also says which team is expected to
   score more when it's 4+ points apart, `impliedOf`) and `analyzeLeague` lets a bench player take a close call's spot when his tilted projection beats

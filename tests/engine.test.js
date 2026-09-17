@@ -623,6 +623,21 @@ section('a weekly matchup table as text (parseMatchups)');
   check(SCC.parseMatchups('Offense,Matchup,PROE Off\nKC,@ IND,12') .rows[0].v[0] === 12 && SCC.parseMatchups('just some text') === null && SCC.parseMatchups('') === null, 'comma-separated works too; no table gives null');
 }
 
+section('the matchup sheet as the tilt\'s source (matchupRank, tiltFromRank)');
+{
+  const tsv = ['Offense\tMatchup\tTeam Tot\tFP/G QB\tFP/G RB\tFP/G WR\tFP/G TE', 'KC\tvs. IND\t26.5\t6\t3\t9\t16',
+    'NE\tvs. PIT\t23.5\t30\t6\t32\t32', 'CHI\tvs. MIN\t26.0\t11\t32\t2\t10'].join('\n');
+  const tables = {overview: SCC.parseMatchups(tsv)};
+  check(SCC.matchupRank(tables, 'CHI', 'WR') === 2 && SCC.matchupRank(tables, 'NE', 'WR') === 32 && SCC.matchupRank(tables, 'KC', 'RB') === 3,
+    'a player\'s matchup on the sheet: his opponent\'s rank for points given up to his position, 1 the softest');
+  check(SCC.matchupRank(tables, 'DEN', 'WR') === null && SCC.matchupRank(tables, 'KC', 'K') === null && SCC.matchupRank(null, 'KC', 'WR') === null && SCC.matchupRank({}, 'KC', 'WR') === null,
+    'a team the sheet doesn\'t carry, a position it has no column for, or no sheet at all: null');
+  check(SCC.tiltFromRank(2) === SCC.MATCH_TILT && SCC.tiltFromRank(8) === SCC.MATCH_TILT && SCC.tiltFromRank(9) === 0 && SCC.tiltFromRank(24) === 0
+    && SCC.tiltFromRank(25) === -SCC.MATCH_TILT && SCC.tiltFromRank(32) === -SCC.MATCH_TILT,
+    'the tilt: the eight softest spots up, the eight toughest down, the middle nothing');
+  check(SCC.tiltFromRank(null) === 0 && SCC.tiltFromRank(undefined) === 0 && SCC.tiltFromRank(1, 0.05) === 0.05, 'no rank, no tilt; the ceiling can be set');
+}
+
 section('the nudge before kickoff (kickoffNudge)');
 {
   const now = Date.parse('2026-09-20T15:00:00Z'), h = 3600e3, min = 60e3;

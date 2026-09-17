@@ -302,18 +302,22 @@
      and the context are in, so the server's frozen record (no tilt) and the app agree except on these close calls. */
   const TILT = 0.08;
   function tiltFor() {
-    if (!S.ctx.data || !S.ctx.data.teams || !Object.keys(S.proj).length) return null;
+    const sheet = muWeek();
+    if ((!S.ctx.data || !S.ctx.data.teams) && !sheet) return null;
+    if (!Object.keys(S.proj).length) return null;
     return cfg => p => {
       const proj = SCC.projFor(S.proj, p.id, cfg);
       if (proj === null || proj === undefined) return null;
-      const r = dvpRank(p);
-      return proj * (1 + (r && r <= 8 ? TILT : r && r >= 25 ? -TILT : 0) + SCC.impliedTilt(S.ctx.data, p.team));
+      const imp = S.ctx.data && S.ctx.data.teams ? SCC.impliedTilt(S.ctx.data, p.team) : 0;
+      return proj * (1 + SCC.tiltFromRank(matchRank(p), TILT) + imp);
     };
   }
 
   function analyze() {
     S.look.A = null; // a planned later week is worked out again when next drawn (lookAnalysis)
     if (!S.snap) { S.A = null; return; }
+    // The owner's matchup sheet feeds the tilt (matchRank), so it loads before the calls are made.
+    if ((S.owner.is || S.owner.lab) && !S.mu.at && !S.mu.busy) loadMuData();
     const r = ranksFor(S.snap.week, S.proj), tilt = tiltFor();
     S.A = SCC.analyzeAll(S.snap, rankingsOf(r, S.proj, playerList()), tilt ? {tilt: (p, cfg) => tilt(cfg)(p)} : undefined);
     S.A.ranks = r;
@@ -1137,7 +1141,7 @@
       rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg)).join('')}</ol>${compareLineups(L, rec)}${LV ? '' : closeNotes(L) + disagreeNotes(L)}`;
     (L.tilts || []).forEach(t => {
       h += `<p class="note tilt"><b>Matchup tilt:</b> ${esc(t.inn.name)} starts over ${esc(t.out.name)}, who ranks higher (${esc(rl(t.out))} vs ${esc(rl(t.inn))}):
-        with the matchups counted, ${esc(t.inn.name)} projects ${fmt(t.by)} more.</p>`;
+        with the matchups counted (${esc(matchSource())}), ${esc(t.inn.name)} projects ${fmt(t.by)} more.</p>`;
     });
     L.wire.forEach(w => {
       const tail = w.cur ? `, better than ${esc(w.cur.name)} (${esc(rl(w.cur))})`
@@ -1178,6 +1182,21 @@
     const d = t && C.dvp && C.dvp[t.opp] && C.dvp[t.opp][p.pos];
     return d ? d.rank : null;
   }
+  /* This week's tables from the matchup sheet (Match Up data), or null: only the owner and the lab crew have one, and
+     only for the week being shown, so everyone else's calls are unchanged. */
+  function muWeek() {
+    const D = S.mu.data;
+    if (!D || !S.snap || String(D.season) !== String(S.snap.season)) return null;
+    return D.weeks[LV ? LV.week : S.snap.week] || null;
+  }
+  /* How soft a player's matchup is (1 the softest of 32): the owner's matchup sheet for the week where he has one,
+     else the game context's own points-allowed ranks. The sheet is the same measure from his own source, so the tilt,
+     the close-call notes and the player card all read it the same way. `matchSource()` says which is in use. */
+  function matchRank(p) {
+    const w = muWeek(), r = w ? SCC.matchupRank(w, p.team, p.pos) : null;
+    return r === null ? dvpRank(p) : r;
+  }
+  const matchSource = () => (muWeek() ? 'your matchup sheet' : 'the season\'s points allowed by position');
   // Your chance to win this week in a league, from the Matchup tab's data when it's in (0 to 100), else null.
   function winChance(cfg) {
     const M = S.match;
@@ -1208,7 +1227,7 @@
       let s = `<b>${esc(starter.name)}</b> over <b>${esc(bench.name)}</b> is a close call (${esc(rl(starter))} vs ${esc(rl(bench))}${nums ? ': ' + esc(nums) : ''}). `;
       if (floorer === ceiler) s += `${esc(floorer.name)} has both the higher floor (${fmt(fl.floor)}) and the higher ceiling (${fmt(ce.ceiling)}).`;
       else s += `${esc(floorer.name)} has the higher floor (${fmt(fl.floor)} to ${fmt(fl.ceiling)}), ${esc(ceiler.name)} the higher ceiling (${fmt(ce.floor)} to ${fmt(ce.ceiling)}).`;
-      const ra = dvpRank(starter), rb = dvpRank(bench);
+      const ra = matchRank(starter), rb = matchRank(bench);
       if (ra && rb && ra !== rb) s += ` ${esc((ra < rb ? starter : bench).name)} has the softer matchup (${nth(Math.min(ra, rb))} most given up to ${esc(starter.pos)}s, against ${nth(Math.max(ra, rb))}).`;
       const ia = impliedOf(starter), ib = impliedOf(bench);
       if (ia && ib && Math.abs(ia - ib) >= 4) s += ` ${esc((ia > ib ? starter : bench).name)}'s team is expected to score more (${Math.max(ia, ib)} points to ${Math.min(ia, ib)}).`;
@@ -2793,7 +2812,9 @@
     catch (e) { S.mu.error = `Couldn't load the matchup data: ${e && e.message ? e.message : e}`; }
     S.mu.busy = false;
     S.mu.at = Date.now();
-    if (S.ui.tab === 'matchups') render();
+    // The sheet is the matchup tilt's source, so the calls are made again once it's in (as the game context does).
+    if (S.mu.data && S.snap) analyze();
+    if (['matchups', 'lineups', 'matchup', 'today'].includes(S.ui.tab)) render();
   }
   async function uploadMatchups(el) {
     const week = Number(el.week.value), tables = {}, bad = [];
@@ -4249,7 +4270,7 @@
     const rankRow = p => (has(p.rank) ? [esc(rl(p)), esc(SCC.rankNote(p))] : ['unranked']);
     const projRow = p => { const v = proj(p), sp = spreadFor(p, cfg); return v === null || v === undefined ? [null] : [fmt(v), sp ? `floor ${fmt(sp.floor)} · ceiling ${fmt(sp.ceiling)}` : '']; };
     const matchRow = p => {
-      const C = S.ctx.data, t = C && C.teams && C.teams[SCC.teamAbbr(p.team)], r = dvpRank(p), imp = impliedOf(p), tv = tp(p);
+      const C = S.ctx.data, t = C && C.teams && C.teams[SCC.teamAbbr(p.team)], r = matchRank(p), imp = impliedOf(p), tv = tp(p);
       if (!t) return [kickText(p) || null];
       return [`${t.home ? 'vs ' : '@ '}${esc(t.opp)}`, [r ? `${r <= 8 ? 'soft' : r >= 25 ? 'tough' : 'middling'}: ${nth(r)} most to ${esc(p.pos)}s` : '', imp ? `team expected ${imp}` : '',
         tv !== null && tv !== undefined ? `tilted projection ${fmt(tv)}` : ''].filter(Boolean).join(' · ')];
@@ -4314,7 +4335,7 @@
     if (sp) bits.push(`<span><b>${fmt(sp.floor)} to ${fmt(sp.ceiling)}</b><small>floor to ceiling this week</small></span>`);
     const tv = titanValueFor(cfg)(p);
     if (tv !== null) bits.push(`<span><b>${thousands(tv)}</b><small>points above a replacement starter, rest of season</small></span>`);
-    const r = dvpRank(p);
+    const r = matchRank(p);
     if (r) bits.push(`<span><b>${r <= 8 ? 'Soft' : r >= 25 ? 'Tough' : 'Middling'}</b><small>matchup: ${nth(r)} most given up to ${esc(p.pos)}s</small></span>`);
     const row = (valueRowsFor(cfg) || {})[p.id];
     if (row && row.ur && row.mr) {

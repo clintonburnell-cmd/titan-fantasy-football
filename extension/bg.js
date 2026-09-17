@@ -223,11 +223,21 @@ async function analyze() {
       } catch (e) { proj = null; }
       const hasProj = !!proj && Object.keys(proj).length > 0;
       const rows = hasProj ? (weeks[week] || []) : ranksFor(weeks, week);
+      /* The matchup tilt, from the week's matchup sheet (Titan's Match Up data, lab/matchups-<season>): on a close call
+         a bench player takes the spot when his tilted projection beats the starter's, exactly as the app does it, so
+         the marks and the panel agree with Titan. Without a sheet for the week there's no tilt and the rankings decide. */
+      let mu = null;
+      try { mu = await labDoc(`matchups-${season}`, user); } catch (e) { mu = null; }
+      const tables = mu && mu.weeks ? mu.weeks[week] : null;
+      const tilt = hasProj && tables ? (p, cfg) => {
+        const v = SCC.projFor(proj, p.id, cfg);
+        return v === null || v === undefined ? null : v * (1 + SCC.tiltFromRank(SCC.matchupRank(tables, p.team, p.pos)));
+      } : null;
       // This week's kickoff times (Titan's scores feed: ESPN's scoreboard through the server), so the flex spots take
       // the latest kickoffs as in the app, and the nudge before kickoff knows when each player locks.
       const kicks = await weekKickoffs(week);
       if (kicks) snap.kickoffs = kicks;
-      const A = SCC.analyzeAll(snap, SCC.rankingsBy(rows, hasProj ? proj : null, players && players.map ? players.map : players));
+      const A = SCC.analyzeAll(snap, SCC.rankingsBy(rows, hasProj ? proj : null, players && players.map ? players.map : players), tilt ? {tilt} : undefined);
       const leagues = {};
       A.leagues.forEach(L => { leagues[String(L.cfg.id)] = trimLeague(L, week, proj, snap.games, kicks); });
       // This week's matchups, best effort: a failure leaves the lineups standing.
