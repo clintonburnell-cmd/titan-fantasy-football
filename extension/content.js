@@ -254,7 +254,7 @@
         hits.sort((a, b) => (b.v || 0) - (a.v || 0)).slice(0, 8).forEach(r => {
           const li = document.createElement('li');
           li.textContent = `${r.n} · ${r.p}${r.t ? ', ' + r.t : ''}`;
-          li.addEventListener('click', () => { S.trade[side].push(r.s); renderPanel(); });
+          li.addEventListener('click', () => { input.focus({preventScroll: true}); S.trade[side].push(r.s); renderPanel(); });
           sugg.appendChild(li);
         });
       });
@@ -308,8 +308,14 @@
       + `<div class="foot"><span>Week ${esc(V.week)}${V.through ? ' · ' + esc(V.through) : ''}</span><span>In Titan: ${
         [['lineups', 'Lineups'], ['waivers', 'Waivers'], ['value', 'Value']].map(([t, n]) => `<a href="${APP}${t}?league=${encodeURIComponent(S.leagueId)}" target="_blank" rel="noopener">${n}</a>`).join(' · ')}</span></div>`;
     const name = (L && L.name) || (DL && DL.name) || 'this league';
+    // A re-render keeps the panel where it was scrolled and, for the trade check, which box was being typed in.
+    const prevBody = host.shadowRoot.querySelector('.body'), scrollTop = prevBody ? prevBody.scrollTop : 0;
+    const active = host.shadowRoot.activeElement, focusSide = active && active.matches && active.matches('.side input') ? active.dataset.side : null;
     host.shadowRoot.innerHTML = `<style>${panelStyles()}</style><div class="box${S.open ? '' : ' closed'}">
       <div class="head" id="head"><span class="mark">T</span><b>Titan · ${esc(name)}</b><small>${S.open ? '▾' : '▴'}</small></div><div class="body">${body}</div></div>`;
+    const newBody = host.shadowRoot.querySelector('.body');
+    if (newBody) newBody.scrollTop = scrollTop;
+    if (focusSide) { const i = host.shadowRoot.querySelector(`.side input[data-side="${focusSide}"]`); if (i) i.focus({preventScroll: true}); }
     host.shadowRoot.getElementById('head').addEventListener('click', () => { S.open = !S.open; chrome.storage.local.set({panelOpen: S.open}); renderPanel(); });
     wireTrade(host.shadowRoot);
   }

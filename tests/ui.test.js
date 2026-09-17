@@ -557,6 +557,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       league: (document.querySelector('.tpick') || {}).dataset && document.querySelector('.tpick').dataset.league, pending: (document.querySelector('.tpick') || {}).dataset && document.querySelector('.tpick').dataset.pending,
       text: document.getElementById('view').textContent.replace(/\\s+/g, ' ').slice(0, 200)})`))));
   check(await ev(`!location.search.includes('trade=')`), 'and the address is cleaned up afterwards');
+  // A refresh reloads the league's teams; the trade in progress must survive it (v1.65.1: it used to be wiped while the list was empty).
+  await ev(`document.getElementById('refresh').click(); true`);
+  await sleep(1500);
+  check(await waitFor(`document.querySelectorAll('.tteam').length === 2 && document.querySelectorAll('.trade-sum .tchip').length === 3`, 30000),
+    'the trade survives a refresh (the teams reload underneath it)');
 
   T.section('game context on Lineups');
   await tab('lineups');

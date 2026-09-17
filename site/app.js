@@ -4441,7 +4441,9 @@
     const teams = (T && T.list) || [], me = teams.find(t => t.mine);
     const partner = teams.find(t => !t.mine && t.id === S.ui.tradePartner) || null;
     const P = S.trade.pick;
-    if (P.league !== d.cfg.id || P.partner !== (partner ? partner.id : '')) Object.assign(P, {league: d.cfg.id, partner: partner ? partner.id : '', give: [], get: []});
+    // A new league or partner starts the trade over. Not while the teams are (re)loading: with no team list yet the
+    // partner can't be found, and a refresh (which reloads the teams) used to wipe a trade in progress that way.
+    if (T && T.list && (P.league !== d.cfg.id || P.partner !== (partner ? partner.id : ''))) Object.assign(P, {league: d.cfg.id, partner: partner ? partner.id : '', give: [], get: []});
 
     // The league and partner pickers sit at the top and again above the trade itself (the give/get box and the rosters),
     // so a long page never means scrolling back up to switch; once a partner is picked, the partner picker heads

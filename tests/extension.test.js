@@ -108,6 +108,7 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     check('the worker stored the stand-in reports', stored === 3, String(stored));
     // The popup, as a page: it asks the worker for its status and shows it.
     await P.send('Runtime.enable'); await P.send('Page.enable');
+    await P.send('Emulation.setFocusEmulationEnabled', {enabled: true}); // headless pages have no focus, so focus() would be a no-op
     const extId = new URL(worker.url).host;
     await P.send('Page.navigate', {url: `chrome-extension://${extId}/popup.html`});
     await sleep(800);
@@ -145,7 +146,8 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     // The trade check: type a name on each side, pick the suggestion, read the totals and the verdict.
     const sr = 'document.querySelector("titan-panel").shadowRoot';
     const type = async (side, text) => {
-      await P.evaluate(`(() => { const i = ${sr}.querySelector('.side input[data-side="${side}"]'); i.value = ${JSON.stringify(text)}; i.dispatchEvent(new Event('input')); })()`, false);
+      // As a person would: open the Trade check, click into the box, type.
+      await P.evaluate(`(() => { ${sr}.querySelector('details.trade').open = true; const i = ${sr}.querySelector('.side input[data-side="${side}"]'); i.focus(); i.value = ${JSON.stringify(text)}; i.dispatchEvent(new Event('input')); })()`, false);
       await sleep(150);
       return P.evaluate(`[...${sr}.querySelectorAll('.side[data-side="${side}"] .sugg li')].map(l => l.textContent).join(" | ")`, false);
     };
@@ -153,6 +155,9 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     check('the trade check suggests a valued player from a few letters', /Josh Allen · QB, BUF/.test(sugg), sugg);
     await P.evaluate(`${sr}.querySelector('.side[data-side="give"] .sugg li').click()`, false);
     await sleep(200);
+    const focused = await P.evaluate(`(() => { const a = ${sr}.activeElement; return (a ? a.tagName + ':' + (a.dataset.side || '') : 'none')
+      + ' / doc=' + document.activeElement.tagName + ' hasFocus=' + document.hasFocus() + ' inputs=' + ${sr}.querySelectorAll('.side input').length; })()`, false);
+    check('picking a name keeps you in that box (the panel re-renders without losing focus or its scroll)', /^INPUT:give/.test(focused), focused);
     await type('get', 'mahom');
     await P.evaluate(`${sr}.querySelector('.side[data-side="get"] .sugg li').click()`, false);
     await sleep(200);
