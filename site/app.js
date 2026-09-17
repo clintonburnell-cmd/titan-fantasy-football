@@ -1154,8 +1154,7 @@
         </div>`).join('')}${L.moves.some(m => m.from || m.to) ? '<p class="fine">Later kickoffs go in FLEX, so a late scratch can still be covered from your bench.</p>' : ''}</div>`;
     }
     const rec = recLineup(L);
-    h += `<h4 class="lu-h">${LV ? `Recommended lineup for week ${LV.week}` : 'Recommended lineup'}</h4><ol class="lineup lineup-rec">${
-      rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg, L)).join('')}</ol>${foldCompare(L, rec)}`;
+    h += compareLineups(L, rec);
     // Everything that explains the calls goes behind one line: read it when you want it, not on every card every time.
     let notes = LV ? '' : closeNotes(L) + disagreeNotes(L);
     (L.tilts || []).forEach(t => {
@@ -1407,13 +1406,6 @@
   /* Why this player has the spot (under each recommended start): the best player on your bench who could have taken it
      and how far back he is, so the call can be checked rather than taken on trust. Nothing when the spot has no
      alternative worth naming, and nothing on a later week's plan. */
-  /* "Yours vs recommended" behind a line: the rows above already mark what changed, so the full side-by-side is there
-     to check the working rather than to read every time (v1.78.0: it was 802px of the same nine players). */
-  function foldCompare(L, rec) {
-    const html = compareLineups(L, rec);
-    if (!html || /lu-same/.test(html)) return html;
-    return `<details class="lg-cmp"><summary>Yours vs recommended, spot by spot</summary>${html}</details>`;
-  }
 
   function whyStart(o, L) {
     if (!o.p || !L || LV) return '';
@@ -1436,47 +1428,44 @@
       u.trend === 'up' ? '\u25b2' : '\u25bc'} snaps</span>`;
   }
 
-  /* A recommended row shows its supporting lines only where a decision is actually being made: a new starter, or one
-     the bench is close to. Everywhere else the row is the slot, the name, the kickoff and the rank. Nine rows a league
-     and twelve leagues, so the restraint is what keeps the tab readable (v1.78.0: rows ran to eight lines each). */
-  function rowDepth(o, cur, L) {
-    if (!o.p || LV || !L) return false;
-    if (!sameIn(o.p, cur)) return true;                                  // a change: say why
-    const alt = SCC.nextBest(recLineup(L), L.roster, o.slot);
-    return !!(alt && o.p.rank !== null && alt.rank !== null && SCC.closeByRank(o.p, alt)); // a close call: say why
-  }
 
-  function recRow(o, cur, cfg, L) {
-    if (!o.p) {
-      return `<li class="row r-stop"><span class="slot">${esc(slotName(o.slot))}</span><span class="pphoto"><span class="hs"></span></span>
-        <span class="who"><b>Nobody to start</b><small>No one on your roster fits this spot: see the wire below.</small></span>
-        <span class="right"><span class="verdict v-stop">FILL SLOT</span></span></li>`;
-    }
-    const p = o.p, fresh = !sameIn(p, cur), proj = projOf(p, cfg), deep = rowDepth(o, cur, L);
-    const sub = [p.pos, p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
-    // Only when nobody better is left: a player on bye or ruled out still takes the spot, and says so.
-    const tag = scored(p) ? scoreChip(p) : p.locked ? '<span class="verdict v-locked">LOCKED</span>'
-      : p.onBye ? '<span class="verdict v-stop">ON BYE</span>' : p.outish ? '<span class="verdict v-stop">OUT</span>'
-      : fresh ? '<span class="verdict v-new">NEW</span>' : '';
-    return `<li class="row${fresh ? ' r-new' : ''}${p.locked ? ' r-locked' : ''}"><span class="slot" data-pos="${esc(p.pos)}">${esc(slotName(o.slot))}</span>${headshot(p)}
-      <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}${roleFlag(p.id, p.pos)}</small>${deep ? ctxLine(p) + whyStart(o, L) : ''}</span>
-      <span class="right">${rankCell(p, deep)}${tag}</span></li>`;
-  }
 
   // Your lineup and the recommended one side by side, spot by spot, the spots that differ highlighted; your side keeps
   // each call (swap out, on bye, do not start). A lineup that already matches gets one line instead.
+  /* A league's lineup, in one block: what Titan recommends beside what you have, spot by spot. There is no separate
+     recommended list, since the two showed the same nine players (v1.79.0, the owner's call, and 800px of a phone
+     screen). A cell carries the name, his kickoff, his rank and, where the spot differs, the projection, the call and
+     why the recommended player has it. */
   function compareLineups(L, rec) {
     const diff = L.rows.filter((r, i) => !sameIn(r.p, (rec[i] || {}).p)).length;
-    if (!diff) return '<p class="fine lu-same">Your lineup matches the recommended one: nothing to change.</p>';
-    // Both columns carry the rank and its note (overall, at the position, tier), so the player being benched reads
-    // against the one taking his spot.
-    const who = p => (p ? `<b${pcAttr(p)}>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}</small>${p.rank === null || p.rank === undefined ? '' : rankCell(p)}` : '<b class="lu-empty">Empty</b>');
-    return `<h4 class="lu-h">Yours vs recommended <small>${plural(diff, 'spot')} different</small></h4><div class="lu-cmp-wrap"><table class="lu-cmp">
-      <thead><tr><th>Spot</th><th>Yours</th><th>Recommended</th></tr></thead><tbody>${L.rows.map((r, i) => {
+    const head = `<h4 class="lu-h">${LV ? `Week ${LV.week}: recommended and yours` : 'Recommended and yours'}${
+      diff ? ` <small>${plural(diff, 'spot')} different</small>` : ' <small>they match</small>'}</h4>`;
+    /* Three ways to draw a player here, because a spot that needs no change deserves one line and a spot that does
+       deserves the reasoning. `full` is the recommended side of a changed spot: photo, kickoff, projection, rank note
+       and the game context. `plain` is what you have there: the name and the rank, since the comparison is the point.
+       `one` is a spot that matches: a single line, which is seven of nine rows on a normal week. */
+    const rankOf = (p, note) => (p.rank === null || p.rank === undefined ? '' : rankCell(p, note));
+    const full = (p, cfg) => {
+      if (!p) return '<b class="lu-empty">Empty</b>';
+      const proj = projOf(p, cfg);
+      const bits = [p.pos, p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && proj !== undefined && `proj ${fmt(proj)}`].filter(Boolean).join(' · ');
+      return `${headshot(p)}${nameLine(p)}<small>${esc(bits)}${statusText(p)}${roleFlag(p.id, p.pos)}</small>${rankOf(p, true)}${ctxLine(p)}`;
+    };
+    const plain = p => (p ? `${nameLine(p)}<small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}${statusText(p)}</small>${rankOf(p, false)}` : '<b class="lu-empty">Empty</b>');
+    const one = p => (p ? `<span class="lu-one">${headshot(p, true)}${nameLine(p)}${rankOf(p, false)}</span>` : '<b class="lu-empty">Empty</b>');
+    return `${head}<div class="lu-cmp-wrap"><table class="lu-cmp"><thead><tr><th>Spot</th><th>Recommended</th><th>Yours</th></tr></thead><tbody>${
+      L.rows.map((r, i) => {
         const o = rec[i] || {}, same = sameIn(r.p, o.p);
         const call = r.verdict && r.verdict !== 'OK' && !same ? `<span class="verdict v-${VERDICT[r.verdict] || 'ok'}">${esc(r.verdict)}</span>` : '';
-        return `<tr${same ? '' : ' class="lu-diff"'}><td class="slot" data-pos="${esc((r.p || o.p || {}).pos || '')}">${esc(slotName(r.slot))}</td>
-          <td>${who(r.p)}${call}</td><td>${who(o.p)}</td></tr>`;
+        const tag = o.p && scored(o.p) ? scoreChip(o.p) : o.p && o.p.locked ? '<span class="verdict v-locked">LOCKED</span>' : !same ? '<span class="verdict v-new">NEW</span>' : '';
+        const why = same ? '' : whyStart(o, L);
+        // A spot that matches has nothing to compare, so it takes one cell across both columns rather than printing the
+        // same player twice: on a phone that is the difference between a readable card and a wall.
+        const slot = `<td class="slot" data-pos="${esc((o.p || r.p || {}).pos || '')}">${esc(slotName(r.slot))}</td>`;
+        if (same) return `<tr>${slot}<td colspan="2" class="lu-keep">${one(o.p)}${tag}</td></tr>`;
+        // data-col labels the two cells, so a phone can stack them and still say which is which (the table's own
+        // header is hidden there: three columns of names in 390px wrap into a wall).
+        return `<tr class="lu-diff">${slot}<td data-col="Start">${full(o.p, L.cfg)}${tag}${why}</td><td data-col="You have">${plain(r.p)}${call}</td></tr>`;
       }).join('')}</tbody></table></div>`;
   }
 
@@ -5074,7 +5063,6 @@
       </div>`;
     let h = `<p class="credit">${fcShown() ? 'Trade values' : 'Who wins is weighed with trade values'} by <a href="https://fantasycalc.com" target="_blank" rel="noopener">FantasyCalc</a>${
       V && V.at ? `, updated ${esc(when(V.at))}` : ''}. Titan isn't affiliated with FantasyCalc.</p>
-      ${pickBar('top', `<button type="button" class="btn ghost small treset" data-action="trade-reset"${canReset ? '' : ' disabled'}>Clear all</button>`)}
       ${seasonListFor(d.cfg) ? `<p class="fine tseason">Your ${esc(seasonLabel(seasonListFor(d.cfg).key))} season rankings set your own values here: "yours" beside a
         player you rank well apart from the market, and the edge on each trade. <button class="link" data-go="season">Season rankings</button></p>` : ''}
       <p class="fine">${fcShown() ? `Values for ${esc(formatName(f))}: what players like these go for in real trades.`
@@ -5120,7 +5108,8 @@
         <input type="text" name="offer" placeholder="give Player A, Player B get Player C" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
         <button class="btn small" type="submit">Read it</button></form>${S.trade.pasteNote ? `<p class="fine tpaste-note">${S.trade.pasteNote}</p>` : ''}</section>`;
     h += tradeIdeasCard(d.cfg, disp) + draftCard(d.cfg);
-    h += pickBar('trade'); // the same pickers again, right above the trade
+    // The only pickers, right above the trade they build, with Clear all beside them.
+    h += pickBar('trade', `<button type="button" class="btn ghost small treset" data-action="trade-reset"${canReset ? '' : ' disabled'}>Clear all</button>`);
     if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth, V.waiver, disp);
     // How both rosters sort: by value, by position, or by position then value (remembered).
     const sort = TRADE_SORTS.some(x => x[0] === S.ui.tradeSort) ? S.ui.tradeSort : 'value';

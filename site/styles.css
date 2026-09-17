@@ -660,7 +660,14 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
   background: var(--surface-2); padding: 6px 8px; }
 .lu-cmp th:first-child { width: 3.4rem; }
 .lu-cmp td { padding: 7px 8px; border-top: 1px solid var(--line); vertical-align: top; overflow: hidden; }
-.lu-cmp td b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A bold name is not a line of its own here: it sits with its kickoff, and inside a why line it stays in the sentence. */
+.lu-cmp td b { font-weight: 600; }
+.lu-cmp td > b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lu-cmp td .name-line { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.lu-cmp td .name-line b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lu-cmp td .rank { display: block; }
+.lu-cmp td .rank small { display: inline; margin-left: .4em; }
+.lu-cmp td .lu-one .rank small { display: none; }
 .lu-cmp td small { display: block; color: var(--muted); font-size: .72rem; }
 .lu-cmp .verdict { display: inline-block; margin-top: 3px; }
 .lu-cmp tr.lu-diff td { background: var(--swap-soft); }
@@ -784,6 +791,25 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 .lg-notes > summary:hover, .lg-cmp > summary:hover { color: var(--text); }
 .lg-notes .note:first-of-type { border-top: 0; }
 .plan-views { margin-bottom: 10px; }
+/* A spot that needs no change takes the width of both columns. */
+.lu-cmp td.lu-keep { color: var(--muted); }
+.lu-cmp td.lu-keep b { color: var(--text); }
+/* A spot that needs no change: one line, the name and the rank. */
+.lu-one { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lu-one .name-line { flex: 1 1 auto; min-width: 0; }
+.lu-one .rank { flex: none; }
+/* On a phone the two columns stack, each labelled, since three columns of names wrap into a wall at 390px. */
+@media (max-width: 640px) {
+  .lu-cmp, .lu-cmp tbody, .lu-cmp tr, .lu-cmp td { display: block; width: auto; }
+  .lu-cmp thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .lu-cmp tr { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr); align-items: start; gap: 2px 8px;
+    padding: 7px 0; border-top: 1px solid var(--line); }
+  .lu-cmp tr.lu-diff td[data-col] { grid-column: 2; }
+  .lu-cmp tr.lu-diff td[data-col]::before { content: attr(data-col); display: block; color: var(--muted);
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+  .lu-cmp td { border: 0; padding: 0; }
+  .lu-cmp td.slot { grid-row: span 2; }
+}
 
 .sc-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: .76rem; }
 .sc-legend span { display: inline-flex; align-items: center; gap: 6px; }

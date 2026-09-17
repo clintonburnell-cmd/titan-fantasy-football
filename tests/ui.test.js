@@ -241,7 +241,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await tab('lineups');
   check(await waitFor(`/default rankings/.test((document.querySelector('.banner.ok') || {}).innerText || '')`, 30000),
     'with nothing imported, Lineups runs on the default rankings');
-  const lineup = await ev(`({h: (document.querySelector('.league .card-h') || {}).innerText || '', n: document.querySelectorAll('.lineup .row').length})`);
+  const lineup = await ev(`({h: (document.querySelector('.league .card-h') || {}).innerText || '', n: document.querySelectorAll('.lu-cmp tbody tr').length})`);
   check(/Titan Test League/.test(lineup.h) && /ESPN/.test(lineup.h) && lineup.n === 9, 'Lineups shows the ESPN league, 9 spots');
   const site = await ev(`[...document.querySelectorAll('.card.league a.open-site')].map(a => a.innerText + ' ' + a.getAttribute('href'))`);
   check(site.length === 1 && /^Open in ESPN/.test(site[0]) && site[0].includes('fantasy.espn.com/football/team?leagueId=' + L1.id + '&teamId=1&seasonId='),
@@ -256,10 +256,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`document.querySelector('[data-filter="all"]').click(); true`);
   await sleep(150);
   check(chipsOk, `each filter shows exactly its leagues (${chips.map(c => c.id + ' ' + c.n).join(', ')})`);
-  const kicks = await ev(`[...document.querySelectorAll('.lineup .kick')].map(k => k.innerText)`);
+  const kicks = await ev(`[...document.querySelectorAll('.lu-cmp .kick')].map(k => k.innerText)`);
   check(kicks.length >= 8 && kicks.every(k => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b|^Bye$/.test(k)),
     `kickoff day and time beside each name (${kicks.length} of 9), e.g. "${kicks[0]}"`);
-  check(await ev(`getComputedStyle(document.querySelector('.lineup .kick')).fontStyle === 'italic'`), 'in italics');
+  check(await ev(`getComputedStyle(document.querySelector('.lu-cmp .kick')).fontStyle === 'italic'`), 'in italics');
   check(await ev(`document.querySelector('details.league').open`), 'Lineups leagues start open');
   await ev(`document.querySelector('details.league > summary').click(); true`);
   await sleep(200);
@@ -269,8 +269,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`document.querySelector('[data-action="fold-all"][data-kind="lineup"]').click(); true`);
   await sleep(200);
   check(await ev(`document.querySelector('details.league').open`), 'Expand all opens them again');
-  const pics = await ev(`({faces: [...document.querySelectorAll('.lineup .pphoto img.hs')].map(i => i.getAttribute('src')),
-    logos: document.querySelectorAll('.lineup .pphoto img.tl').length})`);
+  const pics = await ev(`({faces: [...document.querySelectorAll('.lu-cmp .pphoto img.hs')].map(i => i.getAttribute('src')),
+    logos: document.querySelectorAll('.lu-cmp .pphoto img.tl').length})`);
   check(pics.faces.length === 9 && pics.faces.filter(s => /sleepercdn\.com\/content\/nfl\/players\/thumb\/\d+\.jpg$/.test(s)).length === 8 &&
     pics.faces.some(s => /team_logos\/nfl\/[a-z]+\.png$/.test(s)) && pics.logos === 8,
     `Sleeper headshots with team logos (${pics.faces.length} photos, ${pics.logos} logos; the defense is its logo)`);
@@ -421,9 +421,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`document.querySelectorAll('.tteam').length === 2 && document.querySelectorAll('.tteam .trow').length > 20`, 5000),
     'picking a partner shows both rosters');
   check(await ev(`(() => { const bars = document.querySelectorAll('.tpick'), sum = document.querySelector('.trade-sum');
-    return bars.length === 2 && bars[1].classList.contains('tpick-trade') && !!sum && (bars[1].compareDocumentPosition(sum) & Node.DOCUMENT_POSITION_FOLLOWING) > 0 &&
-      document.querySelectorAll('[data-ui="tradePartner"]').length >= 2 && document.querySelectorAll('[data-ui="tradePartner"]')[1].value === document.querySelector('[data-ui="tradePartner"]').value; })()`),
-    'the league and partner pickers appear twice: at the top, and again right above the trade (the give/get box), in step');
+    return bars.length === 1 && bars[0].classList.contains('tpick-trade') && !!sum && (bars[0].compareDocumentPosition(sum) & Node.DOCUMENT_POSITION_FOLLOWING) > 0
+      && !!bars[0].querySelector('[data-ui="tradePartner"]') && !!bars[0].querySelector('[data-action="trade-reset"]'); })()`),
+    'one set of pickers, right above the trade it builds, with Clear all beside them');
   check(await waitFor(`/You are/.test((document.querySelector('.tfit') || {}).textContent || '')`, 20000),
     'with a partner picked, a card says where each team is thin or deep: ' + (await text('.tfit p')).replace(/\s+/g, ' ').slice(0, 110));
   check(await ev(`document.querySelectorAll('.tteam .trow .pos[data-pos]').length > 20 && !!document.querySelector('.tteam .trow .pos[data-pos="QB"]')`),
@@ -580,8 +580,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   T.section('game context on Lineups');
   await tab('lineups');
-  check(await waitFor(`[...document.querySelectorAll('.lineup .gctx')].some(s => /team expected 28.5 pts/.test(s.textContent) && /wind 20 mph/.test(s.textContent))`, 10000),
-    'each starter shows his team\'s expected points and windy weather: ' + await ev(`((document.querySelector('.lineup .gctx') || {}).textContent || 'none').trim()`));
+  check(await waitFor(`[...document.querySelectorAll('.lu-cmp .gctx')].some(s => /team expected 28.5 pts/.test(s.textContent) && /wind 20 mph/.test(s.textContent))`, 10000),
+    'each starter shows his team\'s expected points and windy weather: ' + await ev(`((document.querySelector('.lu-cmp .gctx') || {}).textContent || 'none').trim()`));
   check(await ev(`/nflverse/.test(document.getElementById('view').textContent) && !!document.querySelector('a[href="https://github.com/nflverse"]')`),
     'ESPN, the National Weather Service and nflverse are credited');
 
@@ -643,18 +643,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await tab('waivers');
   check(await waitFor(`/Your waiver plan/.test(document.getElementById('view').textContent)`, 5000), 'the waiver plan leads the Waivers tab (its claims are checked in the demo)');
   await tab('lineups');
-  await ev(`(() => { const b = document.querySelector('.lineup [data-pcard]'); b.focus(); b.click(); return true; })()`);
+  await ev(`(() => { const b = document.querySelector('.lu-cmp tbody [data-pcard]'); b.focus(); b.click(); return true; })()`);
   check(await waitFor(`!!document.querySelector('dialog.pcard[open]') && location.pathname === '/app/lineups'`, 3000), 'tapping a starter\'s name opens his card');
   check(await waitFor(`!!document.querySelector('dialog.pcard .pctable') || /No games for him/.test(document.querySelector('dialog.pcard').textContent)`, 20000),
     'his stats load from Sleeper: ' + await ev(`(document.querySelector('dialog.pcard .dlg-body') || {}).textContent.replace(/\\s+/g, ' ').trim().slice(0, 120)`));
   await shot('player-card');
   await ev(`history.back(); true`);
   check(await waitFor(`!document.querySelector('dialog.pcard[open]') && location.pathname === '/app/lineups'`, 3000), 'Back closes the card and stays on Lineups');
-  check(await ev(`document.activeElement === document.querySelector('.lineup [data-pcard]')`), 'and keyboard focus returns to the name that opened it');
+  check(await ev(`document.activeElement === document.querySelector('.lu-cmp tbody [data-pcard]')`), 'and keyboard focus returns to the name that opened it');
   check(await ev(`!document.querySelector('.moves') || !!document.querySelector('.moves [data-copy]')`), 'a league with changes to make offers to copy them as text');
 
   // Find a player: the magnifier in the header, from any screen.
-  const starter = await ev(`document.querySelector('.lineup [data-pcard]').textContent.trim()`);
+  const starter = await ev(`document.querySelector('.lu-cmp tbody [data-pcard]').textContent.trim()`);
   await ev(`document.getElementById('psearch-btn').click(); true`);
   check(await waitFor(`!!document.querySelector('dialog.psearch[open]') && document.activeElement === document.querySelector('dialog.psearch [data-psearch]')`, 3000),
     'the magnifier opens Find a player, with the cursor in the box');
@@ -669,8 +669,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`!document.querySelector('dialog.psearch[open]') && location.pathname === '/app/lineups'`, 3000), 'Back closes the card, then the search, and stays on Lineups');
 
   // Compare two players: the card's Compare with… opens the search for the second; the pick shows both side by side.
-  const second = await ev(`[...document.querySelectorAll('.lineup [data-pcard]')].map(b => b.textContent.trim()).find(n => n !== ${JSON.stringify(starter)}) || ''`);
-  await ev(`document.querySelector('.lineup [data-pcard]').click(); true`);
+  const second = await ev(`[...document.querySelectorAll('.lu-cmp tbody [data-pcard]')].map(b => b.textContent.trim()).find(n => n !== ${JSON.stringify(starter)}) || ''`);
+  await ev(`document.querySelector('.lu-cmp tbody [data-pcard]').click(); true`);
   await waitFor(`!!document.querySelector('dialog.pcard[open] [data-action="pcard-compare"]')`, 3000);
   await ev(`document.querySelector('dialog.pcard [data-action="pcard-compare"]').click(); true`);
   check(await waitFor(`!!document.querySelector('dialog.psearch[open]') && /^Compare .* with…$/.test(document.getElementById('ps-title').textContent)`, 3000),
@@ -878,14 +878,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`document.querySelector('.chips [data-filter="all"]').click(); true`);
   // Each league card: the recommended lineup first, then yours beside it (or one line when they match).
   const cmp = await ev(`(() => { const c = document.querySelector('.card.league'), t = c.querySelector('.lu-cmp');
-    return {rec: c.querySelectorAll('.lineup-rec .row').length, head: (c.querySelector('.lu-h') || {}).textContent || '', rows: t ? t.querySelectorAll('tbody tr').length : 0,
-      diff: t ? t.querySelectorAll('tr.lu-diff').length : 0, fresh: c.querySelectorAll('.lineup-rec .r-new').length, same: !!c.querySelector('.lu-same'),
-      moves: c.querySelectorAll('.move').length}; })()`);
-  check(cmp.rec > 0 && /^Recommended lineup/.test(cmp.head.trim()) && (cmp.same ? cmp.moves === 0 && cmp.fresh === 0 : cmp.rows === cmp.rec && cmp.diff > 0 && cmp.fresh > 0),
-    `each league leads with its recommended lineup (${cmp.rec} spots, ${cmp.fresh} new), then yours beside it (${cmp.same ? 'they match' : cmp.diff + ' of ' + cmp.rows + ' spots differ'})`);
+    return {head: (c.querySelector('.lu-h') || {}).textContent || '', rows: t ? t.querySelectorAll('tbody tr').length : 0,
+      diff: t ? t.querySelectorAll('tr.lu-diff').length : 0, fresh: c.querySelectorAll('.lu-cmp .v-new').length,
+      cols: t ? [...t.querySelectorAll('thead th')].map(x => x.textContent).join('|') : '', moves: c.querySelectorAll('.move').length}; })()`);
+  check(cmp.rows > 0 && /^Recommended and yours/.test(cmp.head.trim()) && cmp.cols === 'Spot|Recommended|Yours' && cmp.diff === cmp.fresh,
+    `each league is one table, the recommended lineup beside yours (${cmp.rows} spots, ${cmp.diff} different, ${cmp.fresh} marked new)`);
   // Why each recommended starter has his spot: the next fit on the bench, or that there isn't one.
-  const why = await ev(`(() => { const w = [...document.querySelectorAll('.lineup-rec .why')].map(x => x.textContent.replace(/\\s+/g, ' ').trim());
-    return {n: w.length, rows: document.querySelectorAll('.lineup-rec .row').length, first: w[0] || ''}; })()`);
+  const why = await ev(`(() => { const w = [...document.querySelectorAll('.lu-cmp .why')].map(x => x.textContent.replace(/\\s+/g, ' ').trim());
+    return {n: w.length, rows: document.querySelectorAll('.lu-cmp tbody tr').length, first: w[0] || ''}; })()`);
   check(why.n > 0 && why.n < why.rows && /(over |clear of |only fit at )/.test(why.first),
     `the rows where a decision is being made say why, and the rest stay quiet (${why.n} of ${why.rows} rows): ${why.first.slice(0, 90)}`);
   check(await ev(`document.documentElement.scrollWidth <= innerWidth`), 'the lineup rows still fit a 390px phone with the why line');
@@ -898,7 +898,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await pickWeek(later);
   check(await waitFor(`!!document.querySelector('.plan-note') && document.querySelector('.plan-note').innerText.includes('Planning week ${later}') &&
     document.querySelectorAll('.card.league').length === 2`, 30000), `picking week ${later} plans both leagues for that week`);
-  const planned = await ev(`({vs: [...document.querySelectorAll('.card.league .row .who small')].filter(s => / vs [A-Z]{2,3}\\b/.test(s.textContent)).length,
+  const planned = await ev(`({vs: [...document.querySelectorAll('.card.league .lu-cmp tbody td small')].filter(s => / vs [A-Z]{2,3}\\b/.test(s.textContent)).length,
     games: !!document.querySelector('.tiles-games'), picked: document.querySelector('select[data-ui="lineWeek"]').value})`);
   check(planned.vs > 0 && !planned.games && planned.picked === later, `each player shows that week's opponent (${planned.vs} rows), without this week's game tiles`);
   await shot('lineups-plan');
