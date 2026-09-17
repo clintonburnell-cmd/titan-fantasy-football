@@ -473,6 +473,7 @@
   const gamesLive = () => rostered().some(p => p.game === 'in_game');
   const gameDay = () => { const t = etToday(); return rostered().some(p => p.game === 'in_game' || (p.game === 'pre' && p.kick === t)); };
 
+  const INJ_TICKS = 5; // minutes between injury checks on the live tick
   function scheduleLive() {
     clearTimeout(liveTimer);
     if (!gameDay()) return;
@@ -483,6 +484,12 @@
           // Every minute: the game clock and your points (ESPN's box score every
           // other minute). On Matchup, both lineups reload every other minute.
           const second = gamesLive() && liveTick % 2 === 0;
+          /* Injury tags every five minutes on a game day: Questionable turning into Out is the change that matters most
+             on a Sunday morning, and a full refresh is half an hour away. Only the players already carrying a tag are
+             re-read (SCC.taggedIds), so it costs a handful of calls. */
+          if (liveTick % INJ_TICKS === 0) {
+            try { await API.refreshInjuries(S.snap); } catch (e) { /* the next tick tries again */ }
+          }
           await API.livePoints(S.snap, tab === 'lineups' && second);
           saveSnap();
           analyze();

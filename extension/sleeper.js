@@ -135,6 +135,16 @@
     return out;
   }
 
+  /* Injury tags on their own, without a full refresh (the app's live tick on game days): only the rostered players who
+     already carry one, so it is a handful of calls rather than one per rostered player. The snapshot is updated in
+     place; returns how many rows changed. `get` is for the tests. */
+  async function refreshInjuries(snap, get) {
+    var ids = SCC.taggedIds(snap && snap.leagues);
+    if (!ids.length) return 0;
+    var details = await (get || fetchDetails)(ids);
+    return SCC.applyInjuries(snap.leagues, details);
+  }
+
   async function resolveMissing(ids, players) {
     var got = await fetchDetails(ids);
     var n = 0;
@@ -573,6 +583,23 @@
     return SCC.transactionsFrom(all, names, players, rosterId);
   }
 
+  /* How often each team in a Sleeper league trades: completed trades this season by roster id (a trade counts for
+     every team in it), for the Trade tab's partner list. A team that has dealt before is the one to approach. */
+  async function leagueTradeCounts(lg, week) {
+    var paths = [];
+    for (var w = 1; w <= Math.max(1, Number(week) || 1); w++) paths.push('/transactions/' + w);
+    var got = await Promise.all(paths.map(function (p) { return getJson(API + '/league/' + lg.id + p).catch(function () { return []; }); }));
+    var counts = {}, total = 0;
+    got.forEach(function (list) {
+      (list || []).forEach(function (t) {
+        if (t.type !== 'trade' || t.status !== 'complete') return;
+        total++;
+        (t.roster_ids || []).forEach(function (r) { counts[String(r)] = (counts[String(r)] || 0) + 1; });
+      });
+    });
+    return {counts: counts, total: total};
+  }
+
   /* A Sleeper league's waiver budget (FAAB), for bid suggestions on the Waivers tab: the
      budget, what's left on the person's roster, and the league's winning bids over the last
      six weeks (completed waiver claims). */
@@ -838,9 +865,9 @@
   var api = {
     fetchSeasonProjections: fetchSeasonProjections, nflSchedule: nflSchedule,
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
-    collect: collect, collectScores: collectScores, livePoints: livePoints,
+    collect: collect, collectScores: collectScores, livePoints: livePoints, refreshInjuries: refreshInjuries,
     collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule, leagueDraft: leagueDraft,
-    trendingAdds: trendingAdds, leagueWaivers: leagueWaivers, leagueTransactions: leagueTransactions,
+    trendingAdds: trendingAdds, leagueWaivers: leagueWaivers, leagueTransactions: leagueTransactions, leagueTradeCounts: leagueTradeCounts,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
     fetchProjections: fetchProjections, fetchStats: fetchStats, fetchPlayerStats: fetchPlayerStats, PLAYERS_KEY: PLAYERS_KEY
   };

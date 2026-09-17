@@ -108,7 +108,10 @@ How the pieces fit, and what keeps them working.
   (`v` in `collect`, `sleeper.js`) and the matching check at the end of `app.js`, so devices
   holding an older snapshot refresh on open instead of showing gaps.
 - Live scores refresh without a full refresh (`livePoints`, `loadMatchups`, `scheduleLive`):
-  keep them light. ESPN's box score is ~230 KB, so it's fetched every other tick.
+  keep them light. Injury tags ride the same tick every `INJ_TICKS` (5) minutes on game days
+  (`API.refreshInjuries` → `SCC.taggedIds`/`SCC.applyInjuries`, v1.76.0): only the rostered players already carrying
+  a tag are re-read, since Questionable turning into Out is the change that matters and a full refresh is half an
+  hour away. Questionable never benches anyone (`INJ_OUT` is Out, Doubtful, IR, PUP, Sus, NA, DNR, COV). ESPN's box score is ~230 KB, so it's fetched every other tick.
 - Titan's lineup is `optimal` (who starts, by rank) then `flexLate` (latest kickoffs in the flex
   spots); `spotMoves` turns it into the changes shown. Route new lineup logic through them, and
   never move a locked player.

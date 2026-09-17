@@ -2201,6 +2201,35 @@
     return best;
   }
 
+  /* The rostered players worth re-reading for an injury check (the app's live tick on game days): the ones who already
+     carry a tag, since the change that matters is Questionable turning into Out. A tag appearing from nothing is caught
+     by the next full refresh or by the server's own alert. Sleeper ids only, each once. */
+  function taggedIds(leagues) {
+    var ids = {};
+    (leagues || []).forEach(function (d) {
+      (d.roster || []).forEach(function (p) { if (p && p.inj && /^[0-9]+$/.test(String(p.id))) ids[String(p.id)] = 1; });
+    });
+    return Object.keys(ids);
+  }
+
+  /* Those tags put back on the rosters: `details` is {id: {inj}} as Sleeper gave them. Sets `inj` and `outish` on every
+     copy of the player across the leagues, clearing a tag that has gone, and returns how many rows changed. Pure. */
+  function applyInjuries(leagues, details) {
+    var n = 0;
+    (leagues || []).forEach(function (d) {
+      (d.roster || []).forEach(function (p) {
+        var got = p && details && details[String(p.id)];
+        if (!got) return;
+        var inj = got.inj || '';
+        if (p.inj === inj) return;
+        p.inj = inj;
+        p.outish = !!(inj && INJ_OUT[inj.split(' ')[0]]);
+        n++;
+      });
+    });
+    return n;
+  }
+
   function closeCalls(roster, slots, startedIds) {
     var wins = 0, total = 0;
     var starters = roster.filter(function (p) { return startedIds[p.id]; });
@@ -3332,7 +3361,7 @@
     rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
-    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest,
+    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest, taggedIds: taggedIds, applyInjuries: applyInjuries,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,

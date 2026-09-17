@@ -135,6 +135,16 @@
     return out;
   }
 
+  /* Injury tags on their own, without a full refresh (the app's live tick on game days): only the rostered players who
+     already carry one, so it is a handful of calls rather than one per rostered player. The snapshot is updated in
+     place; returns how many rows changed. `get` is for the tests. */
+  async function refreshInjuries(snap, get) {
+    var ids = SCC.taggedIds(snap && snap.leagues);
+    if (!ids.length) return 0;
+    var details = await (get || fetchDetails)(ids);
+    return SCC.applyInjuries(snap.leagues, details);
+  }
+
   async function resolveMissing(ids, players) {
     var got = await fetchDetails(ids);
     var n = 0;
@@ -855,7 +865,7 @@
   var api = {
     fetchSeasonProjections: fetchSeasonProjections, nflSchedule: nflSchedule,
     store: store, getJson: getJson, lookupUser: lookupUser, discoverLeagues: discoverLeagues,
-    collect: collect, collectScores: collectScores, livePoints: livePoints,
+    collect: collect, collectScores: collectScores, livePoints: livePoints, refreshInjuries: refreshInjuries,
     collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule, leagueDraft: leagueDraft,
     trendingAdds: trendingAdds, leagueWaivers: leagueWaivers, leagueTransactions: leagueTransactions, leagueTradeCounts: leagueTradeCounts,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,

@@ -677,6 +677,21 @@ section('streaming a kicker or a defense, and the next best at a spot (streamPic
   check(SCC.nextBest(opt, roster, 'FLEX').name === 'A Tight End' && SCC.nextBest(opt, roster, 'QB') === null, 'a flex takes the best of any eligible position; a spot with nobody gives null');
 }
 
+section('injury tags refreshed without a full refresh (taggedIds, applyInjuries)');
+{
+  const pl = (id, name, inj) => ({id, name, pos: 'WR', team: 'KC', inj, outish: !!(inj && ['Out', 'Doubtful', 'IR'].includes(inj.split(' ')[0]))});
+  const leagues = [{roster: [pl('1', 'Tagged One', 'Questionable (Hamstring)'), pl('2', 'Healthy', ''), pl('DEF-KC', 'A Defense', 'Questionable')]},
+    {roster: [pl('1', 'Tagged One', 'Questionable (Hamstring)'), pl('3', 'Tagged Two', 'Out')]}];
+  const ids = SCC.taggedIds(leagues);
+  check(ids.join() === '1,3', `only the rostered players already carrying a tag, each once, Sleeper ids only (${ids.join(', ')})`);
+  const n = SCC.applyInjuries(leagues, {1: {inj: 'Out (Hamstring)'}, 3: {inj: ''}});
+  check(n === 3 && leagues[0].roster[0].inj === 'Out (Hamstring)' && leagues[0].roster[0].outish === true && leagues[1].roster[0].outish === true,
+    'a tag turning into Out lands on every copy of him across the leagues and benches him');
+  check(leagues[1].roster[1].inj === '' && leagues[1].roster[1].outish === false, 'a tag that has gone is cleared, and he can start again');
+  check(SCC.applyInjuries(leagues, {1: {inj: 'Out (Hamstring)'}}) === 0 && SCC.applyInjuries(leagues, {}) === 0 && SCC.taggedIds(null).length === 0,
+    'nothing changed, nothing counted; no leagues, no ids');
+}
+
 section('the nudge before kickoff (kickoffNudge)');
 {
   const now = Date.parse('2026-09-20T15:00:00Z'), h = 3600e3, min = 60e3;
