@@ -1466,7 +1466,7 @@
     var map = {};
     (rows || []).forEach(function (w) {
       map[norm(w.name)] = {name: w.name, pos: w.pos, team: w.team, rank: w.rank,
-        opp: w.opp, implied: w.implied, tier: w.tier};
+        opp: w.opp, implied: w.implied, tier: w.tier, posRank: w.posRank};
     });
     return map;
   }
@@ -2089,8 +2089,37 @@
       q.opp = w && w.opp ? w.opp : (p.opp || ''); // a planned week's opponent (planWeek) when the rankings don't say
       q.implied = w ? w.implied : '';
       q.tier = w ? w.tier : '';
+      q.posRank = w && w.posRank !== undefined ? w.posRank : '';
       return q;
     });
+  }
+
+  /* The three numbers behind a ranked player, for close calls: his overall rank (RB, WR and TE share one scale,
+     so this is where he sits among all of them; null for QB, K and DEF, which rank on their own, and for a player
+     past the overall list's end), his rank at his position (the file's, else what the rank itself says), and
+     his tier (null when the list has none). */
+  function rankBits(p) {
+    var out = {overall: null, pos: null, tier: null};
+    if (!p || p.rank === null || p.rank === undefined) return out;
+    var r = Number(p.rank), shared = !!SLOT_POS.FLEX[p.pos];
+    if (shared && r < 1000) out.overall = r;
+    var pr = p.posRank;
+    if (pr !== '' && pr !== null && pr !== undefined && isFinite(Number(pr))) out.pos = Number(pr);
+    else if (!shared) out.pos = r;
+    else if (r >= 1000) out.pos = r - 1000;
+    var t = p.tier;
+    if (t !== '' && t !== null && t !== undefined && isFinite(Number(t))) out.tier = Number(t);
+    return out;
+  }
+
+  /* The note beside a ranked player's label: "#17 overall · RB9 at position · tier 2" (the parts he has). When the
+     label is already his rank at the position (a quarterback, or a player past the overall list), only the tier. */
+  function rankNote(p) {
+    var b = rankBits(p), parts = [];
+    if (b.overall !== null) parts.push('#' + b.overall + ' overall');
+    if (b.pos !== null && b.overall !== null) parts.push(p.pos + b.pos + ' at position');
+    if (b.tier !== null) parts.push('tier ' + b.tier);
+    return parts.join(' · ');
   }
 
   /* ------------------------------------------------------------ analysis */
@@ -3042,7 +3071,7 @@
     alertsFor: alertsFor, newsWatch: newsWatch, newsAlertsFor: newsAlertsFor,
     depthCharts: depthCharts, backupOf: backupOf, faabBid: faabBid, rivalsFor: rivalsFor, waiverPlan: waiverPlan, usageOf: usageOf, waiverReminder: waiverReminder,
     gameStates: gameStates, weekProgress: weekProgress,
-    rankKey: rankKey, rankLabel: rankLabel, slotFits: slotFits, optimal: optimal,
+    rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,

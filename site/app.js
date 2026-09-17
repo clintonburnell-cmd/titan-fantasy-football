@@ -1065,8 +1065,11 @@
     return h + '</details>';
   }
 
+  /* A player's rank, with the note that makes a close call readable: his overall rank, his rank at his position and
+     his tier (SCC.rankNote), so two players can be compared on all three. */
   function rankCell(p) {
-    return `<span class="rank">${p.rank === null ? 'NR' : esc(rl(p))}${has(p.tier) ? `<small>T${esc(p.tier)}</small>` : ''}</span>`;
+    const note = p.rank === null ? '' : SCC.rankNote(p);
+    return `<span class="rank">${p.rank === null ? 'NR' : esc(rl(p))}${note ? `<small>${esc(note)}</small>` : ''}</span>`;
   }
 
   /* The weeks of Sleeper's stats behind floors and ceilings (the same three finished weeks Waivers' usage lines read,
@@ -1111,7 +1114,11 @@
       if (!a || !b) return;
       const floorer = a.floor >= b.floor ? starter : bench, ceiler = a.ceiling >= b.ceiling ? starter : bench;
       const fl = floorer === starter ? a : b, ce = ceiler === starter ? a : b;
-      let s = `<b>${esc(starter.name)}</b> over <b>${esc(bench.name)}</b> is a close call (${esc(rl(starter))} vs ${esc(rl(bench))}). `;
+      // The call in numbers: overall rank, rank at the position and tier for each, so how close they are is plain.
+      const ba = SCC.rankBits(starter), bb = SCC.rankBits(bench), pair = (x, y, f) => (x !== null && y !== null ? f(x) + ' vs ' + f(y) : '');
+      const nums = [pair(ba.overall, bb.overall, n => '#' + n + ' overall'), pair(ba.pos, bb.pos, n => starter.pos + n + ' at position'),
+        pair(ba.tier, bb.tier, n => 'tier ' + n)].filter(Boolean).join('; ');
+      let s = `<b>${esc(starter.name)}</b> over <b>${esc(bench.name)}</b> is a close call (${esc(rl(starter))} vs ${esc(rl(bench))}${nums ? ': ' + esc(nums) : ''}). `;
       if (floorer === ceiler) s += `${esc(floorer.name)} has both the higher floor (${fmt(fl.floor)}) and the higher ceiling (${fmt(ce.ceiling)}).`;
       else s += `${esc(floorer.name)} has the higher floor (${fmt(fl.floor)} to ${fmt(fl.ceiling)}), ${esc(ceiler.name)} the higher ceiling (${fmt(ce.floor)} to ${fmt(ce.ceiling)}).`;
       const ra = dvpRank(starter), rb = dvpRank(bench);

@@ -517,4 +517,24 @@ section('floor and ceiling, and the close calls in a lineup');
   check(flat.tilts.length === 0 && flat.moves.length === 0 && SCC.analyzeLeague(d(), {x: 1}, 2).tilts.length === 0,
     'a smaller tilt, or none, leaves the rankings\' call alone');
 }
+
+section('the rank note: overall rank, rank at the position, tier (rankBits, rankNote)');
+{
+  const weekly = SCC.weeklyMap([{name: 'Flex Back', pos: 'RB', team: 'PIT', rank: 17, opp: '', implied: '', tier: 2, posRank: 9},
+    {name: 'Deep End', pos: 'TE', team: 'DAL', rank: 1008, opp: '', implied: '', tier: '', posRank: 8},
+    {name: 'Passer One', pos: 'QB', team: 'BUF', rank: 1, opp: '', implied: '', tier: 1, posRank: 1}]);
+  const [rb, te, qb, nr] = SCC.attachRanks([{id: 'a', name: 'Flex Back', pos: 'RB'}, {id: 'b', name: 'Deep End', pos: 'TE'}, {id: 'c', name: 'Passer One', pos: 'QB'},
+    {id: 'd', name: 'Nobody', pos: 'WR'}], weekly);
+  check(rb.posRank === 9 && rb.tier === 2 && te.posRank === 8 && qb.posRank === 1, 'attachRanks carries the position rank and tier onto the player');
+  const b = SCC.rankBits(rb);
+  check(b.overall === 17 && b.pos === 9 && b.tier === 2 && SCC.rankNote(rb) === '#17 overall · RB9 at position · tier 2',
+    'a flex-scale back: overall rank, rank at the position and tier: ' + SCC.rankNote(rb));
+  check(SCC.rankBits(te).overall === null && SCC.rankBits(te).pos === 8 && SCC.rankNote(te) === '' && SCC.rankLabel(te.pos, te.rank) === 'TE8',
+    'past the overall list (the 1000+ sentinel): no overall rank, TE8 at the position, no note without a tier');
+  check(SCC.rankBits(qb).overall === null && SCC.rankBits(qb).pos === 1 && SCC.rankNote(qb) === 'tier 1', 'a quarterback ranks on his own scale: no overall, tier only');
+  check(SCC.rankBits(nr).overall === null && SCC.rankBits(nr).pos === null && SCC.rankNote(nr) === '', 'unranked: nothing');
+  const noPos = SCC.rankBits({pos: 'WR', rank: 1021, posRank: '', tier: 4});
+  check(noPos.pos === 21 && noPos.tier === 4 && SCC.rankNote({pos: 'WR', rank: 1021, posRank: '', tier: 4}) === 'tier 4',
+    'without a position column the sentinel gives the position rank (the label WR21 already says it, so the note is the tier)');
+}
 T.done();

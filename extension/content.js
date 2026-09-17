@@ -132,7 +132,8 @@
       .lineup li { display: grid; grid-template-columns: 52px 1fr auto; gap: 8px; padding: 3px 0; border-top: 1px solid #eef1f5; align-items: baseline; }
       .lineup li:first-child { border-top: 0; }
       .lineup .slot { font-size: 11px; font-weight: 700; color: #6b7280; }
-      .lineup .rk { font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; }
+      .lineup .rk { font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; text-align: right; }
+      .lineup .rk .rn { display: block; font-size: 10px; color: #9ca3af; white-space: nowrap; }
       .lineup li.change b { color: #15803d; }
       .lineup li.stop b { color: #b91c1c; }
       .lineup .v { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
@@ -188,7 +189,10 @@
 
   // ------------------------------------------------------------- the lineup (Titan's engine, run by the worker)
   const SLOT_LABEL = {QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLEX', SUPER_FLEX: 'SFLEX', WRRB_FLEX: 'W/R', REC_FLEX: 'W/T', K: 'K', DEF: 'DEF', DST: 'DEF', IDP_FLEX: 'IDP', DL: 'DL', LB: 'LB', DB: 'DB'};
-  const rankLabel = p => (!p ? '' : p.rank === null || p.rank === undefined ? 'unranked' : `${p.pos}${p.rank}`);
+  // Titan's own label (a rank past the overall list's end is kept as a 1000+ sentinel: RB1021 is RB21 at his position).
+  const rankLabel = p => (!p ? '' : SCC ? SCC.rankLabel(p.pos, p.rank) : p.rank === null || p.rank === undefined ? 'unranked' : `${p.pos}${p.rank}`);
+  // The note that makes a close call readable: overall rank, rank at the position, tier.
+  const rankNote = p => (p && SCC && p.rank !== null && p.rank !== undefined ? SCC.rankNote(p) : '');
   const verdictClass = v => (v === 'OK' || v === 'LOCKED' ? 'ok' : v === 'UNRANKED' ? 'warn' : 'bad');
 
   function lineupSection() {
@@ -210,7 +214,7 @@
         const isChange = p && !current[p.id];
         return `<li class="${isChange ? 'change' : v && verdictClass(v) === 'bad' ? 'stop' : ''}"><span class="slot">${esc(SLOT_LABEL[o.slot] || o.slot)}</span>
           <span><b>${p ? esc(p.name) : 'Empty'}</b>${p && p.inj ? ` <span class="v warn">${esc(p.inj)}</span>` : ''}${p && p.onBye ? ' <span class="v bad">bye</span>' : ''}${isChange ? ' <span class="v ok">start</span>' : ''}</span>
-          <span class="rk">${p ? esc(rankLabel(p)) : ''}</span></li>`;
+          <span class="rk">${p ? esc(rankLabel(p)) : ''}${p && rankNote(p) ? `<small class="rn">${esc(rankNote(p))}</small>` : ''}</span></li>`;
       }).join('');
       const changes = L.moves.map(m => `<li><b>${m.from ? `Move ${esc(m.inn.name)} to ${esc(SLOT_LABEL[m.slot] || m.slot)}` : `Start ${esc(m.inn.name)}${m.inn.rank !== null && m.inn.rank !== undefined ? ` (${esc(rankLabel(m.inn))})` : ''}${m.out ? ` over ${esc(m.out.name)}` : ''}`}</b></li>`).join('');
       const hurt = L.hurt.filter(p => !L.moves.some(m => m.out && m.out.id === p.id)).map(p => `<li>${esc(p.name)} is ${esc(String(p.inj).toLowerCase())} and in your lineup.</li>`).join('');

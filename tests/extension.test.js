@@ -39,8 +39,9 @@ const VALUE = {v: 2, season: 2026, week: 3, through: 'Through week 2 of 2026', a
 const DUMP = {v: 1, week: 3, at: Date.now(), leagues: [{id: '999', name: 'Test League', start: [{n: 'Josh Allen', why: 'Start him over the other one this week.', x: 'QB'}], add: [], watch: []}]};
 // Titan's lineup analysis for the league, as bg.js caches it (trimLeague): the lineup as it stands, the optimal one, the changes, the wire.
 const pl = (id, name, pos, team, rank, extra) => Object.assign({id, name, pos, team, rank, inj: null, onBye: false, locked: false, outish: false}, extra || {});
-const allen = pl('333', 'Josh Allen', 'QB', 'BUF', 1), warren = pl('222', 'Jaylen Warren', 'RB', 'PIT', 17), gain = pl('444', 'Kenny Gainwell', 'RB', 'PIT', 30, {inj: 'Questionable'}),
-  bench = pl('555', 'Bench Back', 'RB', 'NYG', 40), te = pl('666', 'Some Tight End', 'TE', 'DAL', 8);
+const allen = pl('333', 'Josh Allen', 'QB', 'BUF', 1, {tier: 1}), warren = pl('222', 'Jaylen Warren', 'RB', 'PIT', 17, {posRank: 9, tier: 2}),
+  gain = pl('444', 'Kenny Gainwell', 'RB', 'PIT', 30, {inj: 'Questionable', posRank: 14, tier: 3}),
+  bench = pl('555', 'Bench Back', 'RB', 'NYG', 40, {posRank: 19, tier: 3}), te = pl('666', 'Some Tight End', 'TE', 'DAL', 1008, {tier: 2});
 const ANALYSIS = {at: Date.now(), week: 3, season: '2026', rankedCount: 150, leagues: {'999': {id: '999', name: 'Test League', lineup: ['QB', 'RB', 'RB', 'TE'], week: 3,
   rows: [{slot: 'QB', verdict: 'OK', p: allen}, {slot: 'RB', verdict: 'OK', p: warren}, {slot: 'RB', verdict: 'SWAP OUT', p: bench}, {slot: 'TE', verdict: 'OK', p: te}],
   opt: [{slot: 'QB', p: allen}, {slot: 'RB', p: warren}, {slot: 'RB', p: gain}, {slot: 'TE', p: te}],
@@ -141,6 +142,8 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     const lineup = await P.evaluate('(document.querySelector("titan-panel").shadowRoot.querySelector(".lineup") || {}).textContent || ""', false);
     check('the panel shows Titan\'s recommended lineup by slot with ranks', /QB\s*Josh Allen\s*QB1/.test(lineup.replace(/\s+/g, ' ')) && /RB\s*Kenny Gainwell/.test(lineup.replace(/\s+/g, ' ')) && /TE\s*Some Tight End\s*TE8/.test(lineup.replace(/\s+/g, ' ')), lineup.slice(0, 200));
     check('the new starter is marked, and the change is spelled out', /Kenny Gainwell\s*Questionable\s*start/.test(lineup.replace(/\s+/g, ' ')) && /Start Kenny Gainwell \(RB30\) over Bench Back/.test(lineup), lineup.slice(0, 300));
+    check('each starter carries the note for close calls: overall rank, rank at the position, tier (a rank past the overall list shows at the position only)',
+      /RB17\s*#17 overall · RB9 at position · tier 2/.test(lineup.replace(/\s+/g, ' ')) && /QB1\s*tier 1/.test(lineup.replace(/\s+/g, ' ')) && /TE8\s*tier 2/.test(lineup.replace(/\s+/g, ' ')), lineup.slice(0, 260));
     check('waiver upgrades list free agents ranked above a starter', /Waiver upgrades/.test(lineup) && /Free Tight End \(TE6\)/.test(lineup) && /over Some Tight End \(TE8\)/.test(lineup), lineup.slice(-260));
     check('the section says whose engine and when, with a refresh', /Titan's engine, as of/.test(lineup) && /Refresh/.test(lineup), '');
     // The trade check: type a name on each side, pick the suggestion, read the totals and the verdict.

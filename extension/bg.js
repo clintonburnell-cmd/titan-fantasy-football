@@ -123,7 +123,7 @@ function ranksFor(weeks, week) {
 }
 
 const pick = (p, keys) => { const o = {}; keys.forEach(k => { if (p && p[k] !== undefined) o[k] = p[k]; }); return o; };
-const PK = ['id', 'name', 'pos', 'team', 'rank', 'inj', 'onBye', 'locked', 'outish', 'start', 'bye', 'opp'];
+const PK = ['id', 'name', 'pos', 'team', 'rank', 'posRank', 'tier', 'inj', 'onBye', 'locked', 'outish', 'start', 'bye', 'opp'];
 const slim = p => (p ? pick(p, PK) : null);
 
 function trimLeague(L, week) {
