@@ -20,6 +20,14 @@ owner-only Value report and Data dump, read from his Titan account.
   picks are typed. With both sides picked, "Send this trade to Titan's trade analyzer" opens Titan's Trade tab with
   the league and both sides filled in (`/app/trade?trade=<league>:<give ids>:<get ids>`; Titan finds the partner from
   the players you'd get).
+- **Your lineup, by Titan's engine**, at the top of the panel: the service worker reads your Sleeper leagues the way
+  Titan does (`sleeper.js`, `SleeperAPI.collect`: rosters, injuries, byes, matchups) and your synced weekly rankings
+  (Firestore `users/{uid}/ranks`, this week's or the latest earlier; Titan's defaults from Sleeper's projections for
+  positions you left out), then runs `SCC.analyzeAll`, the same call the app and the server job make. The section
+  shows the recommended lineup by slot with each player's rank, the new starters marked, the changes your rankings
+  want ("Start X (RB30) over Y"), hurt starters, and waiver upgrades (free agents ranked above one of your starters).
+  Cached twenty minutes (`analysis` in storage); Refresh in the section or the popup reruns it. The Sleeper player list
+  is kept between runs (`players`, three days). Only the Sleeper side of your account is read (no ESPN or Yahoo).
 - **Links into Titan** at the panel's foot: Lineups, Waivers and Value for the league on screen (`/app/<tab>?league=<id>`
   picks that league in Titan's dropdown). The panel's own Start section is the Data dump's start ideas and its Claims
   section the Value report's claims with a bid and a drop; the full recommended lineup and waiver plan (which need your

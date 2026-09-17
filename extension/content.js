@@ -7,7 +7,8 @@
   const SCC = globalThis.SCC;
   const APP = 'https://titanfantasyfootball.com/app/';
   const S = {value: null, dump: null, showPills: true, showPanel: true, leagueId: null, index: null, facts: null, factsFor: null, open: true,
-    trade: {give: [], get: []}};   // the trade check's picks (Sleeper ids), for the league on screen
+    trade: {give: [], get: []},   // the trade check's picks (Sleeper ids), for the league on screen
+    lineup: null, lineupFor: null, lineupBusy: false};   // Titan's lineup analysis for the league on screen (from the worker)
 
   const norm = s => String(s || '').toLowerCase().replace(/[.'’]/g, '').replace(/-/g, ' ')
     .replace(/\b(jr|sr|ii|iii|iv|v)\b/g, '').replace(/\s+/g, ' ').trim();
@@ -127,6 +128,17 @@
       .totals table { border-collapse: collapse; width: 100%; margin-top: 4px; }
       .totals td { padding: 2px 0; } .totals td.n { text-align: right; font-variant-numeric: tabular-nums; }
       a.send { display: inline-block; margin-bottom: 4px; padding: 6px 10px; border-radius: 8px; background: #1f4fb8; color: #fff; text-decoration: none; font-weight: 700; }
+      .lineup ol { list-style: none; margin: 4px 0 0; padding: 0; }
+      .lineup li { display: grid; grid-template-columns: 52px 1fr auto; gap: 8px; padding: 3px 0; border-top: 1px solid #eef1f5; align-items: baseline; }
+      .lineup li:first-child { border-top: 0; }
+      .lineup .slot { font-size: 11px; font-weight: 700; color: #6b7280; }
+      .lineup .rk { font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; }
+      .lineup li.change b { color: #15803d; }
+      .lineup li.stop b { color: #b91c1c; }
+      .lineup .v { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
+      .lineup .v.ok { color: #15803d; } .lineup .v.bad { color: #b91c1c; } .lineup .v.warn { color: #b45309; }
+      .lineup .meta { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: #6b7280; margin-top: 4px; }
+      .lineup .meta button { border: 0; background: none; color: #1f4fb8; cursor: pointer; font: inherit; font-size: 11px; padding: 0; }
     `;
   }
 
@@ -174,7 +186,62 @@
         : `<a href="${link}" target="_blank" rel="noopener">Open Titan's Trade tab</a> for the full analysis (lineup points, partners, what they'd accept). Pick both sides here to send them across.`}</p></details>`;
   }
 
+  // ------------------------------------------------------------- the lineup (Titan's engine, run by the worker)
+  const SLOT_LABEL = {QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLEX', SUPER_FLEX: 'SFLEX', WRRB_FLEX: 'W/R', REC_FLEX: 'W/T', K: 'K', DEF: 'DEF', DST: 'DEF', IDP_FLEX: 'IDP', DL: 'DL', LB: 'LB', DB: 'DB'};
+  const rankLabel = p => (!p ? '' : p.rank === null || p.rank === undefined ? 'unranked' : `${p.pos}${p.rank}`);
+  const verdictClass = v => (v === 'OK' || v === 'LOCKED' ? 'ok' : v === 'UNRANKED' ? 'warn' : 'bad');
+
+  function lineupSection() {
+    const R = S.lineup;
+    if (!S.value) return '';
+    let inner;
+    if (S.lineupBusy && !R) inner = '<p class="note">Reading your rosters and rankings…</p>';
+    else if (!R) inner = '<p class="note">No lineup analysis yet: open the extension\'s popup and press Refresh reports.</p>';
+    else if (R.error && !R.league) inner = `<p class="note">Titan couldn't build the lineup: ${esc(R.error)}</p>`;
+    else if (!R.league) inner = '<p class="note">This league isn\'t among the Sleeper leagues linked to your Titan account.</p>';
+    else {
+      const L = R.league;
+      // The recommended lineup: the optimal one when there are changes to make, else the lineup as it stands (as Titan's Lineups tab).
+      const rec = L.moves.length ? L.opt : L.rows.map(r => ({slot: r.slot, p: r.p}));
+      const current = {}; L.rows.forEach(r => { if (r.p) current[r.p.id] = r; });
+      const rowsBySlot = {}; L.rows.forEach(r => { if (r.p) rowsBySlot[r.p.id] = r.verdict; });
+      const list = rec.map(o => {
+        const p = o.p, v = p ? rowsBySlot[p.id] : null;
+        const isChange = p && !current[p.id];
+        return `<li class="${isChange ? 'change' : v && verdictClass(v) === 'bad' ? 'stop' : ''}"><span class="slot">${esc(SLOT_LABEL[o.slot] || o.slot)}</span>
+          <span><b>${p ? esc(p.name) : 'Empty'}</b>${p && p.inj ? ` <span class="v warn">${esc(p.inj)}</span>` : ''}${p && p.onBye ? ' <span class="v bad">bye</span>' : ''}${isChange ? ' <span class="v ok">start</span>' : ''}</span>
+          <span class="rk">${p ? esc(rankLabel(p)) : ''}</span></li>`;
+      }).join('');
+      const changes = L.moves.map(m => `<li><b>${m.from ? `Move ${esc(m.inn.name)} to ${esc(SLOT_LABEL[m.slot] || m.slot)}` : `Start ${esc(m.inn.name)}${m.inn.rank !== null && m.inn.rank !== undefined ? ` (${esc(rankLabel(m.inn))})` : ''}${m.out ? ` over ${esc(m.out.name)}` : ''}`}</b></li>`).join('');
+      const hurt = L.hurt.filter(p => !L.moves.some(m => m.out && m.out.id === p.id)).map(p => `<li>${esc(p.name)} is ${esc(String(p.inj).toLowerCase())} and in your lineup.</li>`).join('');
+      const wire = L.wire.map(w => `<li><b>${esc(w.pos)}</b>: ${w.list.map(f => `${esc(f.name)} (${esc(rankLabel(f))})`).join(', ')}${w.cur ? ` <span class="x">· over ${esc(w.cur.name)} (${esc(rankLabel(w.cur))})</span>` : w.anyUnranked ? ' <span class="x">· a starter there is unranked</span>' : ''}</li>`).join('');
+      inner = `<ol>${list}</ol>`
+        + (changes ? `<h4>Changes your rankings want</h4><ul>${changes}</ul>` : `<p class="note">${L.rows.length ? 'This lineup already matches your rankings.' : ''}</p>`)
+        + (hurt ? `<h4>Hurt starters</h4><ul>${hurt}</ul>` : '')
+        + (wire ? `<h4>Waiver upgrades (free agents ranked above a starter)</h4><ul>${wire}</ul>` : '')
+        + (!R.rankedCount ? '<p class="note">No weekly rankings imported in Titan, so this is Titan\'s default order from projections. Import yours on Rankings, Weekly import.</p>' : '');
+    }
+    const at = R && R.at ? new Date(R.at).toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'}) : '';
+    return `<div class="lineup"><h4>Lineup${R && R.week ? ` · week ${esc(R.week)}` : ''}</h4>${inner}
+      <div class="meta"><span>${at ? `Titan's engine, as of ${esc(at)}` : ''}</span><button type="button" data-lineup-refresh${S.lineupBusy ? ' disabled' : ''}>${S.lineupBusy ? 'Refreshing…' : 'Refresh'}</button></div></div>`;
+  }
+
+  function loadLineup(force) {
+    if (!S.leagueId || !S.value) return;
+    if (!force && S.lineupFor === S.leagueId && S.lineup) return;
+    S.lineupFor = S.leagueId; S.lineupBusy = true;
+    if (force) S.lineup = null;
+    renderPanel();
+    chrome.runtime.sendMessage({type: 'lineup', id: S.leagueId, force: !!force}, r => {
+      S.lineupBusy = false;
+      S.lineup = chrome.runtime.lastError ? {error: chrome.runtime.lastError.message} : (r || {error: 'no answer'});
+      renderPanel();
+    });
+  }
+
   function wireTrade(root) {
+    const rb = root.querySelector('[data-lineup-refresh]');
+    if (rb) rb.addEventListener('click', () => loadLineup(true));
     root.querySelectorAll('.side input').forEach(input => {
       const sugg = input.parentElement.querySelector('.sugg'), side = input.dataset.side;
       input.addEventListener('input', () => {
@@ -235,7 +302,7 @@
     let body;
     if (!V) body = `<p class="note">Not connected to Titan yet. Open the extension's popup and choose Connect to Titan.</p>`;
     else if (!L && !DL) body = `<p class="note">Titan's reports don't cover this league (they cover your Sleeper leagues each Tuesday).</p>`;
-    else body = tradeSection() + section('Start', DL && DL.start, 'start') + section('Claims', (L && L.add) || [], 'add') + section('Pickups (data dump)', (DL && DL.add) || [], 'add')
+    else body = lineupSection() + tradeSection() + section('Start ideas (data dump)', DL && DL.start, 'start') + section('Claims', (L && L.add) || [], 'add') + section('Pickups (data dump)', (DL && DL.add) || [], 'add')
       + section('Buy low', (L && L.buy) || [], 'buy') + section('Sell high or keep', (L && L.sell) || [], 'sell') + section('Watch', (DL && DL.watch) || [], 'watch')
       + (L && L.need ? `<p class="note">${esc(L.need)}</p>` : '')
       + `<div class="foot"><span>Week ${esc(V.week)}${V.through ? ' · ' + esc(V.through) : ''}</span><span>In Titan: ${
@@ -266,6 +333,7 @@
     tagNames();
     renderPanel();
     loadFacts();
+    loadLineup(false);
   }
 
   function watchUrl() {
@@ -273,7 +341,7 @@
     const check = () => {
       const m = /\/leagues\/(\d+)/.exec(location.pathname);
       const id = m ? m[1] : null;
-      if (location.href !== last) { last = location.href; if (id !== S.leagueId) { S.leagueId = id; S.trade = {give: [], get: []}; refreshAll(); } else tagNames(); }
+      if (location.href !== last) { last = location.href; if (id !== S.leagueId) { S.leagueId = id; S.trade = {give: [], get: []}; S.lineup = null; S.lineupFor = null; refreshAll(); } else tagNames(); }
     };
     check();
     setInterval(check, 800);
@@ -296,6 +364,7 @@
     if (ch.dump) S.dump = ch.dump.newValue;
     if (ch.showPills) { S.showPills = ch.showPills.newValue; if (!S.showPills) untag(); }
     if (ch.showPanel) S.showPanel = ch.showPanel.newValue;
-    if (ch.value || ch.dump || ch.showPills || ch.showPanel) { S.factsFor = null; refreshAll(); }
+    if (ch.analysis) { S.lineupFor = null; S.lineup = null; }
+    if (ch.value || ch.dump || ch.showPills || ch.showPanel || ch.analysis) { S.factsFor = null; refreshAll(); }
   });
 })();

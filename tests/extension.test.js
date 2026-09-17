@@ -37,6 +37,15 @@ const VALUE = {v: 2, season: 2026, week: 3, through: 'Through week 2 of 2026', a
     {s: '333', n: 'Josh Allen', p: 'QB', t: 'BUF', proj: 24.0, ur: 1, mr: 1, vgap: 0, v: 6000, buy: false, sell: true, keep: true, pb: null, rbk: null, dg: null},
     {s: '444', n: 'Kenny Gainwell', p: 'RB', t: 'PIT', proj: 9.8, ur: 30, mr: 42, vgap: 0.2, v: 900, buy: true, sell: false, keep: false, pb: null, rbk: null, dg: null}]}}};
 const DUMP = {v: 1, week: 3, at: Date.now(), leagues: [{id: '999', name: 'Test League', start: [{n: 'Josh Allen', why: 'Start him over the other one this week.', x: 'QB'}], add: [], watch: []}]};
+// Titan's lineup analysis for the league, as bg.js caches it (trimLeague): the lineup as it stands, the optimal one, the changes, the wire.
+const pl = (id, name, pos, team, rank, extra) => Object.assign({id, name, pos, team, rank, inj: null, onBye: false, locked: false, outish: false}, extra || {});
+const allen = pl('333', 'Josh Allen', 'QB', 'BUF', 1), warren = pl('222', 'Jaylen Warren', 'RB', 'PIT', 17), gain = pl('444', 'Kenny Gainwell', 'RB', 'PIT', 30, {inj: 'Questionable'}),
+  bench = pl('555', 'Bench Back', 'RB', 'NYG', 40), te = pl('666', 'Some Tight End', 'TE', 'DAL', 8);
+const ANALYSIS = {at: Date.now(), week: 3, season: '2026', rankedCount: 150, leagues: {'999': {id: '999', name: 'Test League', lineup: ['QB', 'RB', 'RB', 'TE'], week: 3,
+  rows: [{slot: 'QB', verdict: 'OK', p: allen}, {slot: 'RB', verdict: 'OK', p: warren}, {slot: 'RB', verdict: 'SWAP OUT', p: bench}, {slot: 'TE', verdict: 'OK', p: te}],
+  opt: [{slot: 'QB', p: allen}, {slot: 'RB', p: warren}, {slot: 'RB', p: gain}, {slot: 'TE', p: te}],
+  moves: [{slot: 'RB', from: null, inn: gain, out: bench}], hurt: [gain], stops: 0,
+  wire: [{pos: 'TE', cur: te, anyUnranked: false, list: [pl('777', 'Free Tight End', 'TE', 'SEA', 6)]}]}}};
 const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><header><span>Sleeper</span></header>
   <div class="roster"><div class="row"><span class="name">Patrick Mahomes</span><span>QB - KC</span></div>
   <div class="row"><span class="name">J. Warren</span><span>RB - PIT</span></div>
@@ -94,7 +103,7 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
       else W.fulfill(m, 404, '{}');
     });
     // The reports the worker would have fetched after a sign-in.
-    await W.evaluate(`chrome.storage.local.set(${JSON.stringify({value: VALUE, dump: DUMP, fetched: Date.now(), showPills: true, showPanel: true, panelOpen: true})})`);
+    await W.evaluate(`chrome.storage.local.set(${JSON.stringify({value: VALUE, dump: DUMP, analysis: ANALYSIS, fetched: Date.now(), showPills: true, showPanel: true, panelOpen: true})})`);
     const stored = await W.evaluate('chrome.storage.local.get("value").then(o => o.value && o.value.week)');
     check('the worker stored the stand-in reports', stored === 3, String(stored));
     // The popup, as a page: it asks the worker for its status and shows it.
@@ -127,6 +136,12 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     check('the claim shows its drop and a bid from the league\'s winning bids', /drop Bench Guy/.test(panel) && /bid about \$\d+ of \$80 left/.test(panel), panel.slice(panel.indexOf('Claims'), panel.indexOf('Claims') + 220));
     const foot = await P.evaluate('[...document.querySelector("titan-panel").shadowRoot.querySelectorAll(".foot a")].map(a => a.href).join(" ")', false);
     check('the panel carries the position note and links to Titan\'s Lineups, Waivers and Value for this league', /Thin at RB/.test(panel) && /app\/lineups\?league=999/.test(foot) && /app\/waivers\?league=999/.test(foot), foot);
+    // The lineup: Titan's recommended lineup for the league (the cached analysis), the change it wants, the hurt starter, the wire.
+    const lineup = await P.evaluate('(document.querySelector("titan-panel").shadowRoot.querySelector(".lineup") || {}).textContent || ""', false);
+    check('the panel shows Titan\'s recommended lineup by slot with ranks', /QB\s*Josh Allen\s*QB1/.test(lineup.replace(/\s+/g, ' ')) && /RB\s*Kenny Gainwell/.test(lineup.replace(/\s+/g, ' ')) && /TE\s*Some Tight End\s*TE8/.test(lineup.replace(/\s+/g, ' ')), lineup.slice(0, 200));
+    check('the new starter is marked, and the change is spelled out', /Kenny Gainwell\s*Questionable\s*start/.test(lineup.replace(/\s+/g, ' ')) && /Start Kenny Gainwell \(RB30\) over Bench Back/.test(lineup), lineup.slice(0, 300));
+    check('waiver upgrades list free agents ranked above a starter', /Waiver upgrades/.test(lineup) && /Free Tight End \(TE6\)/.test(lineup) && /over Some Tight End \(TE8\)/.test(lineup), lineup.slice(-260));
+    check('the section says whose engine and when, with a refresh', /Titan's engine, as of/.test(lineup) && /Refresh/.test(lineup), '');
     // The trade check: type a name on each side, pick the suggestion, read the totals and the verdict.
     const sr = 'document.querySelector("titan-panel").shadowRoot';
     const type = async (side, text) => {
