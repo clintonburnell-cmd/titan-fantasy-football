@@ -16,8 +16,8 @@
   // the demo can't overwrite someone's leagues or rankings.
   const DEMO = new URLSearchParams(location.search).has('demo');
   const KEY = DEMO
-    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1', seasonRanks: 'titan.demo.seasonranks.v1'}
-    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1', seasonRanks: 'titan.seasonranks.v1'};
+    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1', seasonRanks: 'titan.demo.seasonranks.v1', calls: 'titan.demo.calls.v1'}
+    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1', seasonRanks: 'titan.seasonranks.v1', calls: 'titan.calls.v1'};
   const STALE_MS = 5 * 60 * 1000;
   const TABS = ['today', 'lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'score', 'news', 'trade', 'moves', 'ranks', 'season', 'multi', 'lab', 'value', 'dump', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
@@ -146,6 +146,7 @@
     look: {week: 0, season: '', sched: null, proj: {}, none: {}, A: null, busy: false, error: ''},
     // Results' season so far: each week's totals, kept on this device once its games are all played (loadSeason).
     season: store.get(KEY.season) || null, seasonBusy: false,
+    calls: store.get(KEY.calls) || null, // this season's close calls as they stood before kickoff (recordCalls), graded on Results
     // Compare rankings (Titan's owner only): each week's test, kept on this device once its games are over (loadLab).
     lab: store.get(KEY.lab) || null, labBusy: false, labAt: 0, labError: '',
     value: {busy: false, data: null, error: '', at: 0, q: ''}, // the value report (Titan's owner only), from the owner's PC; q: its player search
@@ -314,6 +315,59 @@
     const r = ranksFor(S.snap.week, S.proj), tilt = tiltFor();
     S.A = SCC.analyzeAll(S.snap, rankingsOf(r, S.proj, playerList()), tilt ? {tilt: (p, cfg) => tilt(cfg)(p)} : undefined);
     S.A.ranks = r;
+    recordCalls(tilt);
+  }
+
+  /* This week's close calls, kept as they stood before kickoff so Results can grade them (SCC.gradeCalls): for each
+     league, every pair the rankings call close (SCC.closeCallPairs on Titan's lineup), the pick (the starter), the other,
+     whether the matchup tilt made the pick (L.tilts), and both tilted projections. Each analysis rewrites the pairs whose
+     players are still free to move; a pair with a locked player stays as it was, and a pair that stopped being close
+     before kickoff (new rankings, an injury) is dropped. Keyed by league and the two players. KEY.calls, this season's. */
+  const slimCall = p => ({id: String(p.id), name: p.name, pos: p.pos, team: p.team, rank: p.rank, posRank: p.posRank, tier: p.tier});
+  function callsStore() {
+    const c = S.calls, user = String((S.account && (S.account.userId || S.account.username)) || '');
+    if (!c || c.season !== S.snap.season || c.user !== user) S.calls = {season: S.snap.season, user, weeks: {}};
+    return S.calls;
+  }
+  function recordCalls(tilt) {
+    if (DEMO || !S.snap || !S.A || !S.account) return;
+    const r = S.A.ranks;
+    if (!r || !r.rows || !r.rows.length) return; // default rankings: nothing of the person's to grade
+    const week = S.snap.week, c = callsStore(), W = c.weeks[week] = c.weeks[week] || {};
+    let changed = false;
+    S.A.leagues.forEach(L => {
+      const id = String(L.cfg.id), was = W[id] || {}, now = {}, locked = {};
+      L.roster.forEach(p => { if (p.locked) locked[p.id] = 1; });
+      const proj = tilt ? tilt(L.cfg) : (p => SCC.projFor(S.proj, p.id, L.cfg));
+      SCC.closeCallPairs(L.opt, L.roster).forEach(({starter, bench}) => {
+        const key = [starter.id, bench.id].map(String).sort().join('|');
+        const slot = (L.opt.find(o => o.p && o.p.id === starter.id) || {}).slot || starter.pos;
+        const flip = (L.tilts || []).some(t => t.inn.id === starter.id && t.out.id === bench.id);
+        const a = proj(starter), b = proj(bench);
+        now[key] = {league: L.cfg.key, slot, pick: slimCall(starter), other: slimCall(bench), flip,
+          a: has(a) ? Math.round(a * 10) / 10 : null, b: has(b) ? Math.round(b * 10) / 10 : null, at: Date.now()};
+      });
+      // A pair with a locked player stays as recorded; the rest follow this analysis.
+      Object.keys(was).forEach(key => { const x = was[key]; if (locked[x.pick.id] || locked[x.other.id]) now[key] = x; });
+      if (JSON.stringify(now) !== JSON.stringify(was)) { W[id] = now; changed = true; }
+    });
+    if (changed) store.set(KEY.calls, S.calls);
+  }
+  // A week's recorded calls, flat.
+  const callsFor = week => {
+    const W = S.calls && S.calls.season === S.snap.season ? S.calls.weeks[week] : null;
+    return W ? Object.values(W).flatMap(x => Object.values(x)) : [];
+  };
+  // The calls of a scored week graded (points from the scored rosters; a player yet to play stays ungraded while the week is live).
+  function gradeWeek(D) {
+    const calls = callsFor(D.week);
+    if (!calls.length) return null;
+    const pts = {}, live = D.provisional, games = (S.snap && S.snap.week === D.week && S.snap.games) || {};
+    (D.rows || []).forEach(r => (r.roster || []).forEach(p => { pts[String(p.id)] = Number(p.pts) || 0; }));
+    const played = p => !live || ((games[SCC.teamAbbr(p.team)] || {}).state === 'post');
+    const byId = {};
+    calls.forEach(c => { byId[c.pick.id] = c.pick; byId[c.other.id] = c.other; });
+    return SCC.gradeCalls(calls, id => (id in pts && byId[id] && played(byId[id]) ? pts[id] : null));
   }
 
   /* ------------------------------------------------------------ refresh */
@@ -491,8 +545,11 @@
   }
   function keepWeek(D) {
     const T = D.totals;
+    // The week's close calls graded (Results' Close calls card adds the season up from these).
+    const G = D.provisional ? null : gradeWeek(D);
     seasonStore().weeks[D.week] = {week: D.week, actual: T.actual, proj: T.projActual, byRank: T.byRank, perfect: T.perfect,
-      wins: T.wins, losses: T.losses, ties: T.ties, done: !D.provisional, sig: weekSig(D.week)};
+      wins: T.wins, losses: T.losses, ties: T.ties, done: !D.provisional, sig: weekSig(D.week),
+      calls: G ? {n: G.n, right: G.right, fn: G.flips.n, fr: G.flips.right} : null};
     store.set(KEY.season, S.season);
   }
   // Scores the weeks before this one that aren't kept yet (or have changed), one at a time.
@@ -1049,7 +1106,7 @@
     }
     const rec = recLineup(L);
     h += `<h4 class="lu-h">${LV ? `Recommended lineup for week ${LV.week}` : 'Recommended lineup'}</h4><ol class="lineup lineup-rec">${
-      rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg)).join('')}</ol>${compareLineups(L, rec)}${LV ? '' : closeNotes(L)}`;
+      rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg)).join('')}</ol>${compareLineups(L, rec)}${LV ? '' : closeNotes(L) + disagreeNotes(L)}`;
     (L.tilts || []).forEach(t => {
       h += `<p class="note tilt"><b>Matchup tilt:</b> ${esc(t.inn.name)} starts over ${esc(t.out.name)}, who ranks higher (${esc(rl(t.out))} vs ${esc(rl(t.inn))}):
         with the matchups counted, ${esc(t.inn.name)} projects ${fmt(t.by)} more.</p>`;
@@ -1134,6 +1191,23 @@
       notes.push(`<p class="note close-call">${s}</p>`);
     });
     return notes.join('');
+  }
+
+  /* Where the projections disagree with your rankings (SCC.disagreements): a bench player whose matchup-tilted projection
+     beats a starter's at his position by SCC.DISAGREE points or more while your rankings put them well apart (a different
+     tier, or more than a few ranks). The call still follows your rankings; the note is the flag to check the news, since
+     a stale list is where most wrong calls hide. Only with rankings of your own for the week (the defaults are the
+     projections, so they can't disagree with themselves). */
+  function disagreeNotes(L) {
+    const r = S.A && S.A.ranks, tilt = tiltFor();
+    if (!r || !r.rows || !r.rows.length || !tilt) return '';
+    const proj = tilt(L.cfg);
+    return SCC.disagreements(L.opt, L.roster, proj).map(({starter, bench, a, b}) => {
+      const ba = SCC.rankBits(starter), bb = SCC.rankBits(bench), pair = (x, y, f) => (x !== null && y !== null ? f(x) + ' vs ' + f(y) : '');
+      const nums = [pair(ba.overall, bb.overall, n => '#' + n), pair(ba.pos, bb.pos, n => starter.pos + n), pair(ba.tier, bb.tier, n => 'tier ' + n)].filter(Boolean).join(', ');
+      return `<p class="note disagree"><b>Projections disagree:</b> with the matchups counted, <b>${esc(bench.name)}</b> projects ${fmt(b)} against <b>${esc(starter.name)}</b>'s ${
+        fmt(a)}, while your rankings have ${esc(starter.name)} well ahead${nums ? ` (${esc(nums)})` : ''}. Titan follows your rankings here; worth a look if the news has moved since you imported them.</p>`;
+    }).join('');
   }
 
   // A started player's points: LIVE while his game is on, FINAL once it's over.
@@ -1826,7 +1900,27 @@
     try { S.sos.sched = await API.nflSchedule(S.snap.season); }
     catch (e) { S.sos.error = 'Could not load the NFL schedule.'; }
     S.sos.busy = false;
-    if (S.ui.tab === 'sos') render();
+    if (['sos', 'trade', 'value'].includes(S.ui.tab)) render();
+  }
+  /* The next four weeks' schedule as a tilt on a player's points (the Trade tab's "Next 4 weeks" row, the Value report's
+     Next 4 column): his team's average opponent rank for points given up to his position over the next four weeks
+     (SCC.scheduleStrength, the same numbers as Schedule strength), the softest schedule (1) lifting him SOS_TILT and the
+     toughest (32) cutting him as much. {tilt(p), rank(team, pos)} once the schedule and the game context are in, else null. */
+  const SOS_TILT = 0.08;
+  function sosNext4() {
+    const C = S.ctx.data, wk = S.snap && S.snap.week;
+    if (!S.snap) return null;
+    if (!S.sos.sched && !S.sos.busy && !S.sos.error) loadSos();
+    if (!S.sos.sched || !C || !C.dvp) return null;
+    const key = `${wk}|${S.ctx.at}`;
+    if (!S.sos.n4 || S.sos.n4.key !== key) {
+      const by = {};
+      SOS_POS.forEach(pos => { by[pos] = {}; SCC.scheduleStrength(S.sos.sched, C.dvp, pos, wk, {n4: [wk, wk + 3]}).forEach(r => { by[pos][r.team] = r.spans.n4; }); });
+      S.sos.n4 = {key, by};
+    }
+    const by = S.sos.n4.by;
+    const rank = (team, pos) => { const v = by[pos] && by[pos][SCC.teamAbbr(team)]; return has(v) ? v : null; };
+    return {rank, tilt: p => { const v = rank(p.team, p.pos); return v === null ? 1 : 1 + SOS_TILT * (16.5 - v) / 15.5; }};
   }
   function screenSos() {
     if (!S.snap) return emptyState();
@@ -1942,6 +2036,7 @@
         <span><b>${esc(m.sat.name)}</b> (${fmt(m.sat.pts)}) sat while <b>${esc(m.started.name)}</b> (${fmt(m.started.pts)}) started at ${esc(slotName(m.slot))}</span>
         <b class="bm-lost amber">−${fmt(m.lost)}</b></li>`).join('')}</ul></section>`;
     }
+    h += callsCard(D);
     h += seasonCard();
     if (D.skipped.length) h += `<p class="fine">Skipped: ${esc(D.skipped.join('; '))}</p>`;
     if (D.rows.length) h += foldTools('score');
@@ -1978,6 +2073,36 @@
       <p class="fine">Projections via Sleeper.${D.ranks.week
         ? ` <button class="link" data-action="ranks-view" data-week="${D.ranks.week}">See your week ${D.ranks.week} rankings</button>` : ''}</p>`;
     return h;
+  }
+
+  /* Close calls graded (Results): the week's close calls as Titan recorded them before kickoff (recordCalls), each
+     against the points both players scored (SCC.gradeCalls), the rankings' calls and the matchup tilt's flips counted
+     apart, and the season's running score from the weeks kept (keepWeek). This is the calibration check: by week 5 it
+     says whether the tilt margin and the tier rule are earning their keep. */
+  function callsCard(D) {
+    const G = gradeWeek(D);
+    if (!G || !G.rows.length) return '';
+    const live = D.provisional;
+    const s = S.season && S.season.season === S.snap.season ? Object.values(S.season.weeks).filter(x => x.done && x.calls && x.week !== D.week) : [];
+    const tot = {n: G.n, right: G.right, fn: G.flips.n, fr: G.flips.right};
+    s.forEach(x => { tot.n += x.calls.n; tot.right += x.calls.right; tot.fn += x.calls.fn; tot.fr += x.calls.fr; });
+    const pct = (a, b) => (b ? Math.round(a / b * 100) + '%' : '–');
+    const who = p => `<b${pcAttr(p)}>${esc(p.name)}</b> <small>${esc(rl(p))}${SCC.rankNote(p) ? ' · ' + esc(SCC.rankNote(p)) : ''}</small>`;
+    const rows = G.rows.map(r => `<li class="${r.right === null ? 'cc-wait' : r.right ? 'cc-right' : 'cc-wrong'}">
+      <span class="cc-lg">${esc(r.league)} · ${esc(slotName(r.slot))}${r.flip ? ' <span class="pill p-swap" title="The matchup tilt started him over the higher-ranked player">tilt</span>' : ''}</span>
+      <span class="cc-who">${who(r.pick)} <em>over</em> ${who(r.other)}${has(r.a) && has(r.b) ? ` <small class="cc-proj">projected ${fmt(r.a)} vs ${fmt(r.b)}</small>` : ''}</span>
+      <span class="cc-res">${r.right === null ? '<small>yet to play</small>' : `<b>${fmt(r.pickPts)}</b> vs ${fmt(r.otherPts)} <span class="${r.right ? 'good' : 'amber'}">${r.right ? '✓' : '✗'} ${signed(r.margin)}</span>`}</span></li>`).join('');
+    return `<section class="card pad ccalls"><h3>Close calls, graded</h3>
+      <p class="fine">Each close call as it stood before kickoff: Titan's pick against the bench player your rankings had within a tier, and what each scored.
+        Right when the pick outscored him.${live ? ' Games are still on: a call counts once both have played.' : ''}</p>
+      <div class="wsum-stats cc-stats">
+        <div><b>${G.n ? `${G.right} of ${G.n}` : '–'}</b><span>right this week${G.n ? ` (${pct(G.right, G.n)})` : ''}</span></div>
+        <div><b>${G.ranks.n ? `${G.ranks.right} of ${G.ranks.n}` : '–'}</b><span>by your rankings</span></div>
+        <div><b>${G.flips.n ? `${G.flips.right} of ${G.flips.n}` : '–'}</b><span>matchup-tilt flips</span></div>
+      </div>
+      ${s.length ? `<p class="fine cc-season">Season so far, ${plural(s.length + (live ? 0 : 1), 'week')}: <b>${tot.right} of ${tot.n}</b> right (${pct(tot.right, tot.n)}), the tilt's flips <b>${tot.fr} of ${tot.fn}</b> (${
+        pct(tot.fr, tot.fn)})${tot.fn >= 10 ? (tot.fr / tot.fn >= 0.55 ? '. The tilt is earning its keep.' : tot.fr / tot.fn < 0.45 ? '. The tilt is losing more than it wins: worth a look at its margin.' : '. The tilt is about even so far.') : ''}</p>` : ''}
+      <ul class="cc-list">${rows}</ul></section>`;
   }
 
   /* Season so far: the record, points and how the rankings did across every week kept (loadSeason),
@@ -2794,7 +2919,17 @@
   }
 
   // where(row): who has him in the picked league (a Where column), or null under All leagues.
-  function valueTable(rows, filtered, where) {
+  function valueTable(rows, filtered, where, cfg) {
+    // Next 4: his projected points over the next four weeks (the season projections in the picked league's scoring, or
+    // full PPR under All leagues, byes out, the same span the Trade tab shows) and his team's schedule over them, the
+    // average opponent rank for points given up to his position (1 the softest, from Schedule strength).
+    const sp = S.trade.season && S.trade.season.map, n4 = sosNext4(), wk = S.snap ? S.snap.week : 1;
+    const next4 = r => {
+      if (!sp || !Object.keys(sp).length || !r.s) return '–';
+      const pts = SCC.spanPoints(sp, r.s, cfg || 1, wk, Math.min(wk + 3, LAST_REG_WEEK), SCC.byeOf(r.t));
+      const sched = n4 && r.p !== 'K' && r.p !== 'DEF' ? n4.rank(r.t, r.p) : null;
+      return `${rt.n(pts)}${sched !== null ? ` <small title="Schedule over the next four weeks: average opponent rank for points given up to ${esc(r.p)}s, 1 the softest">sched ${easeRank(sched)}</small>` : ''}`;
+    };
     // Garbage time: his share of touches with the game decided, shown once it's a fifth or more (those count a quarter toward usage).
     const gt = r => (r.gt === null || r.gt === undefined ? '–' : r.gt >= 0.2 ? `<span class="amber">${Math.round(r.gt * 100)}%</span>` : Math.round(r.gt * 100) + '%');
     // Goal line: a back's share of his team's carries inside the 10; a pass catcher's end-zone targets a game.
@@ -2820,7 +2955,7 @@
       return has(r.ypt) ? `${r.ypt.toFixed(1)} yds/tgt` : '–';
     };
     const playbook = r => (r.pb ? `<span class="pill p-pb" title="${esc(r.pb)}">JJ</span>` : '');
-    return reportTable(rows, [['Guide', r => guidePill(r.dg)], ['Late-Round', playbook], ['Projection', r => rt.n(r.proj)], ['Points', r => rt.n(r.fp)], ['Over usage', r => rt.sgn(r.fpoe)], ['Snaps', r => rt.share(r.snap)],
+    return reportTable(rows, [['Guide', r => guidePill(r.dg)], ['Late-Round', playbook], ['Projection', r => rt.n(r.proj)], ['Next 4', next4, 'vr-n4'], ['Points', r => rt.n(r.fp)], ['Over usage', r => rt.sgn(r.fpoe)], ['Snaps', r => rt.share(r.snap)],
       ['Routes', routes], ['Per route', perRoute], ['Workload', workload],
       ['Target share', r => rt.share(r.tgt)], ['Rush share', r => (r.p === 'RB' ? rt.share(r.rs) : '')], ['Red zone', r => rt.n(r.rz)], ['Goal line', goal], ['Garbage time', gt],
       ['By projection', r => rt.rank(r.p, r.ur)], ['Market', r => rt.rank(r.p, r.mr)],
@@ -2896,8 +3031,11 @@
       return o === undefined ? '<span class="good">Free agent</span>' : o === 'me' ? '<b>Yours</b>' : esc((one.teams || [])[o] || 'Taken');
     } : null;
     const fname = esc(F.name || '') + (one ? ` (${esc(one.name)})` : '');
+    // The Next 4 column reads the season projections (loaded here if the Trade tab hasn't yet) in the picked league's scoring.
+    if (!S.trade.season) loadSeasonProj();
+    const vcfg = one ? cfgOf(one.id) : null;
     const section = (title, sub, rows) => `<section class="card pad vr-sec"><h3>${title}</h3><p class="fine">${sub}</p>${
-      rows.length ? valueTable(rows, false, where) : '<p class="fine">None this week.</p>'}</section>`;
+      rows.length ? valueTable(rows, false, where, vcfg) : '<p class="fine">None this week.</p>'}</section>`;
     h += section('Buy low', `${fname}: the projection well ahead of the market, and not already scoring above his usage.`, F.buys || []);
     h += section('Sell high or keep', `${fname}: the market well ahead of the projection, often on touchdowns that don't last. <b>Sell</b> when the role
       behind the points is thin; <b>keep</b> when it's a solid starter's, unless the offer is strong.`, F.sells || []);
@@ -2905,7 +3043,7 @@
     const vp = VALUE_POS.includes(S.ui.valuePos) ? S.ui.valuePos : 'ALL';
     h += `<section class="card pad vr-sec"><h3>Every valued player</h3><p class="fine">${fname}, by projection.</p>
       <div class="chips" role="group" aria-label="Position">${VALUE_POS.map(p =>
-        `<button type="button" class="chip" data-vpos="${p}" aria-pressed="${vp === p}">${p === 'ALL' ? 'All' : p}</button>`).join('')}</div>${valueTable(F.all || [], true, where)}</section>`;
+        `<button type="button" class="chip" data-vpos="${p}" aria-pressed="${vp === p}">${p === 'ALL' ? 'All' : p}</button>`).join('')}</div>${valueTable(F.all || [], true, where, vcfg)}</section>`;
     h += `<details class="card pad vr-how"><summary>How it works</summary><p class="fine"><b>Projection</b> is expected fantasy points a game from a player's
       usage (targets, carries, throws, field position and depth, from nflverse's ffopportunity model), blended with last season's while this season's
       sample is small (most for receivers and quarterbacks, least for backs: one week says the most about a back's role and the least about a
@@ -4218,7 +4356,7 @@
     try { S.trade.season = {map: await API.fetchSeasonProjections(S.snap.season)}; }
     catch (e) { S.trade.season = {map: {}}; }
     S.trade.tv = {};
-    if (['trade', 'standings', 'waivers', 'lineups', 'rosters'].includes(S.ui.tab)) render();
+    if (['trade', 'standings', 'waivers', 'lineups', 'rosters', 'value'].includes(S.ui.tab)) render();
   }
   // Titan's own values for a league ({k, m: {playerId: value}}), or null until this season's projections are in.
   function titanValueMap(cfg) {
@@ -4771,9 +4909,10 @@
      is a rest-of-season decision, so this week alone would mislead. Draft picks don't play. */
   function lineupImpact(cfg, me, partner, give, get) {
     if (!give.length || !get.length) return '';
-    const po = playoffSpan(cfg), tilt = playoffTilt();
+    const po = playoffSpan(cfg), tilt = playoffTilt(), n4 = sosNext4(), wk = S.snap.week;
     const cols = [['This week', Object.keys(S.proj).length ? p => SCC.projFor(S.proj, p.id, cfg) || 0 : null],
-      ['Rest of season', spanFor(cfg, S.snap.week, LAST_REG_WEEK)], [`Playoffs (weeks ${po[0]}-${po[1]})`, spanFor(cfg, po[0], po[1], tilt)]].filter(c => c[1]);
+      ['Next 4 weeks', spanFor(cfg, wk, Math.min(wk + 3, LAST_REG_WEEK), n4 ? n4.tilt : null)],
+      ['Rest of season', spanFor(cfg, wk, LAST_REG_WEEK)], [`Playoffs (weeks ${po[0]}-${po[1]})`, spanFor(cfg, po[0], po[1], tilt)]].filter(c => c[1]);
     if (!cols.length) return '';
     const cell = (team, out, inn, pts) => {
       const gone = new Set(out.map(p => p.id));
@@ -4786,9 +4925,10 @@
     const row = c => `<tr><th scope="row">${esc(c[0])}</th>${cell(me, give, get, c[1])}${cell(partner, get, give, c[1])}</tr>`;
     return `<div class="tlineup"><table class="tl-t"><thead><tr><th scope="col"><span class="sr-only">Period</span></th><th scope="col">Your starters</th>
       <th scope="col">${esc(partner.name)}'s</th></tr></thead><tbody>${cols.map(row).join('')}</tbody></table>
-      <p class="fine">Projected points for each team's best lineup, before and after the trade: this week, the rest of the regular season and the
+      <p class="fine">Projected points for each team's best lineup, before and after the trade: this week, the next four weeks, the rest of the regular season and the
         fantasy-playoff weeks (${pointsSource(cfg) === 'season' ? 'by your season rankings: each player you rank gets the points of the player the projections rank where you rank him'
-          : 'season projections'}, byes out${tilt ? ', the playoff weeks tilted by each player\'s playoff schedule from your Data dump' : ''}).</p></div>`;
+          : 'season projections'}, byes out${n4 ? ', the next four weeks tilted by each player\'s schedule (up to 8% either way, from Schedule strength)' : ''}${
+          tilt ? ', the playoff weeks tilted by each player\'s playoff schedule from your Data dump' : ''}).</p></div>`;
   }
 
   /* Bye cover after a trade: the weeks from now on where your roster couldn't fill a starting spot (SCC.byeNeeds, each

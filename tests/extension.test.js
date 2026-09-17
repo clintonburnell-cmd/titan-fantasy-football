@@ -39,9 +39,11 @@ const VALUE = {v: 2, season: 2026, week: 3, through: 'Through week 2 of 2026', a
 const DUMP = {v: 1, week: 3, at: Date.now(), leagues: [{id: '999', name: 'Test League', start: [{n: 'Josh Allen', why: 'Start him over the other one this week.', x: 'QB'}], add: [], watch: []}]};
 // Titan's lineup analysis for the league, as bg.js caches it (trimLeague): the lineup as it stands, the optimal one, the changes, the wire.
 const pl = (id, name, pos, team, rank, extra) => Object.assign({id, name, pos, team, rank, inj: null, onBye: false, locked: false, outish: false}, extra || {});
-const allen = pl('333', 'Josh Allen', 'QB', 'BUF', 1, {tier: 1, proj: 24}), warren = pl('222', 'Jaylen Warren', 'RB', 'PIT', 17, {posRank: 9, tier: 2, proj: 12.3}),
-  gain = pl('444', 'Kenny Gainwell', 'RB', 'PIT', 30, {inj: 'Questionable', posRank: 14, tier: 3, proj: 9.8}),
-  bench = pl('555', 'Bench Back', 'RB', 'NYG', 40, {posRank: 19, tier: 3, proj: 6.2}), te = pl('666', 'Some Tight End', 'TE', 'DAL', 1008, {tier: 2, proj: 8});
+// KICK: the Steelers' and Giants' kickoff (the change and the hurt starter); the others play later.
+const KICK = Date.parse('2026-09-20T17:00:00Z');
+const allen = pl('333', 'Josh Allen', 'QB', 'BUF', 1, {tier: 1, proj: 24, kick: KICK + 7 * 3600e3}), warren = pl('222', 'Jaylen Warren', 'RB', 'PIT', 17, {posRank: 9, tier: 2, proj: 12.3, kick: KICK}),
+  gain = pl('444', 'Kenny Gainwell', 'RB', 'PIT', 30, {inj: 'Questionable', posRank: 14, tier: 3, proj: 9.8, kick: KICK}),
+  bench = pl('555', 'Bench Back', 'RB', 'NYG', 40, {posRank: 19, tier: 3, proj: 6.2, kick: KICK}), te = pl('666', 'Some Tight End', 'TE', 'DAL', 1008, {tier: 2, proj: 8, kick: KICK + 3 * 3600e3});
 const mside = (name, record, players, pts) => ({name, record, players, pts, proj: players.reduce((a, p) => a + p.proj, 0), final: players.reduce((a, p) => a + p.proj, 0)});
 const ANALYSIS = {at: Date.now(), week: 3, season: '2026', rankedCount: 150, leagues: {'999': {id: '999', name: 'Test League', lineup: ['QB', 'RB', 'RB', 'TE'], week: 3,
   rows: [{slot: 'QB', verdict: 'OK', p: allen}, {slot: 'RB', verdict: 'OK', p: warren}, {slot: 'RB', verdict: 'SWAP OUT', p: bench}, {slot: 'TE', verdict: 'OK', p: te}],
@@ -122,6 +124,14 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     check('the worker answers the popup\'s status (not signed in, reports present)', status && !status.user && status.value && status.value.week === 3, JSON.stringify(status || null).slice(0, 200));
     const popupText = await P.evaluate('document.body.textContent', false);
     check('the popup offers Connect to Titan when not signed in', /Not connected to Titan/.test(popupText) && /Connect to Titan/.test(popupText), popupText.slice(0, 160));
+    // The nudge before kickoff: the fixture's change (Gainwell over Bench Back) and hurt starter kick off in an hour; the tight end's wire line isn't a nudge.
+    const nudge = await P.evaluate(`new Promise(r => chrome.runtime.sendMessage({type: "nudge", now: ${KICK - 60 * 60e3}, dry: true}, r))`).catch(e => ({error: e.message}));
+    check('ninety minutes before kickoff the worker works out the nudge: the change and the hurt starter (as the popup lists them), the league named, the minutes left',
+      nudge && nudge.lines && nudge.lines.length === 2 && /^Test League: Start Kenny Gainwell over Bench Back at RB$/.test(nudge.lines[0]) && /Kenny Gainwell is Questionable and in your lineup/.test(nudge.lines[1])
+        && nudge.mins === 60 && /2 things to do before kickoff \(60 min\)/.test(nudge.title),
+      JSON.stringify(nudge || null).slice(0, 240));
+    const quiet = await P.evaluate(`new Promise(r => chrome.runtime.sendMessage({type: "nudge", now: ${KICK - 5 * 60 * 60e3}, dry: true}, r))`).catch(e => ({error: e.message}));
+    check('five hours out there is nothing to nudge about yet', quiet && quiet.none === true, JSON.stringify(quiet || null).slice(0, 120));
 
     // A stand-in Sleeper league page.
     await P.send('Fetch.enable', {patterns: [{urlPattern: '*sleeper.com*'}]});

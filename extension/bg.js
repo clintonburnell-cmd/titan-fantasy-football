@@ -139,9 +139,16 @@ const pick = (p, keys) => { const o = {}; keys.forEach(k => { if (p && p[k] !== 
 const PK = ['id', 'name', 'pos', 'team', 'rank', 'posRank', 'tier', 'inj', 'onBye', 'locked', 'outish', 'start', 'bye', 'opp'];
 const slim = p => (p ? pick(p, PK) : null);
 
-function trimLeague(L, week, proj, games) {
+function trimLeague(L, week, proj, games, kicks) {
   const cfg = L.cfg, pj = p => (p && proj ? SCC.projFor(proj, p.id, cfg) : null);
-  const withProj = p => (p ? Object.assign(slim(p), {proj: pj(p)}) : null);
+  // Each player's kickoff (ms): ESPN's time through Titan's scores feed when known, else his game day at 1 PM Eastern.
+  const kickOf = p => {
+    const t = SCC.teamAbbr(p.team), k = kicks && kicks[t];
+    if (k && k[0]) return Number(k[0]) || 0;
+    const g = games && games[t];
+    return g && g.kick ? Date.parse(g.kick + 'T17:00:00Z') || 0 : 0;
+  };
+  const withProj = p => (p ? Object.assign(slim(p), {proj: pj(p), kick: kickOf(p)}) : null);
   // The close calls (a starter and a bench player at his position within a few ranks): both players' projections
   // and rank notes, the second opinion for the spots the rankings call nearly even.
   let close = [];
@@ -216,9 +223,13 @@ async function analyze() {
       } catch (e) { proj = null; }
       const hasProj = !!proj && Object.keys(proj).length > 0;
       const rows = hasProj ? (weeks[week] || []) : ranksFor(weeks, week);
+      // This week's kickoff times (Titan's scores feed: ESPN's scoreboard through the server), so the flex spots take
+      // the latest kickoffs as in the app, and the nudge before kickoff knows when each player locks.
+      const kicks = await weekKickoffs(week);
+      if (kicks) snap.kickoffs = kicks;
       const A = SCC.analyzeAll(snap, SCC.rankingsBy(rows, hasProj ? proj : null, players && players.map ? players.map : players));
       const leagues = {};
-      A.leagues.forEach(L => { leagues[String(L.cfg.id)] = trimLeague(L, week, proj, snap.games); });
+      A.leagues.forEach(L => { leagues[String(L.cfg.id)] = trimLeague(L, week, proj, snap.games, kicks); });
       // This week's matchups, best effort: a failure leaves the lineups standing.
       try {
         const ms = await SleeperAPI.collectMatchups(snap);
@@ -227,6 +238,7 @@ async function analyze() {
       const analysis = {at: Date.now(), week, season, rankedCount: A.rankedCount, leagues};
       await chrome.storage.local.set({analysis});
       await setBadge(analysis);
+      await nudge(Date.now(), analysis);
       return analysis;
     } catch (e) {
       state.lineupError = e && e.message ? e.message : String(e);
@@ -237,6 +249,56 @@ async function analyze() {
   })();
   return state.lineupBusy;
 }
+
+// This week's kickoffs by team ({team: [ms, false]}) from Titan's scores feed, or null when it can't be read.
+async function weekKickoffs(week) {
+  try {
+    const r = await fetch(`${SITE}/api/scores`);
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j || !Array.isArray(j.games) || (j.week && Number(j.week) !== Number(week))) return null;
+    const out = {};
+    j.games.forEach(g => { if (g.kickoff) { out[SCC.teamAbbr(g.home)] = [g.kickoff, false]; out[SCC.teamAbbr(g.away)] = [g.kickoff, false]; } });
+    return Object.keys(out).length ? out : null;
+  } catch (e) { return null; }
+}
+
+/* The nudge before kickoff: with a lineup change or a hurt starter still standing in any league NUDGE_LEAD before the
+   player's kickoff, one Chrome notification names the leagues and the moves (SCC.kickoffNudge), once per kickoff slot
+   (`nudged` in storage keeps the slots already shown). Checked after each analysis and on the titan-nudge alarm.
+   `dry` (tests) works out the notice without showing it. */
+const NUDGE_LEAD = 90 * 60e3;
+function nudgeItems(a) {
+  const items = [];
+  Object.values((a && a.leagues) || {}).forEach(L => {
+    const kick = (...ps) => { const ks = ps.filter(p => p && p.kick).map(p => p.kick); return ks.length ? Math.min(...ks) : 0; };
+    (L.moves || []).forEach(m => items.push({league: L.name, kick: kick(m.inn, m.out),
+      text: m.from ? `Move ${m.inn.name} to ${m.slot}` : `Start ${m.inn.name}${m.out ? ` over ${m.out.name}` : ''} at ${m.slot}`}));
+    (L.hurt || []).filter(p => !(L.moves || []).some(m => m.out && m.out.id === p.id))
+      .forEach(p => items.push({league: L.name, kick: p.kick || 0, text: `${p.name} is ${p.inj} and in your lineup`}));
+  });
+  return items;
+}
+async function nudge(now, analysis, dry) {
+  const a = analysis || (await chrome.storage.local.get('analysis')).analysis;
+  const N = SCC.kickoffNudge(nudgeItems(a), now, NUDGE_LEAD);
+  if (!N || dry) return N;
+  const o = await chrome.storage.local.get('nudged'), nudged = o.nudged || {};
+  if (nudged[N.key]) return N;
+  Object.keys(nudged).forEach(k => { if (now - nudged[k] > 7 * 86400e3) delete nudged[k]; });
+  nudged[N.key] = now;
+  await chrome.storage.local.set({nudged});
+  try {
+    await chrome.notifications.create(`titan-${N.key}`, {type: 'basic', iconUrl: 'icons/icon-128.png', title: N.title,
+      message: N.lines.slice(0, 5).join('\n') + (N.lines.length > 5 ? `\n+${N.lines.length - 5} more` : ''), priority: 2});
+  } catch (e) { /* notifications off on this profile: the badge still counts them */ }
+  return N;
+}
+chrome.notifications.onClicked.addListener(id => {
+  if (!String(id).startsWith('titan-')) return;
+  chrome.notifications.clear(id);
+  chrome.tabs.create({url: `${SITE}/app/lineups`});
+});
 
 async function lineupFor(id, force) {
   const o = await chrome.storage.local.get('analysis');
@@ -257,6 +319,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === 'league') return leagueFacts(String(msg.id), msg.week, msg.mine || []);
     if (msg.type === 'lineup') return lineupFor(String(msg.id), !!msg.force);
     if (msg.type === 'badge') return {count: await setBadge(null)};
+    if (msg.type === 'nudge') return (await nudge(Number(msg.now) || Date.now(), null, !!msg.dry)) || {none: true};
     return {error: 'unknown message'};
   })().then(sendResponse, e => sendResponse({error: e && e.message ? e.message : String(e)}));
   return true;
@@ -276,9 +339,12 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
 chrome.alarms.create('titan-refresh', {periodInMinutes: REFRESH_HOURS * 60});
 // The lineups and the badge, every LINEUP_MINUTES (rosters, injuries and rankings move through the week).
 chrome.alarms.create('titan-lineup', {periodInMinutes: LINEUP_MINUTES});
+// The nudge before kickoff, every ten minutes on the cached analysis (the analysis itself reruns every LINEUP_MINUTES).
+chrome.alarms.create('titan-nudge', {periodInMinutes: 10});
 chrome.alarms.onAlarm.addListener(a => {
   if (a.name === 'titan-refresh') refresh();
   if (a.name === 'titan-lineup') analyze();
+  if (a.name === 'titan-nudge') nudge(Date.now());
 });
 chrome.runtime.onStartup.addListener(async () => {
   const o = await chrome.storage.local.get(['fetched', 'analysis']);

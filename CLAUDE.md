@@ -227,7 +227,10 @@ One note per screen or feature.
   `loadUsage`, `statWeeks`, blended with his position's usual `SPREAD_CV`), who has the softer matchup (`dvpRank`
   from the game context) and a lean from the win chance (`winChance`, from the Matchup data, loaded quietly): the
   higher floor when you're the favorite (60%+), the higher ceiling as the underdog (40% or less). The note never
-  changes a call. Matchup's card shows each side's range (`rangeLine`: points so far plus the floors, and plus the
+  changes a call. Beside it (v1.70.0), `disagreeNotes` flags where the projections disagree with the person's own
+  rankings (`SCC.disagreements`: a bench player whose tilted projection beats a starter's at his position by `DISAGREE`
+  (3) or more while the rankings put them well apart, so not a close call); it never changes the call either, and shows
+  only with the person's own rankings for the week. Matchup's card shows each side's range (`rangeLine`: points so far plus the floors, and plus the
   ceilings, of the starters yet to play).
 - The matchup tilt (v1.42.0): `analyze` hands `SCC.analyzeAll` a `tilt(p, cfg)` (`tiltFor`: the projection in the
   league's scoring, +8% against the eight softest defenses to his position, -8% against the eight toughest, from the
@@ -306,7 +309,13 @@ One note per screen or feature.
   `espnWeek`), the bench's misses from `SCC.benchMistakes`, both pure and tested. Season so far scores
   the earlier weeks one at a time (`loadSeason`, through `scoreFor`) and keeps each finished week on
   the device (`KEY.season`, tied to the leagues and that week's rankings). Its chart's columns use
-  `--chart-bar`, checked with the dataviz palette checks in both themes; a table sits behind it.
+  `--chart-bar`, checked with the dataviz palette checks in both themes; a table sits behind it. Close calls, graded
+  (v1.70.0, `callsCard`): `recordCalls` (from `analyze`) keeps each week's close calls as they stood before kickoff in
+  `KEY.calls` (the pick, the other, `flip` when the matchup tilt made it, both tilted projections; a pair with a locked
+  player stays as recorded, one that stops being close is dropped, nothing under the default rankings or in the demo),
+  `gradeWeek` scores them from the scored rosters' points (`SCC.gradeCalls`, a player counted once his game is over)
+  and `keepWeek` stores each finished week's totals (`calls`) so the card adds the season up. Never let the record be
+  rewritten after a player locks: that is what makes the grade honest.
 - Season rankings (`screenSeason`, tab `season`, `/app/season`, under Rankings after Import; v1.48.0, the owner's ask): a
   person's own rest-of-season or dynasty list for each kind of league (`SCC.SEASON_FORMATS`: 1QB or superflex, redraft or
   dynasty, each with a TE Premium list; `SCC.seasonFormat(cfg)` picks a league's `key` from `tradeFormat` and
@@ -409,9 +418,12 @@ One note per screen or feature.
   equally priced players the market misjudges is an idea), `points` (rest-of-season points, `spanFor`/`SCC.spanPoints`
   from the season projections with byes out; an idea may not lower them) and `thin` (positionStrength), and each
   carries `accept` and `why` (fills their hole, they get the best player, asks two starters for one; ±15% a point on
-  the order). The impact table (`lineupImpact`, `.tl-t`) shows this week, the rest of the regular season (`LAST_REG_WEEK`
-  17) and the playoff weeks (`cfg.playoffStart` or 15, three weeks; for the owner tilted up to 10% by the Data dump's
-  playoff schedule rank, `playoffTilt`). Batch B (v1.40.0): ideas allow two for two; in a dynasty or keeper league each
+  the order). The impact table (`lineupImpact`, `.tl-t`) shows this week, the next four weeks (v1.70.0: tilted up to 8%
+  either way by each player's schedule, `sosNext4`, the next four weeks' average opponent rank for points given up to
+  his position from Schedule strength's numbers; `loadSos` loads the NFL schedule for the Trade and Value tabs too, and
+  the Value report's Next 4 column shows the same span's points with that rank), the rest of the regular season
+  (`LAST_REG_WEEK` 17) and the playoff weeks (`cfg.playoffStart` or 15, three weeks; for the owner tilted up to 10% by
+  the Data dump's playoff schedule rank, `playoffTilt`). Batch B (v1.40.0): ideas allow two for two; in a dynasty or keeper league each
   team's stance from the standings simulation (`stanceOf`: contender at 55% playoff odds, rebuilder at 25%;
   `standingsResult` is shared with Standings) puts draft picks into the ideas for rebuilding partners (and from
   contenders when you're rebuilding) and a line on "Where you both stand" (`stanceLine`) says what to offer; "to even

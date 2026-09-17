@@ -1999,6 +1999,77 @@
     return out;
   }
 
+  /* Where the projections disagree with the rankings (a note on Lineups that never changes the call): a bench player
+     whose matchup-tilted projection beats a starter's at his position by DISAGREE points or more while the rankings
+     don't call them close (a close call already flips on TILT_MARGIN in analyzeLeague, so these are the wide gaps:
+     a different tier, or more than CLOSE ranks apart). tilt(p) is the tilted projection in the league's scoring.
+     [{starter, bench, a, b}], the widest gap first, each player once, at most three. */
+  var DISAGREE = 3;
+  function disagreements(opt, roster, tilt) {
+    var starting = {}, out = [];
+    (opt || []).forEach(function (o) { if (o.p) starting[o.p.id] = 1; });
+    var bench = (roster || []).filter(function (p) {
+      return !starting[p.id] && !p.held && !p.locked && !p.outish && !p.onBye && p.rank !== null && p.rank !== undefined;
+    });
+    (opt || []).forEach(function (o) {
+      var s = o.p;
+      if (!s || s.locked || s.outish || s.onBye || s.rank === null || s.rank === undefined) return;
+      var a = Number(tilt(s));
+      if (!isFinite(a)) return;
+      bench.forEach(function (p) {
+        if (p.pos !== s.pos || closeByRank(p, s)) return;
+        var b = Number(tilt(p));
+        if (!isFinite(b) || b - a < DISAGREE) return;
+        out.push({starter: s, bench: p, a: round1(a), b: round1(b)});
+      });
+    });
+    out.sort(function (x, y) { return (y.b - y.a) - (x.b - x.a); });
+    var seen = {}, keep = [];
+    out.forEach(function (x) {
+      if (seen[x.starter.id] || seen[x.bench.id]) return;
+      seen[x.starter.id] = seen[x.bench.id] = 1;
+      keep.push(x);
+    });
+    return keep.slice(0, 3);
+  }
+
+  /* Close calls graded (Results): each call recorded before kickoff (pick: the player Titan started, other: the bench
+     player the rankings called it close with, flip: the matchup tilt made the pick over the rankings) against the
+     points each scored. ptsOf(id) gives a player's points, or null while he hasn't played. Counts only the calls where
+     both have played: {n, right, flips: {n, right}, ranks: {n, right}, rows: [{pick, other, flip, league, slot, a, b,
+     pickPts, otherPts, margin, right}]}. A call is right when the pick outscored the other. */
+  function gradeCalls(calls, ptsOf) {
+    var out = {n: 0, right: 0, flips: {n: 0, right: 0}, ranks: {n: 0, right: 0}, rows: []};
+    (calls || []).forEach(function (c) {
+      if (!c || !c.pick || !c.other) return;
+      var a = ptsOf(c.pick.id), b = ptsOf(c.other.id);
+      var done = typeof a === 'number' && typeof b === 'number' && isFinite(a) && isFinite(b);
+      var row = {pick: c.pick, other: c.other, flip: !!c.flip, league: c.league, slot: c.slot, a: c.a, b: c.b,
+        pickPts: done ? round2(a) : null, otherPts: done ? round2(b) : null, margin: done ? round2(a - b) : null, right: done ? a > b : null};
+      out.rows.push(row);
+      if (!done) return;
+      out.n++;
+      if (row.right) out.right++;
+      var g = c.flip ? out.flips : out.ranks;
+      g.n++;
+      if (row.right) g.right++;
+    });
+    return out;
+  }
+
+  /* The nudge before kickoff (the extension): items [{league, text, kick}] still to do, each with the kickoff (ms) it
+     must be done by. The ones due within `lead` ms of now (and not past) make one notice, keyed by the earliest of
+     their kickoffs so it's shown once: {key, kick, mins, title, lines}, or null when nothing is due. */
+  function kickoffNudge(items, now, lead) {
+    var due = (items || []).filter(function (i) { return i && i.kick && i.kick > now && i.kick - now <= lead; });
+    if (!due.length) return null;
+    var kick = Math.min.apply(null, due.map(function (i) { return i.kick; }));
+    var mins = Math.max(1, Math.round((kick - now) / 60000));
+    var lines = due.map(function (i) { return (i.league ? i.league + ': ' : '') + i.text; });
+    return {key: String(kick), kick: kick, mins: mins, lines: lines,
+      title: (due.length === 1 ? '1 thing' : due.length + ' things') + ' to do before kickoff (' + mins + ' min)'};
+  }
+
   function closeCalls(roster, slots, startedIds) {
     var wins = 0, total = 0;
     var starters = roster.filter(function (p) { return startedIds[p.id]; });
@@ -3110,6 +3181,7 @@
     rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
+    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,

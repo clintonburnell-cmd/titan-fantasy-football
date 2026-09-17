@@ -621,7 +621,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .note { padding: 8px 14px; border-top: 1px solid var(--line); font-size: .82rem; color: var(--muted); }
 .note.wire b { color: var(--accent-2); }
 .note.hurt, .note.hurt b { color: var(--bad); }
-.note.close-call b, .note.tilt b { color: var(--accent-2); }
+.note.close-call b, .note.tilt b, .note.disagree b { color: var(--accent-2); }
 .wbid-why { display: block; color: var(--muted); font-size: .74rem; }
 .xrow .meter { position: relative; }
 .xrow .meter b { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-2); opacity: .55; border-radius: inherit; }
@@ -734,6 +734,18 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 .bm-list li:first-child { border-top: 0; }
 .bm-lg { grid-column: 1 / -1; display: flex; align-items: center; color: var(--muted); font-size: .76rem; font-weight: 700; }
 .bm-lost { align-self: center; font-weight: 800; white-space: nowrap; }
+/* Close calls, graded (Results): league and slot, the pick over the other, the points and the verdict. */
+.cc-stats { margin-bottom: 10px; }
+.cc-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.cc-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: .86rem; }
+.cc-list .cc-lg { grid-column: 1 / -1; color: var(--muted); font-size: .76rem; }
+.cc-list .cc-who em { font-style: normal; color: var(--muted); }
+.cc-list .cc-who small, .cc-list .cc-res small { color: var(--muted); }
+.cc-list .cc-proj { display: block; }
+.cc-list .cc-res { align-self: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cc-list .cc-res span { font-weight: 800; }
+.cc-season b { color: var(--text); }
+.vr-n4 small { color: var(--muted); white-space: nowrap; }
 .sc-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: .76rem; }
 .sc-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .sw-bar { width: 10px; height: 10px; border-radius: 2px; background: var(--chart-bar); }

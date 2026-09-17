@@ -447,9 +447,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'Titan\'s values are for the rest of this season; a redraft league has no contender or rebuilder line');
   check(await ev(`[...document.querySelectorAll('.trade-sum *')].every(el => el.getBoundingClientRect().right <= document.querySelector('.trade-sum').getBoundingClientRect().right + 1)`),
     'on a phone the trade fits inside its card (nothing cut off on the right)');
-  check(await waitFor(`document.querySelectorAll('.trade-sum .tl-t tbody tr').length === 3 && document.querySelectorAll('.trade-sum .tl-t thead th').length === 3 &&
+  check(await waitFor(`document.querySelectorAll('.trade-sum .tl-t tbody tr').length === 4 && document.querySelectorAll('.trade-sum .tl-t thead th').length === 3 && /Next 4 weeks/.test(document.querySelector('.trade-sum .tl-t').textContent) &&
     /Rest of season/.test(document.querySelector('.trade-sum .tl-t').textContent) && /Playoffs \\(weeks 15-17\\)/.test(document.querySelector('.trade-sum .tl-t').textContent)`, 20000),
-    'each team\'s projected starters before and after, this week, the rest of the season and the playoff weeks: ' + (await text('.trade-sum .tlineup')).replace(/\s+/g, ' ').slice(0, 120));
+    'each team\'s projected starters before and after, this week, the next four weeks, the rest of the season and the playoff weeks: ' + (await text('.trade-sum .tlineup')).replace(/\s+/g, ' ').slice(0, 120));
   check(await ev(`/By Titan's own values/.test((document.querySelector('.trade-sum .tedge') || {}).textContent || '')`),
     'and what Titan\'s own values say about the trade: ' + (await text('.trade-sum .tedge')).replace(/\s+/g, ' ').slice(0, 120));
 

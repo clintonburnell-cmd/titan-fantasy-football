@@ -32,6 +32,13 @@ owner-only Value report and Data dump, read from his Titan account.
   recounted every twenty minutes (`titan-lineup` alarm) and on browser start. The popup's **Today** list names each
   league's lines: the changes with both players' ranks, hurt starters, waiver upgrades and the report's claims, each
   league a link to it on Sleeper (the same list as Titan's Today tab).
+- **A nudge before kickoff** (v0.3.0): ninety minutes before a player's kickoff, if a lineup change or a hurt starter
+  still stands in any league, one Chrome notification names the leagues and the moves ("Test League: Start X over Y at
+  RB"), once per kickoff slot (`nudged` in storage); clicking it opens Titan's Lineups. `SCC.kickoffNudge` decides,
+  checked after each analysis and every ten minutes (`titan-nudge` alarm). Kickoff times come from Titan's scores
+  feed (`/api/scores`, ESPN's scoreboard through the server), read into the analysis too so the flex spots take the
+  latest kickoffs as in the app; without it, a player's game day at 1 PM Eastern. Needs the `notifications`
+  permission (in the manifest; Chrome asks nothing more).
 - **A player card** on any pill (click): projection, points and over-usage, market rank against Titan's with the
   edge and value, usage (snaps, target share, routes, per-route), workload by position, this week's rank note and
   status, the league's call with its drop, the Late-Round note, the guide take, and a button that puts him in the

@@ -555,4 +555,50 @@ section('the rank note: overall rank, rank at the position, tier (rankBits, rank
   check(noPos.pos === 21 && noPos.tier === 4 && SCC.rankNote({pos: 'WR', rank: 1021, posRank: '', tier: 4}) === 'tier 4',
     'without a position column the sentinel gives the position rank (the label WR21 already says it, so the note is the tier)');
 }
+
+section('where the projections disagree with the rankings (disagreements)');
+{
+  const mk = (id, name, pos, rank, tier, extra) => Object.assign({id, name, pos, team: 'X', rank, tier}, extra || {});
+  const s1 = mk('1', 'Starter One', 'WR', 12, 3), s2 = mk('2', 'Starter Two', 'WR', 20, 4), rb = mk('3', 'Back One', 'RB', 8, 2);
+  const b1 = mk('4', 'Bench One', 'WR', 30, 6), b2 = mk('5', 'Bench Two', 'WR', 21, 4), b3 = mk('6', 'Bench Out', 'WR', 40, 7, {outish: true}), b4 = mk('7', 'Bench Back', 'RB', 25, 5);
+  const opt = [{slot: 'WR', p: s1}, {slot: 'WR', p: s2}, {slot: 'RB', p: rb}];
+  const roster = [s1, s2, rb, b1, b2, b3, b4];
+  const proj = {1: 10.8, 2: 9.0, 3: 15, 4: 14.2, 5: 11.5, 6: 30, 7: 19};
+  const D = SCC.disagreements(opt, roster, p => proj[p.id]);
+  check(D.length === 2 && D[0].bench.name === 'Bench One' && D[0].starter.name === 'Starter Two' && D[0].a === 9 && D[0].b === 14.2,
+    `a bench receiver two tiers down who projects 3+ points more is a disagreement, the widest gap first, with both projections (${JSON.stringify(D.map(d => [d.starter.name, d.bench.name, d.a, d.b]))})`);
+  check(D[1].bench.name === 'Bench Back' && D[1].starter.name === 'Back One', 'a back on the bench over the starting back too (same position only)');
+  check(!D.some(d => d.bench.name === 'Bench Two'), 'a bench player in the starter\'s tier is a close call, not a disagreement (the tilt already weighs it)');
+  check(!D.some(d => d.bench.name === 'Bench Out'), 'an Out bench player never counts, whatever he projects');
+  check(SCC.disagreements(opt, roster, () => null).length === 0, 'no projections, no disagreements');
+  // Each player once: Bench One would also beat Starter Two (14.2 vs 9), but he's already named against Starter One.
+  check(D.filter(d => d.bench.id === '4').length === 1, 'each bench player is named once, against the starter he most outscores');
+}
+
+section('close calls graded against the points (gradeCalls)');
+{
+  const calls = [{league: 'A', slot: 'WR', pick: {id: '1', name: 'P One'}, other: {id: '2', name: 'O One'}, flip: false, a: 10, b: 9},
+    {league: 'A', slot: 'RB', pick: {id: '3', name: 'P Two'}, other: {id: '4', name: 'O Two'}, flip: true, a: 12, b: 14},
+    {league: 'B', slot: 'TE', pick: {id: '5', name: 'P Three'}, other: {id: '6', name: 'O Three'}, flip: false},
+    {league: 'B', slot: 'WR', pick: {id: '7', name: 'Not yet'}, other: {id: '8', name: 'Played'}, flip: false}];
+  const pts = {1: 15.2, 2: 8.1, 3: 6, 4: 19.5, 5: 7, 6: 7, 8: 10};
+  const G = SCC.gradeCalls(calls, id => (id in pts ? pts[id] : null));
+  check(G.n === 3 && G.right === 1 && G.rows.length === 4, `three calls with both players played, one right (${G.right} of ${G.n}), every call listed`);
+  check(G.ranks.n === 2 && G.ranks.right === 1 && G.flips.n === 1 && G.flips.right === 0, 'the rankings\' calls and the tilt\'s flips are counted apart');
+  check(G.rows[0].margin === 7.1 && G.rows[0].right === true && G.rows[1].margin === -13.5 && G.rows[1].right === false, 'each row carries the margin and the verdict');
+  check(G.rows[2].right === false && G.rows[3].right === null && G.rows[3].pickPts === null, 'a tie is not right; a call with a player yet to play is ungraded');
+}
+
+section('the nudge before kickoff (kickoffNudge)');
+{
+  const now = Date.parse('2026-09-20T15:00:00Z'), h = 3600e3, min = 60e3;
+  const items = [{league: 'A', text: 'Start X over Y', kick: now + 60 * min}, {league: 'B', text: 'Z is Questionable and in your lineup', kick: now + 80 * min},
+    {league: 'C', text: 'Start late guy', kick: now + 5 * h}, {league: 'D', text: 'too late', kick: now - 10 * min}];
+  const N = SCC.kickoffNudge(items, now, 90 * min);
+  check(N && N.lines.length === 2 && N.lines[0] === 'A: Start X over Y' && N.mins === 60 && N.key === String(now + 60 * min),
+    `two items due within 90 minutes, keyed by the earliest kickoff, the minutes left (${N && N.title})`);
+  check(N.title === '2 things to do before kickoff (60 min)', 'the title counts them');
+  check(SCC.kickoffNudge(items, now + 2 * h, 90 * min) === null, 'nothing due (the next kickoff is three hours off, the early ones are past): null');
+  check(SCC.kickoffNudge([], now, 90 * min) === null && SCC.kickoffNudge(null, now, 90 * min) === null, 'no items: null');
+}
 T.done();
