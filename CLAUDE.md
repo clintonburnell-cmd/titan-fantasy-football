@@ -275,7 +275,10 @@ One note per screen or feature.
 - The Waivers tab: the waiver plan (`planCard`, from `SCC.waiverPlan`, pure and tested: claims from the
   rankings' wire targets `L.wire`, at most three a league, and a drop for each: the bench player with the
   lowest season value (`planValue`: Titan's value, then season projected points, so a star on bye is
-  safe) that isn't on IR or the only bench player at a position the lineup starts; a dropdown swaps him;
+  safe) that isn't on IR or the only bench player at a position the lineup starts; a kicker or defense claim
+  (v1.71.1, the owner's rule) drops only a kicker or defense: the spare on the bench, else the one he outranks
+  (`w.cur`), never an open spot or a skill player (`like` on the claim; the dropdown lists that position only);
+  a dropdown swaps him;
   Done and changed drops are `S.ui.wplan`, started over each week; `cfg.bench` counts open roster spots),
   free backups (`SCC.backupOf`), Sleeper's
   trending adds (`API.trendingAdds`) with where each is free (`L.takenNorm`), a search, and bids

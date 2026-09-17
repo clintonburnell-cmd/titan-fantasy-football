@@ -2802,6 +2802,17 @@
         if (!pick.length) return;
         var add = pick[0];
         claimed[norm(add.name)] = 1;
+        // A kicker or a defense is only ever swapped for one: the claim (a free agent ranked above the one you start)
+        // drops a spare kicker or defense on the bench, else the very one he replaces, and never takes an open spot
+        // or a skill player's place.
+        if (add.pos === 'K' || add.pos === 'DEF') {
+          var same = worstFirst.filter(function (p) { return !used[p.id] && p.pos === add.pos; });
+          var swap = same[0] || (w.cur && w.cur.pos === add.pos && !w.cur.locked && !used[w.cur.id] ? w.cur : null);
+          if (swap) { used[swap.id] = 1; if (!swap.start) benchAt[swap.pos]--; }
+          claims.push({pos: w.pos, add: add, alts: pick.slice(1, 3), over: w.cur || null, drop: swap, thin: false, like: true,
+            keep: !!swap && !!val && worth(swap) > worth(add), dropAlts: same.slice(swap === same[0] ? 1 : 0, 2)});
+          return;
+        }
         var free = worstFirst.filter(function (p) {
           return !used[p.id] && !((p.pos === 'K' || p.pos === 'DEF') && p.pos !== add.pos);
         });

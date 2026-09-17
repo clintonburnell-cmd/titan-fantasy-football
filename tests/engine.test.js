@@ -237,6 +237,17 @@ section('the waiver plan, usage and the waiver reminder');
   check(byVal[0].drop.name === 'R C' && byVal[0].dropAlts.map(p => p.name).join() === 'W D,W C' && !byVal[0].keep && byVal[1].drop.name === 'W D' && byVal[1].keep,
     'with season values, the least valuable goes first (W C, ranked low this week, is safe), and a drop worth more than his claim is flagged');
   check(SCC.waiverPlan([{cfg, roster, wire: []}]).length === 0, 'no waiver targets, nothing to plan');
+  // A kicker (or defense) is only swapped for one: the spare kicker on the bench first, else the kicker he replaces; never an open spot or a skill player.
+  const kwire = [{pos: 'K', cur: roster[5], list: [fa('FA Kick', 'K', 1)]}].concat(wire);
+  const kplan = SCC.waiverPlan([{cfg: Object.assign({}, cfg, {bench: 6}), roster, wire: kwire}])[0];
+  check(kplan.open === 1 && kplan.claims[0].add.name === 'FA Kick' && kplan.claims[0].drop.name === 'K Two' && kplan.claims[0].like && kplan.claims[0].over.name === 'K One'
+    && kplan.claims[1].drop === null,
+    'a kicker claim drops the spare kicker on the bench, and leaves the open spot to the next claim: ' + JSON.stringify(kplan.claims.map(c => [c.add.name, c.drop && c.drop.name])));
+  const noSpare = SCC.waiverPlan([{cfg, roster: roster.filter(p => p.id !== '10'), wire: kwire}])[0].claims[0];
+  check(noSpare.drop.name === 'K One' && noSpare.like && noSpare.dropAlts.length === 0, 'with no spare kicker, the claim drops the kicker he replaces, never a skill player');
+  const lockedRoster = roster.filter(p => p.id !== '10').map(p => (p.id === '6' ? Object.assign({}, p, {locked: true}) : p));
+  const kLocked = SCC.waiverPlan([{cfg, roster: lockedRoster, wire: [{pos: 'K', cur: lockedRoster.find(p => p.id === '6'), list: [fa('FA Kick', 'K', 1)]}]}])[0].claims[0];
+  check(kLocked.drop === null, 'a kicker whose game has started can\'t be dropped for one: the claim names nobody');
   const u = SCC.usageOf([{9: {gp: 1, snp: 40, tsnp: 60, tgt: 5, car: 2, rz: 1, ppr: 10}}, {}, {9: {gp: 1, snp: 54, tsnp: 60, tgt: 9, car: 0, rz: 2, ppr: 20}}], '9');
   check(u.games === 2 && u.snapPct === 78 && u.tgt === 7 && u.car === 1 && u.rz === 1.5 && u.pts === 15 && u.trend === 'up' && SCC.usageOf([{}], '9') === null,
     'usage: snap share, targets, carries and red-zone looks a game, and his snaps rising (67% to 90%)');

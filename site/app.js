@@ -3983,9 +3983,11 @@
         if (done) ticked++;
         const id = c.add.pos === 'DEF' ? '' : idByName(players, c.add.name), add = {id, name: c.add.name, pos: c.add.pos, team: c.add.team};
         const opts = [c.drop, ...c.dropAlts].filter(Boolean);
-        bench.forEach(p => { if (!opts.includes(p)) opts.push(p); });
+        // A kicker or defense claim swaps only for a kicker or defense (the spare on the bench, or the one he replaces).
+        if (c.like) { if (c.over && !opts.includes(c.over)) opts.push(c.over); bench.forEach(p => { if (p.pos === c.add.pos && !opts.includes(p)) opts.push(p); }); }
+        else bench.forEach(p => { if (!opts.includes(p)) opts.push(p); });
         const picked = key in P.drop ? P.drop[key] : c.drop ? c.drop.id : '';
-        const nobody = x.open > 0 || !opts.length;
+        const nobody = c.like ? !c.drop : x.open > 0 || !opts.length;
         const sel = `<select data-wdrop="${esc(key)}" aria-label="Who to drop for ${esc(c.add.name)}">${nobody
           ? `<option value=""${picked === '' ? ' selected' : ''}>Nobody (you have an open spot)</option>` : ''}${opts.map(p =>
           `<option value="${esc(p.id)}"${p.id === picked ? ' selected' : ''}>${esc(p.name)} (${esc(rl(p) || p.pos)})${p === c.drop ? ', Titan\'s pick' : ''}</option>`).join('')}</select>`;
@@ -4005,8 +4007,8 @@
     });
     return `<section class="card pad wsec wplan"><div class="wplan-h"><h3>Your waiver plan</h3><span class="wmeta">${ticked} of ${plural(total, 'claim')} done</span></div>
       <p class="fine">Each claim is a free agent your rankings rate above one of your starters. The drop is the bench player valued least (by your season rankings where you've saved them, else Titan's values) over the
-        season that you can spare: never someone on IR, and never your only backup at a position you start. Change it if you like, and tick Done once
-        the claim is in. Tap a name for his stats.</p><ul class="wlist">${cards.join('')}</ul></section>`;
+        season that you can spare: never someone on IR, and never your only backup at a position you start. A kicker or defense is only ever swapped for the kicker or defense he
+        outranks. Change it if you like, and tick Done once the claim is in. Tap a name for his stats.</p><ul class="wlist">${cards.join('')}</ul></section>`;
   }
 
   function screenWaivers() {
