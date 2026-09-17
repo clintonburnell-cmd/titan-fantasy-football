@@ -544,6 +544,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   // A trade sent in by address (the Sleeper extension's trade check): /app/trade?trade=<league>:<give ids>:<get ids>.
   // The partner is whichever team holds the players you'd get; the builder fills, the address is cleaned up.
+  // (Whatever the draft dialog did above, start from the Trade tab with it closed.)
+  await ev(`(() => { const d = document.querySelector('dialog.dlg[open]'); if (d) d.close(); return true; })()`);
+  await tab('trade');
+  await waitFor(`document.querySelectorAll('[data-ui="tradePartner"] option').length > 1`, 20000);
   await ev(`(() => { const s = document.querySelector('[data-ui="tradePartner"]'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
   await waitFor(`document.querySelectorAll('.tteam').length === 2 && document.querySelectorAll('.tteam .trow[data-trade="get"]').length > 5`, 5000);
   const sent = await ev(`(() => { const p = document.querySelector('[data-ui="tradePartner"]'); const rows = [...document.querySelectorAll('.tteam .trow')];
@@ -1123,6 +1127,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`document.querySelector('#tabs [data-tab="lab"]').hidden`, 3000), 'taking the role away hides it again');
   await tab('lineups');
 
+  // Today: the week's to-do list across leagues, with a done check per item that survives a re-render.
+  await send('Page.navigate', {url: ORIGIN + '/app/today'});
+  check(await waitFor(`location.pathname === '/app/today' && document.querySelectorAll('.subtabs [data-go]').length === 2 && !!document.querySelector('.tiles')`, 20000),
+    'the Today tab opens under Lineups (its own address, two sub-tabs, the to-do tiles)');
+  const todoBefore = await ev(`document.querySelectorAll('.today-item').length`);
+  check(todoBefore > 0 || await ev(`/Nothing to do/.test(document.getElementById('view').textContent)`), `it lists the week's items (${todoBefore}) or says there are none`);
+  if (todoBefore > 0) {
+    await ev(`(() => { const i = document.querySelector('.today-item input[data-todo]'); i.checked = true; i.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
+    check(await waitFor(`document.querySelectorAll('.today-item.is-done').length === 1 && JSON.parse(localStorage.getItem('titan.ui.v1') || '{}').todo !== undefined`, 3000),
+      'ticking an item marks it done and remembers it');
+  }
   // Screenshots of every screen at phone and computer widths (TITAN_SHOTS only), to compare a change to the whole app's look.
   if (process.env.TITAN_SHOTS) {
     T.section('a tour of every screen (screenshots only)');

@@ -29,7 +29,9 @@ owner-only Value report and Data dump, read from his Titan account.
   Cached twenty minutes (`analysis` in storage); Refresh in the section or the popup reruns it. The Sleeper player list
   is kept between runs (`players`, three days). Only the Sleeper side of your account is read (no ESPN or Yahoo).
 - **A game-day badge** on the icon: lineup changes your rankings want plus hurt starters across every league,
-  recounted every twenty minutes (`titan-lineup` alarm) and on browser start; the popup lists the leagues to fix.
+  recounted every twenty minutes (`titan-lineup` alarm) and on browser start. The popup's **Today** list names each
+  league's lines: the changes with both players' ranks, hurt starters, waiver upgrades and the report's claims, each
+  league a link to it on Sleeper (the same list as Titan's Today tab).
 - **A player card** on any pill (click): projection, points and over-usage, market rank against Titan's with the
   edge and value, usage (snaps, target share, routes, per-route), workload by position, this week's rank note and
   status, the league's call with its drop, the Late-Round note, the guide take, and a button that puts him in the

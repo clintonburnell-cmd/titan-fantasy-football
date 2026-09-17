@@ -19,13 +19,13 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1', seasonRanks: 'titan.demo.seasonranks.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1', seasonRanks: 'titan.seasonranks.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'score', 'news', 'trade', 'moves', 'ranks', 'season', 'multi', 'lab', 'value', 'dump', 'settings'];
+  const TABS = ['today', 'lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'score', 'news', 'trade', 'moves', 'ranks', 'season', 'multi', 'lab', 'value', 'dump', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
-  const TAB_NAMES = {lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
+  const TAB_NAMES = {today: 'Today', lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
     sos: 'Schedule strength', score: 'Results', news: 'News', ranks: 'Rankings', season: 'Season rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump',
     trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
-  const SLUG = {lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes', sos: 'schedule',
+  const SLUG = {today: 'today', lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes', sos: 'schedule',
     score: 'results', news: 'news', ranks: 'rankings', season: 'season', multi: 'multiple', lab: 'compare', value: 'value', dump: 'data-dump', trade: 'trade', moves: 'transactions',
     settings: 'settings'};
   const tabFromPath = () => {
@@ -37,7 +37,7 @@
      sub-tabs at the top of the screen (screenBar); each opens on the one used there last. Settings
      is the gear in the header. */
   const SECTIONS = [
-    {id: 'lineups', name: 'Lineups', tabs: ['lineups']},
+    {id: 'lineups', name: 'Lineups', tabs: ['today', 'lineups']},
     {id: 'matchup', name: 'Matchup', tabs: ['matchup']},
     {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
     {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes', 'sos']},
@@ -51,7 +51,7 @@
   const canSee = t => (t === 'lab' ? S.owner.is || S.owner.lab : S.owner.is);
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
-  const LEAGUE_SCREENS = {lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1, value: 1, dump: 1};
+  const LEAGUE_SCREENS = {today: 1, lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1, value: 1, dump: 1};
   const AVATAR = 'https://sleepercdn.com/avatars/thumbs/';
   // News-only accounts on the News tab. X doesn't let apps read posts without a
   // paid plan, so each one opens on X.
@@ -135,7 +135,7 @@
     projAt: 0, // when they were last fetched (0: not yet this visit)
     view: {week: 0, pos: 'QB'}, // the saved rankings open on the Rankings tab
     // The Trade tab: each league's teams, FantasyCalc's values by league format, and the trade being built.
-    trade: {teams: {}, values: {}, pick: {league: '', partner: '', give: [], get: []}, ideas: {}},
+    trade: {teams: {}, values: {}, pick: {league: '', partner: '', give: [], get: []}, ideas: {}, activity: {}},   // activity: completed trades by team, per league
     draftRes: {}, draftFor: '', // draft results (the Trade tab's pop-up): each league's draft ({busy, error, data}), and the one showing
     // Import multiple sources: the week being combined and its sources (kept on this device until saved), the file being added, and
     // Sleeper's projections for a week other than this one (for Titan's default rankings as a source).
@@ -1627,6 +1627,71 @@
       (Object.keys(S.proj).length ? `<p class="fine">Projections via Sleeper. Chance to win is Titan's estimate from them and the points so far. Close means a
         chance to win between 35% and 65%; before any game starts, winning and losing go by projections.</p>` : '');
   }
+
+  /* ---- Today: everything to act on this week, across every league, with a done check per item.
+     From the analysis: the lineup changes the rankings want (both players' ranks and notes), starters who are hurt,
+     and the free agents ranked above a starter. For Titan's owner, the Value report's claims (with the drop), buy-lows
+     and sell-highs, and the Data dump's start ideas as well. Done marks live in S.ui.todo, keyed by season and week. */
+  function todoKey() { return S.snap ? `${S.snap.season}-${S.snap.week}` : ''; }
+  function todoDone() { return (S.ui.todo && S.ui.todo[todoKey()]) || {}; }
+  function todayItems() {
+    const items = [], A = S.A;
+    if (!A) return items;
+    const noteOf = p => { const n = SCC.rankNote(p); return n ? ` <small class="td-note">${esc(n)}</small>` : ''; };
+    const lbl = p => (p && p.rank !== null && p.rank !== undefined ? ` (${esc(rl(p))})` : '');
+    A.leagues.forEach(L => {
+      const id = L.cfg.id;
+      L.moves.forEach(m => items.push({id: `${id}|move|${m.inn.id}`, L, kind: 'Lineup', go: 'lineups',
+        html: `${m.from ? `Move <b>${esc(m.inn.name)}</b>${lbl(m.inn)} to ${esc(slotName(m.slot))}` : `Start <b>${esc(m.inn.name)}</b>${lbl(m.inn)}${m.out ? ` over <b>${esc(m.out.name)}</b>${lbl(m.out)}` : ` at ${esc(slotName(m.slot))}`}`}${noteOf(m.inn)}${m.out ? noteOf(m.out) : ''}`}));
+      L.hurt.filter(p => !L.moves.some(m => m.out && m.out.id === p.id)).forEach(p => items.push({id: `${id}|hurt|${p.id}`, L, kind: 'Injury', go: 'lineups',
+        html: `<b>${esc(p.name)}</b> is ${esc(String(p.inj))} and in your lineup${lbl(p)}`}));
+      L.wire.forEach(w => items.push({id: `${id}|wire|${w.pos}`, L, kind: 'Waiver', go: 'waivers',
+        html: `${esc(w.pos)}: <b>${w.list.map(f => `${esc(f.name)} (${esc(rl(f))})`).join('</b>, <b>')}</b>${w.cur ? ` ranked above ${esc(w.cur.name)} (${esc(rl(w.cur))})` : w.anyUnranked ? ' (a starter there is unranked)' : ''}`}));
+    });
+    if (S.owner.is && !DEMO) {
+      const byId = {}; A.leagues.forEach(L => { byId[String(L.cfg.id)] = L; });
+      const R = S.value.data, D = S.dump.data;
+      ((R && R.leagues) || []).forEach(lg => {
+        const L = byId[String(lg.id)];
+        if (!L) return;
+        (lg.add || []).forEach(m => items.push({id: `${lg.id}|add|${m.n}`, L, kind: 'Claim', go: 'value', html: `Claim <b>${esc(m.n)}</b>${m.d ? `, drop <b>${esc(m.d)}</b>` : ''}${m.x ? ` <small>${esc(m.x)}</small>` : ''}`}));
+        (lg.buy || []).forEach(m => items.push({id: `${lg.id}|buy|${m.n}`, L, kind: 'Buy low', go: 'value', html: `<b>${esc(m.n)}</b>${m.x ? ` <small>${esc(m.x)}</small>` : ''}`}));
+        (lg.sell || []).forEach(m => items.push({id: `${lg.id}|sell|${m.n}`, L, kind: m.k ? 'Keep' : 'Sell high', go: 'value', html: `<b>${esc(m.n)}</b>${m.x ? ` <small>${esc(m.x)}</small>` : ''}`}));
+      });
+      ((D && D.leagues) || []).forEach(lg => {
+        const L = byId[String(lg.id)];
+        if (!L) return;
+        (lg.start || []).forEach(m => items.push({id: `${lg.id}|start|${m.n}`, L, kind: 'Start idea', go: 'dump', html: `<b>${esc(m.n)}</b>${m.x ? ` <small>${esc(m.x)}</small>` : ''}: ${esc(String(m.why || '').split('. ')[0])}`}));
+      });
+    }
+    return items;
+  }
+
+  function screenToday() {
+    if (!S.snap) return emptyState();
+    if (S.owner.is && !DEMO) {
+      if (!S.value.at && !S.value.busy) loadValue();
+      if (!S.dump.at && !S.dump.busy) loadDump();
+    }
+    const items = todayItems(), done = todoDone(), left = items.filter(x => !done[x.id]);
+    const shown = items.filter(x => inPick(x.L.cfg));
+    const KIND_CLASS = {Lineup: 'swap', Injury: 'stop', Waiver: 'ok', Claim: 'ok', 'Buy low': 'ok', 'Sell high': 'swap', Keep: 'muted', 'Start idea': 'swap'};
+    let h = `<div class="bar match-bar"><p class="lede">Everything to act on in week ${esc(S.snap.week)}, in every league: lineup changes, hurt starters, waiver upgrades${
+      S.owner.is ? ', claims, trades and start ideas' : ''}. Tick each one off as you make it${S.owner.is ? '' : ''}.</p></div>`;
+    h += `<section class="tiles three" aria-label="Where you stand">${tile(left.length, 'to do', left.length ? 'swap' : 'ok')}${tile(items.length - left.length, 'done', 'muted')}${tile(A_leagues().length, 'leagues', 'muted')}</section>`;
+    if (!items.length) return h + '<div class="empty-note">Nothing to do: every lineup matches your rankings, no starter is hurt, and no free agent beats a starter.</div>';
+    const byLeague = new Map();
+    shown.forEach(x => { if (!byLeague.has(x.L)) byLeague.set(x.L, []); byLeague.get(x.L).push(x); });
+    h += '<div class="league-grid">' + [...byLeague.entries()].map(([L, list]) => {
+      const open = list.filter(x => !done[x.id]).length;
+      return `<section class="card today-card"><div class="card-h"><div><h3>${leagueIcon(L.cfg)}${esc(L.cfg.key)}</h3><p>${open ? plural(open, 'thing') + ' to do' : 'all done'}</p></div></div>
+        <ul class="today-list">${list.map(x => `<li class="today-item${done[x.id] ? ' is-done' : ''}"><label><input type="checkbox" data-todo="${esc(x.id)}"${done[x.id] ? ' checked' : ''}>
+          <span class="td-kind ${KIND_CLASS[x.kind] || ''}">${esc(x.kind)}</span><span class="td-text">${x.html}</span></label>
+          <button class="link td-go" data-go="${esc(x.go)}" data-league="${esc(L.cfg.id)}">Open</button></li>`).join('')}</ul></section>`;
+    }).join('') + '</div>';
+    return h;
+  }
+  const A_leagues = () => ((S.A && S.A.leagues) || []);
 
   /* ---- Rosters */
 
@@ -4427,6 +4492,10 @@
     S.trade.teams[id] = {busy: true};
     try {
       S.trade.teams[id] = {list: await API.leagueTeams(d.cfg, d.rosterId, S.snap.season)};
+      // Who actually trades in this league (Sleeper): completed trades this season by team, for the partner list.
+      if (onSleeper(d.cfg) && S.snap && S.snap.week) {
+        API.leagueTradeCounts(d.cfg, S.snap.week).then(a => { S.trade.activity[id] = a; if (S.ui.tab === 'trade' && S.trade.pick.league === id) render(); }).catch(() => {});
+      }
     } catch (e) {
       S.trade.teams[id] = {error: `Could not load the teams in ${d.cfg.key}: ${e && e.message ? e.message : e}.`};
     }
@@ -4457,8 +4526,10 @@
     // The league and partner pickers sit at the top and again above the trade itself (the give/get box and the rosters),
     // so a long page never means scrolling back up to switch; once a partner is picked, the partner picker heads
     // their roster card too. The league picker here mirrors the dropdown at the top when that names a league.
+    // Each team's trades this season beside its name (S.trade.activity): who actually deals.
+    const actv = S.trade.activity[d.cfg.id], dealtTag = t => (actv && actv.counts[String(t.id)] ? ` · ${actv.counts[String(t.id)]} trade${actv.counts[String(t.id)] === 1 ? '' : 's'}` : '');
     const partnerOptions = `<option value="">Pick a team</option>${teams.filter(t => !t.mine).map(t =>
-      `<option value="${esc(t.id)}"${t === partner ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}`;
+      `<option value="${esc(t.id)}"${t === partner ? ' selected' : ''}>${esc(t.name)}${dealtTag(t)}</option>`).join('')}`;
     const leagueOptions = leagues.map(x => `<option value="${esc(x.cfg.id)}"${x === d ? ' selected' : ''}>${esc(x.cfg.key)}</option>`).join('');
     const canReset = !!(partner || P.give.length || P.get.length || S.trade.ideas[d.cfg.id] || S.trade.q);
     const pickBar = (where, extra) => `<div class="bar tpick tpick-${where}" data-league="${esc(d.cfg.id)}"${S.trade.pending ? ` data-pending="${esc(S.trade.pending.league)}"` : ''}>
@@ -4576,9 +4647,12 @@
         Ideas the other side is likelier to take (a hole of theirs filled, the best player theirs) come first.${I.noQb
           ? ' Quarterbacks stay out of the ideas here: this league starts one, and a quarterback is easy to find.' : ''}</p>`;
     // The partners whose rosters fit yours: thin where you're deep (what you can spare them), deep where you're thin (what you want).
-    const partnersBlock = (I.partners || []).length ? `<div class="tpartners"><h4>Partners who fit</h4><ul>${I.partners.slice(0, 4).map(x => `<li><b>${esc(x.name)}</b>: ${[
+    // Each partner's trade activity this season (S.trade.activity, Sleeper): the teams that deal are the ones to approach.
+    const act = S.trade.activity[cfg.id], dealt = t => (act && act.counts[String(t)]) || 0;
+    const dealtNote = t => (act ? ` <small class="muted">(${dealt(t) ? plural(dealt(t), 'trade') + ' this season' : 'no trades yet this season'})</small>` : '');
+    const partnersBlock = (I.partners || []).length ? `<div class="tpartners"><h4>Partners who fit</h4><ul>${I.partners.slice(0, 4).map(x => `<li><b>${esc(x.name)}</b>${dealtNote(x.id)}: ${[
         x.need.length ? `thin at ${x.need.join(' and ')}, where you're deep` : '', x.spare.length ? `deep at ${x.spare.join(' and ')}, where you're thin` : ''
-      ].filter(Boolean).join('; ')}</li>`).join('')}</ul></div>` : '';
+      ].filter(Boolean).join('; ')}</li>`).join('')}</ul>${act && act.total ? `<p class="fine">${plural(act.total, 'trade')} completed in this league so far this season.</p>` : ''}</div>` : '';
     if (!I.list.length) return `<section class="card pad tideas">${head}${partnersBlock}<p class="empty-note">No fair trade in this league ${I.points ? 'adds points to your starting lineup' : 'makes your starting lineup stronger'} right now.</p></section>`;
     const names = list => list.map(p => `${esc(p.name)}${disp.num(p) ? ` <small>${disp.num(p)}</small>` : ''}`).join(' + ');
     const change = n => `<span class="${n > 0 ? 'good' : n < 0 ? 'amber' : ''}">${(n > 0 ? '+' : n < 0 ? '−' : '') + thousands(Math.abs(n))}</span>`;
@@ -5012,7 +5086,7 @@
   }
 
   const SCREENS = {
-    lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
+    today: screenToday, lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
     sos: screenSos, score: screenScore, ranks: screenRanks, season: screenSeason, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`,
     dump: () => `<div class="vr-page">${screenDump()}</div>`, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
@@ -5313,6 +5387,23 @@
     applyValueFilter();
   });
 
+  // Today's done checks, kept per season and week (S.ui.todo), and its Open buttons (the screen, with that league picked).
+  view.addEventListener('change', e => {
+    const t = e.target.closest('input[data-todo]');
+    if (!t) return;
+    S.ui.todo = S.ui.todo || {};
+    const key = todoKey(), d = S.ui.todo[key] = S.ui.todo[key] || {};
+    if (t.checked) d[t.dataset.todo] = 1; else delete d[t.dataset.todo];
+    // Weeks gone by don't need their checks any more.
+    Object.keys(S.ui.todo).forEach(k => { if (k !== key) delete S.ui.todo[k]; });
+    saveUi();
+    render();
+  });
+  view.addEventListener('click', e => {
+    const t = e.target.closest('.td-go[data-go]');
+    if (!t) return;
+    if (t.dataset.league && S.snap && S.snap.leagues.length > 1) { S.ui.league = t.dataset.league; saveUi(); render(); }
+  });
   // The waiver plan's Done check on each claim.
   view.addEventListener('click', e => {
     const t = e.target.closest('[data-wdone]');

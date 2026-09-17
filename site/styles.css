@@ -641,6 +641,18 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .lineup-rec .row:first-child { border-top: 0; }
 .r-new { background: var(--ok-soft); }
 .v-new { background: var(--ok); color: #fff; }
+/* Today: the week's to-do list across every league, one card a league, a check per item. */
+.today-list { list-style: none; margin: 0; padding: 0 14px 10px; }
+.today-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.today-item:first-child { border-top: 0; }
+.today-item label { display: flex; align-items: flex-start; gap: 8px; flex: 1; cursor: pointer; min-width: 0; }
+.today-item input { margin-top: 3px; flex: none; }
+.td-kind { flex: none; font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); margin-top: 2px; }
+.td-kind.ok { background: var(--ok-soft); color: var(--ok); } .td-kind.swap { background: var(--swap-bg); color: var(--swap-ink); } .td-kind.stop { background: var(--stop-soft, #fde8e8); color: var(--stop, #b91c1c); }
+.td-text { min-width: 0; line-height: 1.4; } .td-text small { color: var(--muted); }
+.td-note { display: block; color: var(--faint); font-size: .74rem; }
+.td-go { flex: none; font-size: .8rem; margin-top: 2px; }
+.today-item.is-done .td-text { text-decoration: line-through; color: var(--muted); }
 .lu-cmp-wrap { overflow-x: auto; margin: 0 14px 12px; border: 1px solid var(--line); border-radius: 12px; }
 .lu-cmp { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .84rem; }
 .lu-cmp th { text-align: left; font-size: .66rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--muted);

@@ -32,9 +32,11 @@ async function render() {
   actions.append(r, o);
   const v = s.value, d = s.dump, l = s.lineup;
   const esc = t => String(t).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+  // Today: every league with something to do, and the lines themselves (lineup changes with both ranks, hurt starters,
+  // waiver upgrades, the report's claims), each league a link to it on Sleeper.
   const todo = l && l.todo && l.todo.length
-    ? `<br><span class="bad">Lineups to fix (${l.todo.reduce((a, x) => a + x.changes + x.hurt, 0)}):</span> ` + l.todo.map(x =>
-      `<a href="https://sleeper.com/leagues/${encodeURIComponent(x.id)}" target="_blank" rel="noopener">${esc(x.name)}</a> (${[x.changes ? x.changes + ' change' + (x.changes === 1 ? '' : 's') : '', x.hurt ? x.hurt + ' hurt' : ''].filter(Boolean).join(', ')})`).join(', ')
+    ? `<div class="today"><b class="bad">Today (${l.todo.reduce((a, x) => a + x.lines.length, 0)})</b>` + l.todo.map(x =>
+      `<div class="tl"><a href="https://sleeper.com/leagues/${encodeURIComponent(x.id)}" target="_blank" rel="noopener">${esc(x.name)}</a><ul>${x.lines.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>`).join('') + '</div>'
     : l ? '<br><span class="ok">Every lineup matches your rankings.</span>' : '';
   report.innerHTML = (v ? `<span class="ok">Value report</span> week ${v.week}, ${v.through || ''} (posted ${when(v.at)}); ${v.leagues} leagues.` : '<span class="bad">No Value report yet</span> (your PC posts one each Tuesday).')
     + '<br>' + (d ? `<span class="ok">Data dump</span> week ${d.week} (posted ${when(d.at)}).` : '<span class="muted">No Data dump yet.</span>')

@@ -81,8 +81,17 @@ async function status() {
     dump: d ? {week: d.week, at: d.at} : null,
     lineup: a ? {at: a.at, week: a.week, leagues: Object.keys(a.leagues || {}).length, ranked: a.rankedCount,
       // Per league: the changes the rankings want and the hurt starters, for the popup's list.
-      todo: Object.values(a.leagues || {}).map(L => ({id: L.id, name: L.name, changes: (L.moves || []).length,
-        hurt: (L.hurt || []).filter(p => !(L.moves || []).some(m => m.out && m.out.id === p.id)).length})).filter(x => x.changes || x.hurt)} : null,
+      todo: Object.values(a.leagues || {}).map(L => {
+        const lbl = p => (p && p.rank !== null && p.rank !== undefined ? ` (${SCC.rankLabel(p.pos, p.rank)})` : '');
+        const hurt = (L.hurt || []).filter(p => !(L.moves || []).some(m => m.out && m.out.id === p.id));
+        const claims = ((v && v.leagues) || []).filter(x => String(x.id) === String(L.id)).flatMap(x => (x.add || []).map(m => `Claim ${m.n}${m.d ? `, drop ${m.d}` : ''}`));
+        // The lines the popup lists: lineup changes with both ranks, hurt starters, waiver upgrades, the report's claims.
+        const lines = (L.moves || []).map(m => (m.from ? `Move ${m.inn.name}${lbl(m.inn)} to ${m.slot}` : `Start ${m.inn.name}${lbl(m.inn)}${m.out ? ` over ${m.out.name}${lbl(m.out)}` : ''}`))
+          .concat(hurt.map(p => `${p.name} is ${p.inj} and in your lineup`))
+          .concat((L.wire || []).map(w => `${w.pos}: ${w.list.map(f => `${f.name}${lbl(f)}`).join(', ')}${w.cur ? ` over ${w.cur.name}${lbl(w.cur)}` : ''}`))
+          .concat(claims);
+        return {id: L.id, name: L.name, changes: (L.moves || []).length, hurt: hurt.length, lines};
+      }).filter(x => x.lines.length)} : null,
     lineupBusy: !!state.lineupBusy, lineupError: state.lineupError
   };
 }
