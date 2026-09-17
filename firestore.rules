@@ -37,6 +37,11 @@ service cloud.firestore {
     match /users/{uid}/private/alerts {
       allow read, write: if own(uid);
     }
+    // Last week's recap from the app (the week's totals, close calls graded, the bench's biggest miss): the
+    // owner's Tuesday briefing reads it on the server.
+    match /users/{uid}/private/recap {
+      allow read, write: if own(uid);
+    }
 
     // The rankings lab (Compare rankings), the value report and the data dump: Titan's owner only, the
     // account with the titanOwner claim. The server and the owner's PC write them; the owner's app keeps

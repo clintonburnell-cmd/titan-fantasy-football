@@ -465,6 +465,17 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`document.querySelector('.tideas').classList.contains('min') && !document.querySelector('.tideas .fine') &&
     document.querySelector('.tideas [data-action="trade-find"]').textContent.trim() === 'Find trades'`, 3000), 'Clear folds the trade ideas back to one line');
   const team3Player = ESPNJS.buildLeague(ESPNJS.leagueCfg(L1, {id: L1.id, teamId: 3}, {}), L1, tradePlayers).roster[0].name;
+  // Paste an offer: "<mine> for <theirs>" fills the trade from the league's rosters, the partner being whoever holds the player you'd get.
+  const myPlayer = await ev(`document.querySelector('.tteam .trow b').textContent.trim()`);
+  await ev(`document.querySelector('[data-action="trade-reset"]').click(); true`);
+  await ev(`(() => { const f = document.querySelector('form[data-form="trade-paste"]'); f.elements.offer.value = ${JSON.stringify(myPlayer + ' for ' + team3Player)}; f.requestSubmit(); return true; })()`);
+  check(await waitFor(`document.querySelectorAll('.trade-sum .tchip').length === 2 && /Read as: you give/.test((document.querySelector('.tpaste-note') || {}).textContent || '')
+    && [...document.querySelectorAll('.trade-sum .tchip')].some(c => c.textContent.includes(${JSON.stringify(team3Player)}))`, 8000),
+    `a pasted offer fills the trade: ${myPlayer} for ${team3Player} (${(await text('.tpaste-note')).replace(/\s+/g, ' ').slice(0, 120)})`);
+  await ev(`(() => { const f = document.querySelector('form[data-form="trade-paste"]'); f.elements.offer.value = 'Nobody Real'; f.requestSubmit(); return true; })()`);
+  check(await waitFor(`/couldn't tell the two sides apart/.test((document.querySelector('.tpaste-note') || {}).textContent || '')`, 3000), 'an offer without two sides is said back');
+  await ev(`document.querySelector('[data-action="trade-reset"]').click(); true`);
+  await waitFor(`!document.querySelector('.trade-sum .tchip')`, 3000);
   await ev(`(() => { const i = document.querySelector('[data-trade-search]'); i.value = ${JSON.stringify(team3Player)}; i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
   check(await waitFor(`[...document.querySelectorAll('#tsearch .wrow')].some(r => r.querySelector('b').textContent === ${JSON.stringify(team3Player)} && /on Team 3/.test(r.textContent))`, 3000),
     'searching a player shows who has him in each league: ' + team3Player + ', on Team 3 (' + (await text('#tsearch')).replace(/\s+/g, ' ').slice(0, 80) + ')');
@@ -656,6 +667,25 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await waitFor(`!document.querySelector('dialog.pcard[open]')`, 3000);
   await ev(`history.back(); true`);
   check(await waitFor(`!document.querySelector('dialog.psearch[open]') && location.pathname === '/app/lineups'`, 3000), 'Back closes the card, then the search, and stays on Lineups');
+
+  // Compare two players: the card's Compare with… opens the search for the second; the pick shows both side by side.
+  const second = await ev(`[...document.querySelectorAll('.lineup [data-pcard]')].map(b => b.textContent.trim()).find(n => n !== ${JSON.stringify(starter)}) || ''`);
+  await ev(`document.querySelector('.lineup [data-pcard]').click(); true`);
+  await waitFor(`!!document.querySelector('dialog.pcard[open] [data-action="pcard-compare"]')`, 3000);
+  await ev(`document.querySelector('dialog.pcard [data-action="pcard-compare"]').click(); true`);
+  check(await waitFor(`!!document.querySelector('dialog.psearch[open]') && /^Compare .* with…$/.test(document.getElementById('ps-title').textContent)`, 3000),
+    'Compare with… opens Find a player asking for the second player: ' + await text('#ps-title'));
+  await ev(`(() => { const i = document.querySelector('dialog.psearch [data-psearch]'); i.value = ${JSON.stringify(second)}; i.dispatchEvent(new Event('input', {bubbles: true})); return true; })()`);
+  await waitFor(`[...document.querySelectorAll('dialog.psearch .wrow b[data-pcard]')].some(b => b.textContent === ${JSON.stringify(second)})`, 3000);
+  await ev(`[...document.querySelectorAll('dialog.psearch .wrow b[data-pcard]')].find(b => b.textContent === ${JSON.stringify(second)}).click(); true`);
+  check(await waitFor(`!!document.querySelector('dialog.pcard[open] .pc-cmp') && document.querySelectorAll('dialog.pcard .pc-cmp thead th b').length === 2
+    && document.querySelectorAll('dialog.pcard .pc-cmp tbody tr').length === 7 && /Your rankings/.test(document.querySelector('dialog.pcard .pc-cmp').textContent)
+    && !!document.querySelector('dialog.pcard .pc-verdict')`, 5000),
+    `picking him shows the two side by side, a measure a row, with a read at the end: ${(await text('dialog.pcard .pc-verdict')).replace(/\s+/g, ' ').slice(0, 120)} (${
+      await ev(`document.querySelectorAll('dialog.pcard .pc-cmp thead th b').length + ' names, ' + document.querySelectorAll('dialog.pcard .pc-cmp tbody tr').length + ' rows, open=' + !!document.querySelector('dialog.pcard[open] .pc-cmp')
+        + ', second=' + ${JSON.stringify(second)} + ', psearch open=' + !!document.querySelector('dialog.psearch[open]') + ', pcard open=' + !!document.querySelector('dialog.pcard[open]') + ', title=' + ((document.querySelector('dialog.pcard h2') || {}).textContent || '') + ', state=' + JSON.stringify(history.state)`)})`);
+  await ev(`history.back(); true`);
+  check(await waitFor(`!document.querySelector('dialog.pcard[open]') && location.pathname === '/app/lineups'`, 3000), 'Back closes the compare and stays on Lineups');
 
   T.section('the Standings tab');
   await tab('standings');

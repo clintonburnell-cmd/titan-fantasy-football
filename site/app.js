@@ -156,7 +156,8 @@
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
     waiv: {trend: null, busy: false, error: '', faab: {}, q: '', usage: null, usageBusy: false}, // usage: the last few weeks' stats (loadUsage)
-    pcard: {id: '', cache: {}}, // the player card: who's showing, and each player's season week by week
+    pcard: {id: '', cache: {}, cmp: null}, // the player card: who's showing, each player's season week by week, and the two being compared
+    cmp: null, // a compare in progress: {a} the first player, while Find a player picks the second
     ctx: {busy: false, at: 0, data: null}, // game context on Lineups rows (/api/game-context)
     moves: {}, // the Transactions tab: each Sleeper league's recent moves ({busy, error, list, at})
     yahoo: {busy: false, error: '', data: null, note: ''}, // linking Yahoo (Titan's owner only while it's being built)
@@ -545,11 +546,17 @@
   }
   function keepWeek(D) {
     const T = D.totals;
-    // The week's close calls graded (Results' Close calls card adds the season up from these).
-    const G = D.provisional ? null : gradeWeek(D);
-    seasonStore().weeks[D.week] = {week: D.week, actual: T.actual, proj: T.projActual, byRank: T.byRank, perfect: T.perfect,
+    // The week's close calls graded (Results' Close calls card adds the season up from these), and the bench's biggest
+    // miss, for the weekly recap on Today (and the owner's Tuesday briefing, through pushRecap).
+    const G = D.provisional ? null : gradeWeek(D), BM = D.provisional ? null : SCC.benchMistakes(D.rows)[0];
+    const entry = seasonStore().weeks[D.week] = {week: D.week, actual: T.actual, proj: T.projActual, byRank: T.byRank, perfect: T.perfect,
       wins: T.wins, losses: T.losses, ties: T.ties, done: !D.provisional, sig: weekSig(D.week),
-      calls: G ? {n: G.n, right: G.right, fn: G.flips.n, fr: G.flips.right} : null};
+      calls: G ? {n: G.n, right: G.right, fn: G.flips.n, fr: G.flips.right} : null,
+      miss: BM ? {key: BM.key, sat: BM.sat.name, satPts: BM.sat.pts, started: BM.started.name, startedPts: BM.started.pts, slot: BM.slot, lost: BM.lost} : null};
+    if (entry.done && S.sync.api && S.sync.user && S.snap.week === D.week + 1 && S.sync.api.pushRecap) {
+      S.sync.api.pushRecap({season: S.snap.season, week: D.week, at: Date.now(), wins: T.wins, losses: T.losses, ties: T.ties, actual: T.actual, proj: T.projActual,
+        calls: entry.calls, miss: entry.miss});
+    }
     store.set(KEY.season, S.season);
   }
   // Scores the weeks before this one that aren't kept yet (or have changed), one at a time.
@@ -564,7 +571,27 @@
       try { const D = await scoreFor(w); if (D) keepWeek(D); } catch (e) { /* that week stays out for now */ }
     }
     S.seasonBusy = false;
-    if (S.ui.tab === 'score') render();
+    if (S.ui.tab === 'score' || S.ui.tab === 'today') render();
+  }
+
+  /* The weekly recap (Today): last week as Results scored it (the week kept by keepWeek), in one card: the record and points,
+     how the close calls went (right of total, the tilt's flips apart) and the bench's biggest miss. Scored quietly the
+     first time Today opens after the week (loadSeason), so Tuesday opens on it. */
+  function recapCard() {
+    if (DEMO || !S.snap || S.snap.week < 2) return '';
+    const s = S.season, w = S.snap.week - 1;
+    const x = s && s.season === S.snap.season && s.weeks[w] && s.weeks[w].done ? s.weeks[w] : null;
+    if (!x) { loadSeason(); return S.seasonBusy ? '<p class="fine">Scoring last week for the recap…</p>' : ''; }
+    const games = x.wins + x.losses + x.ties, c = x.calls, m = x.miss;
+    const pct = (a, b) => (b ? ` (${Math.round(a / b * 100)}%)` : '');
+    const bits = [];
+    if (games) bits.push(`<span><b>${x.wins}–${x.losses}${x.ties ? '–' + x.ties : ''}</b><small>across your leagues</small></span>`);
+    bits.push(`<span><b>${fmt(x.actual)}</b><small>points${x.proj ? `, ${x.actual >= x.proj ? 'beat' : 'missed'} the projection by ${fmt(Math.abs(x.actual - x.proj))}` : ''}</small></span>`);
+    if (c && c.n) bits.push(`<span><b>${c.right} of ${c.n}</b><small>close calls right${pct(c.right, c.n)}${c.fn ? `, the tilt's flips ${c.fr} of ${c.fn}` : ''}</small></span>`);
+    else bits.push('<span><b>–</b><small>no close calls recorded last week</small></span>');
+    if (m) bits.push(`<span><b>−${fmt(m.lost)}</b><small>biggest bench miss: ${esc(m.sat)} (${fmt(m.satPts)}) sat while ${esc(m.started)} (${fmt(m.startedPts)}) started at ${esc(slotName(m.slot))} in ${esc(m.key)}</small></span>`);
+    return `<section class="card pad recap"><div class="card-h"><div><h3>Last week, week ${w}</h3><p>How Titan's calls went</p></div><button class="link td-go" data-go="score">Open Results</button></div>
+      <div class="pc-bits recap-bits">${bits.join('')}</div></section>`;
   }
 
   /* ------------------------------------------------------------- render */
@@ -1265,6 +1292,7 @@
     S.ctx.at = Date.now();
     S.ctx.busy = false;
     if (S.ctx.data && S.snap) analyze(); // the matchup tilt on close calls reads it
+    repaintCompare();
     if (S.ui.tab === 'lineups' || S.ui.tab === 'sos') render();
   }
 
@@ -1757,6 +1785,7 @@
     let h = `<div class="bar match-bar"><p class="lede">Everything to act on in week ${esc(S.snap.week)}, in every league: lineup changes, hurt starters, waiver upgrades${
       S.owner.is ? ', claims, trades and start ideas' : ''}. Tick each one off as you make it${S.owner.is ? '' : ''}.</p></div>`;
     h += `<section class="tiles three" aria-label="Where you stand">${tile(left.length, 'to do', left.length ? 'swap' : 'ok')}${tile(items.length - left.length, 'done', 'muted')}${tile(A_leagues().length, 'leagues', 'muted')}</section>`;
+    h += recapCard();
     if (!items.length) return h + '<div class="empty-note">Nothing to do: every lineup matches your rankings, no starter is hurt, and no free agent beats a starter.</div>';
     const byLeague = new Map();
     shown.forEach(x => { if (!byLeague.has(x.L)) byLeague.set(x.L, []); byLeague.get(x.L).push(x); });
@@ -3899,6 +3928,7 @@
     catch (e) { W.usage = {week: wk, list: [], error: true}; }
     W.usageBusy = false;
     if (['waivers', 'lineups', 'matchup'].includes(S.ui.tab)) render(); // Lineups and Matchup: floors and ceilings
+    repaintCompare();
   }
 
   // One line of a player's recent usage: his share of the snaps (and whether it's rising), then per game what matters at his position.
@@ -4064,6 +4094,15 @@
     PC.addEventListener('click', e => {
       if (e.target === PC || e.target.closest('[data-action="pcard-close"]')) PC.close(); // the ✕, or a tap outside the panel
       else if (e.target.closest('[data-action="pcard-retry"]')) loadPlayerCard(S.pcard.id);
+      else if (e.target.closest('[data-action="pcard-compare"]')) {
+        // The card gives way to Find a player in the same history entry (replaced, not popped: a history.back() here
+        // would land after the search opened and close it), and the pick then takes the entry over for the compare.
+        S.cmp = {a: e.target.closest('[data-action="pcard-compare"]').dataset.pid};
+        pcBack = true; PC.close();
+        openSearch(true);
+      }
+      else if (e.target.closest('[data-action="pcard-swap"]')) { S.cmp = {a: S.pcard.cmp[1]}; openCompare(S.pcard.cmp[1], S.pcard.cmp[0]); }
+      else { const t = e.target.closest('[data-pcard]'); if (t) openPlayerCard(t.dataset.pcard); }
     });
     // Closing takes back the history entry opening added, unless Back is what closed it.
     PC.addEventListener('close', () => {
@@ -4074,9 +4113,78 @@
     return PC;
   }
 
+  /* Compare two players (the card's "Compare with…", then a name from Find a player): the same dialog, two columns, in the
+     league picked (or your first): your rankings' rank note, this week's projection with the floor and ceiling, the
+     matchup, the next four weeks and the rest of the season, Titan's value, recent usage, and where each stands in your
+     leagues. A closing line says who your rankings favor and whether the projections agree. */
+  function openCompare(a, b, noPush) {
+    if (!a || !b || !S.snap) return;
+    playerDialog();
+    S.pcard.id = '';
+    S.pcard.cmp = [a, b];
+    [a, b].forEach(id => { if (!S.pcard.cache[id] || S.pcard.cache[id].error) loadPlayerCard(id); });
+    if (!S.waiv.usage && !S.waiv.usageBusy) loadUsage();
+    PC.innerHTML = compareHtml(a, b);
+    if (PC.open) return;
+    pcOpener = document.activeElement;
+    PC.showModal();
+    if (!noPush && location.protocol !== 'file:') history.pushState(Object.assign({}, history.state, {pcard: 1}), '', location.href);
+  }
+  function compareHtml(a, b) {
+    const d = (S.snap.leagues || []).find(x => x.cfg.id === pickedLeague()) || (S.snap.leagues || [])[0];
+    const cfg = d ? d.cfg : {lineup: [], ppr: 1}, wk = S.snap.week;
+    const info = id => {
+      const i = SCC.playerInfo(playerList(), id), mine = S.A ? S.A.leagues.map(L => L.roster.find(r => String(r.id) === String(id))).find(Boolean) : null;
+      const p = {id: String(id), name: i.name || (mine && mine.name) || 'Player', pos: i.pos || (mine && mine.pos) || '', team: i.team || (mine && mine.team) || '', inj: mine && mine.inj};
+      // His rank by your rankings for this week, as a league reads them (rankingsOf), whoever holds him.
+      if (S.A && S.A.ranks) {
+        const wm = rankingsOf(S.A.ranks, S.proj, playerList()), weekly = typeof wm === 'function' ? wm(cfg) : wm;
+        const q = SCC.attachRanks([{id: p.id, name: p.name, pos: p.pos, team: p.team}], weekly || {})[0];
+        p.rank = q.rank; p.posRank = q.posRank; p.tier = q.tier; p.est = q.est;
+      }
+      return p;
+    };
+    const A = info(a), B = info(b), n4 = sosNext4(), tilt = tiltFor();
+    const proj = p => SCC.projFor(S.proj, p.id, cfg), tp = p => (tilt ? tilt(cfg)(p) : null);
+    const span = (p, from, to, t) => { const f = spanFor(cfg, from, to, t); return f ? f(p) : null; };
+    const cell = (v, sub) => (v === null || v === undefined || v === '' ? '<td>–</td>' : `<td><b>${v}</b>${sub ? `<small>${sub}</small>` : ''}</td>`);
+    const row = (label, fa, fb) => `<tr><th scope="row">${label}</th>${cell(...[].concat(fa(A)))}${cell(...[].concat(fb ? fb(B) : fa(B)))}</tr>`;
+    const rankRow = p => (has(p.rank) ? [esc(rl(p)), esc(SCC.rankNote(p))] : ['unranked']);
+    const projRow = p => { const v = proj(p), sp = spreadFor(p, cfg); return v === null || v === undefined ? [null] : [fmt(v), sp ? `floor ${fmt(sp.floor)} · ceiling ${fmt(sp.ceiling)}` : '']; };
+    const matchRow = p => {
+      const C = S.ctx.data, t = C && C.teams && C.teams[SCC.teamAbbr(p.team)], r = dvpRank(p), imp = impliedOf(p), tv = tp(p);
+      if (!t) return [kickText(p) || null];
+      return [`${t.home ? 'vs ' : '@ '}${esc(t.opp)}`, [r ? `${r <= 8 ? 'soft' : r >= 25 ? 'tough' : 'middling'}: ${nth(r)} most to ${esc(p.pos)}s` : '', imp ? `team expected ${imp}` : '',
+        tv !== null && tv !== undefined ? `tilted projection ${fmt(tv)}` : ''].filter(Boolean).join(' · ')];
+    };
+    const n4Row = p => { const v = span(p, wk, Math.min(wk + 3, LAST_REG_WEEK), n4 ? n4.tilt : null); const r = n4 ? n4.rank(p.team, p.pos) : null; return v === null ? [null] : [fmt(v), r !== null ? `schedule ${nth(r)} softest` : '']; };
+    const rosRow = p => { const v = span(p, wk, LAST_REG_WEEK); const tv = titanValueFor(cfg)(p); return v === null ? [null] : [fmt(v), tv !== null ? `${thousands(tv)} above a replacement starter` : '']; };
+    const useRow = p => { const u = usageLine(p.id, p.pos); return u ? [u.replace(/<\/?small[^>]*>/g, '')] : [S.waiv.usageBusy ? 'loading…' : null]; };
+    const whereRow = p => [((S.A && S.A.leagues) || []).map(L => { const s = wStatus(L, p); return `<span class="wst ${s}">${esc(L.cfg.key)} · ${s === 'mine' ? 'yours' : s === 'taken' ? 'taken' : 'free'}</span>`; }).join(' ') || null];
+    // The read: who your rankings favor, how close, and whether the projections (matchups counted) agree.
+    let read = '';
+    if (has(A.rank) && has(B.rank) && A.pos === B.pos) {
+      const fav = A.rank <= B.rank ? A : B, other = fav === A ? B : A, close = SCC.closeByRank(A, B);
+      const pa = tp(A), pb = tp(B), pf = fav === A ? pa : pb, po = fav === A ? pb : pa;
+      read = `<b>${esc(fav.name)}</b> by your rankings${close ? ', a close call' : ''} (${esc(rl(fav))} vs ${esc(rl(other))}).`;
+      if (has(pf) && has(po)) read += po - pf >= SCC.DISAGREE ? ` <b class="amber">The projections disagree:</b> with the matchups counted ${esc(other.name)} projects ${fmt(po)} to ${fmt(pf)}.`
+        : pf >= po ? ` The projections agree (${fmt(pf)} to ${fmt(po)} with the matchups counted).` : ` The projections lean the other way, but only by ${fmt(po - pf)}.`;
+    } else if (A.pos !== B.pos) read = 'Different positions: compare the projections and the rest-of-season points, not the ranks.';
+    else read = 'One of them is unranked this week.';
+    const who = p => `<th scope="col">${headshot(p, true)}<b${pcAttr(p)}>${esc(p.name)}</b><small>${[p.pos && pos(p.pos), esc(p.team || ''), p.inj && `<span class="warn">${esc(p.inj)}</span>`].filter(Boolean).join(' ')}</small></th>`;
+    return `<header class="dlg-h"><div class="dlg-t"><div><h2 id="pc-title">Compare</h2><p>${esc(cfg.key || 'your leagues')} · week ${esc(wk)}</p></div></div>
+      <button type="button" class="btn small ghost" data-action="pcard-swap" title="Compare ${esc(B.name)} with someone else">Swap</button>
+      <button type="button" class="dlg-x" data-action="pcard-close" aria-label="Close">✕</button></header>
+      <div class="dlg-body"><table class="pc-cmp"><thead><tr><th scope="col"><span class="sr-only">Measure</span></th>${who(A)}${who(B)}</tr></thead><tbody>
+        ${row('Your rankings', rankRow)}${row('This week', projRow)}${row('Matchup', matchRow)}${row('Next 4 weeks', n4Row)}${row('Rest of season', rosRow)}${row('Recent usage', useRow)}${row('In your leagues', whereRow)}
+      </tbody></table><p class="pc-verdict">${read}</p>
+      <p class="fine">Ranks from your rankings for this week (Titan's defaults where you left a position out); projections via Sleeper, the matchup and schedule from Titan's game context. Tap a name for his card.</p></div>`;
+  }
+
   function openPlayerCard(id) {
     if (!id || !S.snap) return;
     playerDialog();
+    S.pcard.cmp = null;
     S.pcard.id = id;
     const C = S.pcard.cache[id];
     if (!C || C.error) loadPlayerCard(id);
@@ -4094,6 +4202,8 @@
     catch (e) { S.pcard.cache[id] = {error: true}; }
     if (PC && PC.open && S.pcard.id === id) PC.innerHTML = playerCardHtml();
   }
+  // The compare view repaints when something it reads lands (usage, the season projections, the context).
+  function repaintCompare() { if (PC && PC.open && S.pcard.cmp) PC.innerHTML = compareHtml(S.pcard.cmp[0], S.pcard.cmp[1]); }
 
   /* Titan's read on a player, one block on his card, so he reads the same on every screen: this week's floor and
      ceiling, his season value (Titan's own, the league picked or your first), the matchup, and for the owner the
@@ -4133,6 +4243,7 @@
     const p = {id, name: info.name || (mine && mine.name) || 'Player', pos: info.pos || (mine && mine.pos) || '', team: info.team || (mine && mine.team) || ''};
     const sub = [p.pos, p.team, mine && mine.inj].filter(Boolean).join(' · ');
     const head = `<header class="dlg-h"><div class="dlg-t">${headshot(p)}<div><h2 id="pc-title">${esc(p.name)}</h2><p>${esc(sub)}</p></div></div>
+      ${p.pos && p.pos !== 'PICK' && p.pos !== 'DEF' ? `<button type="button" class="btn small ghost pc-cmp-btn" data-action="pcard-compare" data-pid="${esc(id)}">Compare with…</button>` : ''}
       <button type="button" class="dlg-x" data-action="pcard-close" aria-label="Close">✕</button></header>`;
     // This week: his game and projection, and where he stands in each of your leagues.
     const proj = SCC.projFor(S.proj, id, 1), opp = mine && mine.opp;
@@ -4357,6 +4468,7 @@
     catch (e) { S.trade.season = {map: {}}; }
     S.trade.tv = {};
     if (['trade', 'standings', 'waivers', 'lineups', 'rosters', 'value'].includes(S.ui.tab)) render();
+    repaintCompare();
   }
   // Titan's own values for a league ({k, m: {playerId: value}}), or null until this season's projections are in.
   function titanValueMap(cfg) {
@@ -4721,7 +4833,10 @@
     if (PS && PS.positions.length) h += tradeFit(d, PS, me, partner);
     h += `<section class="card pad tsearch"><label class="field"><span>Who has him? Search for a player in every league</span>
         <input type="search" data-trade-search placeholder="At least three letters" value="${esc(S.trade.q || '')}" autocomplete="off"
-          autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="tsearch">${tradeSearchResults()}</div></section>`;
+          autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="tsearch">${tradeSearchResults()}</div>
+      <form class="tpaste" data-form="trade-paste"><label class="field grow"><span>Or paste an offer you received in ${esc(d.cfg.key)}</span>
+        <input type="text" name="offer" placeholder="give Player A, Player B get Player C" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+        <button class="btn small" type="submit">Read it</button></form>${S.trade.pasteNote ? `<p class="fine tpaste-note">${S.trade.pasteNote}</p>` : ''}</section>`;
     h += tradeIdeasCard(d.cfg, disp) + draftCard(d.cfg);
     h += pickBar('trade'); // the same pickers again, right above the trade
     if (partner) h += tradeSummary(d.cfg, me, partner, give, get, worth, V.waiver, disp);
@@ -4813,6 +4928,45 @@
      (loadTradeTeams, quietly: only these results redraw); until they have (or where they can't: Yahoo), a
      league says free or taken from the snapshot (takenNorm). Players someone in your leagues has come first,
      most valuable first. Tapping another team opens that trade: its league, that team, him on the get side. */
+  /* A pasted offer (SCC.parseOffer) read against the league's rosters: each name finds its player (his full name, or a
+     first initial and last name, on any team in the league), the side you're really on comes from the rosters (an offer
+     written from the other team's view swaps), the partner is the team holding what you'd get, and the trade fills in
+     through S.trade.pending as one sent from the extension does. Names nobody in the league holds are said back. */
+  function applyOffer(d, text) {
+    const O = SCC.parseOffer(text);
+    if (!O) { S.trade.pasteNote = 'Titan couldn\'t tell the two sides apart. Write it as "give A, B get C" or "A and B for C".'; return; }
+    const T = S.trade.teams[d.cfg.id];
+    if (!T || !T.list) { S.trade.pasteNote = 'The league\'s rosters are still loading. Try again in a moment.'; return; }
+    const held = [];
+    T.list.forEach(t => t.roster.forEach(p => { if (p.pos !== 'PICK') held.push({p, t, n: SCC.norm(p.name)}); }));
+    const find = name => {
+      const q = SCC.norm(name), parts = q.split(' ');
+      return held.find(x => x.n === q) || held.find(x => parts.length > 1 && x.n.split(' ')[0][0] === parts[0][0] && x.n.split(' ').slice(1).join(' ') === parts.slice(1).join(' '))
+        || held.find(x => x.n.includes(q)) || held.find(x => parts.length > 1 && x.n.endsWith(' ' + parts[parts.length - 1]));
+    };
+    const side = list => list.map(n => ({name: n, hit: find(n)}));
+    let give = side(O.give), get = side(O.get);
+    const missing = give.concat(get).filter(x => !x.hit).map(x => x.name);
+    const mineOf = list => list.filter(x => x.hit && x.hit.t.mine).length, theirsOf = list => list.filter(x => x.hit && !x.hit.t.mine).length;
+    // Written from the other side: what it says you give sits on another team, what you get is yours.
+    if (theirsOf(give) > mineOf(give) && mineOf(get) >= theirsOf(get)) { const g = give; give = get; get = g; }
+    const partners = {};
+    get.forEach(x => { if (x.hit && !x.hit.t.mine) partners[x.hit.t.id] = (partners[x.hit.t.id] || 0) + 1; });
+    const partnerId = Object.keys(partners).sort((a, b) => partners[b] - partners[a])[0];
+    const partner = partnerId ? T.list.find(t => String(t.id) === String(partnerId)) : null;
+    const giveIds = give.filter(x => x.hit && x.hit.t.mine).map(x => x.hit.p.id), getIds = get.filter(x => x.hit && partner && x.hit.t.id === partner.id).map(x => x.hit.p.id);
+    const skipped = give.filter(x => x.hit && !x.hit.t.mine).map(x => `${x.hit.p.name} (on ${x.hit.t.name})`).concat(get.filter(x => x.hit && (x.hit.t.mine || (partner && x.hit.t.id !== partner.id))).map(x => `${x.hit.p.name} (${x.hit.t.mine ? 'yours' : 'on ' + x.hit.t.name})`));
+    if (!giveIds.length || !getIds.length || !partner) {
+      S.trade.pasteNote = `Titan read ${esc(O.give.join(', '))} for ${esc(O.get.join(', '))}, but couldn't place both sides in ${esc(d.cfg.key)}${
+        missing.length ? ` (not on a roster here: ${esc(missing.join(', '))})` : ''}${skipped.length ? ` (out of place: ${esc(skipped.join(', '))})` : ''}.`;
+      return;
+    }
+    S.trade.pending = {league: d.cfg.id, give: giveIds, get: getIds};
+    S.trade.pasteNote = `Read as: you give ${esc(give.filter(x => giveIds.includes(x.hit && x.hit.p.id)).map(x => x.hit.p.name).join(', '))}, you get ${
+      esc(get.filter(x => getIds.includes(x.hit && x.hit.p.id)).map(x => x.hit.p.name).join(', '))} from ${esc(partner.name)}.${
+      missing.length ? ` Not on a roster here: ${esc(missing.join(', '))}.` : ''}${skipped.length ? ` Left out: ${esc(skipped.join(', '))}.` : ''}`;
+  }
+
   function tradeSearchResults() {
     const q = SCC.norm(S.trade.q || '').trim(), leagues = (S.snap && S.snap.leagues) || [];
     if (q.length < 3 || !leagues.length) return '';
@@ -5274,23 +5428,38 @@
       if (box) box.innerHTML = searchResults();
     });
     PS.addEventListener('click', e => {
-      if (e.target.closest('[data-action="psearch-close"]')) { PS.close(); return; }
+      if (e.target.closest('[data-action="psearch-close"]')) { S.cmp = null; PS.close(); return; }
       const t = e.target.closest('[data-pcard]');
-      if (t) openPlayerCard(t.dataset.pcard);
+      if (!t) return;
+      // In compare mode (the card's "Compare with…"), the pick is the second player.
+      if (S.cmp && S.cmp.a && S.cmp.a !== t.dataset.pcard) {
+        const a = S.cmp.a; S.cmp = null;
+        psBack = true; PS.close();
+        if (location.protocol !== 'file:' && history.state && history.state.psearch) history.replaceState(Object.assign({}, history.state, {psearch: 0, pcard: 1}), '', location.href);
+        openCompare(a, t.dataset.pcard, true);
+      }
+      else openPlayerCard(t.dataset.pcard);
     });
+    // A compare in progress ends when the search is dismissed (the X, or Back in popstate), never on the close event itself:
+    // a close event from an earlier search can land after the next one opened, and it must not clear the new compare.
     return PS;
   }
-  function openSearch() {
+  function openSearch(replace) {
     if (!S.snap) return;
     const d = searchDialog();
-    d.innerHTML = `<header class="dlg-h"><div class="dlg-t"><div><h2 id="ps-title">Find a player</h2><p>Any NFL player: where he is in every league</p></div></div>
+    const cmpName = S.cmp && S.cmp.a ? SCC.playerInfo(playerList(), S.cmp.a).name : '';
+    d.innerHTML = `<header class="dlg-h"><div class="dlg-t"><div><h2 id="ps-title">${cmpName ? `Compare ${esc(cmpName)} with…` : 'Find a player'}</h2><p>${
+      cmpName ? 'Pick the second player' : 'Any NFL player: where he is in every league'}</p></div></div>
       <button type="button" class="dlg-x" data-action="psearch-close" aria-label="Close">✕</button></header>
       <div class="dlg-body"><label class="field"><span class="sr-only">Player name</span><input type="search" data-psearch placeholder="At least three letters"
         value="${esc(S.ui.psq || '')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="ps-results">${searchResults()}</div></div>`;
     if (d.open) return;
     psOpener = document.activeElement;
     d.showModal();
-    if (location.protocol !== 'file:') history.pushState(Object.assign({}, history.state, {psearch: 1}), '', location.href);
+    if (location.protocol !== 'file:') {
+      if (replace && history.state && history.state.pcard) history.replaceState(Object.assign({}, history.state, {pcard: 0, psearch: 1}), '', location.href);
+      else history.pushState(Object.assign({}, history.state, {psearch: 1}), '', location.href);
+    }
     const box = d.querySelector('[data-psearch]');
     if (box) box.focus();
   }
@@ -5303,12 +5472,12 @@
       <small>${p.pos ? pos(p.pos) + ' ' : ''}${esc(p.team || '')}${p.pos && p.pos !== 'DEF' ? ' · tap for his card' : ''}</small>${leagues.length
         ? `<span class="wchips">${leagues.map(L => { const s = wStatus(L, p); return `<span class="wst ${s}">${esc(L.cfg.key)} · ${s === 'mine' ? 'yours' : s === 'taken' ? 'taken' : 'free'}</span>`; }).join('')}</span>` : ''}</span></li>`).join('')}</ul>`;
   }
-  $('psearch-btn').addEventListener('click', openSearch);
+  $('psearch-btn').addEventListener('click', () => openSearch());
 
   window.addEventListener('popstate', () => {
     // Back with a player's card, the search or the draft results open closes them and stays on the screen.
     if (PC && PC.open) { pcBack = true; PC.close(); return; }
-    if (PS && PS.open) { psBack = true; PS.close(); return; }
+    if (PS && PS.open) { S.cmp = null; psBack = true; PS.close(); return; }
     if (DLG && DLG.open) { dlgBack = true; DLG.close(); return; }
     const t = tabFromPath();
     if (t && t !== S.ui.tab) go(t, true);
@@ -5331,6 +5500,12 @@
     if (form === 'link') linkAccount(el.username.value);
     else if (form === 'espn-add') addEspn(el.league.value);
     else if (form === 'espn-login') saveEspnLogin(el.s2.value, el.swid.value);
+    else if (form === 'trade-paste') {
+      // The offer is read against the league the Trade tab shows (the same pick screenTrade makes).
+      const leagues = (S.snap && S.snap.leagues) || [];
+      const d = leagues.find(x => x.cfg.id === (pickedLeague() !== 'all' ? pickedLeague() : S.ui.tradeLeague)) || leagues[0];
+      if (d) { applyOffer(d, el.offer.value); render(); }
+    }
   });
 
   // Copy (a league's lineup changes as text): to the clipboard, with a word either way.

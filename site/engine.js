@@ -2070,6 +2070,39 @@
       title: (due.length === 1 ? '1 thing' : due.length + ' things') + ' to do before kickoff (' + mins + ' min)'};
   }
 
+  /* A trade offer as text (the Trade tab's "Paste an offer"): "give A, B get C", "A and B for C", "I give A for your B",
+     "Team X offered A for your B", "you receive A; you send B". Each side's names, in the order written:
+     {give: [names], get: [names]}, or null when a side is missing. Which side is really yours is settled by the rosters
+     (the app swaps them when the "give" names sit on another team), so the writer's point of view doesn't matter. */
+  var OFFER_GIVE = /\b(give|gives|gave|giving|given|send|sends|sent|sending|offer|offers|offered|offering|trade away|trading away)\b/;
+  var OFFER_GET = /\b(get|gets|got|getting|receive|receives|received|receiving|in return for|in exchange for|for)\b/;
+  var OFFER_WORDS = new RegExp('(' + OFFER_GIVE.source.slice(2, -2) + '|' + OFFER_GET.source.slice(2, -2) + ')\\b:?', 'gi');
+  function parseOffer(text) {
+    var t = String(text || '').replace(/\s+/g, ' ').replace(/\([^)]*\)/g, ' ').trim();
+    if (!t) return null;
+    var parts = [], last = 0, lead = '', m, side = null;
+    OFFER_WORDS.lastIndex = 0;
+    while ((m = OFFER_WORDS.exec(t))) {
+      var before = t.slice(last, m.index);
+      if (side) parts.push([side, before]); else lead = before;
+      side = OFFER_GIVE.test(m[0].toLowerCase()) ? 'give' : 'get';
+      last = m.index + m[0].length;
+    }
+    if (side) parts.push([side, t.slice(last)]);
+    // "A and B for C": the names before a get-word are what's given.
+    if (lead.trim() && parts.length && parts[0][0] === 'get') parts.unshift(['give', lead]);
+    if (!parts.length) return null;
+    var names = function (s) {
+      return s.split(/,|;|\+|&|\band\b|\bplus\b|\bwith\b/i).map(function (x) {
+        return x.replace(/\b(my|your|their|his|our|the|a|an|you|i|me|them|they|we|us|player|players|trade|offer|to|from|would|will|can|team)\b/gi, ' ')
+          .replace(/[^A-Za-z.'’\- ]/g, ' ').replace(/\s+/g, ' ').trim();
+      }).filter(function (x) { return x.length >= 3 && /[a-z]/i.test(x); });
+    };
+    var out = {give: [], get: []};
+    parts.forEach(function (p) { names(p[1]).forEach(function (n) { if (out[p[0]].indexOf(n) < 0) out[p[0]].push(n); }); });
+    return out.give.length && out.get.length ? out : null;
+  }
+
   function closeCalls(roster, slots, startedIds) {
     var wins = 0, total = 0;
     var starters = roster.filter(function (p) { return startedIds[p.id]; });
@@ -3181,7 +3214,7 @@
     rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
-    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE,
+    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,

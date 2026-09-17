@@ -28,6 +28,13 @@ owner-only Value report and Data dump, read from his Titan account.
   want ("Start X (RB30) over Y"), hurt starters, and waiver upgrades (free agents ranked above one of your starters).
   Cached twenty minutes (`analysis` in storage); Refresh in the section or the popup reruns it. The Sleeper player list
   is kept between runs (`players`, three days). Only the Sleeper side of your account is read (no ESPN or Yahoo).
+- **Lineup marks on the page** (v0.4.0): on a league's pages, every name Titan would start that you aren't starting gets
+  a green "▲ start" on its pill, and every starter it would bench (your rankings have a better start, do not start, on
+  bye) a red "▼ bench", with the reason and his rank note on hover (`buildMarks` from the worker's analysis). A player
+  the reports don't value gets a mark-only pill, so the marks cover the whole roster.
+- **Bids on the pills** (v0.4.0): a free agent in the league on screen carries "bid $N" (the same `SCC.faabBid` as his
+  card) and, when the Value report's claim names one, "drop X", so Sleeper's waiver screen has the number beside the
+  player. Needs the league's facts (FAAB and the winning bids), read once per league.
 - **A game-day badge** on the icon: lineup changes your rankings want plus hurt starters across every league,
   recounted every twenty minutes (`titan-lineup` alarm) and on browser start. The popup's **Today** list names each
   league's lines: the changes with both players' ranks, hurt starters, waiver upgrades and the report's claims, each

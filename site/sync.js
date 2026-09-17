@@ -251,6 +251,14 @@ const api = {
     return (entry ? setDoc(weekDoc(u.uid, week), entry) : deleteDoc(weekDoc(u.uid, week))).catch(saveFailed);
   },
 
+  // Last week's recap (Results' totals, the close calls graded, the bench's biggest miss): users/{uid}/private/recap,
+  // which the owner's Tuesday briefing reads. Quiet on failure: it's a nicety.
+  pushRecap(entry) {
+    const u = auth.currentUser;
+    if (!u || !entry) return;
+    return setDoc(doc(db, 'users', u.uid, 'private', 'recap'), entry).catch(() => {});
+  },
+
   ownerStats() {
     return readOwnerStats().then(r => r.data);
   },

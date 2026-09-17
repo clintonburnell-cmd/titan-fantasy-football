@@ -284,6 +284,14 @@ One note per screen or feature.
   `SCC.rivalsFor` over the league's teams, which Waivers loads quietly for FAAB leagues; the reasons show under the
   bid). Each pickup
   shows a usage line (`usageLine`, `SCC.usageOf` over the last three finished weeks of `API.fetchStats`).
+- Compare two players (v1.71.0, `openCompare`, `compareHtml`, in the player card's dialog): "Compare with…" on a card sets
+  `S.cmp = {a}` and opens Find a player, whose next pick is the second player; the dialog then shows both side by side in
+  the league picked (rank note, projection with floor and ceiling, matchup, next four weeks, rest of season, usage, where
+  in your leagues) with a read at the end. `repaintCompare` redraws it when usage, the season projections or the context
+  land. Opening a card clears the compare. The Trade tab's "Paste an offer" (`applyOffer`, `SCC.parseOffer`) fills a
+  trade from pasted text through `S.trade.pending`, the rosters settling whose side is whose. Today's weekly recap
+  (`recapCard`) reads the week kept by `keepWeek` (now with `miss`, the bench's biggest miss) and `pushRecap` sends it to
+  `users/{uid}/private/recap` for the owner's Tuesday briefing (`recapLine` in functions).
 - The player card (`openPlayerCard`): any element with `data-pcard` (`pcAttr`, players with a Sleeper id)
   opens a `<dialog>` with the player's last four games and season from `API.fetchPlayerStats` (Sleeper's
   per-player stats, `grouping=week`; `trimStat` in sleeper.js keeps what Titan shows), under "Titan's read"

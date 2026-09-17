@@ -11,3 +11,9 @@
 .titan-pill.t-get { background: #e6f6ec; color: #15803d; border-color: #b7e4c7; box-shadow: 0 0 0 2px #b7e4c7; }
 .titan-pill .t-edge { font-weight: 700; }
 .titan-pill .t-tag { opacity: .85; }
+/* Titan's lineup marks (start or bench) and a free agent's bid, on the pills; a mark-only pill for players the reports don't value. */
+.titan-pill .t-tag.t-start { color: #15803d; font-weight: 700; }
+.titan-pill .t-tag.t-bench { color: #b91c1c; font-weight: 700; }
+.titan-pill.t-mark.t-start { background: #e6f6ec; color: #15803d; border-color: #b7e4c7; }
+.titan-pill.t-mark.t-bench { background: #fdecec; color: #b91c1c; border-color: #f5c2c2; }
+.titan-pill .t-tag.t-bid { color: #1f4fb8; font-weight: 700; }

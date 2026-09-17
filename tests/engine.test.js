@@ -589,6 +589,19 @@ section('close calls graded against the points (gradeCalls)');
   check(G.rows[2].right === false && G.rows[3].right === null && G.rows[3].pickPts === null, 'a tie is not right; a call with a player yet to play is ungraded');
 }
 
+section('a trade offer as text (parseOffer)');
+{
+  const P = SCC.parseOffer;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  check(same(P('give Jaylen Warren, Kenny Gainwell get Josh Allen'), {give: ['Jaylen Warren', 'Kenny Gainwell'], get: ['Josh Allen']}), 'give A, B get C: ' + JSON.stringify(P('give Jaylen Warren, Kenny Gainwell get Josh Allen')));
+  check(same(P('Jaylen Warren and Kenny Gainwell for Josh Allen'), {give: ['Jaylen Warren', 'Kenny Gainwell'], get: ['Josh Allen']}), 'A and B for C');
+  check(same(P('I give my Jaylen Warren for your Josh Allen + Bench Back'), {give: ['Jaylen Warren'], get: ['Josh Allen', 'Bench Back']}), 'I give my A for your B + C (the small words go)');
+  check(same(P('Team B offered Josh Allen (QB - BUF) for Jaylen Warren'), {give: ['Josh Allen'], get: ['Jaylen Warren']}),
+    'an offer written from the other side parses as written (the rosters settle whose is whose); a position in brackets is dropped');
+  check(same(P('You receive: Josh Allen; you send: Jaylen Warren'), {give: ['Jaylen Warren'], get: ['Josh Allen']}), 'you receive X; you send Y');
+  check(P('Jaylen Warren') === null && P('') === null && P('give Jaylen Warren') === null, 'one side only, or nothing: null');
+}
+
 section('the nudge before kickoff (kickoffNudge)');
 {
   const now = Date.parse('2026-09-20T15:00:00Z'), h = 3600e3, min = 60e3;

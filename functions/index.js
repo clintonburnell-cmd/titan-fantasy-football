@@ -729,6 +729,19 @@ function briefingFor(doc, R) {
 /* Whether the owner's season lists (users/{uid}/seasonRanks, each with savedAt) have gone stale: Late-Round's
    rest-of-season rankings, which the owner imports as his lists, refresh every Tuesday, so a list STALE_DAYS old or
    more (or none at all) gets a line in the Tuesday briefing. '' when they're fresh. */
+/* Last week in one line for the Tuesday briefing, from the recap the app saved (users/{uid}/private/recap, keepWeek):
+   the record, the close calls graded and the bench's biggest miss. '' when there's no recap for last week. */
+function recapLine(r, week) {
+  if (!r || Number(r.week) !== Number(week) - 1) return '';
+  const bits = [];
+  const games = (r.wins || 0) + (r.losses || 0) + (r.ties || 0);
+  if (games) bits.push(`${r.wins}-${r.losses}${r.ties ? '-' + r.ties : ''}`);
+  const c = r.calls;
+  if (c && c.n) bits.push(`close calls ${c.right} of ${c.n}${c.fn ? ` (tilt flips ${c.fr} of ${c.fn})` : ''}`);
+  const m = r.miss;
+  if (m && m.lost) bits.push(`biggest bench miss ${m.sat} over ${m.started} in ${m.key} (${m.lost} points)`);
+  return bits.length ? `Last week: ${bits.join(', ')}.` : '';
+}
 const STALE_DAYS = 6;
 function seasonStale(lists, now = Date.now()) {
   const entries = Object.entries(lists || {}).filter(([, v]) => v && v.savedAt);
@@ -771,6 +784,12 @@ exports.ownerBriefing = onDocumentWritten({document: 'lab/{doc}', region: 'us-ce
       const stale = seasonStale(lists);
       if (stale) a.body = `${a.body} ${stale}`.trim();
     } catch (e) { logger.warn('owner briefing: could not read the season lists: ' + e.message); }
+    // And last week's recap, when the owner's app has scored it (Results, keepWeek → pushRecap).
+    try {
+      const recap = (await db.collection('users').doc(uid).collection('private').doc('recap').get()).data();
+      const line = recapLine(recap, R.week);
+      if (line) a.body = `${line} ${a.body}`.trim();
+    } catch (e) { logger.warn('owner briefing: could not read the recap: ' + e.message); }
   }
   const sent = Object.assign({}, alerts.sent || {});
   sent[a.key] = 1;
@@ -1034,7 +1053,7 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
   }
 });
 
-exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest, briefingFor, seasonStale,
+exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest, briefingFor, seasonStale, recapLine,
   yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll, latestScores, newsForAlerts, labSnapshot, formatFromKey,
   setSend: fn => { sendPush = fn; },
   setCreds: store => { creds = store; }, espnCredsFor, espnLeaguesOf, plainGet,

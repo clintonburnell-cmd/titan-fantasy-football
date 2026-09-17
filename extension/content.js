@@ -39,8 +39,39 @@
     return {league, byName, bySid, calls};
   }
 
+  /* Titan's lineup marks for the league on screen (from the worker's analysis): who to start (in Titan's lineup but not
+     yours, or a change's incoming player) and who to bench (a starter the rankings would swap out, do not start, or on
+     bye). By full name and "F. Last", each with the reason for the hover. */
+  function buildMarks() {
+    const L = S.lineup && S.lineup.league;
+    if (!L) return null;
+    const marks = new Map(), put = (p, kind, why) => {
+      if (!p || !p.name) return;
+      const note = [rankLabel(p), rankNote(p)].filter(Boolean).join(', ');
+      const m = {kind, p, title: `Titan: ${kind === 'start' ? 'start him' : 'bench him'}${why ? ' (' + why + ')' : ''}${note ? ' · ' + note : ''}`};
+      const full = norm(p.name), parts = full.split(' ');
+      marks.set(full, m);
+      if (parts.length > 1) marks.set(parts[0][0] + ' ' + parts.slice(1).join(' '), m);
+    };
+    const current = {}; (L.rows || []).forEach(r => { if (r.p) current[r.p.id] = r; });
+    (L.rows || []).forEach(r => { if (r.p && ['SWAP OUT', 'DO NOT START', 'ON BYE'].includes(r.verdict)) put(r.p, 'bench', r.verdict === 'SWAP OUT' ? 'your rankings have a better start' : r.verdict.toLowerCase()); });
+    (L.moves || []).forEach(m => { if (m.out && !m.to) put(m.out, 'bench', 'your rankings have a better start'); });
+    (L.opt || []).forEach(o => { if (o.p && !current[o.p.id]) put(o.p, 'start', `at ${SLOT_LABEL[o.slot] || o.slot}`); });
+    (L.moves || []).forEach(m => { if (m.inn && !current[m.inn.id]) put(m.inn, 'start', `at ${SLOT_LABEL[m.slot] || m.slot}`); });
+    return marks;
+  }
+  const markTag = m => (m ? `<span class="t-tag t-${m.kind}">${m.kind === 'start' ? '▲ start' : '▼ bench'}</span>` : '');
+  // A pill on a player the reports don't value, carrying only Titan's lineup mark.
+  function markPill(m) {
+    const el = document.createElement('span');
+    el.className = `titan-pill t-mark t-${m.kind}`;
+    el.title = m.title;
+    el.innerHTML = markTag(m);
+    return el;
+  }
+
   // ------------------------------------------------------------- pills
-  function pillFor(r, call) {
+  function pillFor(r, call, mark) {
     const tags = [];
     if (call && call.kind === 'buy') tags.push('buy low');
     else if (call && call.kind === 'sell') tags.push(call.k ? 'keep' : 'sell high');
@@ -52,9 +83,16 @@
       call ? call.why : '', r.pb ? 'Late-Round: ' + r.pb : '', r.dg ? `Draft guide: ${r.dg.k} ${r.dg.c}/10` + (r.dg.a ? '' : ' (off the list)') + (r.dg.n ? ': ' + r.dg.n : '') : '']
       .filter(Boolean).join('\n');
     const el = document.createElement('span');
-    el.className = 'titan-pill ' + cls;
-    el.title = title;
-    el.innerHTML = `<span class="t-edge">${esc(pct(r.vgap) || 'T')}</span>${tags.length ? `<span class="t-tag">${esc(tags.join(' · '))}</span>` : ''}`;
+    el.className = 'titan-pill ' + cls + (mark ? ' t-' + mark.kind : '');
+    el.title = title + (mark ? '\n' + mark.title : '');
+    el.innerHTML = `<span class="t-edge">${esc(pct(r.vgap) || 'T')}</span>${tags.length ? `<span class="t-tag">${esc(tags.join(' · '))}</span>` : ''}${markTag(mark)}`;
+    // A free agent in this league shows his bid (SCC.faabBid on the league's winning bids) and the drop the claim names,
+    // so Sleeper's waiver screen has the number where it's needed.
+    const bid = freeAgentBid(r);
+    if (bid) {
+      el.innerHTML += `<span class="t-tag t-bid">bid $${bid.bid}${call && call.kind === 'add' && call.d ? ` · drop ${esc(call.d)}` : ''}</span>`;
+      el.title += `\nBid about $${bid.bid} of $${bid.left} left (${bid.why})`;
+    }
     // A pill on a player in a trade being proposed on Sleeper says which side he's on.
     const prop = S.proposal;
     if (prop && prop.league === S.leagueId) {
@@ -162,7 +200,8 @@
 
   const SKIP = new Set(['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'TITLE', 'NOSCRIPT']);
   function tagNames(root) {
-    if (!S.showPills || !S.index) return;
+    if (!S.showPills || (!S.index && !S.marks)) return;
+    const byName = S.index ? S.index.byName : new Map(), marks = S.marks || new Map();
     const walker = document.createTreeWalker(root || document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: n => {
         const p = n.parentElement;
@@ -173,15 +212,15 @@
     });
     const hits = [];
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-      const r = S.index.byName.get(norm(n.nodeValue));
-      if (r) hits.push([n, r]);
+      const key = norm(n.nodeValue), r = byName.get(key), m = marks.get(key);
+      if (r || m) hits.push([n, r, m]);
     }
-    hits.forEach(([n, r]) => {
-      const p = n.parentElement;
-      if (!p || p.dataset.titan === r.s) return;
+    hits.forEach(([n, r, m]) => {
+      const p = n.parentElement, id = r ? r.s : 'm' + m.p.id;
+      if (!p || p.dataset.titan === id) return;
       p.querySelectorAll(':scope > .titan-pill').forEach(x => x.remove());
-      p.dataset.titan = r.s;
-      p.insertBefore(pillFor(r, S.index.calls.get(norm(r.n))), n.nextSibling);
+      p.dataset.titan = id;
+      p.insertBefore(r ? pillFor(r, S.index.calls.get(norm(r.n)), m) : markPill(m), n.nextSibling);
     });
   }
   function untag() { document.querySelectorAll('.titan-pill').forEach(x => x.remove()); document.querySelectorAll('[data-titan]').forEach(x => delete x.dataset.titan); }
@@ -414,8 +453,11 @@
       S.lineupBusy = false;
       S.lineup = chrome.runtime.lastError ? {error: chrome.runtime.lastError.message} : (r || {error: 'no answer'});
       renderPanel();
+      retag(); // the lineup marks on the page's names
     });
   }
+  // The pills again from scratch: after the lineup (marks) or the league's facts (bids) land.
+  function retag() { S.marks = buildMarks(); untag(); tagNames(); }
 
   function wireTrade(root) {
     const rb = root.querySelector('[data-lineup-refresh]');
@@ -514,11 +556,13 @@
       if (chrome.runtime.lastError || !f || f.error) return;
       S.facts = f;
       renderPanel();
+      retag(); // the bids on free agents' pills
     });
   }
 
   function refreshAll() {
     S.index = buildIndex();
+    S.marks = buildMarks();
     untag();
     tagNames();
     renderPanel();

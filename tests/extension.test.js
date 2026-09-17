@@ -57,7 +57,8 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
   <div class="roster"><div class="row"><span class="name">Patrick Mahomes</span><span>QB - KC</span></div>
   <div class="row"><span class="name">J. Warren</span><span>RB - PIT</span></div>
   <div class="row"><span class="name">Josh Allen</span></div><div class="row"><span class="name">Nobody Here</span></div>
-  <div class="row"><span class="name">Kenny Gainwell</span><span>RB - PIT</span></div></div></body></html>`;
+  <div class="row"><span class="name">Kenny Gainwell</span><span>RB - PIT</span></div>
+  <div class="row"><span class="name">Bench Back</span><span>RB - NYG</span></div></div></body></html>`;
 
 (async () => {
   const PORT = 9900 + Math.floor(Math.random() * 90);
@@ -137,16 +138,24 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     await P.send('Fetch.enable', {patterns: [{urlPattern: '*sleeper.com*'}]});
     P.on(m => { if (m.method === 'Fetch.requestPaused') P.fulfill(m, 200, PAGE, 'text/html'); });
     await P.send('Page.navigate', {url: 'https://sleeper.com/leagues/999/team'});
-    let pills = 0, panel = '';
+    let pills = 0, panel = '', document_pills = '';
     for (let i = 0; i < 60; i++) {
       await sleep(250);
       pills = await P.evaluate('document.querySelectorAll(".titan-pill").length', false).catch(() => 0);
       panel = await P.evaluate('(document.querySelector("titan-panel") && document.querySelector("titan-panel").shadowRoot.textContent) || ""', false).catch(() => '');
-      if (pills >= 4 && /bid about/.test(panel)) break;
+      if (pills >= 5 && /bid about/.test(panel) && /bench/.test(document_pills = await P.evaluate('[...document.querySelectorAll(".titan-pill")].map(p => p.textContent).join(" | ")', false).catch(() => ''))) break;
     }
-    check('four names got a pill (the full names and "J. Warren"); the unknown name did not', pills === 4, String(pills));
+    check('five names got a pill (the full names, "J. Warren", and Bench Back with only the lineup mark); the unknown name did not', pills === 5, String(pills));
     const pillText = await P.evaluate('[...document.querySelectorAll(".titan-pill")].map(p => p.textContent).join(" | ")', false);
     check('the pills carry the edge and the call (+31% buy low, mini bell cow; keep)', /\+31%buy low · mini bell cow/.test(pillText) && /keep/.test(pillText), pillText);
+    // Titan's lineup marks on the page's names: Gainwell (in Titan's lineup, not yours) start, Bench Back (SWAP OUT) bench; and a free agent's bid with the claim's drop.
+    const gainPill = await P.evaluate('([...document.querySelectorAll(".titan-pill")].find(p => p.title.startsWith("Kenny Gainwell")) || {}).textContent || ""', false);
+    check('a player Titan would start is marked on the page, and as a free agent his pill carries the bid and the drop the claim names',
+      /▲ start/.test(gainPill) && /claim/.test(gainPill) && /bid \$\d+ · drop Bench Guy/.test(gainPill), gainPill);
+    const benchPill = await P.evaluate('([...document.querySelectorAll(".titan-pill.t-mark")].find(p => /bench/.test(p.title)) || {}).textContent || ""', false);
+    const benchTitle = await P.evaluate('([...document.querySelectorAll(".titan-pill.t-mark")].find(p => /bench/.test(p.title)) || {}).title || ""', false);
+    check('a starter Titan would bench gets a mark-only pill (the reports don\'t value him) with the reason and his rank note on hover',
+      /▼ bench/.test(benchPill) && /Titan: bench him \(your rankings have a better start\) · RB40, #40 overall · RB19 at position · tier 3/.test(benchTitle), benchTitle);
     const titles = await P.evaluate('[...document.querySelectorAll(".titan-pill")].map(p => p.title).join(" | ")', false);
     check('a pill\'s hover carries the Late-Round note and the draft guide take', /Late-Round: 5.2 rushing points/.test(titles) && /Draft guide: target 2\/10/.test(titles), titles.slice(0, 200));
     check('the league panel names the league and its sections', /Titan · Test League/.test(panel) && /Start/.test(panel) && /Claims/.test(panel) && /Buy low/.test(panel) && /Sell high or keep/.test(panel), panel.slice(0, 300));

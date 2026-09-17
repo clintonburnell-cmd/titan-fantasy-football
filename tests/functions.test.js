@@ -60,6 +60,11 @@ function fakeUser(db) {
     /Your season lists are 8 days old/.test(job.seasonStale({'redraft-1qb': {savedAt: atT - 8 * msDay}}, atT)) &&
     /Your dynasty-sf-tep season list is 7 days old/.test(job.seasonStale({'redraft-1qb': {savedAt: atT - msDay}, 'dynasty-sf-tep': {savedAt: atT - 7 * msDay}}, atT)),
     'the briefing says when the season lists are stale (six days or more), which ones, or that none are saved');
+  // Last week's recap (the app saves it after scoring the week): the record, the close calls graded, the bench's biggest miss.
+  const recap = {week: 2, wins: 3, losses: 1, ties: 0, calls: {n: 9, right: 6, fn: 2, fr: 1}, miss: {key: 'Dynasty', sat: 'A Back', started: 'B Back', lost: 11.4}};
+  check(job.recapLine(recap, 3) === 'Last week: 3-1, close calls 6 of 9 (tilt flips 1 of 2), biggest bench miss A Back over B Back in Dynasty (11.4 points).',
+    'the recap line: ' + job.recapLine(recap, 3));
+  check(job.recapLine(recap, 4) === '' && job.recapLine(null, 3) === '' && job.recapLine({week: 2}, 3) === '', 'a recap for another week, none, or an empty one says nothing');
 
   section('trade values (FantasyCalc, cached by Titan\'s server)');
   const tvFormat = job.valuesFormat({dynasty: '0', qbs: '2', teams: '10', ppr: '0.5'});
