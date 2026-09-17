@@ -150,7 +150,8 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
       && /Kenny Gainwell: #30 overall · RB14 at position · tier 3 \| Bench Back: #40 overall · RB19 at position · tier 3/.test(lineup), lineup.slice(0, 400));
     check('each starter carries the note for close calls: overall rank, rank at the position, tier (a rank past the overall list shows at the position only)',
       /RB17\s*#17 overall · RB9 at position · tier 2/.test(lineup.replace(/\s+/g, ' ')) && /QB1\s*tier 1/.test(lineup.replace(/\s+/g, ' ')) && /TE8\s*tier 2/.test(lineup.replace(/\s+/g, ' ')), lineup.slice(0, 260));
-    check('waiver upgrades list free agents ranked above a starter', /Waiver upgrades/.test(lineup) && /Free Tight End \(TE6\)/.test(lineup) && /over Some Tight End \(TE8\)/.test(lineup), lineup.slice(-260));
+    check('waiver upgrades list free agents ranked above a starter, each with his rank note', /Waiver upgrades/.test(lineup) && /Free Tight End \(TE6, #6 overall\)/.test(lineup) && /over Some Tight End \(TE8, tier 2\)/.test(lineup)
+      && /Gainwell \(RB30, #30 overall · RB14 at position · tier 3\) is questionable/.test(lineup), lineup.slice(-300));
     check('the section says whose engine and when, with a refresh', /Titan's engine, as of/.test(lineup) && /Refresh/.test(lineup), '');
     // The matchup: both sides' projected finals, the chance to win, and the close calls with projections and rank notes.
     const match = await P.evaluate('(document.querySelector("titan-panel").shadowRoot.querySelector(".match") || {}).textContent || ""', false);

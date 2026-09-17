@@ -1644,9 +1644,11 @@
       L.moves.forEach(m => items.push({id: `${id}|move|${m.inn.id}`, L, kind: 'Lineup', go: 'lineups',
         html: `${m.from ? `Move <b>${esc(m.inn.name)}</b>${lbl(m.inn)} to ${esc(slotName(m.slot))}` : `Start <b>${esc(m.inn.name)}</b>${lbl(m.inn)}${m.out ? ` over <b>${esc(m.out.name)}</b>${lbl(m.out)}` : ` at ${esc(slotName(m.slot))}`}`}${noteOf(m.inn)}${m.out ? noteOf(m.out) : ''}`}));
       L.hurt.filter(p => !L.moves.some(m => m.out && m.out.id === p.id)).forEach(p => items.push({id: `${id}|hurt|${p.id}`, L, kind: 'Injury', go: 'lineups',
-        html: `<b>${esc(p.name)}</b> is ${esc(String(p.inj))} and in your lineup${lbl(p)}`}));
+        html: `<b>${esc(p.name)}</b> is ${esc(String(p.inj))} and in your lineup${lbl(p)}${noteOf(p)}`}));
+      // Each free agent with his rank and note, and the starter he'd replace with his, so the gap is plain.
       L.wire.forEach(w => items.push({id: `${id}|wire|${w.pos}`, L, kind: 'Waiver', go: 'waivers',
-        html: `${esc(w.pos)}: <b>${w.list.map(f => `${esc(f.name)} (${esc(rl(f))})`).join('</b>, <b>')}</b>${w.cur ? ` ranked above ${esc(w.cur.name)} (${esc(rl(w.cur))})` : w.anyUnranked ? ' (a starter there is unranked)' : ''}`}));
+        html: `${esc(w.pos)}: <b>${w.list.map(f => `${esc(f.name)} (${esc(rl(f))}${SCC.rankNote(f) ? ', ' + esc(SCC.rankNote(f)) : ''})`).join('</b>, <b>')}</b>${
+          w.cur ? ` ranked above ${esc(w.cur.name)} (${esc(rl(w.cur))}${SCC.rankNote(w.cur) ? ', ' + esc(SCC.rankNote(w.cur)) : ''})` : w.anyUnranked ? ' (a starter there is unranked)' : ''}`}));
     });
     if (S.owner.is && !DEMO) {
       const byId = {}; A.leagues.forEach(L => { byId[String(L.cfg.id)] = L; });

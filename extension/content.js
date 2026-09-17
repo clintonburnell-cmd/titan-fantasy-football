@@ -368,8 +368,10 @@
         const notes = [m.inn && rankNote(m.inn) ? `${esc(m.inn.name)}: ${esc(rankNote(m.inn))}` : '', m.out && rankNote(m.out) ? `${esc(m.out.name)}: ${esc(rankNote(m.out))}` : ''].filter(Boolean).join(' | ');
         return `<li><b>${m.from ? `Move ${esc(m.inn.name)}${lbl(m.inn)} to ${esc(SLOT_LABEL[m.slot] || m.slot)}` : `Start ${esc(m.inn.name)}${lbl(m.inn)}${m.out ? ` over ${esc(m.out.name)}${lbl(m.out)}` : ''}`}</b>${notes ? `<div class="rn">${notes}</div>` : ''}</li>`;
       }).join('');
-      const hurt = L.hurt.filter(p => !L.moves.some(m => m.out && m.out.id === p.id)).map(p => `<li>${esc(p.name)} is ${esc(String(p.inj).toLowerCase())} and in your lineup.</li>`).join('');
-      const wire = L.wire.map(w => `<li><b>${esc(w.pos)}</b>: ${w.list.map(f => `${esc(f.name)} (${esc(rankLabel(f))})`).join(', ')}${w.cur ? ` <span class="x">· over ${esc(w.cur.name)} (${esc(rankLabel(w.cur))})</span>` : w.anyUnranked ? ' <span class="x">· a starter there is unranked</span>' : ''}</li>`).join('');
+      const full = p => `${esc(rankLabel(p))}${rankNote(p) ? ', ' + esc(rankNote(p)) : ''}`;
+      const hurtLine = p => `${esc(p.name)} (${full(p)}) is ${esc(String(p.inj).toLowerCase())} and in your lineup.`;
+      const hurt = L.hurt.filter(p => !L.moves.some(m => m.out && m.out.id === p.id)).map(p => `<li>${hurtLine(p)}</li>`).join('');
+      const wire = L.wire.map(w => `<li><b>${esc(w.pos)}</b>: ${w.list.map(f => `${esc(f.name)} (${full(f)})`).join(', ')}${w.cur ? ` <span class="x">· over ${esc(w.cur.name)} (${full(w.cur)})</span>` : w.anyUnranked ? ' <span class="x">· a starter there is unranked</span>' : ''}</li>`).join('');
       inner = `<ol>${list}</ol>`
         + (changes ? `<h4>Changes your rankings want</h4><ul>${changes}</ul>` : `<p class="note">${L.rows.length ? 'This lineup already matches your rankings.' : ''}</p>`)
         + (hurt ? `<h4>Hurt starters</h4><ul>${hurt}</ul>` : '')

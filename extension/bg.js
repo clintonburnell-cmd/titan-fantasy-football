@@ -82,7 +82,8 @@ async function status() {
     lineup: a ? {at: a.at, week: a.week, leagues: Object.keys(a.leagues || {}).length, ranked: a.rankedCount,
       // Per league: the changes the rankings want and the hurt starters, for the popup's list.
       todo: Object.values(a.leagues || {}).map(L => {
-        const lbl = p => (p && p.rank !== null && p.rank !== undefined ? ` (${SCC.rankLabel(p.pos, p.rank)})` : '');
+        // Each player's rank with the note that makes a comparison readable: overall rank, rank at the position, tier.
+        const lbl = p => (p && p.rank !== null && p.rank !== undefined ? ` (${SCC.rankLabel(p.pos, p.rank)}${SCC.rankNote(p) ? ', ' + SCC.rankNote(p) : ''})` : '');
         const hurt = (L.hurt || []).filter(p => !(L.moves || []).some(m => m.out && m.out.id === p.id));
         const claims = ((v && v.leagues) || []).filter(x => String(x.id) === String(L.id)).flatMap(x => (x.add || []).map(m => `Claim ${m.n}${m.d ? `, drop ${m.d}` : ''}`));
         // The lines the popup lists: lineup changes with both ranks, hurt starters, waiver upgrades, the report's claims.
