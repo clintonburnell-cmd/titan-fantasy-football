@@ -152,7 +152,7 @@
     value: {busy: false, data: null, error: '', at: 0, q: ''}, // the value report (Titan's owner only), from the owner's PC; q: its player search
     dump: {busy: false, data: null, error: '', at: 0}, // the data dump (Titan's owner only), from the owner's PC; it shares the value report's search
     mu: {busy: false, data: null, error: '', at: 0, week: 0, table: 'overview', note: ''}, // Match Up data (the owner and titanLab): the weekly matchup sheets, uploaded week by week
-    news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
+    news: {busy: false, at: 0, list: null, error: '', all: false}, // ESPN's latest stories, on the News tab
     sos: {sched: null, busy: false, error: ''}, // the NFL schedule, for Schedule strength
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
     // The Waivers tab: Sleeper's trending adds, each FAAB league's budget and bids, and the search.
@@ -1606,6 +1606,12 @@
       }).join('')}</div>` : ''}</li>`;
   }
 
+  const NEWS_FIRST = 10; // stories shown before "show the rest": ESPN hands over everything it has
+  /* A screen waiting on data keeps its shape: grey rows the height of the real ones, rather than a line of text that
+     the content then shoves aside. The words stay for screen readers. */
+  const skeleton = (n, label) => `<div class="skel" role="status" aria-live="polite"><span class="sr-only">${esc(label)}</span>${
+    new Array(n).fill('<span class="skel-row"></span>').join('')}</div>`;
+
   function screenNews() {
     const N = S.news;
     if (!N.list && !N.busy && !N.error) loadNews();
@@ -1620,9 +1626,16 @@
     else if (N.list && Date.now() - N.from > NEWS_OLD) {
       h += `<div class="banner swap">ESPN isn't letting Titan in right now, so these are its stories as of ${esc(when(N.from))}. Titan keeps trying.</div>`;
     }
-    if (!N.list) h += N.error ? '' : '<div class="empty-note">Loading the latest news…</div>';
+    if (!N.list) h += N.error ? '' : skeleton(6, 'Loading the latest news');
     else if (!shown.length) h += `<div class="empty-note">${S.ui.newsMine ? 'Nothing about your players in ESPN\'s latest news.' : 'No news right now.'}</div>`;
-    else h += `<ul class="card news-list">${shown.map(s => newsRow(s, yoursIn(s), mine)).join('')}</ul>`;
+    else {
+      /* Your players' stories first, then the rest, and only NEWS_FIRST of them until asked: ESPN returns everything it
+         has, which ran to 5,500px on a phone (v1.80.0). The count on the button says what is behind it. */
+      const ordered = S.ui.newsMine ? shown : yours.concat(list.filter(x => !yoursIn(x).length));
+      const cut = S.news.all ? ordered.length : Math.min(NEWS_FIRST, ordered.length);
+      h += `<ul class="card news-list">${ordered.slice(0, cut).map(s => newsRow(s, yoursIn(s), mine)).join('')}</ul>`;
+      if (cut < ordered.length) h += `<div class="bar news-more"><button type="button" class="btn ghost small" data-action="news-all">Show the other ${ordered.length - cut} stories</button></div>`;
+    }
     return h + `<h3 class="news-h">Insiders on X</h3><p class="fine">Accounts that only post news. Tap one to see its latest posts on X.</p>
       <ul class="card list">${NEWS_ACCOUNTS.map(a => `
         <li class="row xrow"><span class="pos" aria-hidden="true">X</span>
@@ -1795,7 +1808,7 @@
     // The leagues down the left side on a wide computer window (Matchup has no chips).
     jumpBar((M.data && M.data.length ? shown : S.A.leagues.filter(x => inPick(x.cfg))).map(x => ({cfg: x.cfg})), false);
     if (M.error) h += `<div class="banner stop">${esc(M.error)}</div>`;
-    if (!M.data) return h + (M.busy ? '<div class="empty-note">Loading this week\'s matchups…</div>' : '');
+    if (!M.data) return h + (M.busy ? skeleton(4, 'Loading this week\'s matchups') : '');
     if (!M.data.length) return h + '<div class="empty-note">No leagues to show.</div>';
     const n = k => games.filter(MATCH_KINDS[k]).length;
     if (games.length) {
@@ -1923,8 +1936,10 @@
           <span class="who"><b>Empty</b></span><span class="right"></span></li>`)).join('');
       return `<details class="card roster-card fold" ${foldAttrs('roster', L.cfg)}><summary class="card-h"><div><h3>${leagueIcon(L.cfg)}${esc(L.cfg.key)}</h3>
         <p>${plural(L.roster.length, 'player')} · ${L.roster.filter(p => p.start).length} starting</p></div></summary>${leagueAdvice(L.cfg)}
-        <ul class="roster">${starters}${bench.length ? '<li class="rdiv">Bench</li>' + bench.map(p => row(p, 'BN')).join('') : ''}${
-          held.length ? '<li class="rdiv">Reserve</li>' + held.map(p => row(p, p.heldAs || 'IR', 'held')).join('') : ''}</ul></details>`;
+        <ul class="roster">${starters}</ul>${
+          // Starters are what a roster card is for; the bench and the reserve are a lookup, so they wait behind a line.
+          bench.length ? `<details class="rost-more"><summary>${plural(bench.length, 'player')} on the bench</summary><ul class="roster">${bench.map(p => row(p, 'BN')).join('')}</ul></details>` : ''}${
+          held.length ? `<details class="rost-more"><summary>${plural(held.length, 'player')} on reserve</summary><ul class="roster">${held.map(p => row(p, p.heldAs || 'IR', 'held')).join('')}</ul></details>` : ''}</details>`;
     }).join('') + '</div>';
     return h;
   }
@@ -2655,6 +2670,7 @@
     return srcs.length ? SCC.combineRanks(srcs, {curve: dflt, curveName: DEFAULTS_SOURCE}) : null;
   }
 
+  const MULTI_FIRST = 15; // players shown per position in the combined preview: a check of the merge, not a list to read
   function screenMulti() {
     if (!S.multi.week) multiWeek(S.snap ? S.snap.week : 1);
     const M = S.multi, w = M.week, saved = S.ranks.weeks[w], C = combined();
@@ -2725,7 +2741,9 @@
       ${n < 2 ? '<p class="fine">Add another source to combine them. For a single file, the Import screen is simpler.</p>' : ''}
       <button class="btn" data-action="multi-save"${n >= 2 ? '' : ' disabled'}>Save as week ${w} rankings${saved ? ' (replaces saved)' : ''}</button>
       <div class="chips" role="group" aria-label="Position">${shown.map(p => `<button class="chip" data-view-pos="${p}" aria-pressed="${p === pick}">${p} ${counts[p]}</button>`).join('')}</div>
-      <ol class="roster mcombined">${C.players.filter(p => p.pos === pick).map(p => `<li class="row"><span class="slot">${esc(pick)}${p.posRank}</span>${pos(p.pos)}
+      ${(() => { const all = C.players.filter(p => p.pos === pick), cut = S.multi.allRows ? all.length : Math.min(MULTI_FIRST, all.length);
+        return cut < all.length ? `<p class="fine">The first ${cut} at ${esc(pick)}, of ${all.length}. <button class="link" data-action="multi-all">Show them all</button></p>` : ''; })()}
+      <ol class="roster mcombined">${C.players.filter(p => p.pos === pick).slice(0, S.multi.allRows ? undefined : MULTI_FIRST).map(p => `<li class="row"><span class="slot">${esc(pick)}${p.posRank}</span>${pos(p.pos)}
         <span class="who"><b>${esc(p.name)}</b><small>${p.team ? esc(p.team) + ' · ' : ''}${places(p)}</small></span>
         <span class="right">${split(p) ? '<span class="mspread" title="The sources are 8 or more spots apart on him">split</span>' : ''}<span class="rank">${
           flex && p.rank < 1000 ? 'FLEX ' + p.rank : ''}</span></span></li>`).join('')}</ol></section>`;
@@ -2990,7 +3008,7 @@
       const W = D.weeks[week], table = W[U.table] ? U.table : MU_TABLES.map(t => t[0]).find(k => W[k]);
       h += `<div class="chips" role="group" aria-label="Table">${MU_TABLES.map(([k, label]) => `<button type="button" class="chip" data-mu-table="${k}" aria-pressed="${k === table}"${W[k] ? '' : ' disabled'}>${label}</button>`).join('')}</div>`;
       h += `<section class="card pad vr-sec mu-sec"><h3>Week ${week} · ${esc((MU_TABLES.find(t => t[0] === table) || [])[1] || '')}</h3><p class="fine">Uploaded ${esc(when(W.at))}.</p>${muTable(W[table])}</section>`;
-    } else if (U.busy) h += '<div class="empty-note">Loading the matchup data…</div>';
+    } else if (U.busy) h += skeleton(6, 'Loading the matchup data');
     else h += '<div class="empty-note">No matchup data yet this season. Upload a week below.</div>';
     if (S.owner.is) {
       h += `<section class="card pad mu-up"><h3>Upload a week</h3><p class="fine">Paste each sheet as text: a header row (Offense, Matchup, then the measures, "PROE Off", "PROE Def", "Team Tot"...) and one row per offense,
@@ -4043,7 +4061,7 @@
     if (leagues.length > sleeper.length) h += '<p class="fine">Yahoo leagues aren\'t in this list yet.</p>';
     if (failed.length) h += `<div class="banner stop">Couldn't load the moves in ${esc(failed.map(d => d.cfg.key).join(', '))}. Tap Refresh to try again.</div>`;
     if (!shown.length) {
-      h += loading ? '<div class="empty-note">Loading your leagues\' transactions…</div>'
+      h += loading ? skeleton(5, 'Loading your leagues\' transactions')
         : `<div class="empty-note">${sleeper.length ? (f === 'all' ? 'No moves in your leagues over the last three weeks.' : 'Nothing like that over the last three weeks.') : 'Link a Sleeper account or add an ESPN league to see your leagues\' moves.'}</div>`;
     } else {
       h += `<ul class="card txlist">${shown.map(moveRow).join('')}</ul>`;
@@ -4228,8 +4246,11 @@
           <button type="button" class="chip wc-done" data-wdone="${esc(key)}" aria-pressed="${done}">${done ? '✓ Done' : 'Done'}</button></li>`;
       }).join('');
       const whenRun = waiverWhen(cfg);
-      return `<li class="wlg"><div class="wlg-h">${leagueIcon(cfg, 'xs')}<b>${esc(cfg.key)}</b>${budget(x.league)}${
-        whenRun ? `<span class="wmeta">· ${esc(whenRun)}</span>` : ''}<span class="wlg-open">${openSite(cfg)}</span></div><ol class="wclaims">${rows}</ol></li>`;
+      // Every league's claims open at once ran to several screens (v1.80.0): each folds, and the first one opens.
+      const open = plan[0] && plan[0].cfg.id === cfg.id;
+      return `<li class="wlg"><details class="wlg-fold"${open ? ' open' : ''}><summary class="wlg-h">${leagueIcon(cfg, 'xs')}<b>${esc(cfg.key)}</b>
+        <span class="wmeta">${plural(x.claims.length, 'claim')}</span>${budget(x.league)}${
+        whenRun ? `<span class="wmeta">· ${esc(whenRun)}</span>` : ''}</summary><div class="wlg-body"><span class="wlg-open">${openSite(cfg)}</span><ol class="wclaims">${rows}</ol></div></details></li>`;
     });
     return `<section class="card pad wsec wplan"><div class="wplan-h"><h3>Your waiver plan</h3><span class="wmeta">${ticked} of ${plural(total, 'claim')} done</span></div>
       <p class="fine">Each claim is a free agent your rankings rate above one of your starters. The drop is the bench player valued least (by your season rankings where you've saved them, else Titan's values) over the
@@ -4280,6 +4301,7 @@
       <ul class="wlist">${cards.join('')}</ul></section>`;
   }
 
+  const TREND_FIRST = 8; // trending pickups shown before "show more": Sleeper returns forty
   function screenWaivers() {
     if (!S.snap || !S.A) return emptyState();
     const W = S.waiv, players = playerList(), leagues = S.A.leagues;
@@ -4325,7 +4347,7 @@
       if (b && wStatus(L, {id: b.id, name: b.name, pos: p.pos, team: p.team}) === 'free') cuffs.push({L, p, b});
     }));
 
-    const trend = (W.trend || []).slice(0, 25).map(t => {
+    const trend = (W.trend || []).slice(0, W.allTrend ? 25 : TREND_FIRST).map(t => {
       const info = SCC.playerInfo(players, t.id), p = {id: t.id, name: info.name, pos: info.pos, team: info.team};
       const st = leagues.map(L => ({L, s: wStatus(L, p)})), free = st.filter(x => x.s === 'free'), mine = st.filter(x => x.s === 'mine').length;
       return `<li class="wrow">${headshot(p, true)}<span class="who"><b${pcAttr(p)}>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))} · ${thousands(t.count)} adds in the last day</small>${usageLine(p.id, p.pos)}
@@ -4347,7 +4369,9 @@
         ${esc(c.L.cfg.key)}.${bid(c.L, c.b.name)}${usageLine(c.b.id, c.p.pos)}</span></li>`).join('')}</ul></section>`;
     }
     h += `<section class="card pad wsec"><h3>Trending pickups</h3><p class="fine">Sleeper's most-added players in the last day, and where each is free in your leagues.</p>${
-      W.error ? `<div class="banner stop">${esc(W.error)}</div>` : !W.trend ? '<p class="fine">Loading…</p>' : `<ul class="wlist">${trend.join('')}</ul>`}</section>`;
+      W.error ? `<div class="banner stop">${esc(W.error)}</div>` : !W.trend ? skeleton(4, 'Loading the trending pickups') : `<ul class="wlist">${trend.join('')}</ul>${
+        !W.allTrend && (W.trend || []).length > TREND_FIRST ? `<div class="bar news-more"><button type="button" class="btn ghost small" data-action="trend-all">Show ${
+          Math.min(25, (W.trend || []).length) - TREND_FIRST} more</button></div>` : ''}`}</section>`;
     return h;
   }
 
@@ -4685,7 +4709,7 @@
     let h = (pickedLeague() === 'all' && leagues.length > 1 ? oddsOverview(leagues, cfg.id) : '') + onePick(d, leagues);
     const err = (St && St.error) || (Tm && Tm.error);
     if (err) return h + `<div class="banner stop">${esc(err)} <button class="link" data-action="stand-retry">Try again</button></div>`;
-    if (!St || St.busy || !Tm || Tm.busy) return h + '<div class="empty-note">Loading the schedule and every team\'s roster…</div>';
+    if (!St || St.busy || !Tm || Tm.busy) return h + skeleton(5, 'Loading the schedule and every team\'s roster');
     const sched = St.sched;
     if (!sched.teams.length || !sched.games.length) return h + '<div class="empty-note">This league has no regular-season schedule yet.</div>';
     const R = standingsResult(d), picture = playoffPicture(d, sched, R), mineId = String(cfg.platform === 'espn' ? cfg.teamId : d.rosterId), me = R.teams.find(t => t.id === mineId);
@@ -5076,7 +5100,7 @@
     const retry = '<button class="link" data-action="trade-retry">Try again</button>';
     if (T && T.error) return h + `<div class="banner stop">${esc(T.error)} ${retry}</div>`;
     if (V && V.error) return h + `<div class="banner stop">${esc(V.error)} ${retry}</div>`;
-    if (!T || T.busy || !V || V.busy) return h + '<div class="empty-note">Loading the teams and their trade values…</div>';
+    if (!T || T.busy || !V || V.busy) return h + skeleton(5, 'Loading the teams and their trade values');
     if (!me) return h + `<div class="empty-note">Titan couldn't find your team in ${esc(d.cfg.key)}.</div>`;
 
     const val = p => SCC.playerValue(V.idx, p), worth = p => (val(p) || {}).v || 0, disp = tradeDisplay(d.cfg, V);
@@ -5887,6 +5911,9 @@
     if (a === 'score') loadScore(S.score.week || S.snap.week);
     else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
     else if (a === 'matchups') loadMatchups();
+    else if (a === 'news-all') { S.news.all = true; render(); }
+    else if (a === 'trend-all') { S.waiv.allTrend = true; render(); }
+    else if (a === 'multi-all') { S.multi.allRows = true; render(); }
     else if (a === 'news-retry') { S.news.error = ''; loadNews(); }
     else if (a === 'sos-retry') { S.sos.error = ''; loadSos(); render(); }
     else if (a === 'stand-retry') {

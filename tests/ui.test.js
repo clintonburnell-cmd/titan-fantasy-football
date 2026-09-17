@@ -284,8 +284,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'a league card leads with where you stand and your playoff odds: ' + (await text('.league .lg-advice')).replace(/\s+/g, ' ').slice(0, 150));
   T.section('player search on Rosters');
   await tab('rosters');
-  const order = await ev(`[...document.querySelectorAll('.roster-card .roster > li')].map(li => li.classList.contains('rdiv') ? '|' + li.innerText.toUpperCase() + '|'
-    : li.querySelector('.slot').innerText + ':' + ((li.querySelector('.who small') || {}).innerText || '').split(' · ')[0])`);
+  // The bench and the reserve fold behind a line now, so their rows are in the DOM but not rendered: read textContent.
+  const order = await ev(`[...document.querySelectorAll('.roster-card .roster > li, .roster-card .rost-more > summary')].map(el =>
+    el.tagName === 'SUMMARY' ? (/reserve/i.test(el.textContent) ? '|RESERVE|' : '|BENCH|')
+      : el.classList.contains('rdiv') ? '|' + el.textContent.toUpperCase() + '|'
+      : el.querySelector('.slot').textContent + ':' + ((el.querySelector('.who small') || {}).textContent || '').split(' · ')[0])`);
   const startLabels = order.slice(0, 9).map(x => x.split(':')[0]).join(' ');
   const benchPos = order.slice(order.indexOf('|BENCH|') + 1, order.indexOf('|RESERVE|')).map(x => x.split(':')[1]);
   const posRank = {QB: 0, RB: 1, WR: 2, TE: 3, K: 4, DEF: 5};
@@ -1291,6 +1294,32 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await waitFor('!!document.querySelector("#tabs")', 20000);
 
   check(await ev('document.documentElement.scrollWidth <= innerWidth'), 'nothing is wider than a 390px phone');
+  /* How long each screen is on a phone, in screens of scrolling. A budget, not a measurement: a screen that grows past
+     it is telling you a block needs folding or capping, which is how Lineups quietly reached eight screens before
+     anyone looked (v1.78.0). Raise a number here only with a reason. */
+  T.section('screen lengths on a phone');
+  await send('Emulation.setDeviceMetricsOverride', {width: 390, height: 844, deviceScaleFactor: 2, mobile: true});
+  const BUDGET = {lineups: 6, today: 5, matchup: 5, standings: 6, rosters: 4, trade: 9, moves: 5,
+    waivers: 5, news: 4, plan: 5, score: 6, ranks: 4, season: 4, multi: 4, settings: 3};
+  const lengths = [];
+  for (const t of Object.keys(BUDGET)) {
+    // A screen without a menu button of its own (Today) is a sub-tab: open its section first, then click it there.
+    const btn = await ev(`(() => { let b = document.querySelector('[data-tab="${t}"]');
+      if (!b) { const s = document.querySelector('[data-tab="lineups"]'); if (s) s.click(); b = document.querySelector('.subtabs [data-go="${t}"]'); }
+      if (!b) return false; b.click(); return true; })()`);
+    if (!btn) { lengths.push({t, screens: 0, skip: true}); continue; }
+    await sleep(900);
+    const m = await ev(`({page: Math.round(document.documentElement.scrollHeight), vp: innerHeight,
+      top: (() => { const k = [...document.querySelectorAll('#view section, #view .card')].map(el => ({c: (el.className || '').slice(0, 24), h: Math.round(el.getBoundingClientRect().height)})).sort((a, b) => b.h - a.h)[0];
+        return k ? k.c + ' ' + k.h + 'px' : ''; })()})`);
+    lengths.push({t, screens: Math.round((m.page / m.vp) * 10) / 10, top: m.top});
+  }
+  const over = lengths.filter(x => !x.skip && x.screens > BUDGET[x.t]);
+  check(!over.length, over.length
+    ? 'screens past their length budget on a phone: ' + over.map(x => `${x.t} ${x.screens} > ${BUDGET[x.t]} (tallest block: ${x.top})`).join('; ')
+    : 'every screen fits its length budget on a phone: ' + lengths.filter(x => !x.skip).map(x => `${x.t} ${x.screens}`).join(', '));
+
+
   check(!problems.length, problems.length ? 'page errors:\n    ' + problems.join('\n    ') : 'no page errors');
   await send('Browser.close').catch(() => {});
   chrome.kill();

@@ -791,6 +791,20 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 .lg-notes > summary:hover, .lg-cmp > summary:hover { color: var(--text); }
 .lg-notes .note:first-of-type { border-top: 0; }
 .plan-views { margin-bottom: 10px; }
+/* A league's claims, and a roster's bench, behind a line: the same shape as the folds on a league card. */
+.wlg-fold > summary, .rost-more > summary { display: flex; align-items: center; gap: 8px; padding: 8px 0; cursor: pointer; list-style: none;
+  font-size: .82rem; font-weight: 700; }
+.wlg-fold > summary::-webkit-details-marker, .rost-more > summary::-webkit-details-marker { display: none; }
+.wlg-fold > summary::after, .rost-more > summary::after { content: '\25be'; margin-left: auto; color: var(--muted); }
+.wlg-fold[open] > summary::after, .rost-more[open] > summary::after { content: '\25b4'; }
+.rost-more > summary { padding: 8px 14px; border-top: 1px solid var(--line); color: var(--muted); font-weight: 600; font-size: .78rem; }
+.rost-more > summary:hover, .wlg-fold > summary:hover { color: var(--text); }
+.news-more { justify-content: center; padding-top: 10px; }
+/* A screen waiting on data keeps its shape. */
+.skel { display: grid; gap: 8px; padding: 4px 0; }
+.skel-row { display: block; height: 56px; border-radius: 12px; background: var(--chip); opacity: .75; }
+@media (prefers-reduced-motion: no-preference) { .skel-row { animation: skel 1.4s ease-in-out infinite; } }
+@keyframes skel { 0%, 100% { opacity: .45; } 50% { opacity: .85; } }
 /* A spot that needs no change takes the width of both columns. */
 .lu-cmp td.lu-keep { color: var(--muted); }
 .lu-cmp td.lu-keep b { color: var(--text); }

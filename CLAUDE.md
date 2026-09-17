@@ -290,6 +290,12 @@ One note per screen or feature.
   points, a defense by how few the offense it faces is expected to score, both moved by `tiltFromRank` on the matchup.
   Only in leagues that start one, free agents only, with the bid and the starter he'd replace. It needs the game
   context, so it draws nothing until `/api/game-context` is in.
+- **Screen length is a test** (v1.80.0): the UI suite walks every screen at 390px and fails when one goes past its
+  budget (`BUDGET` in `tests/ui.test.js`), naming the tallest block. Raise a number there only with a reason, and
+  fold or cap the block instead where you can. The long lists all cap now: News `NEWS_FIRST`, trending pickups
+  `TREND_FIRST`, the combined preview `MULTI_FIRST`, with the rest behind a button; a waiver league's claims and a
+  roster's bench and reserve fold. `skeleton(n, label)` is the loading state: rows the height of the real ones, the
+  words kept for screen readers.
 - Density is a feature (v1.78.0, measured on a 390px phone): a recommended row shows the game context, the why line
   and the rank note only where a decision is being made (`rowDepth`: a change, or a close call), and everything that
   explains the calls folds behind one line (`.lg-notes`, `.lg-cmp`). Before adding a line to a row, ask whether it
