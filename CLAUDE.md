@@ -40,7 +40,7 @@ and `tests/` are never published. The paths below are inside `site/`; URLs are u
 | `sync.js` | Google sign-in, Firestore sync, the saved ESPN login, the private-ESPN transport, the Yahoo link (ES module) |
 | `yahoo.js` | Yahoo Fantasy's nested answers read into Titan's shapes (being built; see Rules) |
 | `syncplan.js` | Which copy wins when syncing (pure) |
-| `extension/` | Titan for Sleeper, a Chrome extension loaded unpacked for the owner (its README has the build and load steps): pills after player names and a league panel on sleeper.com from the owner-only reports; signs in through `site/ext/connect.html`; never writes to Sleeper |
+| `extension/` | Titan Fantasy Assistant, a Chrome extension loaded unpacked for the owner (named "Titan for Sleeper" until v0.6.0: a product name carrying another service's mark implies an endorsement, so it was dropped; "Sleeper" stays only where it states what the extension works with) (its README has the build and load steps): pills after player names and a league panel on sleeper.com from the owner-only reports; signs in through `site/ext/connect.html`; never writes to Sleeper |
 | `functions/index.js` | `freezeCalls` (every 15 minutes on game days), `espnLeague` and `espnLogin` (private ESPN leagues and the saved login), `deleteMyAccount`, the `/api` feeds |
 | `tests/` | `node tests/run.js` (`T.ROOT` is `site/`; the server tests reach `functions/` through `T.ROOT/..` since v1.59.1, and they skip, not fail, when `functions/node_modules` is missing: a `skip` line in the run means they didn't run) |
 
@@ -278,6 +278,15 @@ One note per screen or feature.
   `ESPN.transactionsFrom` (trades are `TRADE_ACCEPT` with an ADD item per player carrying both teams; claims `WAIVER`
   or `FREEAGENT` with ADD and DROP items; anything else is left out). Written to ESPN's format as best known and tested
   on a made-up answer: **not yet checked against a real ESPN league**; the owner's ESPN test league is the place to look.
+- Streamers this week (Waivers, `streamCard`, v1.74.0): kickers and defenses turn on the game, not the season, so the
+  free agents at those positions are ordered by `SCC.streamPicks` (pure, tested): a kicker by his own team's expected
+  points, a defense by how few the offense it faces is expected to score, both moved by `tiltFromRank` on the matchup.
+  Only in leagues that start one, free agents only, with the bid and the starter he'd replace. It needs the game
+  context, so it draws nothing until `/api/game-context` is in.
+- Lineups' rows carry two lines beyond the rank (v1.74.0): `whyStart` (`SCC.nextBest`: the best bench player who fits
+  the spot and how far back he is, or that there is no other fit) so a call can be checked, and `roleFlag` (the snap
+  share rising or falling from `SCC.usageOf`, which Lineups now loads as Waivers does). Neither shows on a later
+  week's plan.
 - The Waivers tab: the waiver plan (`planCard`, from `SCC.waiverPlan`, pure and tested: claims from the
   rankings' wire targets `L.wire`, at most three a league, and a drop for each: the bench player with the
   lowest season value (`planValue`: Titan's value, then season projected points, so a star on bye is

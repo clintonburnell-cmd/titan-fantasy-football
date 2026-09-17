@@ -1,4 +1,4 @@
-/* Titan for Sleeper: the pills next to player names and the league panel (the panel's own styles live in its shadow root). */
+/* Titan Fantasy Assistant: the pills next to player names and the league panel (the panel's own styles live in its shadow root). */
 .titan-pill {
   display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
   font: 600 11px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: .01em; vertical-align: middle;

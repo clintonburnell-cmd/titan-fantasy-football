@@ -1,4 +1,4 @@
-// Titan for Sleeper, on Sleeper's pages: a pill after each player name the reports know (his edge on the market, the
+// Titan Fantasy Assistant, on Sleeper's pages: a pill after each player name the reports know (his edge on the market, the
 // buy, sell or keep call, his archetype, the Late-Round note on hover), and a panel on league pages with Titan's
 // calls for that league (start ideas, claims with a bid and a drop, buy-lows, sell-highs, the watch list). Reads the
 // reports the service worker cached in chrome.storage.local; asks it only for a league's waiver facts (the bids).

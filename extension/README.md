@@ -1,6 +1,9 @@
-# Titan for Sleeper (Chrome extension, step 1)
+# Titan Fantasy Assistant (Chrome extension, step 1)
 
-Titan's calls on Sleeper's own pages, for Titan's owner. Loaded unpacked (no Web Store): the reports it shows are the
+Titan's calls on Sleeper's own pages, for Titan's owner. An independent tool: not affiliated with or endorsed by
+Sleeper, and it never writes to Sleeper. The name carries no one else's mark (it was "Titan for Sleeper" until v0.6.0;
+using another service's name in a product name implies an endorsement that isn't there, and the Web Store treats it that
+way, so "Sleeper" now appears only where it states a plain fact about what the extension works with). Loaded unpacked (no Web Store): the reports it shows are the
 owner-only Value report and Data dump, read from his Titan account.
 
 ## What it does

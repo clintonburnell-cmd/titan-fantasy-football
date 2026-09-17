@@ -1,4 +1,4 @@
-// Titan for Sleeper, the service worker: holds the extension's own Firebase session (handed over from Titan's site by
+// Titan Fantasy Assistant, the service worker: holds the extension's own Firebase session (handed over from Titan's site by
 // ext/connect.html), reads the owner's reports (Firestore lab/value-latest and lab/dump-latest, owner-only by the
 // rules) over REST into chrome.storage.local for the content script, fetches a league's waiver-budget facts from
 // Sleeper's public API for the bids, and runs Titan's own lineup engine on the owner's Sleeper leagues under his

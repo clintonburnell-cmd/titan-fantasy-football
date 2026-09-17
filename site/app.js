@@ -982,6 +982,8 @@
     week ${w}'s byes, matchups and rankings.</div>`;
 
   function screenLineups() {
+    // The role flags read the same recent usage the Waivers lists do.
+    if (!DEMO && S.snap && !S.waiv.usageBusy && (!S.waiv.usage || S.waiv.usage.week !== S.snap.week)) loadUsage();
     if (!S.snap) return emptyState();
     const w = lookWeek();
     if (!w) return lineupsFor(S.A, 0);
@@ -1138,7 +1140,7 @@
     }
     const rec = recLineup(L);
     h += `<h4 class="lu-h">${LV ? `Recommended lineup for week ${LV.week}` : 'Recommended lineup'}</h4><ol class="lineup lineup-rec">${
-      rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg)).join('')}</ol>${compareLineups(L, rec)}${LV ? '' : closeNotes(L) + disagreeNotes(L)}`;
+      rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg, L)).join('')}</ol>${compareLineups(L, rec)}${LV ? '' : closeNotes(L) + disagreeNotes(L)}`;
     (L.tilts || []).forEach(t => {
       h += `<p class="note tilt"><b>Matchup tilt:</b> ${esc(t.inn.name)} starts over ${esc(t.out.name)}, who ranks higher (${esc(rl(t.out))} vs ${esc(rl(t.inn))}):
         with the matchups counted (${esc(matchSource())}), ${esc(t.inn.name)} projects ${fmt(t.by)} more.</p>`;
@@ -1377,7 +1379,31 @@
   const sameIn = (a, b) => ((a && a.id) || '') === ((b && b.id) || '');
 
   // One spot of the recommended lineup; NEW where he isn't in that spot now.
-  function recRow(o, cur, cfg) {
+  /* Why this player has the spot (under each recommended start): the best player on your bench who could have taken it
+     and how far back he is, so the call can be checked rather than taken on trust. Nothing when the spot has no
+     alternative worth naming, and nothing on a later week's plan. */
+  function whyStart(o, L) {
+    if (!o.p || !L || LV) return '';
+    const alt = SCC.nextBest(recLineup(L), L.roster, o.slot);
+    if (!alt) return `<small class="why">Your only fit at ${esc(slotName(o.slot))}.</small>`;
+    if (o.p.rank === null || o.p.rank === undefined || alt.rank === null || alt.rank === undefined) return '';
+    const ta = Number(o.p.tier), tb = Number(alt.tier);
+    const tiers = isFinite(ta) && isFinite(tb) && ta !== tb ? `${Math.abs(tb - ta) === 1 ? 'a tier' : Math.abs(tb - ta) + ' tiers'} clear of` : 'ahead of';
+    return `<small class="why">${esc(tiers)} <b>${esc(alt.name)}</b> (${esc(rl(alt))}), the next fit on your bench.</small>`;
+  }
+
+  /* A role on the move (Lineups and the waiver lists): his snap share against the weeks before, from the same usage
+     Waivers reads (SCC.usageOf). This is what turns into a breakout before the rankings catch it. */
+  function roleFlag(id, pos) {
+    const U = S.waiv.usage;
+    if (!id || !U || !U.list.length || pos === 'K' || pos === 'DEF') return '';
+    const u = SCC.usageOf(U.list, id);
+    if (!u || !u.trend) return '';
+    return `<small class="role r-${u.trend}" title="His share of the offense's snaps against the weeks before">${u.trend === 'up' ? '\u25b2' : '\u25bc'} snap share ${
+      u.trend === 'up' ? 'rising' : 'falling'}${u.snapPct === null ? '' : ` (${u.snapPct}%)`}</small>`;
+  }
+
+  function recRow(o, cur, cfg, L) {
     if (!o.p) {
       return `<li class="row r-stop"><span class="slot">${esc(slotName(o.slot))}</span><span class="pphoto"><span class="hs"></span></span>
         <span class="who"><b>Nobody to start</b><small>No one on your roster fits this spot: see the wire below.</small></span>
@@ -1390,7 +1416,7 @@
       : p.onBye ? '<span class="verdict v-stop">ON BYE</span>' : p.outish ? '<span class="verdict v-stop">OUT</span>'
       : fresh ? '<span class="verdict v-new">NEW</span>' : '';
     return `<li class="row${fresh ? ' r-new' : ''}${p.locked ? ' r-locked' : ''}"><span class="slot" data-pos="${esc(p.pos)}">${esc(slotName(o.slot))}</span>${headshot(p)}
-      <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small>${ctxLine(p)}</span>
+      <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small>${ctxLine(p)}${roleFlag(p.id, p.pos)}${whyStart(o, L)}</span>
       <span class="right">${rankCell(p)}${tag}</span></li>`;
   }
 
@@ -4127,6 +4153,49 @@
         outranks. Change it if you like, and tick Done once the claim is in. Tap a name for his stats.</p><ul class="wlist">${cards.join('')}</ul></section>`;
   }
 
+  /* Streamers (Waivers): in every league that starts a kicker or a defense, the free agents at that position put in the
+     order this week's games suggest (SCC.streamPicks: a kicker rides his own team's expected points, a defense how few
+     the offense it faces is expected to score, both nudged by the matchup rank), each with a bid and the starter he'd
+     replace. Season rank picks the pool; the game picks the order, which is the whole point of streaming. */
+  const oppImpliedOf = t => {
+    const C = S.ctx.data, x = C && C.teams && C.teams[SCC.teamAbbr(t)], o = x && C.teams[x.opp];
+    return o && o.implied ? o.implied : null;
+  };
+  function streamCard(leagues, players, bid) {
+    if (!S.ctx.data || !S.A || !S.A.ranks) return '';
+    const wk = rankingsOf(S.A.ranks, S.proj, playerList());
+    const started = {}, games = (S.snap && S.snap.games) || {};
+    Object.keys(games).forEach(t => { if (games[t] && games[t].state !== 'pre') started[t] = 1; });
+    const opts = {implied: t => impliedOf({team: t}), oppImplied: oppImpliedOf, rank: (t, pos) => matchRank({team: t, pos})};
+    const cards = leagues.filter(L => inPick(L.cfg)).map(L => {
+      const slots = L.cfg.lineup || [];
+      const kinds = [['K', 'Kicker'], ['DEF', 'Defense']].filter(k => slots.includes(k[0]));
+      const d = (S.snap.leagues || []).find(x => x.cfg.id === L.cfg.id);
+      if (!kinds.length || !d) return '';
+      const weekly = typeof wk === 'function' ? wk(L.cfg) : wk;
+      const blocks = kinds.map(([pos, label]) => {
+        const free = SCC.freeAgents({[pos]: 1}, weekly, d.takenNorm || {}, d.takenAbbr || {}, null, 30, started);
+        const picks = SCC.streamPicks(pos, free, opts, 3);
+        if (!picks.length) return '';
+        const mine = L.roster.find(x => x.start && x.pos === pos) || null;
+        const rows = picks.map(({p, why}) => {
+          const add = {id: pos === 'DEF' ? '' : idByName(players, p.name), name: p.name, pos, team: p.team};
+          return `<li class="wrow"><span class="who"><b${pcAttr(add)}>${esc(p.name)}</b> <small>${esc([p.team, rl(p)].filter(Boolean).join(' · '))}</small>${
+            bid(L, p.name, add, mine)}<small class="wuse">${esc(why.join(' · ') || 'no game read yet')}</small></span></li>`;
+        }).join('');
+        const now = mine ? `You start ${esc(mine.name)} (${esc(rl(mine) || mine.pos)})` : `No ${esc(label.toLowerCase())} in your lineup`;
+        return `<div class="wstream-k"><h4>${esc(label)}</h4><p class="fine">${now}.</p><ul class="wlist">${rows}</ul></div>`;
+      }).filter(Boolean).join('');
+      if (!blocks) return '';
+      return `<li class="wlg"><div class="wlg-h">${leagueIcon(L.cfg, 'xs')}<b>${esc(L.cfg.key)}</b><span class="wlg-open">${openSite(L.cfg)}</span></div>${blocks}</li>`;
+    }).filter(Boolean);
+    if (!cards.length) return '';
+    return `<section class="card pad wsec wstream"><h3>Streamers this week</h3>
+      <p class="fine">Kickers and defenses turn on the game, not the season, so these are ordered by it: a kicker by what his own team is expected to score, a defense by how
+        little the offense it faces is expected to score, both moved by the matchup. Free agents only, and only in leagues that start one.</p>
+      <ul class="wlist">${cards.join('')}</ul></section>`;
+  }
+
   function screenWaivers() {
     if (!S.snap || !S.A) return emptyState();
     const W = S.waiv, players = playerList(), leagues = S.A.leagues;
@@ -4184,7 +4253,7 @@
     const anyFaab = leagues.some(L => L.cfg.faab && onSleeper(L.cfg));
     let h = `<p class="lede">Your waiver plan for every league, then backups for hurt starters, what Sleeper players are adding, and where anyone
       is available.${anyFaab ? ' Where a league bids for players, Titan suggests a bid from its recent winning bids.' : ''}</p>
-      ${planCard(leagues, players, bid, budget)}${newsletterCard('waivers')}
+      ${planCard(leagues, players, bid, budget)}${streamCard(leagues, players, bid)}${newsletterCard('waivers')}
       <section class="card pad wsec"><h3>Where is he available?</h3>
         <label class="field"><span>A player's name</span><input type="search" data-waiver-search placeholder="At least three letters" value="${esc(W.q)}"
           autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label><div id="wsearch">${waiverSearchResults()}</div></section>`;

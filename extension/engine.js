@@ -2157,6 +2157,46 @@
     return rank <= 8 ? t : rank >= 25 ? -t : 0;
   }
 
+  /* Streaming picks for a kicker or a defense (Waivers): the free agents at that position put in the order this week's
+     game suggests, not their season rank. A kicker rides his own team's expected points; a defense rides how few points
+     the offense it faces is expected to score, and both move on the matchup rank where there is one. opts:
+     {implied(team), oppImplied(team), rank(team, pos)}, each free to return null. [{p, why}] best first, at most `max`
+     (3). A candidate with nothing known about his game is left out: there would be nothing to say for him. */
+  function streamPicks(pos, free, opts, max) {
+    var o = opts || {}, out = [];
+    (free || []).forEach(function (p) {
+      if (!p || !p.team) return;
+      var mine = o.implied ? o.implied(p.team) : null, opp = o.oppImplied ? o.oppImplied(p.team) : null;
+      var r = o.rank ? o.rank(p.team, pos) : null;
+      var base = pos === 'K' ? mine : (opp === null || opp === undefined ? null : -opp);
+      if (base === null || base === undefined || !isFinite(Number(base))) return;
+      var why = [];
+      if (pos === 'K' && mine) why.push('his team is expected to score ' + mine);
+      if (pos !== 'K' && opp) why.push(opp + ' expected against them');
+      if (r !== null && r !== undefined) {
+        if (r <= 8) why.push('a soft matchup, ' + r + ' of 32');
+        else if (r >= 25) why.push('a tough matchup, ' + r + ' of 32');
+      }
+      // The matchup rank is worth about two points either way, next to a team total in the twenties.
+      out.push({p: p, score: Number(base) + tiltFromRank(r) * 25, why: why});
+    });
+    out.sort(function (a, b) { return b.score - a.score || rankKey(a.p) - rankKey(b.p); });
+    return out.slice(0, max || 3).map(function (x) { return {p: x.p, why: x.why}; });
+  }
+
+  /* The best player on the bench who could take a starting spot (the "why him" line on Lineups): the highest-ranked
+     player not in the lineup whose position fits that slot, skipping anyone held, locked, out or on bye. Null when the
+     spot has no alternative at all, which is worth saying too. */
+  function nextBest(opt, roster, slot) {
+    var starting = {}, best = null;
+    (opt || []).forEach(function (o) { if (o.p) starting[o.p.id] = 1; });
+    (roster || []).forEach(function (p) {
+      if (starting[p.id] || p.held || p.locked || p.outish || p.onBye || !slotFits(slot, p.pos)) return;
+      if (!best || rankKey(p) < rankKey(best)) best = p;
+    });
+    return best;
+  }
+
   function closeCalls(roster, slots, startedIds) {
     var wins = 0, total = 0;
     var starters = roster.filter(function (p) { return startedIds[p.id]; });
@@ -3279,7 +3319,7 @@
     rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
-    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT,
+    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,

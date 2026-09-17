@@ -755,6 +755,16 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 .mu-form { display: grid; gap: 10px; }
 .mu-form textarea { width: 100%; font: 500 .8rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); resize: vertical; }
 .mu-up code { font-size: .8rem; }
+/* Why a player has his spot, and a role on the move, under a lineup row. */
+.why { display: block; color: var(--muted); font-size: .74rem; line-height: 1.35; }
+.why b { color: var(--text); font-weight: 600; }
+.role { display: block; font-size: .74rem; font-weight: 600; }
+.role.r-up { color: var(--ok); }
+.role.r-down { color: var(--swap); }
+/* Streamers: kickers and defenses ordered by this week's game. */
+.wstream-k { padding-top: 8px; }
+.wstream-k h4 { font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 2px; }
+.wstream-k .wrow { padding: 6px 0; }
 .sc-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: .76rem; }
 .sc-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .sw-bar { width: 10px; height: 10px; border-radius: 2px; background: var(--chart-bar); }

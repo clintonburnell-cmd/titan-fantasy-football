@@ -883,6 +883,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       moves: c.querySelectorAll('.move').length}; })()`);
   check(cmp.rec > 0 && /^Recommended lineup/.test(cmp.head.trim()) && (cmp.same ? cmp.moves === 0 && cmp.fresh === 0 : cmp.rows === cmp.rec && cmp.diff > 0 && cmp.fresh > 0),
     `each league leads with its recommended lineup (${cmp.rec} spots, ${cmp.fresh} new), then yours beside it (${cmp.same ? 'they match' : cmp.diff + ' of ' + cmp.rows + ' spots differ'})`);
+  // Why each recommended starter has his spot: the next fit on the bench, or that there isn't one.
+  const why = await ev(`(() => { const w = [...document.querySelectorAll('.lineup-rec .why')].map(x => x.textContent.replace(/\\s+/g, ' ').trim());
+    return {n: w.length, rows: document.querySelectorAll('.lineup-rec .row').length, first: w[0] || ''}; })()`);
+  check(why.n > 0 && /(the next fit on your bench|Your only fit at)/.test(why.first),
+    `each recommended start says why he has the spot (${why.n} of ${why.rows} rows): ${why.first.slice(0, 90)}`);
+  check(await ev(`document.documentElement.scrollWidth <= innerWidth`), 'the lineup rows still fit a 390px phone with the why line');
   await shot('lineups-compare');
   // Lineups' week dropdown: this week, then every week to come, each a plan.
   const weeks = await ev(`[...document.querySelectorAll('select[data-ui="lineWeek"] option')].map(o => o.value)`);

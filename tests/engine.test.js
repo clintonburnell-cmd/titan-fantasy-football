@@ -638,6 +638,31 @@ section('the matchup sheet as the tilt\'s source (matchupRank, tiltFromRank)');
   check(SCC.tiltFromRank(null) === 0 && SCC.tiltFromRank(undefined) === 0 && SCC.tiltFromRank(1, 0.05) === 0.05, 'no rank, no tilt; the ceiling can be set');
 }
 
+section('streaming a kicker or a defense, and the next best at a spot (streamPicks, nextBest)');
+{
+  const fa = (name, pos, team, rank) => ({id: name, name, pos, team, rank});
+  const implied = {KC: 27, BUF: 30, TEN: 16, NYJ: 18, CLE: 17};
+  const opp = {KC: 20, BUF: 24, TEN: 23, NYJ: 26, CLE: 25};
+  const opts = {implied: t => implied[t] || null, oppImplied: t => opp[t] || null, rank: (t, p) => ({KC: 3, BUF: 12, TEN: 30}[t] || null)};
+  const kickers = [fa('K Tenn', 'K', 'TEN', 5), fa('K Chief', 'K', 'KC', 20), fa('K Bill', 'K', 'BUF', 9), fa('K Nobody', 'K', 'XXX', 1)];
+  const K = SCC.streamPicks('K', kickers, opts, 3);
+  check(K.length === 3 && K[0].p.name === 'K Bill' && K[1].p.name === 'K Chief' && !K.some(x => x.p.name === 'K Nobody'),
+    `a kicker rides his team's expected points, the matchup nudging it, and one with no game known is left out (${K.map(x => x.p.name).join(', ')})`);
+  check(/expected to score 30/.test(K[0].why.join(' ')) && /soft matchup, 3 of 32/.test(K[1].why.join(' ')), 'each pick says why: ' + K[1].why.join('; '));
+  const defs = [fa('D Chief', 'DEF', 'KC', 8), fa('D Jet', 'DEF', 'NYJ', 2), fa('D Brown', 'DEF', 'CLE', 14)];
+  const D = SCC.streamPicks('DEF', defs, opts, 2);
+  check(D.length === 2 && D[0].p.name === 'D Chief' && /20 expected against them/.test(D[0].why.join(' ')),
+    `a defense rides how few points it faces (${D.map(x => x.p.name).join(', ')})`);
+  check(SCC.streamPicks('K', [], opts).length === 0 && SCC.streamPicks('K', kickers, {}).length === 0, 'nothing to go on, nothing suggested');
+  // nextBest: who else could have taken the spot.
+  const roster = [{id: '1', name: 'Starter', pos: 'RB', rank: 10, start: true}, {id: '2', name: 'Bench One', pos: 'RB', rank: 30},
+    {id: '3', name: 'Bench Hurt', pos: 'RB', rank: 12, outish: true}, {id: '4', name: 'Bench Bye', pos: 'RB', rank: 11, onBye: true},
+    {id: '5', name: 'A Tight End', pos: 'TE', rank: 5}];
+  const opt = [{slot: 'RB', p: roster[0]}];
+  check(SCC.nextBest(opt, roster, 'RB').name === 'Bench One', 'the best bench player who fits the spot, skipping the hurt and the on-bye');
+  check(SCC.nextBest(opt, roster, 'FLEX').name === 'A Tight End' && SCC.nextBest(opt, roster, 'QB') === null, 'a flex takes the best of any eligible position; a spot with nobody gives null');
+}
+
 section('the nudge before kickoff (kickoffNudge)');
 {
   const now = Date.parse('2026-09-20T15:00:00Z'), h = 3600e3, min = 60e3;
