@@ -1275,7 +1275,9 @@
   function compareLineups(L, rec) {
     const diff = L.rows.filter((r, i) => !sameIn(r.p, (rec[i] || {}).p)).length;
     if (!diff) return '<p class="fine lu-same">Your lineup matches the recommended one: nothing to change.</p>';
-    const who = p => (p ? `<b${pcAttr(p)}>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}</small>` : '<b class="lu-empty">Empty</b>');
+    // Both columns carry the rank and its note (overall, at the position, tier), so the player being benched reads
+    // against the one taking his spot.
+    const who = p => (p ? `<b${pcAttr(p)}>${esc(p.name)}</b><small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}</small>${p.rank === null || p.rank === undefined ? '' : rankCell(p)}` : '<b class="lu-empty">Empty</b>');
     return `<h4 class="lu-h">Yours vs recommended <small>${plural(diff, 'spot')} different</small></h4><div class="lu-cmp-wrap"><table class="lu-cmp">
       <thead><tr><th>Spot</th><th>Yours</th><th>Recommended</th></tr></thead><tbody>${L.rows.map((r, i) => {
         const o = rec[i] || {}, same = sameIn(r.p, o.p);

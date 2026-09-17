@@ -241,6 +241,7 @@
       .lineup .slot { font-size: 11px; font-weight: 700; color: #6b7280; }
       .lineup .rk { font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; text-align: right; }
       .lineup .rk .rn { display: block; font-size: 10px; color: #9ca3af; white-space: nowrap; }
+      .lineup ul .rn { font-size: 10px; color: #9ca3af; font-weight: 400; }
       .lineup li.change b { color: #15803d; }
       .lineup li.stop b { color: #b91c1c; }
       .lineup .v { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
@@ -355,7 +356,12 @@
           <span><b>${p ? esc(p.name) : 'Empty'}</b>${p && p.inj ? ` <span class="v warn">${esc(p.inj)}</span>` : ''}${p && p.onBye ? ' <span class="v bad">bye</span>' : ''}${isChange ? ' <span class="v ok">start</span>' : ''}</span>
           <span class="rk">${p ? esc(rankLabel(p)) : ''}${p && rankNote(p) ? `<small class="rn">${esc(rankNote(p))}</small>` : ''}</span></li>`;
       }).join('');
-      const changes = L.moves.map(m => `<li><b>${m.from ? `Move ${esc(m.inn.name)} to ${esc(SLOT_LABEL[m.slot] || m.slot)}` : `Start ${esc(m.inn.name)}${m.inn.rank !== null && m.inn.rank !== undefined ? ` (${esc(rankLabel(m.inn))})` : ''}${m.out ? ` over ${esc(m.out.name)}` : ''}`}</b></li>`).join('');
+      // Each change names both players with their ranks, and the notes (overall, at the position, tier) for the two side by side.
+      const changes = L.moves.map(m => {
+        const lbl = p => (p && p.rank !== null && p.rank !== undefined ? ` (${esc(rankLabel(p))})` : '');
+        const notes = [m.inn && rankNote(m.inn) ? `${esc(m.inn.name)}: ${esc(rankNote(m.inn))}` : '', m.out && rankNote(m.out) ? `${esc(m.out.name)}: ${esc(rankNote(m.out))}` : ''].filter(Boolean).join(' | ');
+        return `<li><b>${m.from ? `Move ${esc(m.inn.name)}${lbl(m.inn)} to ${esc(SLOT_LABEL[m.slot] || m.slot)}` : `Start ${esc(m.inn.name)}${lbl(m.inn)}${m.out ? ` over ${esc(m.out.name)}${lbl(m.out)}` : ''}`}</b>${notes ? `<div class="rn">${notes}</div>` : ''}</li>`;
+      }).join('');
       const hurt = L.hurt.filter(p => !L.moves.some(m => m.out && m.out.id === p.id)).map(p => `<li>${esc(p.name)} is ${esc(String(p.inj).toLowerCase())} and in your lineup.</li>`).join('');
       const wire = L.wire.map(w => `<li><b>${esc(w.pos)}</b>: ${w.list.map(f => `${esc(f.name)} (${esc(rankLabel(f))})`).join(', ')}${w.cur ? ` <span class="x">· over ${esc(w.cur.name)} (${esc(rankLabel(w.cur))})</span>` : w.anyUnranked ? ' <span class="x">· a starter there is unranked</span>' : ''}</li>`).join('');
       inner = `<ol>${list}</ol>`

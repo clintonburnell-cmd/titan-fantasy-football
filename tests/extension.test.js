@@ -146,7 +146,8 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     // The lineup: Titan's recommended lineup for the league (the cached analysis), the change it wants, the hurt starter, the wire.
     const lineup = await P.evaluate('(document.querySelector("titan-panel").shadowRoot.querySelector(".lineup") || {}).textContent || ""', false);
     check('the panel shows Titan\'s recommended lineup by slot with ranks', /QB\s*Josh Allen\s*QB1/.test(lineup.replace(/\s+/g, ' ')) && /RB\s*Kenny Gainwell/.test(lineup.replace(/\s+/g, ' ')) && /TE\s*Some Tight End\s*TE8/.test(lineup.replace(/\s+/g, ' ')), lineup.slice(0, 200));
-    check('the new starter is marked, and the change is spelled out', /Kenny Gainwell\s*Questionable\s*start/.test(lineup.replace(/\s+/g, ' ')) && /Start Kenny Gainwell \(RB30\) over Bench Back/.test(lineup), lineup.slice(0, 300));
+    check('the new starter is marked, and the change is spelled out with both players\' ranks and notes', /Kenny Gainwell\s*Questionable\s*start/.test(lineup.replace(/\s+/g, ' ')) && /Start Kenny Gainwell \(RB30\) over Bench Back \(RB40\)/.test(lineup)
+      && /Kenny Gainwell: #30 overall · RB14 at position · tier 3 \| Bench Back: #40 overall · RB19 at position · tier 3/.test(lineup), lineup.slice(0, 400));
     check('each starter carries the note for close calls: overall rank, rank at the position, tier (a rank past the overall list shows at the position only)',
       /RB17\s*#17 overall · RB9 at position · tier 2/.test(lineup.replace(/\s+/g, ' ')) && /QB1\s*tier 1/.test(lineup.replace(/\s+/g, ' ')) && /TE8\s*tier 2/.test(lineup.replace(/\s+/g, ' ')), lineup.slice(0, 260));
     check('waiver upgrades list free agents ranked above a starter', /Waiver upgrades/.test(lineup) && /Free Tight End \(TE6\)/.test(lineup) && /over Some Tight End \(TE8\)/.test(lineup), lineup.slice(-260));
