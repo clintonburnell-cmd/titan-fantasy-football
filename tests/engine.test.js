@@ -518,6 +518,24 @@ section('floor and ceiling, and the close calls in a lineup');
     'a smaller tilt, or none, leaves the rankings\' call alone');
 }
 
+section('past the overall list: an estimated overall rank instead of the position-only sentinel (extendOverall)');
+{
+  // A wide file whose FLEX (overall) list stops at five players: the receivers and tight ends beyond it used to carry
+  // the 1000+ sentinel, which ordered TE25 ahead of WR47 on position rank alone.
+  const wide = ['QB Player,QB Rank,WR Player,WR Rank,WR Tier,TE Player,TE Rank,TE Tier,FLEX Player,FLEX Rank',
+    'A Passer,1,W One,1,1,T One,1,1,W One,1', ',,W Two,2,1,T Two,2,1,T One,2', ',,W Three,3,2,T Three,3,2,W Two,3',
+    ',,W Four,4,2,T Four,4,2,W Three,5', ',,W Five,5,3,T Five,5,3,T Two,8', ',,W Six,6,3,,,,,'].join('\n');
+  const w = SCC.parseRanks(wide);
+  const by = {}; w.rows.forEach(r => { by[r.name] = r; });
+  check(w.format === 'wide' && by['W Three'].rank === 5 && !by['W Three'].est && by['T Two'].rank === 8, 'listed players keep the list\'s overall ranks');
+  // Receivers map two overall spots to one position spot (1→1, 2→3, 3→5): W Four continues the line from the list's end.
+  check(by['W Four'].rank === 10 && by['W Four'].est === true && by['W Five'].rank === 12 && by['W Six'].rank === 14,
+    `past the list a receiver's overall rank continues his position's line, behind everyone listed (${by['W Four'].rank}, ${by['W Five'].rank}, ${by['W Six'].rank})`);
+  check(by['T Three'].rank === 1003 && !by['T Three'].est, 'a position with too few listed players (two tight ends) keeps the sentinel');
+  const p = SCC.attachRanks([{id: 'x', name: 'W Four', pos: 'WR'}], SCC.weeklyMap(w.rows))[0];
+  check(p.est === true && SCC.rankNote(p) === '#10 overall (estimated) · WR4 at position · tier 2', 'the note says the overall rank is an estimate: ' + SCC.rankNote(p));
+}
+
 section('the rank note: overall rank, rank at the position, tier (rankBits, rankNote)');
 {
   const weekly = SCC.weeklyMap([{name: 'Flex Back', pos: 'RB', team: 'PIT', rank: 17, opp: '', implied: '', tier: 2, posRank: 9},

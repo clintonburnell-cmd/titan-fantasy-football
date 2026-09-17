@@ -1253,8 +1253,43 @@
           implied: implied === null ? '' : implied, tier: tier === null ? '' : tier, posRank: posRank});
       }
     });
+    if (flex) extendOverall(rows);
     return {rows: rows, skipped: skipped, format: 'wide',
       error: rows.length ? '' : 'Found the position columns but no player rows.'};
+  }
+
+  /* Past the end of a file's FLEX (overall) list, RB, WR and TE rows carry the 1000+ sentinel, which orders them by
+     position rank alone: TE25 ahead of WR47 whatever the positions are worth. This gives each such player an
+     estimated overall rank instead, from how his position's ranks map onto the overall list (a straight line fitted
+     to the listed pairs of position rank and overall rank), kept behind everyone the list names. Rows get `est`
+     so the note can say the number is an estimate. Positions with too few listed players keep the sentinel. */
+  function extendOverall(rows) {
+    var fits = {}, listMax = 0, lastPR = {};
+    rows.forEach(function (r) {
+      if (!SLOT_POS.FLEX[r.pos] || r.rank >= 1000 || r.posRank === null || r.posRank === undefined) return;
+      (fits[r.pos] = fits[r.pos] || []).push([Number(r.posRank), Number(r.rank)]);
+      if (r.rank > listMax) listMax = r.rank;
+      if (!lastPR[r.pos] || Number(r.posRank) > lastPR[r.pos]) lastPR[r.pos] = Number(r.posRank);
+    });
+    // The slope of each position's line (overall ranks per position rank), from the listed pairs.
+    var slope = {};
+    Object.keys(fits).forEach(function (pos) {
+      var pts = fits[pos];
+      if (pts.length < 3) return;
+      var n = pts.length, sx = 0, sy = 0, sxx = 0, sxy = 0;
+      pts.forEach(function (p) { sx += p[0]; sy += p[1]; sxx += p[0] * p[0]; sxy += p[0] * p[1]; });
+      var d = n * sxx - sx * sx;
+      if (!d) return;
+      var b = (n * sxy - sx * sy) / d;
+      if (b > 0) slope[pos] = b;
+    });
+    // Past the list, each position's line continues from the list's end: always behind everyone listed, and in
+    // position-rank order within a position.
+    rows.forEach(function (r) {
+      if (!SLOT_POS.FLEX[r.pos] || r.rank < 1000 || !slope[r.pos]) return;
+      r.rank = listMax + Math.max(1, Math.round(slope[r.pos] * (Number(r.posRank) - lastPR[r.pos])));
+      r.est = true;
+    });
   }
 
   /* The position a single-position file ranks, from its name, for example
@@ -1466,7 +1501,7 @@
     var map = {};
     (rows || []).forEach(function (w) {
       map[norm(w.name)] = {name: w.name, pos: w.pos, team: w.team, rank: w.rank,
-        opp: w.opp, implied: w.implied, tier: w.tier, posRank: w.posRank};
+        opp: w.opp, implied: w.implied, tier: w.tier, posRank: w.posRank, est: !!w.est};
     });
     return map;
   }
@@ -2090,6 +2125,7 @@
       q.implied = w ? w.implied : '';
       q.tier = w ? w.tier : '';
       q.posRank = w && w.posRank !== undefined ? w.posRank : '';
+      q.est = !!(w && w.est);
       return q;
     });
   }
@@ -2116,7 +2152,7 @@
      label is already his rank at the position (a quarterback, or a player past the overall list), only the tier. */
   function rankNote(p) {
     var b = rankBits(p), parts = [];
-    if (b.overall !== null) parts.push('#' + b.overall + ' overall');
+    if (b.overall !== null) parts.push('#' + b.overall + ' overall' + (p.est ? ' (estimated)' : ''));
     if (b.pos !== null && b.overall !== null) parts.push(p.pos + b.pos + ' at position');
     if (b.tier !== null) parts.push('tier ' + b.tier);
     return parts.join(' · ');
