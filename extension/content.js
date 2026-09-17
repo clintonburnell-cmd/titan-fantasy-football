@@ -106,6 +106,12 @@
     if (r.p === 'RB') line('Workload', esc(`${fmt1(r.car)} carries · ${fmt1(r.tg)} targets a game${r.opp ? ` · opportunity ${fmt1(r.opp)}` : ''}${r.rbk ? ` · ${r.rbk}` : ''}${r.gl ? ` · ${pctOf(r.gl)} of carries inside the 10` : ''}`));
     if (r.p === 'QB') line('Workload', esc(`${fmt1(r.rp)} rushing points a game${r.tdr !== null && r.tdr !== undefined ? ` · touchdown on ${(r.tdr * 100).toFixed(1)}% of attempts` : ''}`));
     if ((r.p === 'WR' || r.p === 'TE') && (r.ypt || r.ez)) line('Workload', esc(`${r.ypt ? `${fmt1(r.ypt)} yards a target` : ''}${r.ez ? `${r.ypt ? ' · ' : ''}${fmt1(r.ez)} end-zone targets a game` : ''}`));
+    // The team behind him (batch 2): plays and throws a game, the touchdown rate; a receiver's room; a back's game-script snaps; a passer's deep balls.
+    const team = [r.tpl ? `${fmt1(r.tpl)} plays` : '', r.tpa ? `${fmt1(r.tpa)} throws a game` : '', r.ttd !== null && r.ttd !== undefined ? `scores on ${(r.ttd * 100).toFixed(1)}% of throws` : ''].filter(Boolean).join(' · ');
+    if (team) line('Team', esc(team));
+    if (r.cmp !== null && r.cmp !== undefined) line('Room', esc(`teammates worth ${Math.round(r.cmp * 100)}% of a typical team's top pass catchers${r.cmp >= 1.4 ? ' (crowded)' : r.cmp <= 0.6 ? ' (thin: the targets funnel to him)' : ''}`));
+    if (r.p === 'RB' && r.ld !== null && r.ld !== undefined) line('Game script', esc(`${pctOf(r.ld)} of long downs · ${pctOf(r.tm)} of two-minute plays${r.ld < 0.15 && r.tm < 0.3 ? ' (leaves when his team trails)' : ''}`));
+    if (r.p === 'QB' && r.da) line('Deep balls', esc(`${r.dc} of ${r.da} caught (${Math.round(r.dc / r.da * 100)}%)${r.dc / r.da >= 0.53 ? ': that hot falls back' : r.dc / r.da <= 0.40 ? ': that cold comes back' : ''}`));
     if (inLineup) line('This week', esc(`${rankLabel(inLineup)}${rankNote(inLineup) ? ' · ' + rankNote(inLineup) : ''}${inLineup.inj ? ' · ' + inLineup.inj : ''}${inLineup.onBye ? ' · on bye' : ''}${inLineup.proj !== null && inLineup.proj !== undefined ? ` · projects ${fmt1(inLineup.proj)}` : ''}`));
     if (call) line(call.kind === 'add' ? 'Claim' : call.kind === 'buy' ? 'Buy low' : call.k ? 'Keep' : 'Sell high', esc(call.why) + (call.d ? ` <b>Drop ${esc(call.d)}.</b>` : ''));
     else if (r.buy || r.sell) line(r.buy ? 'Buy low' : r.keep ? 'Keep' : 'Sell high', `${r.buy ? 'The market prices him below his projection' : r.keep ? 'Priced high, but a real role' : 'Priced above his projection'} (${esc(r.p)}${r.mr} against ${esc(r.p)}${r.ur}).`);
