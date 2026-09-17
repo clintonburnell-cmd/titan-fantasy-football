@@ -47,6 +47,8 @@
   ];
   const SUB_NAMES = {ranks: 'Weekly import', season: 'Season import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', score: 'Results', sos: 'Schedule'};
   const OWNER_TABS = ['lab', 'value', 'dump']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else)
+  // ... except Compare rankings, which an account with the titanLab claim sees too (S.owner.lab; nothing else of the owner's).
+  const canSee = t => (t === 'lab' ? S.owner.is || S.owner.lab : S.owner.is);
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
   const LEAGUE_SCREENS = {lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1, value: 1, dump: 1};
@@ -125,7 +127,7 @@
     espn: {busy: false, error: '', pick: null, login: null, openLogin: false}, // adding ESPN leagues
     match: {busy: false, data: null, error: '', at: 0, week: 0}, // this week's matchups, loaded on the Matchup tab
     rosterQuery: '', // the Rosters page's player search
-    owner: {is: false, busy: false, data: null, error: ''}, // Titan's owner: the stats card in Settings
+    owner: {is: false, lab: false, busy: false, data: null, error: ''}, // Titan's owner: the stats card in Settings; lab: the titanLab role (Compare rankings only)
     alerts: null, // game-day alerts on this device: {supported, permission, on, prefs}, once signed in
     alertsBusy: false,
     alertsError: '',
@@ -528,7 +530,7 @@
     document.querySelectorAll('#tabs [data-section]').forEach(t =>
       t.setAttribute('aria-current', sec && sec.id === t.dataset.section ? 'page' : 'false'));
     // Compare rankings and the value report are on the menu only for Titan's owner.
-    OWNER_TABS.forEach(t => { const b = document.querySelector(`#tabs [data-tab="${t}"]`); if (b) b.hidden = !S.owner.is; });
+    OWNER_TABS.forEach(t => { const b = document.querySelector(`#tabs [data-tab="${t}"]`); if (b) b.hidden = !canSee(t); });
     // Badges: the lineup changes to make, and a dot on Players for waiver pickups not yet seen on Waivers.
     const changes = S.A ? S.A.changes.length : 0, fresh = newWire();
     const badge = $('badge-lineups'), dot = $('dot-players');
@@ -642,7 +644,7 @@
      says so in the dropdown's place while a league is picked, so the filter never seems to vanish. */
   function screenBar() {
     const sec = sectionOf(S.ui.tab), leagues = (S.snap && S.snap.leagues) || [], pick = pickedLeague();
-    const subTabs = sec ? sec.tabs.filter(t => !OWNER_TABS.includes(t) || S.owner.is) : [];
+    const subTabs = sec ? sec.tabs.filter(t => !OWNER_TABS.includes(t) || canSee(t)) : [];
     const subs = subTabs.length > 1 ? `<nav class="subtabs" aria-label="${esc(sec.name)}">${subTabs.map(t =>
       `<button type="button" data-go="${t}"${t === S.ui.tab ? ' aria-current="page"' : ''}>${esc(SUB_NAMES[t] || TAB_NAMES[t])}</button>`).join('')}</nav>` : '';
     const drop = LEAGUE_SCREENS[S.ui.tab] && leagues.length > 1 ? `<label class="lpick"><span class="sr-only">Which leagues</span><select data-ui="league">
@@ -2454,7 +2456,7 @@
   }
 
   async function loadLab() {
-    if (DEMO || !S.owner.is || !S.snap || S.labBusy) return;
+    if (DEMO || !(S.owner.is || S.owner.lab) || !S.snap || S.labBusy) return;
     if (!S.lab || S.lab.season !== S.snap.season) S.lab = {season: S.snap.season, weeks: {}};
     S.labBusy = true;
     S.labError = '';
@@ -2861,7 +2863,7 @@
   }
 
   function screenLab() {
-    if (!S.owner.is) return '<div class="empty-note">Only Titan\'s owner sees this screen.</div>';
+    if (!S.owner.is && !S.owner.lab) return '<div class="empty-note">Only Titan\'s owner, and anyone he\'s given the rankings lab, sees this screen.</div>';
     if (!S.snap) return emptyState();
     if (!S.labAt && !S.labBusy) loadLab();
     const weeks = S.lab && S.lab.season === S.snap.season ? Object.values(S.lab.weeks).sort((a, b) => a.week - b.week) : [];
@@ -3439,9 +3441,10 @@
   // The bridge sync.js talks to. The app never depends on it being there.
   window.TitanApp = {
     local: () => ({account: S.account, ranks: S.ranks, seasonRanks: S.seasonRanks}),
-    setOwner(is) {
-      if (S.owner.is === !!is) return;
-      S.owner = {is: !!is, busy: false, data: null, error: ''};
+    setOwner(is, lab) {
+      is = !!is; lab = !!lab;
+      if (S.owner.is === is && !!S.owner.lab === lab) return;
+      S.owner = {is, lab, busy: false, data: null, error: ''};
       Object.assign(S.yahoo, {busy: false, error: '', data: null});
       if (is) sendLabFormats();
       paintHeader();

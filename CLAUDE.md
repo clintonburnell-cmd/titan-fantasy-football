@@ -441,8 +441,10 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
 
 - Titan's owner is the one sign-in account with the `titanOwner` custom claim. `ownerStats`
   refuses everyone else and returns totals only: never add per-person details to it.
-- Compare rankings (`screenLab`, tab `lab`, `/app/compare`) is Titan's owner's only: its sub-tab and menu
-  button show only with the `titanOwner` claim. The server's `run` saves FantasyCalc's values once a week
+- Compare rankings (`screenLab`, tab `lab`, `/app/compare`) is Titan's owner's, and since v1.65.0 also anyone
+  the owner grants the `titanLab` claim (`titan-analytics/grant-role.js <email> titanLab`; `S.owner.lab`,
+  `canSee`): they see that one screen and the rules let them read only `lab/<season>-<week>`. The Value report
+  and Data dump stay owner-only (his leagues, his paid draft guide): never widen them to `titanLab`. The server's `run` saves FantasyCalc's values once a week
   (`labSnapshot` → `lab/{season}-{week}`, every format in `lab/config` plus any cached in `tradeValues`;
   `late` when saved after the week's first kickoff, and a late week doesn't count for FantasyCalc). The
   owner's app keeps `lab/config` (`sendLabFormats`, keys like `redraft-1qb-12teams-1ppr`, matching

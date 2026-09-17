@@ -41,8 +41,12 @@ service cloud.firestore {
     // The rankings lab (Compare rankings), the value report and the data dump: Titan's owner only, the
     // account with the titanOwner claim. The server and the owner's PC write them; the owner's app keeps
     // lab/config, the league formats to save.
+    // An account with the titanLab claim (grant-role.js in titan-analytics) reads the lab's weekly snapshots only
+    // (lab/<season>-<week>, fetched one document at a time, never listed): Compare rankings, not the value report
+    // or the data dump, which carry the owner's leagues and his paid draft guide.
     match /lab/{doc} {
-      allow read: if request.auth != null && request.auth.token.titanOwner == true;
+      allow read: if request.auth != null && (request.auth.token.titanOwner == true
+        || (request.auth.token.titanLab == true && doc.matches('^[0-9]{4}-[0-9]{1,2}$')));
       allow write: if request.auth != null && request.auth.token.titanOwner == true && doc == 'config';
     }
     // The Titan Waiver Wire's latest issue, which the newsletter page shows to new subscribers: anyone can

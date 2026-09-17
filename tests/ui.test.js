@@ -1106,6 +1106,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await ev(`window.TitanApp.setOwner(false); true`);
   check(await waitFor(`/Only Titan's owner sees this screen/.test(document.getElementById('view').textContent) && document.querySelector('#tabs [data-tab="value"]').hidden &&
     document.querySelector('#tabs [data-tab="dump"]').hidden`, 3000), 'without the owner account Value and Data dump hide again');
+  // The titanLab role: Compare rankings alone, none of the owner's other screens.
+  await ev(`window.TitanApp.setOwner(false, true); true`);
+  check(await waitFor(`!document.querySelector('#tabs [data-tab="lab"]').hidden && document.querySelector('#tabs [data-tab="value"]').hidden &&
+    document.querySelector('#tabs [data-tab="dump"]').hidden`, 3000), 'the titanLab role puts Compare rankings on the menu and nothing else of the owner\'s');
+  await tab('lab');
+  check(await waitFor(`location.pathname === '/app/compare' && !/Only Titan's owner/.test(document.getElementById('view').textContent)`, 3000),
+    'and Compare rankings opens for it');
+  check(await ev(`document.querySelectorAll('.subtabs [data-go]').length === 4`), 'its Rankings sub-tabs: Import, Season, Import multiple and Compare rankings (no Value report, no Data dump)');
+  await ev(`window.TitanApp.setOwner(false, false); true`);
+  check(await waitFor(`document.querySelector('#tabs [data-tab="lab"]').hidden`, 3000), 'taking the role away hides it again');
   await tab('lineups');
 
   // Screenshots of every screen at phone and computer widths (TITAN_SHOTS only), to compare a change to the whole app's look.

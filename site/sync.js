@@ -356,7 +356,8 @@ onAuthStateChanged(auth, user => {
   }).catch(() => App.setEspnLogin(null));
   App.setSync({user: {name: user.displayName || '', email: user.email || '', photo: user.photoURL || ''}});
   // Titan's owner (a custom claim on that one account) gets the stats card in Settings.
-  user.getIdTokenResult(true).then(t => App.setOwner(t.claims.titanOwner === true)).catch(() => App.setOwner(false));
+  // The owner (titanOwner) and, since v1.65.0, anyone granted the rankings lab alone (titanLab: Compare rankings, nothing else).
+  user.getIdTokenResult(true).then(t => App.setOwner(t.claims.titanOwner === true, t.claims.titanLab === true)).catch(() => App.setOwner(false, false));
   alertsState(user.uid).then(a => App.setAlerts(a)).catch(() => App.setAlerts(null));
   reconcile(user.uid).catch(e => App.setSync({state: 'error', error: 'Sync failed: ' + why(e)}));
 });
