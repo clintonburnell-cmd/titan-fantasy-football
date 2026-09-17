@@ -2956,6 +2956,11 @@
     const weeks = D ? Object.keys(D.weeks).map(Number).sort((a, b) => a - b) : [];
     const week = weeks.includes(U.week) ? U.week : weeks[weeks.length - 1] || 0;
     if (weeks.length) {
+      // The screen opens on the newest week uploaded, which may not be this one: say so, since a week with no sheet
+      // quietly falls back to the season's own matchup numbers rather than using an old sheet.
+      if (!weeks.includes(Number(S.snap.week))) {
+        h += `<div class="banner swap">No sheet for week ${esc(S.snap.week)} yet, so this week's calls use the season's points allowed by position instead. Upload it below.</div>`;
+      }
       h += `<div class="chips" role="group" aria-label="Week">${weeks.map(w => `<button type="button" class="chip" data-mu-week="${w}" aria-pressed="${w === week}">Week ${w}</button>`).join('')}</div>`;
       const W = D.weeks[week], table = W[U.table] ? U.table : MU_TABLES.map(t => t[0]).find(k => W[k]);
       h += `<div class="chips" role="group" aria-label="Table">${MU_TABLES.map(([k, label]) => `<button type="button" class="chip" data-mu-table="${k}" aria-pressed="${k === table}"${W[k] ? '' : ' disabled'}>${label}</button>`).join('')}</div>`;
