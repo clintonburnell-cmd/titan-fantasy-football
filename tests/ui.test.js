@@ -976,6 +976,28 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(sideOk, 5000), 'Rosters list the leagues down the left side too');
   await tab('score');
   check(await waitFor(sideOk, 30000), 'and so does Results, one link per scored league');
+
+  // The same list on a screen that shows one league at a time switches to it instead of scrolling to it.
+  await tab('trade');
+  const swap = await ev(`(() => { const s = document.querySelector('.with-side > .side');
+    if (!s) return null; const b = [...s.querySelectorAll('[data-pickleague]')];
+    return {n: b.length, jumps: s.querySelectorAll('[data-jump]').length, on: b.filter(x => x.getAttribute('aria-current') === 'true').length,
+      ids: b.map(x => x.dataset.pickleague).join(',')}; })()`);
+  check(swap && swap.n > 0 && swap.jumps === 0 && swap.on === 1,
+    `Trade lists the leagues down the left as a switch, not a jump, with the one showing marked (${swap ? swap.ids : 'no sidebar'})`);
+  if (swap && swap.n > 1) {
+    const cur = await ev(`(document.querySelector('.side [aria-current="true"]') || {dataset: {}}).dataset.pickleague`);
+    const other = swap.ids.split(',').find(id => id !== cur);
+    await ev(`document.querySelector('.side [data-pickleague="${other}"]').click(); true`);
+    check(await waitFor(`document.querySelector('.side [data-pickleague="${other}"]').getAttribute('aria-current') === 'true' &&
+      document.querySelector('[data-ui="tradeLeague"]').value === '${other}'`, 4000),
+      'clicking another league there switches the trade to it, dropdown and all');
+  }
+  await tab('standings');
+  check(await waitFor(`(() => { const s = document.querySelector('.with-side > .side');
+    return !!s && s.querySelectorAll('[data-pickleague]').length > 0 && s.querySelectorAll('[aria-current="true"]').length === 1; })()`, 8000),
+    'Standings gets the same switching list');
+
   await tab('rosters');
   await send('Emulation.setDeviceMetricsOverride', {width: 1000, height: 900, deviceScaleFactor: 1, mobile: false});
   await sleep(500);

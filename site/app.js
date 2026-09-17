@@ -933,25 +933,38 @@
   // leagues, or on a wide computer window a list down the left side (sideNav,
   // drawn by render). chips=false gives the sidebar only.
   const anchor = cfg => 'lg-' + String(cfg.id).replace(/[^\w-]/g, '_');
-  function jumpBar(items, chips = true) {
-    if (side()) { sideItems = items; return ''; }
+  /* The list of leagues down the left of a wide window does one of two jobs, depending on the screen it is on.
+     On a screen that stacks every league (Lineups, Matchup, Rosters, Results) it jumps to one. On a screen that shows
+     one league at a time (Trade, Standings, Byes, Value, Data dump) it switches to one, which is the dropdown's job
+     done in a single click (v1.81.0, the owner's ask: "the same league filter for fast swapping"). `opts.pick` is the
+     id of the league showing; `opts.flagOf` marks one worth a dot. */
+  function jumpBar(items, chips = true, opts) {
+    if (side()) { sideItems = {items, pick: (opts && opts.pick) || '', all: !!(opts && opts.all)}; return ''; }
     if (!chips || items.length < 2) return '';
     return `<nav class="jump" aria-label="Jump to a league">${items.map(x => `<button type="button" class="jump-chip" data-jump="${anchor(x.cfg)}">${
       x.flag ? '<i class="dot" role="img" aria-label="Needs action" title="Needs action"></i>' : ''}${leagueIcon(x.cfg, 'xs')}${esc(x.cfg.key)}</button>`).join('')}</nav>`;
   }
-  function sideNav(items) {
+  function sideNav(S2) {
+    const items = S2.items, pick = S2.pick;
     // When some leagues have a needs-action dot, the others keep an empty slot so the names line up.
     const dots = items.some(x => x.flag);
-    return `<nav class="side" aria-label="Your leagues"><p class="side-h">${plural(items.length, 'league')}</p>${items.map(x =>
-      `<button type="button" class="side-link" data-jump="${anchor(x.cfg)}">${x.flag ? '<i class="dot" role="img" aria-label="Needs action" title="Needs action"></i>'
+    // A screen that can show every league at once keeps that as the first entry, so the list says what the dropdown says.
+    const allOn = S2.all && String(pick) === 'all';
+    return `<nav class="side" aria-label="Your leagues"><p class="side-h">${plural(items.length, 'league')}</p>${
+      S2.all ? `<button type="button" class="side-link side-all${allOn ? ' is-on' : ''}" data-pickleague="all" aria-current="${allOn ? 'true' : 'false'}">${
+        dots ? '<i class="dot off" aria-hidden="true"></i>' : ''}<span class="sl-name">All leagues<small>every one at once</small></span></button>` : ''}${items.map(x => {
+      const on = pick && String(x.cfg.id) === String(pick);
+      const how = pick ? `data-pickleague="${esc(x.cfg.id)}" aria-current="${on ? 'true' : 'false'}"` : `data-jump="${anchor(x.cfg)}"`;
+      return `<button type="button" class="side-link${on ? ' is-on' : ''}" ${how}>${x.flag ? '<i class="dot" role="img" aria-label="Needs action" title="Needs action"></i>'
         : dots ? '<i class="dot off" aria-hidden="true"></i>' : ''}${leagueIcon(x.cfg)}<span class="sl-name">${
-        esc(x.cfg.key)}<small>${siteName(x.cfg)}</small></span></button>`).join('')}</nav>`;
+        esc(x.cfg.key)}<small>${esc(x.note || siteName(x.cfg))}</small></span></button>`;
+    }).join('')}</nav>`;
   }
   // The sidebar marks the league at the top of the window as the page scrolls.
   let spyQueued = false;
   function spySide() {
     spyQueued = false;
-    const links = [...view.querySelectorAll('.side [data-jump]')].filter(b => !b.hidden);
+    const links = [...view.querySelectorAll('.side [data-jump]')].filter(b => !b.hidden); // the switching kind has nothing to spy on
     if (!links.length) return;
     let cur = links[0];
     for (const b of links) {
@@ -2112,6 +2125,7 @@
     if (!S.snap) return emptyState();
     // The league dropdown narrows everything here: the table, the banners and the totals.
     const mine = S.A.leagues.filter(L => inPick(L.cfg));
+    jumpBar((S.A.leagues || []).map(L => ({cfg: L.cfg})), false, {pick: pickedLeague(), all: true});
     const B = SCC.byeMap(mine, S.snap.byes);
     const N = SCC.byeNeeds(mine, S.snap.week);
     const short = N.filter(n => n.needs.length).length;
@@ -4701,6 +4715,8 @@
     // One league at a time: the league dropdown's when it names one, else this screen's own pick.
     const one = pickedLeague() !== 'all' ? pickedLeague() : S.ui.standLeague;
     const d = leagues.find(x => x.cfg.id === one) || leagues[0], cfg = d.cfg;
+    // On a wide window the leagues run down the left and clicking one switches to it (the dropdown stays on a phone).
+    jumpBar(leagues.map(x => ({cfg: x.cfg})), false, {pick: cfg.id});
     if (!S.stand[cfg.id]) loadStandings(d);
     if (!S.trade.teams[cfg.id]) loadTradeTeams(d);
     if (!S.trade.season) loadSeasonProj(); // for Position strength
@@ -5060,6 +5076,9 @@
     if (!leagues.length) return '<div class="empty-note">No leagues to trade in yet.</div>';
     // One league at a time: the league dropdown's when it names one, else this screen's own pick.
     const d = leagues.find(x => x.cfg.id === (pickedLeague() !== 'all' ? pickedLeague() : S.ui.tradeLeague)) || leagues[0];
+    // The leagues down the left switch in one click, and a league with completed trades this season carries a dot.
+    jumpBar(leagues.map(x => { const a = S.trade.activity[x.cfg.id];
+      return {cfg: x.cfg, flag: !!(a && a.total), note: a && a.total ? plural(a.total, 'trade') + ' this season' : ''}; }), false, {pick: d.cfg.id});
     const f = SCC.tradeFormat(d.cfg), k = tradeKey(f);
     if (!S.trade.values[k]) loadTradeValues(f);
     if (!S.trade.teams[d.cfg.id]) loadTradeTeams(d);
@@ -5846,7 +5865,7 @@
     // A tap on a league's header folds or unfolds it; the toggle listener remembers it.
     const head = e.target.closest('details[data-fold] > summary');
     if (head) { tapped = head.parentElement; return; }
-    const t = e.target.closest('[data-go],[data-filter],[data-mfilter],[data-sweek],[data-tsort],[data-view-pos],[data-link-tab],[data-jump],[data-trade],[data-news],[data-idea],[data-moves],[data-tsearch],[data-action]');
+    const t = e.target.closest('[data-go],[data-filter],[data-mfilter],[data-sweek],[data-tsort],[data-view-pos],[data-link-tab],[data-jump],[data-pickleague],[data-trade],[data-news],[data-idea],[data-moves],[data-tsearch],[data-action]');
     if (!t) return;
     if (t.dataset.go) {
       // "Import week N": the import opens on that week (a later week planned on Lineups, say).
@@ -5895,6 +5914,18 @@
       if (i >= 0) list.splice(i, 1);
       else list.push(t.dataset.pid);
       return render();
+    }
+    if (t.dataset.pickleague) {
+      // The same move the screen's own dropdown makes, and the page keeps its place: swapping leagues should feel
+      // like a filter, not like opening a new page.
+      const id = t.dataset.pickleague, at = window.scrollY;
+      if (S.ui.tab === 'trade') { S.ui.tradeLeague = id; S.ui.tradePartner = ''; if (pickedLeague() !== 'all') S.ui.league = id; }
+      else if (S.ui.tab === 'standings') { S.ui.standLeague = id; if (pickedLeague() !== 'all') S.ui.league = id; }
+      else S.ui.league = id;
+      saveUi();
+      render();
+      window.scrollTo({top: at});
+      return;
     }
     if (t.dataset.jump) {
       const card = document.getElementById(t.dataset.jump);

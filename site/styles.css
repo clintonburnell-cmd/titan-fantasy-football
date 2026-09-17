@@ -803,6 +803,10 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 /* A screen waiting on data keeps its shape. */
 .skel { display: grid; gap: 8px; padding: 4px 0; }
 .skel-row { display: block; height: 56px; border-radius: 12px; background: var(--chip); opacity: .75; }
+/* The league showing, in a side list that switches rather than jumps. */
+.side-link.is-on { background: var(--chip); }
+.side-link.is-on .sl-name { color: var(--accent-2); font-weight: 700; }
+.side-all .sl-name { font-weight: 600; }
 @media (prefers-reduced-motion: no-preference) { .skel-row { animation: skel 1.4s ease-in-out infinite; } }
 @keyframes skel { 0%, 100% { opacity: .45; } 50% { opacity: .85; } }
 /* A spot that needs no change takes the width of both columns. */

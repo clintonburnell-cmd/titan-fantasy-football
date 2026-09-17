@@ -125,6 +125,11 @@ How the pieces fit, and what keeps them working.
   from `SCC.teamLabel` (Sleeper's `team_name` and `display_name`; ESPN's team name and member name),
   or the account name alone when there's no nickname. Build new team names with it, and don't add
   the manager again where one is shown. `slimSchedule` keeps the members so private ESPN leagues get them.
+- The sidebar of leagues (`jumpBar` → `sideNav`, wide windows only) does one of two jobs, and the screen says which
+  by what it passes: nothing means jump (`data-jump`, the stacked screens), `{pick: <league id>}` means switch
+  (`data-pickleague`, the one-league screens: Trade, Standings), and `{pick, all: true}` adds an All leagues entry
+  for a screen that can show them together (Byes). A switch keeps the page's scroll position, and does exactly
+  what that screen's own dropdown does, which stays for phones. The scroll spy only watches the jumping kind.
 - Folding (Lineups, Rosters, Matchup) goes through `isOpen`, `setFold` and `foldAll` in
   `app.js`, keyed by `FOLD_KEY`. Only a person's tap on a header is saved (`tapped`); code
   that opens or closes a league (the Rosters search, jump chips) must not save it.
