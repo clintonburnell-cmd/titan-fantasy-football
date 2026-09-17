@@ -39,18 +39,23 @@ const VALUE = {v: 2, season: 2026, week: 3, through: 'Through week 2 of 2026', a
 const DUMP = {v: 1, week: 3, at: Date.now(), leagues: [{id: '999', name: 'Test League', start: [{n: 'Josh Allen', why: 'Start him over the other one this week.', x: 'QB'}], add: [], watch: []}]};
 // Titan's lineup analysis for the league, as bg.js caches it (trimLeague): the lineup as it stands, the optimal one, the changes, the wire.
 const pl = (id, name, pos, team, rank, extra) => Object.assign({id, name, pos, team, rank, inj: null, onBye: false, locked: false, outish: false}, extra || {});
-const allen = pl('333', 'Josh Allen', 'QB', 'BUF', 1, {tier: 1}), warren = pl('222', 'Jaylen Warren', 'RB', 'PIT', 17, {posRank: 9, tier: 2}),
-  gain = pl('444', 'Kenny Gainwell', 'RB', 'PIT', 30, {inj: 'Questionable', posRank: 14, tier: 3}),
-  bench = pl('555', 'Bench Back', 'RB', 'NYG', 40, {posRank: 19, tier: 3}), te = pl('666', 'Some Tight End', 'TE', 'DAL', 1008, {tier: 2});
+const allen = pl('333', 'Josh Allen', 'QB', 'BUF', 1, {tier: 1, proj: 24}), warren = pl('222', 'Jaylen Warren', 'RB', 'PIT', 17, {posRank: 9, tier: 2, proj: 12.3}),
+  gain = pl('444', 'Kenny Gainwell', 'RB', 'PIT', 30, {inj: 'Questionable', posRank: 14, tier: 3, proj: 9.8}),
+  bench = pl('555', 'Bench Back', 'RB', 'NYG', 40, {posRank: 19, tier: 3, proj: 6.2}), te = pl('666', 'Some Tight End', 'TE', 'DAL', 1008, {tier: 2, proj: 8});
+const mside = (name, record, players, pts) => ({name, record, players, pts, proj: players.reduce((a, p) => a + p.proj, 0), final: players.reduce((a, p) => a + p.proj, 0)});
 const ANALYSIS = {at: Date.now(), week: 3, season: '2026', rankedCount: 150, leagues: {'999': {id: '999', name: 'Test League', lineup: ['QB', 'RB', 'RB', 'TE'], week: 3,
   rows: [{slot: 'QB', verdict: 'OK', p: allen}, {slot: 'RB', verdict: 'OK', p: warren}, {slot: 'RB', verdict: 'SWAP OUT', p: bench}, {slot: 'TE', verdict: 'OK', p: te}],
   opt: [{slot: 'QB', p: allen}, {slot: 'RB', p: warren}, {slot: 'RB', p: gain}, {slot: 'TE', p: te}],
   moves: [{slot: 'RB', from: null, inn: gain, out: bench}], hurt: [gain], stops: 0,
-  wire: [{pos: 'TE', cur: te, anyUnranked: false, list: [pl('777', 'Free Tight End', 'TE', 'SEA', 6)]}]}}};
+  wire: [{pos: 'TE', cur: te, anyUnranked: false, list: [pl('777', 'Free Tight End', 'TE', 'SEA', 6)]}],
+  close: [{starter: warren, bench: gain}],
+  matchup: {me: mside('My Team', '2-0', [{id: '333', name: 'Josh Allen', pos: 'QB', team: 'BUF', slot: 'QB', pts: 0, proj: 24, state: 'pre'}, {id: '222', name: 'Jaylen Warren', pos: 'RB', team: 'PIT', slot: 'RB', pts: 0, proj: 12.3, state: 'pre'}], 0),
+    opp: mside('Rival Team', '1-1', [{id: '888', name: 'Their QB', pos: 'QB', team: 'KC', slot: 'QB', pts: 0, proj: 20, state: 'pre'}, {id: '889', name: 'Their RB', pos: 'RB', team: 'DET', slot: 'RB', pts: 0, proj: 11, state: 'pre'}], 0), pa: 62}}}};
 const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><header><span>Sleeper</span></header>
   <div class="roster"><div class="row"><span class="name">Patrick Mahomes</span><span>QB - KC</span></div>
   <div class="row"><span class="name">J. Warren</span><span>RB - PIT</span></div>
-  <div class="row"><span class="name">Josh Allen</span></div><div class="row"><span class="name">Nobody Here</span></div></div></body></html>`;
+  <div class="row"><span class="name">Josh Allen</span></div><div class="row"><span class="name">Nobody Here</span></div>
+  <div class="row"><span class="name">Kenny Gainwell</span><span>RB - PIT</span></div></div></body></html>`;
 
 (async () => {
   const PORT = 9900 + Math.floor(Math.random() * 90);
@@ -127,9 +132,9 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
       await sleep(250);
       pills = await P.evaluate('document.querySelectorAll(".titan-pill").length', false).catch(() => 0);
       panel = await P.evaluate('(document.querySelector("titan-panel") && document.querySelector("titan-panel").shadowRoot.textContent) || ""', false).catch(() => '');
-      if (pills >= 3 && /bid about/.test(panel)) break;
+      if (pills >= 4 && /bid about/.test(panel)) break;
     }
-    check('three names got a pill (the full names and "J. Warren"); the unknown name did not', pills === 3, String(pills));
+    check('four names got a pill (the full names and "J. Warren"); the unknown name did not', pills === 4, String(pills));
     const pillText = await P.evaluate('[...document.querySelectorAll(".titan-pill")].map(p => p.textContent).join(" | ")', false);
     check('the pills carry the edge and the call (+31% buy low, mini bell cow; keep)', /\+31%buy low · mini bell cow/.test(pillText) && /keep/.test(pillText), pillText);
     const titles = await P.evaluate('[...document.querySelectorAll(".titan-pill")].map(p => p.title).join(" | ")', false);
@@ -146,6 +151,29 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
       /RB17\s*#17 overall · RB9 at position · tier 2/.test(lineup.replace(/\s+/g, ' ')) && /QB1\s*tier 1/.test(lineup.replace(/\s+/g, ' ')) && /TE8\s*tier 2/.test(lineup.replace(/\s+/g, ' ')), lineup.slice(0, 260));
     check('waiver upgrades list free agents ranked above a starter', /Waiver upgrades/.test(lineup) && /Free Tight End \(TE6\)/.test(lineup) && /over Some Tight End \(TE8\)/.test(lineup), lineup.slice(-260));
     check('the section says whose engine and when, with a refresh', /Titan's engine, as of/.test(lineup) && /Refresh/.test(lineup), '');
+    // The matchup: both sides' projected finals, the chance to win, and the close calls with projections and rank notes.
+    const match = await P.evaluate('(document.querySelector("titan-panel").shadowRoot.querySelector(".match") || {}).textContent || ""', false);
+    const m1 = match.replace(/\s+/g, ' ');
+    check('the matchup shows both teams, records, projected finals and the chance to win', /My Team/.test(m1) && /2-0/.test(m1) && /36\.3/.test(m1) && /Rival Team/.test(m1) && /31\.0/.test(m1) && /62%\s*to win/.test(m1), m1.slice(0, 200));
+    check('the close calls compare projections and rank notes, with a lean from the win chance', /Jaylen Warren over Kenny Gainwell is close: RB17 vs RB30 · projects 12\.3 vs 9\.8/.test(m1) && /#17 overall · RB9 at position · tier 2 \| #30 overall · RB14 at position · tier 3/.test(m1) && /favorite/.test(m1), m1.slice(-300));
+    // The badge: lineup changes plus hurt starters across every league (one change, one hurt starter who isn't the one being benched).
+    const badge = await W.evaluate('setBadge(null).then(n => chrome.action.getBadgeText({}).then(t => n + ":" + t))');
+    check('the icon badge counts the lineup changes and hurt starters', badge === '2:2', badge);
+    // The player card: a pill click opens it with usage, market, workload, the Late-Round note; a free agent gets a bid; a rostered player a trade button.
+    const pillOf = name => `[...document.querySelectorAll('.titan-pill')].find(p => p.title.startsWith(${JSON.stringify(name)}))`;
+    await P.evaluate(`${pillOf('Patrick Mahomes')}.click()`, false);
+    await sleep(200);
+    const card1 = await P.evaluate('(document.querySelector("titan-card") && document.querySelector("titan-card").shadowRoot.textContent) || ""', false);
+    const c1 = card1.replace(/\s+/g, ' ');
+    check('a pill click opens the player card: projection, market, workload and the Late-Round note', /Patrick Mahomes/.test(c1) && /On your roster/.test(c1) && /Projection\s*22\.1 a game/.test(c1) && /Market\s*QB10 · Titan QB3 · edge \+18%/.test(c1) && /5\.2 rushing points a game last year/.test(c1) && /Add to trade: you give/.test(c1), c1.slice(0, 300));
+    await P.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape"}))', false);
+    await sleep(100);
+    check('Escape closes it', await P.evaluate('!document.querySelector("titan-card")', false), '');
+    await P.evaluate(`${pillOf('Kenny Gainwell')}.click()`, false);
+    await sleep(200);
+    const c2 = (await P.evaluate('(document.querySelector("titan-card") && document.querySelector("titan-card").shadowRoot.textContent) || ""', false)).replace(/\s+/g, ' ');
+    check('a free agent\'s card carries a bid from the league\'s budget and what he adds over your lowest starter at the position', /Free agent in this league/.test(c2) && /Bid\s*about \$\d+ of \$80 left · \+3\.6 a game over your lowest starter at RB/.test(c2) && /Claim/.test(c2), c2.slice(0, 300));
+    await P.evaluate('document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape"}))', false);
     // The trade check: type a name on each side, pick the suggestion, read the totals and the verdict.
     const sr = 'document.querySelector("titan-panel").shadowRoot';
     const type = async (side, text) => {
@@ -172,6 +200,18 @@ const PAGE = `<!doctype html><html><head><title>Sleeper</title></head><body><hea
     check('the trade check totals both sides and gives a verdict', /You win by 2[0-9]% of Titan's worth/.test(totals) && /gain 10\.4 points a game/.test(totals) && /Yougive6000/.test(totals.replace(/\s+/g, '')) && /Youget6000/.test(totals.replace(/\s+/g, '')), totals.slice(0, 260));
     const send = await P.evaluate(`(${sr}.querySelector('a.send') || {}).href || ''`, false);
     check('the trade can be sent to Titan\'s Trade tab with the league and both sides in the address', send === 'https://titanfantasyfootball.com/app/trade?trade=999:333:111,222', send);
+    // Proposing on Sleeper, assisted: the pieces named (and copied), the partner from the get side, and the pills marked give and get.
+    await P.evaluate(`${sr}.querySelector('[data-propose]').click()`, false);
+    await sleep(300);
+    const prop = (await P.evaluate(`(${sr}.querySelector('.prop') || {}).textContent || ''`, false)).replace(/\s+/g, ' ');
+    check('Propose on Sleeper names the pieces to add on Sleeper\'s trade screen', /you give Josh Allen/.test(prop) && /you get Patrick Mahomes, Jaylen Warren/.test(prop), prop.slice(0, 200));
+    const marked = await P.evaluate(`[...document.querySelectorAll('.titan-pill')].map(p => (p.classList.contains('t-give') ? 'give:' : p.classList.contains('t-get') ? 'get:' : '') + p.title.split(' (')[0]).filter(x => /^(give|get):/.test(x)).sort().join(' | ')`, false);
+    check('and marks those players\' pills on the page', marked === 'get:Jaylen Warren | get:Patrick Mahomes | give:Josh Allen', marked);
+    const kept = await W.evaluate('chrome.storage.local.get("proposal").then(o => o.proposal && o.proposal.text)');
+    check('the proposal is kept until Done, so it follows you to Sleeper\'s trade screen', kept === 'Trade: I give Josh Allen; I get Patrick Mahomes, Jaylen Warren.', String(kept));
+    await P.evaluate(`${sr}.querySelector('[data-proposal-clear]').click()`, false);
+    await sleep(300);
+    check('Done clears it', await P.evaluate(`!${sr}.querySelector('.prop') && !document.querySelector('.titan-pill.t-give')`, false), '');
     await P.evaluate(`${sr}.querySelector('button[data-remove="222"]').click()`, false);
     await sleep(200);
     const after1 = await P.evaluate(`${sr}.querySelector('.totals').textContent`, false);

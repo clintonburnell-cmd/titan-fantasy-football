@@ -28,6 +28,22 @@ owner-only Value report and Data dump, read from his Titan account.
   want ("Start X (RB30) over Y"), hurt starters, and waiver upgrades (free agents ranked above one of your starters).
   Cached twenty minutes (`analysis` in storage); Refresh in the section or the popup reruns it. The Sleeper player list
   is kept between runs (`players`, three days). Only the Sleeper side of your account is read (no ESPN or Yahoo).
+- **A game-day badge** on the icon: lineup changes your rankings want plus hurt starters across every league,
+  recounted every twenty minutes (`titan-lineup` alarm) and on browser start; the popup lists the leagues to fix.
+- **A player card** on any pill (click): projection, points and over-usage, market rank against Titan's with the
+  edge and value, usage (snaps, target share, routes, per-route), workload by position, this week's rank note and
+  status, the league's call with its drop, the Late-Round note, the guide take, and a button that puts him in the
+  trade check on the right side (you give when he's yours, you get when he's on another team). Escape or a click
+  outside closes it.
+- **A bid on every free agent's card**: `SCC.faabBid` on the league's winning bids and what's left of your budget,
+  with what he adds over your lowest-projected starter at his position (from the lineup analysis).
+- **Matchup** on league pages: both sides' projected finals and the chance to win (`SleeperAPI.collectMatchups` and
+  `SCC.winProbability`, run in the worker with the lineup analysis; points so far once games start), then the
+  lineup's close calls with both players' projections and rank notes and a favorite/underdog lean.
+- **Propose on Sleeper**, assisted: with both sides picked, it names the partner (the team holding the players you'd
+  get), copies "I give …; I get …" to the clipboard, and marks each player's pill give or get on Sleeper's pages
+  until you press Done, so you can find them on Sleeper's trade screen. Titan never drives that screen itself: its
+  markup is undocumented and automating it sits near Sleeper's terms.
 - **Links into Titan** at the panel's foot: Lineups, Waivers and Value for the league on screen (`/app/<tab>?league=<id>`
   picks that league in Titan's dropdown). The panel's own Start section is the Data dump's start ideas and its Claims
   section the Value report's claims with a bid and a drop; the full recommended lineup and waiver plan (which need your

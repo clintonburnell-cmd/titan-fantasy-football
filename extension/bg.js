@@ -79,7 +79,10 @@ async function status() {
     user: user ? {email: user.email, uid: user.uid} : null, busy: state.busy, error: state.error, fetched: o.fetched || 0,
     value: v ? {week: v.week, through: v.through, at: v.at, leagues: (v.leagues || []).length} : null,
     dump: d ? {week: d.week, at: d.at} : null,
-    lineup: a ? {at: a.at, week: a.week, leagues: Object.keys(a.leagues || {}).length, ranked: a.rankedCount} : null,
+    lineup: a ? {at: a.at, week: a.week, leagues: Object.keys(a.leagues || {}).length, ranked: a.rankedCount,
+      // Per league: the changes the rankings want and the hurt starters, for the popup's list.
+      todo: Object.values(a.leagues || {}).map(L => ({id: L.id, name: L.name, changes: (L.moves || []).length,
+        hurt: (L.hurt || []).filter(p => !(L.moves || []).some(m => m.out && m.out.id === p.id)).length})).filter(x => x.changes || x.hurt)} : null,
     lineupBusy: !!state.lineupBusy, lineupError: state.lineupError
   };
 }
@@ -126,15 +129,53 @@ const pick = (p, keys) => { const o = {}; keys.forEach(k => { if (p && p[k] !== 
 const PK = ['id', 'name', 'pos', 'team', 'rank', 'posRank', 'tier', 'inj', 'onBye', 'locked', 'outish', 'start', 'bye', 'opp'];
 const slim = p => (p ? pick(p, PK) : null);
 
-function trimLeague(L, week) {
+function trimLeague(L, week, proj, games) {
+  const cfg = L.cfg, pj = p => (p && proj ? SCC.projFor(proj, p.id, cfg) : null);
+  const withProj = p => (p ? Object.assign(slim(p), {proj: pj(p)}) : null);
+  // The close calls (a starter and a bench player at his position within a few ranks): both players' projections
+  // and rank notes, the second opinion for the spots the rankings call nearly even.
+  let close = [];
+  try { close = SCC.closeCallPairs(L.opt, L.roster).slice(0, 4).map(x => ({starter: withProj(x.starter), bench: withProj(x.bench)})); } catch (e) { close = []; }
   return {
-    id: L.cfg.id, name: L.cfg.name || L.cfg.key, lineup: L.cfg.lineup, week,
-    rows: (L.rows || []).map(r => ({slot: r.slot, verdict: r.verdict, p: slim(r.p)})),
-    opt: (L.opt || []).map(o => ({slot: o.slot, p: slim(o.p)})),
-    moves: (L.moves || []).map(m => ({slot: m.slot, from: m.from || null, inn: slim(m.inn), out: slim(m.out)})),
+    id: cfg.id, name: cfg.name || cfg.key, lineup: cfg.lineup, week,
+    rows: (L.rows || []).map(r => ({slot: r.slot, verdict: r.verdict, p: withProj(r.p)})),
+    opt: (L.opt || []).map(o => ({slot: o.slot, p: withProj(o.p)})),
+    moves: (L.moves || []).map(m => ({slot: m.slot, from: m.from || null, inn: withProj(m.inn), out: withProj(m.out)})),
     wire: (L.wire || []).map(w => ({pos: w.pos, cur: slim(w.cur), anyUnranked: !!w.anyUnranked, list: (w.list || []).slice(0, 3).map(slim)})),
-    hurt: (L.hurt || []).map(slim), stops: L.stops || 0
+    hurt: (L.hurt || []).map(slim), stops: L.stops || 0, close
   };
+}
+
+/* This week's head-to-head for a league (SleeperAPI.collectMatchups), the way Titan's Matchup tab reads it: each side's
+   points so far and projections, and the chance to win (SCC.winProbability: points in the books, half of what a player
+   on the field still expects, the projection for everyone yet to play). */
+function trimMatchup(m, proj, games) {
+  if (!m || m.error || m.none) return m && m.error ? {error: m.error} : null;
+  const state = p => ((games || {})[SCC.teamAbbr(p.team)] || {}).state || 'pre';
+  const side = s => {
+    const players = (s.players || []).map(p => (!p || p.empty ? {slot: p && p.slot, empty: true}
+      : {id: p.id, name: p.name, pos: p.pos, team: p.team, slot: p.slot, pts: Number(p.pts) || 0, proj: proj ? SCC.projFor(proj, p.id, m.cfg) : null, state: state(p)}));
+    const list = players.map(p => (p.empty ? null : {pts: p.pts, proj: p.proj, state: p.state}));
+    return {name: s.name, record: s.record || '', players, list, pts: players.reduce((a, p) => a + (p.empty || p.state === 'pre' ? 0 : p.pts), 0),
+      proj: players.reduce((a, p) => a + (p.empty ? 0 : (p.proj || 0)), 0)};
+  };
+  const me = side(m.me), opp = side(m.opp), wp = SCC.winProbability(me.list, opp.list);
+  delete me.list; delete opp.list;
+  return {me: Object.assign(me, {final: wp.expA}), opp: Object.assign(opp, {final: wp.expB}), pa: Math.round(wp.a * 100)};
+}
+
+/* The icon's badge: lineup changes the rankings want plus hurt starters, across every league, so game day shows a
+   number before anything is opened. */
+async function setBadge(analysis) {
+  const a = analysis || (await chrome.storage.local.get('analysis')).analysis;
+  let n = 0;
+  if (a) Object.values(a.leagues || {}).forEach(L => {
+    n += (L.moves || []).length;
+    n += (L.hurt || []).filter(p => !(L.moves || []).some(m => m.out && m.out.id === p.id)).length;
+  });
+  await chrome.action.setBadgeBackgroundColor({color: '#b91c1c'});
+  await chrome.action.setBadgeText({text: n ? String(n) : ''});
+  return n;
 }
 
 async function analyze() {
@@ -167,9 +208,15 @@ async function analyze() {
       const rows = hasProj ? (weeks[week] || []) : ranksFor(weeks, week);
       const A = SCC.analyzeAll(snap, SCC.rankingsBy(rows, hasProj ? proj : null, players && players.map ? players.map : players));
       const leagues = {};
-      A.leagues.forEach(L => { leagues[String(L.cfg.id)] = trimLeague(L, week); });
+      A.leagues.forEach(L => { leagues[String(L.cfg.id)] = trimLeague(L, week, proj, snap.games); });
+      // This week's matchups, best effort: a failure leaves the lineups standing.
+      try {
+        const ms = await SleeperAPI.collectMatchups(snap);
+        ms.forEach(m => { const L = m && m.cfg && leagues[String(m.cfg.id)]; if (L) L.matchup = trimMatchup(m, proj, snap.games); });
+      } catch (e) { /* no matchups this time */ }
       const analysis = {at: Date.now(), week, season, rankedCount: A.rankedCount, leagues};
       await chrome.storage.local.set({analysis});
+      await setBadge(analysis);
       return analysis;
     } catch (e) {
       state.lineupError = e && e.message ? e.message : String(e);
@@ -199,6 +246,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === 'signOut') { await signOut(auth); await chrome.storage.local.remove(['value', 'dump', 'fetched', 'analysis', 'players']); return status(); }
     if (msg.type === 'league') return leagueFacts(String(msg.id), msg.week, msg.mine || []);
     if (msg.type === 'lineup') return lineupFor(String(msg.id), !!msg.force);
+    if (msg.type === 'badge') return {count: await setBadge(null)};
     return {error: 'unknown message'};
   })().then(sendResponse, e => sendResponse({error: e && e.message ? e.message : String(e)}));
   return true;
@@ -216,8 +264,16 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.alarms.create('titan-refresh', {periodInMinutes: REFRESH_HOURS * 60});
-chrome.alarms.onAlarm.addListener(a => { if (a.name === 'titan-refresh') refresh(); });
-chrome.runtime.onStartup.addListener(async () => {
-  const o = await chrome.storage.local.get('fetched');
-  if (!o.fetched || Date.now() - o.fetched > REFRESH_HOURS * 3600e3) refresh();
+// The lineups and the badge, every LINEUP_MINUTES (rosters, injuries and rankings move through the week).
+chrome.alarms.create('titan-lineup', {periodInMinutes: LINEUP_MINUTES});
+chrome.alarms.onAlarm.addListener(a => {
+  if (a.name === 'titan-refresh') refresh();
+  if (a.name === 'titan-lineup') analyze();
 });
+chrome.runtime.onStartup.addListener(async () => {
+  const o = await chrome.storage.local.get(['fetched', 'analysis']);
+  if (!o.fetched || Date.now() - o.fetched > REFRESH_HOURS * 3600e3) refresh();
+  await setBadge(o.analysis || null);
+  if (!o.analysis || Date.now() - o.analysis.at > LINEUP_MINUTES * 60e3) analyze();
+});
+setBadge(null);

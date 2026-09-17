@@ -30,10 +30,16 @@ async function render() {
   o.textContent = 'Sign out';
   o.onclick = async () => { await send({type: 'signOut'}); render(); };
   actions.append(r, o);
-  const v = s.value, d = s.dump;
+  const v = s.value, d = s.dump, l = s.lineup;
+  const esc = t => String(t).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+  const todo = l && l.todo && l.todo.length
+    ? `<br><span class="bad">Lineups to fix (${l.todo.reduce((a, x) => a + x.changes + x.hurt, 0)}):</span> ` + l.todo.map(x =>
+      `<a href="https://sleeper.com/leagues/${encodeURIComponent(x.id)}" target="_blank" rel="noopener">${esc(x.name)}</a> (${[x.changes ? x.changes + ' change' + (x.changes === 1 ? '' : 's') : '', x.hurt ? x.hurt + ' hurt' : ''].filter(Boolean).join(', ')})`).join(', ')
+    : l ? '<br><span class="ok">Every lineup matches your rankings.</span>' : '';
   report.innerHTML = (v ? `<span class="ok">Value report</span> week ${v.week}, ${v.through || ''} (posted ${when(v.at)}); ${v.leagues} leagues.` : '<span class="bad">No Value report yet</span> (your PC posts one each Tuesday).')
     + '<br>' + (d ? `<span class="ok">Data dump</span> week ${d.week} (posted ${when(d.at)}).` : '<span class="muted">No Data dump yet.</span>')
-    + (s.fetched ? `<br>Fetched ${when(s.fetched)}.` : '');
+    + (l ? `<br><span class="ok">Lineups</span> week ${l.week}, Titan's engine as of ${when(l.at)}${l.ranked ? '' : ' (no weekly rankings imported: default order)'}.` : s.lineupBusy ? '<br>Reading your lineups…' : s.lineupError ? `<br><span class="bad">Lineups: ${esc(s.lineupError)}</span>` : '')
+    + todo + (s.fetched ? `<br>Fetched ${when(s.fetched)}.` : '');
 }
 
 chrome.storage.local.get({showPills: true, showPanel: true}, o => {

@@ -8,6 +8,7 @@
   const APP = 'https://titanfantasyfootball.com/app/';
   const S = {value: null, dump: null, showPills: true, showPanel: true, leagueId: null, index: null, facts: null, factsFor: null, open: true,
     trade: {give: [], get: []},   // the trade check's picks (Sleeper ids), for the league on screen
+    proposal: null,               // a trade being proposed on Sleeper: {league, give, get, partner, text} (kept in storage)
     lineup: null, lineupFor: null, lineupBusy: false};   // Titan's lineup analysis for the league on screen (from the worker)
 
   const norm = s => String(s || '').toLowerCase().replace(/[.'’]/g, '').replace(/-/g, ' ')
@@ -54,8 +55,103 @@
     el.className = 'titan-pill ' + cls;
     el.title = title;
     el.innerHTML = `<span class="t-edge">${esc(pct(r.vgap) || 'T')}</span>${tags.length ? `<span class="t-tag">${esc(tags.join(' · '))}</span>` : ''}`;
-    el.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); window.open(APP + 'value', '_blank', 'noopener'); });
+    // A pill on a player in a trade being proposed on Sleeper says which side he's on.
+    const prop = S.proposal;
+    if (prop && prop.league === S.leagueId) {
+      if (prop.give.includes(r.s)) { el.classList.add('t-give'); el.innerHTML += '<span class="t-tag">→ give</span>'; }
+      else if (prop.get.includes(r.s)) { el.classList.add('t-get'); el.innerHTML += '<span class="t-tag">← get</span>'; }
+    }
+    el.addEventListener('click', e => { e.stopPropagation(); e.preventDefault(); openCard(r, el); });
     return el;
+  }
+
+  // ------------------------------------------------------------- the player card
+  let cardHost = null;
+  const fmt1 = v => (v === null || v === undefined ? '–' : (Math.round(v * 10) / 10).toFixed(1));
+  const pctOf = v => (v === null || v === undefined ? '–' : Math.round(v * 100) + '%');
+  const sgn = v => (v === null || v === undefined ? '–' : (v > 0 ? '+' : '') + fmt1(v));
+
+  // A free agent's bid in this league: what he adds over the lowest-projected starter at his position, in the league's
+  // budget (SCC.faabBid on the league's winning bids); null when he isn't free here or the league has no FAAB.
+  function freeAgentBid(r) {
+    const L = S.index && S.index.league, F = S.facts, LL = S.lineup && S.lineup.league;
+    if (!L || !F || !F.faab || F.left === null || !SCC) return null;
+    if (L.own && L.own[r.s] !== undefined) return null;   // rostered here
+    let gain = null;
+    if (LL) {
+      const mine = LL.rows.filter(x => x.p && x.p.pos === r.p && x.p.proj !== null && x.p.proj !== undefined).map(x => x.p.proj);
+      if (mine.length && r.proj !== null && r.proj !== undefined) gain = Math.round((r.proj - Math.min.apply(null, mine)) * 10) / 10;
+    }
+    const heat = F.trending.indexOf(r.s) >= 0 ? (F.trending.indexOf(r.s) < 10 ? 'hot' : 'warm') : 'cold';
+    const o = {budget: F.budget, left: F.left, bids: F.bids, teams: F.teams, pos: r.p, heat};
+    if (gain !== null) o.gain = gain;
+    const b = SCC.faabBid(o);
+    return b.bid ? {bid: b.bid, left: F.left, gain, why: [b.basis === 'league' ? 'from this league\'s winning bids' : 'a share of the budget'].concat(b.why || []).join('; ')} : null;
+  }
+
+  function cardHtml(r) {
+    const L = S.index && S.index.league, call = S.index && S.index.calls.get(norm(r.n)), LL = S.lineup && S.lineup.league;
+    const ownerIdx = L && L.own ? L.own[r.s] : undefined;
+    const where = ownerIdx === undefined ? (L ? 'Free agent in this league' : '') : ownerIdx === 'me' ? 'On your roster' : `On ${(L.teams || [])[ownerIdx] || 'another team'}`;
+    const inLineup = LL ? [].concat(LL.rows.map(x => x.p), LL.opt.map(x => x.p)).find(p => p && String(p.id) === String(r.s)) : null;
+    const now = r.rt !== null && r.rt !== undefined;
+    const rows = [];
+    const line = (k, v) => { if (v !== null && v !== undefined && v !== '' && v !== '–') rows.push(`<tr><td>${esc(k)}</td><td>${v}</td></tr>`); };
+    line('Projection', `${fmt1(r.proj)} a game${r.fp !== null && r.fp !== undefined ? ` · scoring ${fmt1(r.fp)} · over usage ${sgn(r.fpoe)}` : ''}`);
+    line('Market', `${esc(r.p)}${r.mr} · Titan ${esc(r.p)}${r.ur}${r.vgap !== null && r.vgap !== undefined ? ` · edge ${esc(pct(r.vgap))}` : ''}${r.v ? ` · value ${r.v}` : ''}`);
+    const usage = [r.snap !== null && r.snap !== undefined ? `snaps ${pctOf(r.snap)}` : '', r.tgt !== null && r.tgt !== undefined && r.p !== 'QB' ? `target share ${pctOf(r.tgt)}` : '',
+      r.p !== 'QB' && (now || r.prt !== null) ? `routes ${pctOf(now ? r.rt : r.prt)}${now ? '' : ' (last year)'}` : '',
+      (r.p === 'WR' || r.p === 'TE') && (r.tprr || r.ptprr) ? `${pctOf(now ? r.tprr : r.ptprr)} of routes targeted · ${fmt1(now ? r.yprr : r.pyprr)} yds a route${now ? '' : ' (last year)'}` : ''].filter(Boolean);
+    line('Usage', esc(usage.join(' · ')));
+    if (r.p === 'RB') line('Workload', esc(`${fmt1(r.car)} carries · ${fmt1(r.tg)} targets a game${r.opp ? ` · opportunity ${fmt1(r.opp)}` : ''}${r.rbk ? ` · ${r.rbk}` : ''}${r.gl ? ` · ${pctOf(r.gl)} of carries inside the 10` : ''}`));
+    if (r.p === 'QB') line('Workload', esc(`${fmt1(r.rp)} rushing points a game${r.tdr !== null && r.tdr !== undefined ? ` · touchdown on ${(r.tdr * 100).toFixed(1)}% of attempts` : ''}`));
+    if ((r.p === 'WR' || r.p === 'TE') && (r.ypt || r.ez)) line('Workload', esc(`${r.ypt ? `${fmt1(r.ypt)} yards a target` : ''}${r.ez ? `${r.ypt ? ' · ' : ''}${fmt1(r.ez)} end-zone targets a game` : ''}`));
+    if (inLineup) line('This week', esc(`${rankLabel(inLineup)}${rankNote(inLineup) ? ' · ' + rankNote(inLineup) : ''}${inLineup.inj ? ' · ' + inLineup.inj : ''}${inLineup.onBye ? ' · on bye' : ''}${inLineup.proj !== null && inLineup.proj !== undefined ? ` · projects ${fmt1(inLineup.proj)}` : ''}`));
+    if (call) line(call.kind === 'add' ? 'Claim' : call.kind === 'buy' ? 'Buy low' : call.k ? 'Keep' : 'Sell high', esc(call.why) + (call.d ? ` <b>Drop ${esc(call.d)}.</b>` : ''));
+    else if (r.buy || r.sell) line(r.buy ? 'Buy low' : r.keep ? 'Keep' : 'Sell high', `${r.buy ? 'The market prices him below his projection' : r.keep ? 'Priced high, but a real role' : 'Priced above his projection'} (${esc(r.p)}${r.mr} against ${esc(r.p)}${r.ur}).`);
+    const bid = freeAgentBid(r);
+    if (bid) line('Bid', `<b>about $${bid.bid}</b> of $${bid.left} left${bid.gain !== null ? ` · ${bid.gain > 0 ? '+' : ''}${fmt1(bid.gain)} a game over your lowest starter at ${esc(r.p)}` : ''} <span class="x">(${esc(bid.why)})</span>`);
+    if (r.pb) line('Late-Round', esc(r.pb));
+    if (r.dg) line('Draft guide', esc(`${r.dg.k} ${r.dg.c}/10${r.dg.a ? '' : ' (off the list)'}${r.dg.n ? ': ' + r.dg.n : ''}${r.dg.w ? ' Watch: ' + r.dg.w + '.' : ''}`));
+    const tradeBtn = L && ownerIdx !== undefined ? `<button type="button" class="tb" data-trade-side="${ownerIdx === 'me' ? 'give' : 'get'}" data-sid="${esc(r.s)}">${ownerIdx === 'me' ? 'Add to trade: you give' : 'Add to trade: you get'}</button>` : '';
+    return `<div class="card"><div class="ch"><b>${esc(r.n)}</b> <span class="x">${esc(r.p)}${r.t ? ', ' + r.t : ''}${where ? ' · ' + esc(where) : ''}</span><button type="button" class="close" title="Close">×</button></div>
+      <table>${rows.join('')}</table>
+      <div class="cf">${tradeBtn}<a href="${APP}value" target="_blank" rel="noopener">Open in Titan</a></div></div>`;
+  }
+
+  function cardStyles() {
+    return `:host { all: initial; }
+      .card { position: fixed; z-index: 2147483001; width: 380px; max-width: calc(100vw - 24px); max-height: 70vh; overflow: auto; background: #fff; color: #1c2330; border: 1px solid #d9dee7;
+        border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.2); font: 12px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 10px 12px; }
+      .ch { display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; } .ch b { font-size: 14px; } .ch .x { color: #6b7280; flex: 1; }
+      .close { border: 0; background: none; font-size: 16px; cursor: pointer; color: #6b7280; }
+      table { border-collapse: collapse; width: 100%; } td { padding: 3px 0; vertical-align: top; border-top: 1px solid #eef1f5; }
+      td:first-child { width: 78px; color: #6b7280; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding-right: 8px; }
+      .x { color: #6b7280; }
+      .cf { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; }
+      .cf a { color: #1f4fb8; } .tb { font: inherit; padding: 5px 9px; border-radius: 8px; border: 1px solid #c7d9ff; background: #eaf2ff; color: #1f4fb8; cursor: pointer; }`;
+  }
+
+  function openCard(r, anchor) {
+    closeCard();
+    cardHost = document.createElement('titan-card');
+    cardHost.attachShadow({mode: 'open'});
+    document.documentElement.appendChild(cardHost);
+    cardHost.shadowRoot.innerHTML = `<style>${cardStyles()}</style>${cardHtml(r)}`;
+    const card = cardHost.shadowRoot.querySelector('.card'), rect = anchor.getBoundingClientRect();
+    const left = Math.max(12, Math.min(rect.left, window.innerWidth - 392)), top = rect.bottom + 8 + 300 > window.innerHeight ? Math.max(12, rect.top - 8 - 300) : rect.bottom + 8;
+    card.style.left = left + 'px'; card.style.top = top + 'px';
+    cardHost.shadowRoot.querySelector('.close').addEventListener('click', closeCard);
+    const tb = cardHost.shadowRoot.querySelector('.tb');
+    if (tb) tb.addEventListener('click', () => { const side = tb.dataset.trade; if (!S.trade[tb.dataset.tradeSide].includes(tb.dataset.sid)) S.trade[tb.dataset.tradeSide].push(tb.dataset.sid); closeCard(); S.open = true; renderPanel(); });
+    setTimeout(() => { document.addEventListener('mousedown', outsideCard, true); document.addEventListener('keydown', escCard, true); }, 0);
+  }
+  function outsideCard(e) { if (cardHost && !e.composedPath().includes(cardHost)) closeCard(); }
+  function escCard(e) { if (e.key === 'Escape') closeCard(); }
+  function closeCard() {
+    if (cardHost) cardHost.remove();
+    cardHost = null;
+    document.removeEventListener('mousedown', outsideCard, true); document.removeEventListener('keydown', escCard, true);
   }
 
   const SKIP = new Set(['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'TITLE', 'NOSCRIPT']);
@@ -128,6 +224,17 @@
       .totals table { border-collapse: collapse; width: 100%; margin-top: 4px; }
       .totals td { padding: 2px 0; } .totals td.n { text-align: right; font-variant-numeric: tabular-nums; }
       a.send { display: inline-block; margin-bottom: 4px; padding: 6px 10px; border-radius: 8px; background: #1f4fb8; color: #fff; text-decoration: none; font-weight: 700; }
+      .propose { display: inline-block; margin: 0 0 4px 6px; padding: 5px 10px; border-radius: 8px; border: 1px solid #1f4fb8; background: #fff; color: #1f4fb8; font: inherit; font-weight: 700; cursor: pointer; }
+      .prop { margin: 4px 0 8px; padding: 8px 10px; border-radius: 8px; background: #fff7e6; border: 1px solid #fcd9a0; font-size: 12px; }
+      .prop .give { color: #b91c1c; font-weight: 700; } .prop .get { color: #15803d; font-weight: 700; }
+      .prop button { font: inherit; font-size: 11px; margin-top: 4px; padding: 3px 8px; border-radius: 6px; border: 1px solid #d9dee7; background: #fff; cursor: pointer; }
+      .match { margin: 6px 0 4px; padding: 8px 10px; border-radius: 10px; background: #f3f4f6; }
+      .match .vs { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }
+      .match .side b { display: block; font-size: 13px; } .match .side small { color: #6b7280; }
+      .match .side.opp { text-align: right; } .match .num { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .match .pa { text-align: center; font-size: 11px; color: #6b7280; } .match .pa b { display: block; font-size: 16px; }
+      .match .pa b.win { color: #15803d; } .match .pa b.lose { color: #b91c1c; }
+      .close-calls li { border-top: 1px solid #eef1f5; padding: 5px 0; } .close-calls .rn { color: #9ca3af; font-size: 11px; }
       .lineup ol { list-style: none; margin: 4px 0 0; padding: 0; }
       .lineup li { display: grid; grid-template-columns: 52px 1fr auto; gap: 8px; padding: 3px 0; border-top: 1px solid #eef1f5; align-items: baseline; }
       .lineup li:first-child { border-top: 0; }
@@ -177,15 +284,47 @@
       <p class="note">Points are each player's own projection, not your lineup's change: for that (and whether the other side would take it), open Titan's Trade tab.</p></div>`;
   }
 
+  // The partner in a trade: the team holding the players you'd get (the report's own map and team names).
+  function partnerOf(L, getIds) {
+    if (!L || !L.own) return '';
+    const idx = getIds.map(sid => L.own[sid]).find(i => i !== undefined && i !== 'me');
+    return idx === undefined ? '' : (L.teams || [])[idx] || '';
+  }
+
+  /* Proposing on Sleeper, assisted: Titan never drives Sleeper's trade screen (its markup is undocumented and
+     automating it sits near Sleeper's terms), so this copies the pieces, names the partner, and marks each player's
+     pill "give" or "get" on Sleeper's pages until the proposal is cleared. */
+  function proposalHtml() {
+    const P = S.proposal;
+    if (!P || P.league !== S.leagueId) return '';
+    return `<div class="prop"><b>Proposing on Sleeper</b>${P.partner ? ` with <b>${esc(P.partner)}</b>` : ''}: open the trade screen, pick ${P.partner ? esc(P.partner) : 'the team'}, then add
+      <span class="give">you give ${esc(P.giveNames.join(', '))}</span> and <span class="get">you get ${esc(P.getNames.join(', '))}</span>. Their pills on this page are marked give and get.
+      <button type="button" data-proposal-copy>Copy again</button> <button type="button" data-proposal-clear>Done</button></div>`;
+  }
+
   function tradeSection() {
     if (!S.index || !S.index.bySid.size) return '';
     // Sending the picks to Titan's Trade tab: /app/trade?trade=<league>:<give ids>:<get ids>; Titan finds the partner from the get side.
     const L = S.index.league, both = S.trade.give.length && S.trade.get.length;
     const link = L && both ? `${APP}trade?trade=${encodeURIComponent(L.id)}:${S.trade.give.join(',')}:${S.trade.get.join(',')}` : `${APP}trade`;
-    return `<details class="trade"${S.trade.give.length || S.trade.get.length ? ' open' : ''}><summary>Trade check</summary>${tradeSide('give', 'You give')}${tradeSide('get', 'You get')}${tradeTotals()}
-      <p class="note">${both ? `<a class="send" href="${link}" target="_blank" rel="noopener">Send this trade to Titan's trade analyzer</a> for the full analysis (your lineup's points, what they'd accept).`
+    return `<details class="trade"${S.trade.give.length || S.trade.get.length || (S.proposal && S.proposal.league === S.leagueId) ? ' open' : ''}><summary>Trade check</summary>${proposalHtml()}${tradeSide('give', 'You give')}${tradeSide('get', 'You get')}${tradeTotals()}
+      <p class="note">${both ? `<a class="send" href="${link}" target="_blank" rel="noopener">Send this trade to Titan's trade analyzer</a> for the full analysis (your lineup's points, what they'd accept).
+          <button type="button" class="propose" data-propose>Propose on Sleeper</button>`
         : `<a href="${link}" target="_blank" rel="noopener">Open Titan's Trade tab</a> for the full analysis (lineup points, partners, what they'd accept). Pick both sides here to send them across.`}</p></details>`;
   }
+
+  function propose() {
+    const L = S.index && S.index.league;
+    if (!L || !S.trade.give.length || !S.trade.get.length) return;
+    const names = ids => ids.map(sid => (S.index.bySid.get(sid) || {}).n || sid);
+    const P = {league: L.id, give: S.trade.give.slice(), get: S.trade.get.slice(), giveNames: names(S.trade.give), getNames: names(S.trade.get), partner: partnerOf(L, S.trade.get)};
+    P.text = `Trade${P.partner ? ' with ' + P.partner : ''}: I give ${P.giveNames.join(', ')}; I get ${P.getNames.join(', ')}.`;
+    S.proposal = P;
+    chrome.storage.local.set({proposal: P});
+    copyText(P.text);
+    untag(); tagNames(); renderPanel();
+  }
+  function copyText(t) { try { navigator.clipboard.writeText(t).catch(() => {}); } catch (e) { /* no clipboard here */ } }
 
   // ------------------------------------------------------------- the lineup (Titan's engine, run by the worker)
   const SLOT_LABEL = {QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLEX', SUPER_FLEX: 'SFLEX', WRRB_FLEX: 'W/R', REC_FLEX: 'W/T', K: 'K', DEF: 'DEF', DST: 'DEF', IDP_FLEX: 'IDP', DL: 'DL', LB: 'LB', DB: 'DB'};
@@ -230,6 +369,27 @@
       <div class="meta"><span>${at ? `Titan's engine, as of ${esc(at)}` : ''}</span><button type="button" data-lineup-refresh${S.lineupBusy ? ' disabled' : ''}>${S.lineupBusy ? 'Refreshing…' : 'Refresh'}</button></div></div>`;
   }
 
+  /* This week's matchup (from the lineup analysis): both sides' projected finals, the chance to win, and the close
+     calls in the lineup with both players' projections and rank notes. */
+  function matchupSection() {
+    const R = S.lineup, L = R && R.league;
+    if (!L) return '';
+    const M = L.matchup;
+    let inner = '';
+    if (M && !M.error) {
+      const started = M.me.pts > 0 || M.opp.pts > 0;
+      inner = `<div class="vs"><div class="side"><b>${esc(M.me.name)}</b><small>you${M.me.record ? ' · ' + esc(M.me.record) : ''}</small><span class="num">${fmt1(M.me.final)}</span><small>${started ? `${fmt1(M.me.pts)} so far · ` : ''}projects ${fmt1(M.me.proj)}</small></div>
+        <div class="pa"><b class="${M.pa >= 60 ? 'win' : M.pa <= 40 ? 'lose' : ''}">${M.pa}%</b>to win</div>
+        <div class="side opp"><b>${esc(M.opp.name)}</b><small>${M.opp.record ? esc(M.opp.record) + ' · ' : ''}opponent</small><span class="num">${fmt1(M.opp.final)}</span><small>${started ? `${fmt1(M.opp.pts)} so far · ` : ''}projects ${fmt1(M.opp.proj)}</small></div></div>`;
+    } else inner = `<p class="note">${M && M.error ? esc(M.error) : 'No matchup this week (a bye, or the week has not been set up).'}</p>`;
+    const calls = (L.close || []).map(c => {
+      const s = c.starter, b = c.bench, lean = M && !M.error ? (M.pa >= 60 ? 'You\'re the favorite: the safer, higher-floor start is the play.' : M.pa <= 40 ? 'You\'re the underdog: the higher ceiling gives the better shot.' : '') : '';
+      return `<li><b>${esc(s.name)}</b> over <b>${esc(b.name)}</b> is close: ${esc(rankLabel(s))} vs ${esc(rankLabel(b))}${s.proj !== null && s.proj !== undefined && b.proj !== null && b.proj !== undefined ? ` · projects ${fmt1(s.proj)} vs ${fmt1(b.proj)}` : ''}
+        <div class="rn">${esc(rankNote(s) || '')}${rankNote(s) && rankNote(b) ? ' | ' : ''}${esc(rankNote(b) || '')}</div>${lean ? `<div class="rn">${esc(lean)}</div>` : ''}</li>`;
+    }).join('');
+    return `<div class="match"><h4 style="margin-top:0">Matchup${R.week ? ` · week ${esc(R.week)}` : ''}</h4>${inner}${calls ? `<h4>Close calls</h4><ul class="close-calls">${calls}</ul>` : ''}</div>`;
+  }
+
   function loadLineup(force) {
     if (!S.leagueId || !S.value) return;
     if (!force && S.lineupFor === S.leagueId && S.lineup) return;
@@ -246,6 +406,12 @@
   function wireTrade(root) {
     const rb = root.querySelector('[data-lineup-refresh]');
     if (rb) rb.addEventListener('click', () => loadLineup(true));
+    const pb = root.querySelector('[data-propose]');
+    if (pb) pb.addEventListener('click', propose);
+    const pc = root.querySelector('[data-proposal-copy]');
+    if (pc) pc.addEventListener('click', () => S.proposal && copyText(S.proposal.text));
+    const pd = root.querySelector('[data-proposal-clear]');
+    if (pd) pd.addEventListener('click', () => { S.proposal = null; chrome.storage.local.remove('proposal'); untag(); tagNames(); renderPanel(); });
     root.querySelectorAll('.side input').forEach(input => {
       const sugg = input.parentElement.querySelector('.sugg'), side = input.dataset.side;
       input.addEventListener('input', () => {
@@ -306,7 +472,7 @@
     let body;
     if (!V) body = `<p class="note">Not connected to Titan yet. Open the extension's popup and choose Connect to Titan.</p>`;
     else if (!L && !DL) body = `<p class="note">Titan's reports don't cover this league (they cover your Sleeper leagues each Tuesday).</p>`;
-    else body = lineupSection() + tradeSection() + section('Start ideas (data dump)', DL && DL.start, 'start') + section('Claims', (L && L.add) || [], 'add') + section('Pickups (data dump)', (DL && DL.add) || [], 'add')
+    else body = lineupSection() + matchupSection() + tradeSection() + section('Start ideas (data dump)', DL && DL.start, 'start') + section('Claims', (L && L.add) || [], 'add') + section('Pickups (data dump)', (DL && DL.add) || [], 'add')
       + section('Buy low', (L && L.buy) || [], 'buy') + section('Sell high or keep', (L && L.sell) || [], 'sell') + section('Watch', (DL && DL.watch) || [], 'watch')
       + (L && L.need ? `<p class="note">${esc(L.need)}</p>` : '')
       + `<div class="foot"><span>Week ${esc(V.week)}${V.through ? ' · ' + esc(V.through) : ''}</span><span>In Titan: ${
@@ -363,8 +529,8 @@
     pending = setTimeout(() => { pending = null; tagNames(); }, 350);
   });
 
-  chrome.storage.local.get({value: null, dump: null, showPills: true, showPanel: true, panelOpen: true}, o => {
-    S.value = o.value; S.dump = o.dump; S.showPills = o.showPills; S.showPanel = o.showPanel; S.open = o.panelOpen;
+  chrome.storage.local.get({value: null, dump: null, showPills: true, showPanel: true, panelOpen: true, proposal: null}, o => {
+    S.value = o.value; S.dump = o.dump; S.showPills = o.showPills; S.showPanel = o.showPanel; S.open = o.panelOpen; S.proposal = o.proposal;
     watchUrl();
     observer.observe(document.documentElement, {childList: true, subtree: true, characterData: true});
   });
@@ -375,6 +541,7 @@
     if (ch.showPills) { S.showPills = ch.showPills.newValue; if (!S.showPills) untag(); }
     if (ch.showPanel) S.showPanel = ch.showPanel.newValue;
     if (ch.analysis) { S.lineupFor = null; S.lineup = null; }
+    if (ch.proposal) S.proposal = ch.proposal.newValue || null;
     if (ch.value || ch.dump || ch.showPills || ch.showPanel || ch.analysis) { S.factsFor = null; refreshAll(); }
   });
 })();
