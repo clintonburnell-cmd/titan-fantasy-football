@@ -1035,14 +1035,16 @@
       leagueAdvice(L.cfg)}`;
     if (L.moves.length) {
       // The changes as text, for the clipboard (Copy changes): one line a spot.
+      // Each player's rank with its note (overall rank, rank at the position, tier), so the swap reads as a comparison.
+      const rankText = p => (p.rank === null || p.rank === undefined ? '' : rl(p) + (SCC.rankNote(p) ? ' · ' + SCC.rankNote(p) : ''));
       const copyText = `${L.cfg.key}, week ${LV ? LV.week : S.snap.week} lineup changes:\n` + L.moves.map(m =>
-        `${slotName(m.slot)}: ${m.out ? `out ${m.out.name}${m.to ? ` (to ${slotName(m.to)})` : ''}` : 'empty'} → in ${m.inn.name}${m.from ? ` (from ${slotName(m.from)})` : ''}`).join('\n');
+        `${slotName(m.slot)}: ${m.out ? `out ${m.out.name}${rankText(m.out) ? ` (${rankText(m.out)})` : ''}${m.to ? ` (to ${slotName(m.to)})` : ''}` : 'empty'} → in ${m.inn.name}${rankText(m.inn) ? ` (${rankText(m.inn)})` : ''}${m.from ? ` (from ${slotName(m.from)})` : ''}`).join('\n');
       // A starter changing spots shows where he goes or comes from, and when he plays.
       h += `<div class="moves"><div class="moves-h"><h4>${LV ? `For week ${LV.week}, make these changes in ${siteName(L.cfg)}` : `Make these changes in ${siteName(L.cfg)}`}</h4><span class="moves-b">${
         L.cfg.demo ? '' : `<button type="button" class="btn small ghost" data-copy="${esc(copyText)}">Copy changes</button>`}${openSite(L.cfg)}</span></div>${L.moves.map(m => `
         <div class="move"><span class="slot">${esc(slotName(m.slot))}</span>
-          <span class="mv out${m.to ? ' to' : ''}">${m.out ? `${esc(m.out.name)} <em>${m.to ? `to ${esc(slotName(m.to))}${esc(kickOf(m.out))}` : esc(rl(m.out))}</em>` : '<em>nobody</em>'}</span>
-          <span class="mv in">${esc(m.inn.name)} <em>${m.from ? `from ${esc(slotName(m.from))}${esc(kickOf(m.inn))}` : esc(rl(m.inn)) + (m.inn.opp ? ' vs ' + esc(m.inn.opp) : '')}</em></span>
+          <span class="mv out${m.to ? ' to' : ''}">${m.out ? `${esc(m.out.name)} <em>${m.to ? `to ${esc(slotName(m.to))}${esc(kickOf(m.out))}` : esc(rl(m.out))}</em>${SCC.rankNote(m.out) ? `<small class="mv-note">${esc(SCC.rankNote(m.out))}</small>` : ''}` : '<em>nobody</em>'}</span>
+          <span class="mv in">${esc(m.inn.name)} <em>${m.from ? `from ${esc(slotName(m.from))}${esc(kickOf(m.inn))}` : esc(rl(m.inn)) + (m.inn.opp ? ' vs ' + esc(m.inn.opp) : '')}</em>${SCC.rankNote(m.inn) ? `<small class="mv-note">${esc(SCC.rankNote(m.inn))}</small>` : ''}</span>
         </div>`).join('')}${L.moves.some(m => m.from || m.to) ? '<p class="fine">Later kickoffs go in FLEX, so a late scratch can still be covered from your bench.</p>' : ''}</div>`;
     }
     const rec = recLineup(L);
