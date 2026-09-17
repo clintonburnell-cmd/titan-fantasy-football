@@ -758,7 +758,7 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 /* Why a player has his spot, and a role on the move, under a lineup row. */
 .why { display: block; color: var(--muted); font-size: .74rem; line-height: 1.35; }
 .why b { color: var(--text); font-weight: 600; }
-.role { display: block; font-size: .74rem; font-weight: 600; }
+.role { font-size: .72rem; font-weight: 700; white-space: nowrap; }
 .role.r-up { color: var(--ok); }
 .role.r-down { color: var(--swap); }
 /* Streamers: kickers and defenses ordered by this week's game. */
@@ -774,6 +774,17 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 .sc-cmp tr.sc-diff td, .sc-cmp tr.sc-diff th { background: var(--swap-soft); }
 .sc-cmp td small { color: var(--muted); font-variant-numeric: tabular-nums; }
 .sc-same { margin: 6px 0; }
+/* The explanations behind a league's calls, folded away until wanted. */
+/* One shape for every "there is more behind this line" fold on a card. */
+.lg-notes, .lg-cmp { border-top: 1px solid var(--line); }
+.lg-notes > summary, .lg-cmp > summary { padding: 8px 14px; font-size: .78rem; font-weight: 600; color: var(--muted); cursor: pointer; list-style: none; }
+.lg-notes > summary::-webkit-details-marker, .lg-cmp > summary::-webkit-details-marker { display: none; }
+.lg-notes > summary::after, .lg-cmp > summary::after { content: ' \25be'; }
+.lg-notes[open] > summary::after, .lg-cmp[open] > summary::after { content: ' \25b4'; }
+.lg-notes > summary:hover, .lg-cmp > summary:hover { color: var(--text); }
+.lg-notes .note:first-of-type { border-top: 0; }
+.plan-views { margin-bottom: 10px; }
+
 .sc-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: .76rem; }
 .sc-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .sw-bar { width: 10px; height: 10px; border-radius: 2px; background: var(--chart-bar); }

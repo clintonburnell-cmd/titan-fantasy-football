@@ -132,7 +132,8 @@ How the pieces fit, and what keeps them working.
 ## Navigation, look and type
 
 - Navigation: six sections (`SECTIONS` in `app.js`): Lineups, Matchup, League (Standings, Rosters,
-  Trade, Transactions), Players (Waivers, News, Exposure, Byes, Schedule) and Rankings (Import, which is the `ranks`
+  Trade, Transactions), Players (Waivers, News, Planning, which is `screenPlan`: Exposure, Byes and Schedule
+  strength behind chips since v1.78.0, each keeping its own address through `go`) and Rankings (Import, which is the `ranks`
   screen, Import multiple, which is `multi` at `/app/multiple`, and for Titan's owner only Compare (`lab`) and Value
   report (`value`), the screens in `OWNER_TABS`) and Results (the `score` screen), with Settings behind the gear (`#gear`). Phones, the Android app and home-screen
   copies show them as a bar along the bottom (the header is solid there: a see-through `backdrop-filter`
@@ -289,6 +290,11 @@ One note per screen or feature.
   points, a defense by how few the offense it faces is expected to score, both moved by `tiltFromRank` on the matchup.
   Only in leagues that start one, free agents only, with the bid and the starter he'd replace. It needs the game
   context, so it draws nothing until `/api/game-context` is in.
+- Density is a feature (v1.78.0, measured on a 390px phone): a recommended row shows the game context, the why line
+  and the rank note only where a decision is being made (`rowDepth`: a change, or a close call), and everything that
+  explains the calls folds behind one line (`.lg-notes`, `.lg-cmp`). Before adding a line to a row, ask whether it
+  changes a decision on every row or only some; nine rows a league and twelve leagues is how a tab becomes
+  unreadable. Re-measure with the demo at 390px rather than guessing.
 - Lineups' rows carry two lines beyond the rank (v1.74.0): `whyStart` (`SCC.nextBest`: the best bench player who fits
   the spot and how far back he is, or that there is no other fit) so a call can be checked, and `roleFlag` (the snap
   share rising or falling from `SCC.usageOf`, which Lineups now loads as Waivers does). Neither shows on a later

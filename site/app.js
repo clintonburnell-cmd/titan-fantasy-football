@@ -19,13 +19,13 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1', seasonRanks: 'titan.demo.seasonranks.v1', calls: 'titan.demo.calls.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1', seasonRanks: 'titan.seasonranks.v1', calls: 'titan.calls.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['today', 'lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'score', 'news', 'trade', 'moves', 'ranks', 'season', 'multi', 'lab', 'value', 'dump', 'matchups', 'settings'];
+  const TABS = ['today', 'lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'plan', 'score', 'news', 'trade', 'moves', 'ranks', 'season', 'multi', 'lab', 'value', 'dump', 'matchups', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {today: 'Today', lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
-    sos: 'Schedule strength', score: 'Results', news: 'News', ranks: 'Rankings', season: 'Season rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump', matchups: 'Match Up data',
+    sos: 'Schedule strength', plan: 'Planning', score: 'Results', news: 'News', ranks: 'Rankings', season: 'Season rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump', matchups: 'Match Up data',
     trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
-  const SLUG = {today: 'today', lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes', sos: 'schedule',
+  const SLUG = {today: 'today', lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes', sos: 'schedule', plan: 'planning',
     score: 'results', news: 'news', ranks: 'rankings', season: 'season', multi: 'multiple', lab: 'compare', value: 'value', dump: 'data-dump', matchups: 'matchup-data', trade: 'trade', moves: 'transactions',
     settings: 'settings'};
   const tabFromPath = () => {
@@ -40,18 +40,18 @@
     {id: 'lineups', name: 'Lineups', tabs: ['today', 'lineups']},
     {id: 'matchup', name: 'Matchup', tabs: ['matchup']},
     {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
-    {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes', 'sos']},
+    {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'plan']},
     // Compare (lab), Value and Data dump are Titan's owner's only: they show only on the owner's account.
     {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'season', 'multi', 'lab', 'value', 'dump', 'matchups']},
     {id: 'results', name: 'Results', tabs: ['score']}
   ];
-  const SUB_NAMES = {ranks: 'Weekly import', season: 'Season import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', matchups: 'Match Up data', score: 'Results', sos: 'Schedule'};
+  const SUB_NAMES = {ranks: 'Weekly import', season: 'Season import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', matchups: 'Match Up data', score: 'Results', sos: 'Schedule', plan: 'Planning'};
   const OWNER_TABS = ['lab', 'value', 'dump', 'matchups']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else); Compare and Match Up data also for titanLab
   // ... except Compare rankings, which an account with the titanLab claim sees too (S.owner.lab; nothing else of the owner's).
   const canSee = t => (t === 'lab' || t === 'matchups' ? S.owner.is || S.owner.lab : S.owner.is);
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
-  const LEAGUE_SCREENS = {today: 1, lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1, value: 1, dump: 1};
+  const LEAGUE_SCREENS = {today: 1, lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1, plan: 1, value: 1, dump: 1};
   const AVATAR = 'https://sleepercdn.com/avatars/thumbs/';
   // News-only accounts on the News tab. X doesn't let apps read posts without a
   // paid plan, so each one opens on X.
@@ -1155,20 +1155,27 @@
     }
     const rec = recLineup(L);
     h += `<h4 class="lu-h">${LV ? `Recommended lineup for week ${LV.week}` : 'Recommended lineup'}</h4><ol class="lineup lineup-rec">${
-      rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg, L)).join('')}</ol>${compareLineups(L, rec)}${LV ? '' : closeNotes(L) + disagreeNotes(L)}`;
+      rec.map((o, i) => recRow(o, (L.rows[i] || {}).p, L.cfg, L)).join('')}</ol>${foldCompare(L, rec)}`;
+    // Everything that explains the calls goes behind one line: read it when you want it, not on every card every time.
+    let notes = LV ? '' : closeNotes(L) + disagreeNotes(L);
     (L.tilts || []).forEach(t => {
       const mus = has(t.muIn) && has(t.muOut) ? ` (${nth(t.muIn)} softest to ${esc(t.inn.pos)}s against ${nth(t.muOut)})` : '';
-      h += `<p class="note tilt"><b>Matchup tilt:</b> ${esc(t.inn.name)} starts over ${esc(t.out.name)}, who ranks higher (${esc(rl(t.out))} vs ${esc(rl(t.inn))}):
+      notes += `<p class="note tilt"><b>Matchup tilt:</b> ${esc(t.inn.name)} starts over ${esc(t.out.name)}, who ranks higher (${esc(rl(t.out))} vs ${esc(rl(t.inn))}):
         his matchup${mus} is the softer one by ${esc(matchSource())}, and with it counted he projects ${fmt(t.by)} more.</p>`;
     });
     L.wire.forEach(w => {
       const tail = w.cur ? `, better than ${esc(w.cur.name)} (${esc(rl(w.cur))})`
         : w.anyUnranked ? ', and you are starting someone unranked here' : '';
-      h += `<p class="note wire"><b>Wire ${esc(w.pos)}:</b> ${w.list.map(x =>
+      notes += `<p class="note wire"><b>Wire ${esc(w.pos)}:</b> ${w.list.map(x =>
         `${esc(x.name)} (${esc(SCC.rankLabel(x.pos, x.rank))}${x.opp ? ' ' + esc(x.opp) : ''})`).join(', ')}${tail}</p>`;
     });
+    // A hurt starter is not an explanation, it is something to act on, so it stays in the open.
     if (L.hurt.length) {
       h += `<p class="note hurt"><b>Injured in your lineup:</b> ${L.hurt.map(p => `${esc(p.name)} (${esc(p.inj)})`).join(', ')}</p>`;
+    }
+    if (notes.trim()) {
+      const n = (notes.match(/class="note/g) || []).length;
+      h += `<details class="lg-notes"><summary>${plural(n, 'note')} on these calls</summary>${notes}</details>`;
     }
     if (!L.moves.length && !L.cfg.demo) h += `<div class="card-foot">${openSite(L.cfg)}</div>`;
     return h + '</details>';
@@ -1176,8 +1183,8 @@
 
   /* A player's rank, with the note that makes a close call readable: his overall rank, his rank at his position and
      his tier (SCC.rankNote), so two players can be compared on all three. */
-  function rankCell(p) {
-    const note = p.rank === null ? '' : SCC.rankNote(p);
+  function rankCell(p, withNote) {
+    const note = p.rank === null || withNote === false ? '' : SCC.rankNote(p);
     return `<span class="rank">${p.rank === null ? 'NR' : esc(rl(p))}${note ? `<small>${esc(note)}</small>` : ''}</span>`;
   }
 
@@ -1339,7 +1346,7 @@
   // A player's game context under his name (SCC.gameTags); who he plays only when his rankings don't say.
   function ctxLine(p) {
     if (LV) return ''; // game lines and weather are this week's
-    const tags = SCC.gameTags(S.ctx.data, p, {opp: !p.opp});
+    const tags = SCC.gameTags(S.ctx.data, p, {opp: !p.opp}).slice(0, 3);
     return tags.length ? `<small class="gctx">${tags.map(t => `<span class="${t.tone}">${esc(t.text)}</span>`).join(' · ')}</small>` : '';
   }
 
@@ -1400,14 +1407,22 @@
   /* Why this player has the spot (under each recommended start): the best player on your bench who could have taken it
      and how far back he is, so the call can be checked rather than taken on trust. Nothing when the spot has no
      alternative worth naming, and nothing on a later week's plan. */
+  /* "Yours vs recommended" behind a line: the rows above already mark what changed, so the full side-by-side is there
+     to check the working rather than to read every time (v1.78.0: it was 802px of the same nine players). */
+  function foldCompare(L, rec) {
+    const html = compareLineups(L, rec);
+    if (!html || /lu-same/.test(html)) return html;
+    return `<details class="lg-cmp"><summary>Yours vs recommended, spot by spot</summary>${html}</details>`;
+  }
+
   function whyStart(o, L) {
     if (!o.p || !L || LV) return '';
     const alt = SCC.nextBest(recLineup(L), L.roster, o.slot);
-    if (!alt) return `<small class="why">Your only fit at ${esc(slotName(o.slot))}.</small>`;
+    if (!alt) return `<small class="why">only fit at ${esc(slotName(o.slot))}</small>`;
     if (o.p.rank === null || o.p.rank === undefined || alt.rank === null || alt.rank === undefined) return '';
     const ta = Number(o.p.tier), tb = Number(alt.tier);
-    const tiers = isFinite(ta) && isFinite(tb) && ta !== tb ? `${Math.abs(tb - ta) === 1 ? 'a tier' : Math.abs(tb - ta) + ' tiers'} clear of` : 'ahead of';
-    return `<small class="why">${esc(tiers)} <b>${esc(alt.name)}</b> (${esc(rl(alt))}), the next fit on your bench.</small>`;
+    const tiers = isFinite(ta) && isFinite(tb) && ta !== tb ? `${Math.abs(tb - ta) === 1 ? 'a tier' : Math.abs(tb - ta) + ' tiers'} clear of` : 'over';
+    return `<small class="why">${esc(tiers)} <b>${esc(alt.name)}</b> (${esc(rl(alt))})</small>`;
   }
 
   /* A role on the move (Lineups and the waiver lists): his snap share against the weeks before, from the same usage
@@ -1417,8 +1432,18 @@
     if (!id || !U || !U.list.length || pos === 'K' || pos === 'DEF') return '';
     const u = SCC.usageOf(U.list, id);
     if (!u || !u.trend) return '';
-    return `<small class="role r-${u.trend}" title="His share of the offense's snaps against the weeks before">${u.trend === 'up' ? '\u25b2' : '\u25bc'} snap share ${
-      u.trend === 'up' ? 'rising' : 'falling'}${u.snapPct === null ? '' : ` (${u.snapPct}%)`}</small>`;
+    return ` <span class="role r-${u.trend}" title="His share of the offense's snaps against the weeks before${u.snapPct === null ? '' : `, now ${u.snapPct}%`}">${
+      u.trend === 'up' ? '\u25b2' : '\u25bc'} snaps</span>`;
+  }
+
+  /* A recommended row shows its supporting lines only where a decision is actually being made: a new starter, or one
+     the bench is close to. Everywhere else the row is the slot, the name, the kickoff and the rank. Nine rows a league
+     and twelve leagues, so the restraint is what keeps the tab readable (v1.78.0: rows ran to eight lines each). */
+  function rowDepth(o, cur, L) {
+    if (!o.p || LV || !L) return false;
+    if (!sameIn(o.p, cur)) return true;                                  // a change: say why
+    const alt = SCC.nextBest(recLineup(L), L.roster, o.slot);
+    return !!(alt && o.p.rank !== null && alt.rank !== null && SCC.closeByRank(o.p, alt)); // a close call: say why
   }
 
   function recRow(o, cur, cfg, L) {
@@ -1427,15 +1452,15 @@
         <span class="who"><b>Nobody to start</b><small>No one on your roster fits this spot: see the wire below.</small></span>
         <span class="right"><span class="verdict v-stop">FILL SLOT</span></span></li>`;
     }
-    const p = o.p, fresh = !sameIn(p, cur), proj = projOf(p, cfg);
+    const p = o.p, fresh = !sameIn(p, cur), proj = projOf(p, cfg), deep = rowDepth(o, cur, L);
     const sub = [p.pos, p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && 'proj ' + fmt(proj)].filter(Boolean).join(' · ');
     // Only when nobody better is left: a player on bye or ruled out still takes the spot, and says so.
     const tag = scored(p) ? scoreChip(p) : p.locked ? '<span class="verdict v-locked">LOCKED</span>'
       : p.onBye ? '<span class="verdict v-stop">ON BYE</span>' : p.outish ? '<span class="verdict v-stop">OUT</span>'
       : fresh ? '<span class="verdict v-new">NEW</span>' : '';
     return `<li class="row${fresh ? ' r-new' : ''}${p.locked ? ' r-locked' : ''}"><span class="slot" data-pos="${esc(p.pos)}">${esc(slotName(o.slot))}</span>${headshot(p)}
-      <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}</small>${ctxLine(p)}${roleFlag(p.id, p.pos)}${whyStart(o, L)}</span>
-      <span class="right">${rankCell(p)}${tag}</span></li>`;
+      <span class="who">${nameLine(p)}<small>${esc(sub)}${statusText(p)}${roleFlag(p.id, p.pos)}</small>${deep ? ctxLine(p) + whyStart(o, L) : ''}</span>
+      <span class="right">${rankCell(p, deep)}${tag}</span></li>`;
   }
 
   // Your lineup and the recommended one side by side, spot by spot, the spots that differ highlighted; your side keeps
@@ -1977,6 +2002,17 @@
   }
 
   /* ---- Exposure */
+
+  /* Planning (Players → Planning): exposure, byes and schedule strength behind one tab with chips, since they answer the
+     same question at different ranges and three menu entries for three tables read as sprawl. Each keeps its own
+     address, so an old link still lands on the right view. */
+  const PLAN_VIEWS = [['exposure', 'Exposure'], ['byes', 'Byes'], ['sos', 'Schedule strength']];
+  function screenPlan() {
+    const view = PLAN_VIEWS.some(v => v[0] === S.ui.planView) ? S.ui.planView : 'exposure';
+    const chips = `<div class="chips plan-views" role="group" aria-label="Planning view">${PLAN_VIEWS.map(([k, label]) =>
+      `<button type="button" class="chip" data-planview="${k}" aria-pressed="${k === view}">${label}</button>`).join('')}</div>`;
+    return chips + ({exposure: screenExposure, byes: screenByes, sos: screenSos}[view])();
+  }
 
   function screenExposure() {
     if (!S.snap) return emptyState();
@@ -5631,13 +5667,15 @@
 
   const SCREENS = {
     today: screenToday, lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
-    sos: screenSos, score: screenScore, ranks: screenRanks, season: screenSeason, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`,
+    sos: screenSos, plan: screenPlan, score: screenScore, ranks: screenRanks, season: screenSeason, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`,
     dump: () => `<div class="vr-page">${screenDump()}</div>`, matchups: () => `<div class="vr-page">${screenMatchups()}</div>`, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
 
   /* ------------------------------------------------------------- events */
 
   function go(tab, fromHistory) {
+    // /app/byes and the rest still work: they open Planning on that view.
+    if (PLAN_VIEWS.some(v => v[0] === tab)) { S.ui.planView = tab; tab = 'plan'; }
     if (!TABS.includes(tab)) return;
     S.ui.tab = tab;
     const sec = sectionOf(tab);
@@ -5946,6 +5984,8 @@
   view.addEventListener('click', e => {
     const fb = e.target.closest('[data-vfmt]');
     if (fb) { S.ui.valueFmt = fb.dataset.vfmt; saveUi(); render(); return; }
+    const pv = e.target.closest('[data-planview]');
+    if (pv) { S.ui.planView = pv.dataset.planview; saveUi(); render(); return; }
     const mw = e.target.closest('[data-mu-week]');
     if (mw) { S.mu.week = Number(mw.dataset.muWeek); render(); return; }
     const mt = e.target.closest('[data-mu-table]');

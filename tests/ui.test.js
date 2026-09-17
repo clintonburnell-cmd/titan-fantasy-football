@@ -375,16 +375,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'Back goes to the screen before');
   await send('Page.navigate', {url: ORIGIN + '/app/byes'});
   check(await waitFor(`!!document.querySelector('table.byes')`, 30000), 'an address opens its screen directly (/app/byes)');
-  await tab('byes');
+  await tab('plan'); await ev(`document.querySelector('[data-planview="byes"]').click(); true`); await sleep(400);
   check(await ev(`!!document.querySelector('table.byes')`), 'the Byes table renders');
   const nav = await ev(`(() => { const t = document.getElementById('tabs'), r = t.getBoundingClientRect();
     return {fixed: getComputedStyle(t).position, gap: Math.round(innerHeight - r.bottom),
       subs: [...document.querySelectorAll('.subtabs button')].map(b => b.innerText).join(' | '),
       on: (document.querySelector('[data-section][aria-current="page"]') || {}).dataset?.section}; })()`);
-  check(nav.fixed === 'fixed' && nav.gap <= 1 && nav.subs === 'Waivers | News | Exposure | Byes | Schedule' && nav.on === 'players',
+  check(nav.fixed === 'fixed' && nav.gap <= 1 && nav.subs === 'Waivers | News | Planning' && nav.on === 'players',
     `on a phone the sections sit along the bottom, and Players shows its screens as sub-tabs (${nav.subs})`);
   await tab('trade');
-  await tab('byes');
+  await tab('plan'); await ev(`document.querySelector('[data-planview="byes"]').click(); true`); await sleep(400);
   await ev(`document.querySelector('[data-section="league"]').click(); true`);
   await sleep(500);
   const lastLeague = await ev('location.pathname');
@@ -702,8 +702,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     'the playoff picture: your game\'s win-or-lose odds, then who to root for this week: ' + (await text('.ppic')).replace(/\s+/g, ' ').slice(0, 120));
 
   T.section('Schedule strength');
-  await tab('sos');
-  check(await waitFor(`location.pathname === '/app/schedule' && document.querySelectorAll('.sos-t tbody tr').length >= 30`, 30000),
+  await tab('plan'); await ev(`document.querySelector('[data-planview="sos"]').click(); true`); await sleep(400);
+  check(await waitFor(`location.pathname === '/app/planning' && document.querySelectorAll('.sos-t tbody tr').length >= 30`, 30000),
     'Schedule strength lists every NFL team\'s road ahead at /app/schedule (under Players)');
   await ev(`document.querySelector('[data-sos-pos="WR"]').click(); true`);
   check(await waitFor(`document.querySelector('[data-sos-pos="WR"]').getAttribute('aria-pressed') === 'true' && /Your WRs/.test(document.querySelector('.sos-t thead').textContent)`, 3000),
@@ -886,8 +886,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // Why each recommended starter has his spot: the next fit on the bench, or that there isn't one.
   const why = await ev(`(() => { const w = [...document.querySelectorAll('.lineup-rec .why')].map(x => x.textContent.replace(/\\s+/g, ' ').trim());
     return {n: w.length, rows: document.querySelectorAll('.lineup-rec .row').length, first: w[0] || ''}; })()`);
-  check(why.n > 0 && /(the next fit on your bench|Your only fit at)/.test(why.first),
-    `each recommended start says why he has the spot (${why.n} of ${why.rows} rows): ${why.first.slice(0, 90)}`);
+  check(why.n > 0 && why.n < why.rows && /(over |clear of |only fit at )/.test(why.first),
+    `the rows where a decision is being made say why, and the rest stay quiet (${why.n} of ${why.rows} rows): ${why.first.slice(0, 90)}`);
   check(await ev(`document.documentElement.scrollWidth <= innerWidth`), 'the lineup rows still fit a 390px phone with the why line');
   await shot('lineups-compare');
   // Lineups' week dropdown: this week, then every week to come, each a plan.
@@ -1197,7 +1197,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // Screenshots of every screen at phone and computer widths (TITAN_SHOTS only), to compare a change to the whole app's look.
   if (process.env.TITAN_SHOTS) {
     T.section('a tour of every screen (screenshots only)');
-    const TOUR = ['lineups', 'matchup', 'standings', 'rosters', 'trade', 'moves', 'waivers', 'news', 'exposure', 'byes', 'sos', 'score', 'ranks', 'season', 'multi', 'settings'];
+    const TOUR = ['lineups', 'matchup', 'standings', 'rosters', 'trade', 'moves', 'waivers', 'news', 'plan', 'score', 'ranks', 'season', 'multi', 'settings'];
     for (const [w, h, dpr, mobile] of [[390, 844, 2, true], [1280, 900, 1, false]]) {
       await send('Emulation.setDeviceMetricsOverride', {width: w, height: h, deviceScaleFactor: dpr, mobile});
       for (const t of TOUR) {
