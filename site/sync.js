@@ -283,6 +283,16 @@ const api = {
     const s = await getDoc(doc(db, 'lab', 'dump-latest'));
     return s.exists() ? s.data() : null;
   },
+  // Any lab/ document holding a report as a JSON string (the Match Up data screen's lab/matchups-<season>: the rules let
+  // the owner and titanLab accounts read it), parsed; null when there isn't one.
+  async labJson(name) {
+    const s = await getDoc(doc(db, 'lab', name));
+    return s.exists() && s.data().json ? JSON.parse(s.data().json) : null;
+  },
+  // Writes one (the owner only, by the rules: lab/matchups-<season>).
+  labWrite(name, data) {
+    return setDoc(doc(db, 'lab', name), {json: JSON.stringify(data), at: Date.now()});
+  },
 
   /* A week's frozen record of Titan's calls, saved by the server job at each
      kickoff, or null if there isn't one. */

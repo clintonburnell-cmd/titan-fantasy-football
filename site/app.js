@@ -19,14 +19,14 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1', seasonRanks: 'titan.demo.seasonranks.v1', calls: 'titan.demo.calls.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1', seasonRanks: 'titan.seasonranks.v1', calls: 'titan.calls.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['today', 'lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'score', 'news', 'trade', 'moves', 'ranks', 'season', 'multi', 'lab', 'value', 'dump', 'settings'];
+  const TABS = ['today', 'lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'score', 'news', 'trade', 'moves', 'ranks', 'season', 'multi', 'lab', 'value', 'dump', 'matchups', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {today: 'Today', lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
-    sos: 'Schedule strength', score: 'Results', news: 'News', ranks: 'Rankings', season: 'Season rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump',
+    sos: 'Schedule strength', score: 'Results', news: 'News', ranks: 'Rankings', season: 'Season rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump', matchups: 'Match Up data',
     trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
   const SLUG = {today: 'today', lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes', sos: 'schedule',
-    score: 'results', news: 'news', ranks: 'rankings', season: 'season', multi: 'multiple', lab: 'compare', value: 'value', dump: 'data-dump', trade: 'trade', moves: 'transactions',
+    score: 'results', news: 'news', ranks: 'rankings', season: 'season', multi: 'multiple', lab: 'compare', value: 'value', dump: 'data-dump', matchups: 'matchup-data', trade: 'trade', moves: 'transactions',
     settings: 'settings'};
   const tabFromPath = () => {
     const m = location.pathname.match(/^\/app\/([a-z-]+)\/?$/);
@@ -42,13 +42,13 @@
     {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
     {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'exposure', 'byes', 'sos']},
     // Compare (lab), Value and Data dump are Titan's owner's only: they show only on the owner's account.
-    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'season', 'multi', 'lab', 'value', 'dump']},
+    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'season', 'multi', 'lab', 'value', 'dump', 'matchups']},
     {id: 'results', name: 'Results', tabs: ['score']}
   ];
-  const SUB_NAMES = {ranks: 'Weekly import', season: 'Season import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', score: 'Results', sos: 'Schedule'};
-  const OWNER_TABS = ['lab', 'value', 'dump']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else)
+  const SUB_NAMES = {ranks: 'Weekly import', season: 'Season import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', matchups: 'Match Up data', score: 'Results', sos: 'Schedule'};
+  const OWNER_TABS = ['lab', 'value', 'dump', 'matchups']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else); Compare and Match Up data also for titanLab
   // ... except Compare rankings, which an account with the titanLab claim sees too (S.owner.lab; nothing else of the owner's).
-  const canSee = t => (t === 'lab' ? S.owner.is || S.owner.lab : S.owner.is);
+  const canSee = t => (t === 'lab' || t === 'matchups' ? S.owner.is || S.owner.lab : S.owner.is);
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
   // The screens the league dropdown steers (Standings and Trade show one league at a time).
   const LEAGUE_SCREENS = {today: 1, lineups: 1, matchup: 1, standings: 1, rosters: 1, trade: 1, moves: 1, byes: 1, value: 1, dump: 1};
@@ -151,6 +151,7 @@
     lab: store.get(KEY.lab) || null, labBusy: false, labAt: 0, labError: '',
     value: {busy: false, data: null, error: '', at: 0, q: ''}, // the value report (Titan's owner only), from the owner's PC; q: its player search
     dump: {busy: false, data: null, error: '', at: 0}, // the data dump (Titan's owner only), from the owner's PC; it shares the value report's search
+    mu: {busy: false, data: null, error: '', at: 0, week: 0, table: 'overview', note: ''}, // Match Up data (the owner and titanLab): the weekly matchup sheets, uploaded week by week
     news: {busy: false, at: 0, list: null, error: ''}, // ESPN's latest stories, on the News tab
     sos: {sched: null, busy: false, error: ''}, // the NFL schedule, for Schedule strength
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
@@ -2776,6 +2777,100 @@
     return [...list].sort((a, b) => place(a) - place(b) || String(a.name).localeCompare(String(b.name)));
   }
 
+  /* ---- Match Up data (Rankings → Match Up data; the owner and the titanLab accounts): the weekly matchup sheets the owner
+     uploads week by week, three tables an NFL week (Overview: totals, spread, pass rate over expected, pace and points
+     allowed by position; Passing and Rushing: efficiency, pressure, depth of target, success and target shares), one row
+     per offense, ranks 1 to 32 colored green (the best matchup) to red. Kept as lab/matchups-<season> ({season, weeks:
+     {week: {overview, passing, rushing, at}}}, the rules letting the owner write it and titanLab read it); the owner pastes
+     each table as text (SCC.parseMatchups) or posts it from his PC (titan-analytics upload.js matchups). A dot marks the
+     teams your starters play for in the league picked. */
+  const MU_TABLES = [['overview', 'Overview'], ['passing', 'Passing'], ['rushing', 'Rushing']];
+  async function loadMuData() {
+    if (DEMO || !(S.owner.is || S.owner.lab) || !S.sync.api || !S.sync.api.labJson || S.mu.busy || !S.snap) { S.mu.at = S.mu.at || Date.now(); return; }
+    S.mu.busy = true;
+    S.mu.error = '';
+    try { S.mu.data = await S.sync.api.labJson(`matchups-${S.snap.season}`); }
+    catch (e) { S.mu.error = `Couldn't load the matchup data: ${e && e.message ? e.message : e}`; }
+    S.mu.busy = false;
+    S.mu.at = Date.now();
+    if (S.ui.tab === 'matchups') render();
+  }
+  async function uploadMatchups(el) {
+    const week = Number(el.week.value), tables = {}, bad = [];
+    if (!week || week < 1 || week > 18) { S.mu.note = 'Give the NFL week, 1 to 18.'; render(); return; }
+    MU_TABLES.forEach(([k, label]) => {
+      const t = String(el[k].value || '').trim();
+      if (!t) return;
+      const M = SCC.parseMatchups(t);
+      if (M) tables[k] = M; else bad.push(label);
+    });
+    if (bad.length) { S.mu.note = `Titan couldn't read the ${bad.join(' and ')} table: paste it as text with a header row (Offense, Matchup, then the measures).`; render(); return; }
+    if (!Object.keys(tables).length) { S.mu.note = 'Paste at least one table.'; render(); return; }
+    if (!S.sync.api || !S.sync.api.labWrite) { S.mu.note = 'Sign in with Google first (Settings): the sheets are kept in your account.'; render(); return; }
+    const D = S.mu.data && S.mu.data.season === S.snap.season ? S.mu.data : {season: S.snap.season, weeks: {}};
+    D.weeks[week] = Object.assign({}, D.weeks[week] || {}, tables, {at: Date.now()});
+    try {
+      await S.sync.api.labWrite(`matchups-${S.snap.season}`, D);
+      S.mu.data = D; S.mu.week = week; S.mu.note = `Week ${week} saved: ${Object.keys(tables).map(k => MU_TABLES.find(x => x[0] === k)[1]).join(', ')}.`;
+    } catch (e) { S.mu.note = `Couldn't save: ${e && e.message ? e.message : e}`; }
+    render();
+  }
+  // A rank's shade: 1 the deepest green, 32 the deepest red, the middle plain; a value column shades by its place in the range.
+  function muShade(v, rank, lo, hi) {
+    if (v === null || v === undefined) return '';
+    let x = rank ? (16.5 - v) / 15.5 : hi > lo ? ((v - lo) / (hi - lo)) * 2 - 1 : 0; // -1 (worst) to 1 (best)
+    x = Math.max(-1, Math.min(1, x));
+    const a = Math.round(Math.abs(x) * 0.55 * 100) / 100;
+    if (a < 0.06) return '';
+    return ` style="background: rgba(${x > 0 ? '17,128,77' : '200,54,44'}, ${a})"`;
+  }
+  function muTable(M) {
+    if (!M || !M.rows) return '<p class="fine">No table for this week.</p>';
+    // Column groups from the names: "PROE Off" and "PROE Def" share a PROE header; the last word (Off, Def, QB, RB, WR, TE) is the sub-head.
+    const SUB = ['Off', 'Def', 'QB', 'RB', 'WR', 'TE'];
+    const parts = M.cols.map(c => { const w = c.split(' '); const sub = SUB.includes(w[w.length - 1]) && w.length > 1 ? w.pop() : ''; return {group: w.join(' '), sub}; });
+    const groups = [];
+    parts.forEach(p => { const g = groups[groups.length - 1]; if (g && g.name === p.group && p.sub) g.n++; else groups.push({name: p.group, n: 1}); });
+    const range = M.cols.map((c, i) => { const xs = M.rows.map(r => r.v[i]).filter(x => x !== null && x !== undefined); return [Math.min(...xs), Math.max(...xs)]; });
+    // The teams your starters play for (in the league picked, or all your leagues).
+    const mine = new Set();
+    ((S.A && S.A.leagues) || []).filter(L => inPick(L.cfg)).forEach(L => L.roster.forEach(p => { if (p.start && p.team) mine.add(SCC.teamAbbr(p.team)); }));
+    const fmtV = (v, i) => (v === null || v === undefined ? '–' : /spread/i.test(M.cols[i]) && v > 0 ? '+' + v : String(v));
+    return `<div class="table-wrap vr-scroll"><table class="season-t vr-t mu-t"><thead>
+      <tr class="mu-grp"><th></th><th></th>${groups.map(g => `<th colspan="${g.n}">${esc(g.name)}</th>`).join('')}</tr>
+      <tr><th>Offense</th><th class="vr-w">Matchup</th>${parts.map(p => `<th>${esc(p.sub || '')}</th>`).join('')}</tr></thead><tbody>${M.rows.map(r =>
+      `<tr data-find=" ${esc(String(r.team).toLowerCase())} ${esc(String(r.opp).toLowerCase())} "${mine.has(r.team) ? ' class="mu-mine"' : ''}><td class="vr-p"><b>${esc(r.team)}</b>${mine.has(r.team) ? ' <span class="mu-dot" title="One of your starters plays here"></span>' : ''}</td>
+        <td class="vr-w">${r.opp ? `${r.home === false ? '@' : 'vs.'} ${esc(r.opp)}` : ''}</td>${r.v.map((v, i) => `<td${muShade(v, M.ranks[i], range[i][0], range[i][1])}>${fmtV(v, i)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
+  function screenMatchups() {
+    if (!S.owner.is && !S.owner.lab) return '<div class="empty-note">Only Titan\'s owner, and anyone he\'s given the rankings lab, sees this screen.</div>';
+    if (!S.snap) return emptyState();
+    const U = S.mu;
+    if (!U.at && !U.busy) loadMuData();
+    let h = `<div class="bar match-bar"><p class="lede">The week's matchup sheets: every offense against its opponent, ranked 1 to 32 (green is the best matchup, red the worst) for
+      totals and pace, pass rate over expected, efficiency and pressure, depth of target, and what the defense gives up by position. A dot marks the teams your starters play for.</p>
+      <button class="btn ghost small" data-action="mu-reload"${U.busy ? ' disabled' : ''}>${U.busy ? 'Loading…' : 'Reload'}</button></div>`;
+    if (U.error) h += `<div class="banner stop">${esc(U.error)}</div>`;
+    const D = U.data && String(U.data.season) === String(S.snap.season) ? U.data : null;
+    const weeks = D ? Object.keys(D.weeks).map(Number).sort((a, b) => a - b) : [];
+    const week = weeks.includes(U.week) ? U.week : weeks[weeks.length - 1] || 0;
+    if (weeks.length) {
+      h += `<div class="chips" role="group" aria-label="Week">${weeks.map(w => `<button type="button" class="chip" data-mu-week="${w}" aria-pressed="${w === week}">Week ${w}</button>`).join('')}</div>`;
+      const W = D.weeks[week], table = W[U.table] ? U.table : MU_TABLES.map(t => t[0]).find(k => W[k]);
+      h += `<div class="chips" role="group" aria-label="Table">${MU_TABLES.map(([k, label]) => `<button type="button" class="chip" data-mu-table="${k}" aria-pressed="${k === table}"${W[k] ? '' : ' disabled'}>${label}</button>`).join('')}</div>`;
+      h += `<section class="card pad vr-sec mu-sec"><h3>Week ${week} · ${esc((MU_TABLES.find(t => t[0] === table) || [])[1] || '')}</h3><p class="fine">Uploaded ${esc(when(W.at))}.</p>${muTable(W[table])}</section>`;
+    } else if (U.busy) h += '<div class="empty-note">Loading the matchup data…</div>';
+    else h += '<div class="empty-note">No matchup data yet this season. Upload a week below.</div>';
+    if (S.owner.is) {
+      h += `<section class="card pad mu-up"><h3>Upload a week</h3><p class="fine">Paste each sheet as text: a header row (Offense, Matchup, then the measures, "PROE Off", "PROE Def", "Team Tot"...) and one row per offense,
+        tab- or comma-separated, as copied from a spreadsheet. A week uploaded again replaces its tables. Or post the week from your PC: <code>node upload.js matchups ${esc(S.snap.season)} &lt;week&gt;</code> in titan-analytics.</p>
+        <form data-form="mu-upload" class="mu-form"><label class="field"><span>NFL week</span><input type="number" name="week" min="1" max="18" value="${esc(S.snap.week)}" required></label>
+        ${MU_TABLES.map(([k, label]) => `<label class="field"><span>${label}</span><textarea name="${k}" rows="4" placeholder="Offense, Matchup, …" spellcheck="false"></textarea></label>`).join('')}
+        <button class="btn" type="submit">Save the week</button>${U.note ? `<p class="fine mu-note">${esc(U.note)}</p>` : ''}</form></section>`;
+    }
+    return h;
+  }
+
   // Each league's ideas, in the order they're acted on: this week's lineup, then the wire, trades and the playoffs.
   const DUMP_KINDS = [['start', 'Start this week', 'add'], ['add', 'Pick up', 'add'], ['buy', 'Buy from a rival', 'buy'],
     ['sell', 'Sell high or keep', 'sell'], ['watch', 'Playoff schedule', 'watch']];
@@ -5388,7 +5483,7 @@
   const SCREENS = {
     today: screenToday, lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
     sos: screenSos, score: screenScore, ranks: screenRanks, season: screenSeason, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`,
-    dump: () => `<div class="vr-page">${screenDump()}</div>`, trade: screenTrade, moves: screenMoves, settings: screenSettings
+    dump: () => `<div class="vr-page">${screenDump()}</div>`, matchups: () => `<div class="vr-page">${screenMatchups()}</div>`, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
 
   /* ------------------------------------------------------------- events */
@@ -5502,6 +5597,7 @@
     if (form === 'link') linkAccount(el.username.value);
     else if (form === 'espn-add') addEspn(el.league.value);
     else if (form === 'espn-login') saveEspnLogin(el.s2.value, el.swid.value);
+    else if (form === 'mu-upload') uploadMatchups(el);
     else if (form === 'trade-paste') {
       // The offer is read against the league the Trade tab shows (the same pick screenTrade makes).
       const leagues = (S.snap && S.snap.leagues) || [];
@@ -5654,6 +5750,7 @@
     else if (a === 'ranks-del') deleteRanks(Number(t.dataset.week));
     else if (a === 'lab-run') { S.labAt = 0; loadLab(); render(); }
     else if (a === 'value-reload') { S.value.at = 0; loadValue(); render(); }
+    else if (a === 'mu-reload') { S.mu.at = 0; loadMuData(); render(); }
     else if (a === 'dump-reload') { S.dump.at = 0; loadDump(); render(); }
     else if (a === 'multi-add') multiAdd();
     else if (a === 'multi-save') multiSave();
@@ -5700,6 +5797,10 @@
   view.addEventListener('click', e => {
     const fb = e.target.closest('[data-vfmt]');
     if (fb) { S.ui.valueFmt = fb.dataset.vfmt; saveUi(); render(); return; }
+    const mw = e.target.closest('[data-mu-week]');
+    if (mw) { S.mu.week = Number(mw.dataset.muWeek); render(); return; }
+    const mt = e.target.closest('[data-mu-table]');
+    if (mt) { S.mu.table = mt.dataset.muTable; render(); return; }
     const t = e.target.closest('[data-vpos]');
     if (!t) return;
     S.ui.valuePos = t.dataset.vpos;

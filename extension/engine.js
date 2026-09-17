@@ -2103,6 +2103,34 @@
     return out.give.length && out.get.length ? out : null;
   }
 
+  /* A weekly matchup table pasted as text (the Match Up data screen: the owner's weekly matchup sheets, Overview, Passing
+     and Rushing, one row per offense). Tab-, comma- or two-space-separated, a header row first: Offense, Matchup, then the
+     measures ("PROE Off", "EPA/Rush Def", "Team Tot"...). {cols: [measure names], rows: [{team, opp, home, v: [numbers]}]}
+     sorted by team, or null when it isn't a table. A measure whose values are all whole numbers 1 to 32 is a rank (`ranks`
+     lists which), which the screen colors green (1, the best matchup) to red (32). */
+  var MU_MIN_COLS = 3;
+  function parseMatchups(text) {
+    var lines = String(text || '').replace(/\r/g, '').split('\n').map(function (l) { return l.trim(); }).filter(Boolean);
+    if (lines.length < 2) return null;
+    var sep = lines[0].indexOf('\t') >= 0 ? /\t/ : lines[0].indexOf(',') >= 0 ? /,/ : / {2,}/;
+    var head = lines[0].split(sep).map(function (h) { return h.trim(); });
+    if (head.length < MU_MIN_COLS) return null;
+    var cols = head.slice(2), rows = [];
+    lines.slice(1).forEach(function (l) {
+      var c = l.split(sep).map(function (x) { return x.trim(); });
+      if (c.length < MU_MIN_COLS || !/^[A-Z]{2,4}$/i.test(c[0])) return;
+      var m = /^(vs\.?|@|at)\s*([A-Z]{2,4})$/i.exec(c[1] || '');
+      var v = c.slice(2, 2 + cols.length).map(function (x) { var n = Number(String(x).replace(/[+−]/g, function (s) { return s === '−' ? '-' : ''; })); return isFinite(n) && x !== '' ? n : null; });
+      rows.push({team: teamAbbr(c[0].toUpperCase()), opp: m ? teamAbbr(m[2].toUpperCase()) : '', home: m ? /^vs/i.test(m[1]) : null, v: v});
+    });
+    if (!rows.length) return null;
+    rows.sort(function (a, b) { return a.team.localeCompare(b.team); });
+    var ranks = cols.map(function (c, i) {
+      return rows.every(function (r) { var x = r.v[i]; return x === null || (x >= 1 && x <= 32 && x === Math.round(x)); });
+    });
+    return {cols: cols, rows: rows, ranks: ranks};
+  }
+
   function closeCalls(roster, slots, startedIds) {
     var wins = 0, total = 0;
     var starters = roster.filter(function (p) { return startedIds[p.id]; });
@@ -3225,7 +3253,7 @@
     rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
-    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer,
+    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,

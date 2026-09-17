@@ -50,9 +50,11 @@ service cloud.firestore {
     // (lab/<season>-<week>, fetched one document at a time, never listed): Compare rankings, not the value report
     // or the data dump, which carry the owner's leagues and his paid draft guide.
     match /lab/{doc} {
+      // The titanLab accounts read the weekly snapshots (Compare rankings) and the matchup sheets (Match Up data).
       allow read: if request.auth != null && (request.auth.token.titanOwner == true
-        || (request.auth.token.titanLab == true && doc.matches('^[0-9]{4}-[0-9]{1,2}$')));
-      allow write: if request.auth != null && request.auth.token.titanOwner == true && doc == 'config';
+        || (request.auth.token.titanLab == true && (doc.matches('^[0-9]{4}-[0-9]{1,2}$') || doc.matches('^matchups-[0-9]{4}$'))));
+      // The owner's app writes its lab formats and the matchup sheets it uploads week by week.
+      allow write: if request.auth != null && request.auth.token.titanOwner == true && (doc == 'config' || doc.matches('^matchups-[0-9]{4}$'));
     }
     // The Titan Waiver Wire's latest issue, which the newsletter page shows to new subscribers: anyone can
     // read it; only the owner's PC writes it (titan-analytics' upload.js, with Google's own sign-in, which

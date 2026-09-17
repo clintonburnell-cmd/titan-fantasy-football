@@ -1025,11 +1025,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       tough: [], next4easy: [], next4hard: [], playoffEasy: [], playoffHard: []},
     teams: [{t: 'KC', pr: 0.6, npr: 0.58, i10: 0.5, i5: 0.4, tpg: 34, rbt: 0.15, wrt: 0.6, tet: 0.25, rbx: 20, wrx: 30, tex: 15, ptd: 2, rtd: 1}],
     highlights: ['KC throws the most when the game is close.']};
-  await ev(`window.TitanApp.syncReady({valueReport: async () => ({json: ${JSON.stringify(JSON.stringify(VR))}})
-    , dumpReport: async () => ({json: ${JSON.stringify(JSON.stringify(DR))}})}); window.TitanApp.setOwner(true); true`);
+  // labJson/labWrite stand in for Firestore lab/ (Match Up data keeps its sheets there); the page holds them in memory.
+  await ev(`window.__lab = {}; window.TitanApp.syncReady({valueReport: async () => ({json: ${JSON.stringify(JSON.stringify(VR))}})
+    , dumpReport: async () => ({json: ${JSON.stringify(JSON.stringify(DR))}})
+    , labJson: async name => window.__lab[name] || null, labWrite: async (name, data) => { window.__lab[name] = JSON.parse(JSON.stringify(data)); }}); window.TitanApp.setOwner(true); true`);
   await tab('value');
   check(await waitFor(`location.pathname === '/app/value' && document.querySelectorAll('.vr-lg').length === 2 && document.querySelectorAll('.vr-moves li').length === 6 &&
-    document.querySelectorAll('.subtabs [data-go]').length === 6`, 5000), 'the owner sees it under Rankings, at /app/value: each league\'s sells, buys and claims');
+    document.querySelectorAll('.subtabs [data-go]').length === 7`, 5000), 'the owner sees it under Rankings, at /app/value: each league\'s sells, buys and claims');
   check(await ev(`document.querySelectorAll('[data-vfmt]').length === 2 && /Buy Guy/.test(${vsec(0)}) &&
     [...document.querySelectorAll('.vr-t th')].every(th => th.textContent !== 'Where')`), 'under All leagues, the lists are in the format most leagues play, with a chip for each format');
   check(await ev(`/Sell high or keep/.test(document.getElementById('view').textContent) && document.querySelectorAll('.vr-moves .pill.p-swap').length === 1 &&
@@ -1109,8 +1111,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const ddOrder = await ev(`[...document.querySelectorAll('.vr-lg h3')].map(h => [...h.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim()).join(' | ')`);
   check(ddOrder === 'Dump Test League | Another Dump League',
     'its leagues come in the same order as every other tab (the app\'s leagues first), not by name: ' + ddOrder);
-  check(await ev(`[...document.querySelectorAll('.subtabs [data-go]')].map(b => b.textContent).join('|') === 'Weekly import|Season import|Import multiple|Compare|Value|Data dump'`),
-    'Data dump is its own screen under Rankings, right after Value');
+  check(await ev(`[...document.querySelectorAll('.subtabs [data-go]')].map(b => b.textContent).join('|') === 'Weekly import|Season import|Import multiple|Compare|Value|Data dump|Match Up data'`),
+    'Data dump is its own screen under Rankings, right after Value, and Match Up data after it');
   check(await ev(`(() => { const nav = document.querySelector('.subtabs'), n = nav.getBoundingClientRect(), b = nav.querySelector('[aria-current="page"]').getBoundingClientRect();
     return b.left >= n.left - 1 && b.right <= n.right + 1; })()`), 'on a phone the sub-tab row scrolls so Data dump shows in full');
   const ddText = await text('#view');
@@ -1140,6 +1142,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`/usage edge counts on your side/.test((document.querySelector('.tideas') || {}).textContent || '')`, 8000),
     'and Find trades says the usage edge counts on the owner\'s side');
   await ev(`document.querySelector('[data-action="trade-reset"]').click(); true`);
+  // Match Up data: the owner pastes a week's sheet, it saves to lab/ and draws with the ranks shaded and his starters' teams marked.
+  await tab('matchups');
+  check(await waitFor(`location.pathname === '/app/matchup-data' && !!document.querySelector('.mu-up form[data-form="mu-upload"]')`, 5000),
+    'Match Up data is its own screen under Rankings, with the owner upload form');
+  const SHEET = ['Offense\tMatchup\tTeam Tot\tSpread\tPROE Off\tPROE Def', 'KC\tvs. IND\t26.5\t+6.5\t12\t28', 'BUF\tvs. DET\t30.0\t+5.5\t10\t11', 'ATL\tvs. CAR\t20.5\t-2.5\t32\t16'].join('\n');
+  await ev(`(() => { const f = document.querySelector('form[data-form="mu-upload"]'); f.elements.week.value = '2'; f.elements.overview.value = ${JSON.stringify(SHEET)}; f.requestSubmit(); return true; })()`);
+  check(await waitFor(`!!document.querySelector('.mu-t') && document.querySelectorAll('.mu-t tbody tr').length === 3 && /Week 2 saved/.test((document.querySelector('.mu-note') || {}).textContent || '')`, 5000),
+    'pasting a sheet saves the week and draws it: ' + (await text('.mu-note')).slice(0, 80));
+  const muRow = await ev(`(() => { const r = document.querySelectorAll('.mu-t tbody tr')[0]; const c = [...r.querySelectorAll('td')].map(td => td.textContent.trim());
+    const shaded = [...r.querySelectorAll('td')].filter(td => td.getAttribute('style')).length; return {c: c.join('|'), shaded, week: !!document.querySelector('[data-mu-week="2"]')}; })()`);
+  check(/^ATL\|vs\. CAR\|20\.5\|-2\.5\|32\|16$/.test(muRow.c) && muRow.shaded >= 3 && muRow.week,
+    `each offense with its opponent, the numbers shaded by rank, and a week chip (${muRow.c}, ${muRow.shaded} shaded)`);
+  check(await ev(`document.documentElement.scrollWidth <= innerWidth`), 'the matchup table fits a 390px phone (it scrolls sideways in its box)');
+  await shot('matchup-data');
   await tab('dump');
   await pickLeague('all');
   await ev(`window.TitanApp.setOwner(false); true`);
@@ -1147,12 +1163,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     document.querySelector('#tabs [data-tab="dump"]').hidden`, 3000), 'without the owner account Value and Data dump hide again');
   // The titanLab role: Compare rankings alone, none of the owner's other screens.
   await ev(`window.TitanApp.setOwner(false, true); true`);
-  check(await waitFor(`!document.querySelector('#tabs [data-tab="lab"]').hidden && document.querySelector('#tabs [data-tab="value"]').hidden &&
-    document.querySelector('#tabs [data-tab="dump"]').hidden`, 3000), 'the titanLab role puts Compare rankings on the menu and nothing else of the owner\'s');
+  check(await waitFor(`!document.querySelector('#tabs [data-tab="lab"]').hidden && !document.querySelector('#tabs [data-tab="matchups"]').hidden && document.querySelector('#tabs [data-tab="value"]').hidden &&
+    document.querySelector('#tabs [data-tab="dump"]').hidden`, 3000), 'the titanLab role puts Compare rankings and Match Up data on the menu and nothing else of the owner\'s');
   await tab('lab');
   check(await waitFor(`location.pathname === '/app/compare' && !/Only Titan's owner/.test(document.getElementById('view').textContent)`, 3000),
     'and Compare rankings opens for it');
-  check(await ev(`document.querySelectorAll('.subtabs [data-go]').length === 4`), 'its Rankings sub-tabs: Import, Season, Import multiple and Compare rankings (no Value report, no Data dump)');
+  check(await ev(`document.querySelectorAll('.subtabs [data-go]').length === 5`), 'its Rankings sub-tabs: Import, Season, Import multiple, Compare rankings and Match Up data (no Value report, no Data dump)');
+  await tab('matchups');
+  check(await waitFor(`location.pathname === '/app/matchup-data' && /matchup sheets/.test(document.getElementById('view').textContent) && !document.querySelector('.mu-up')`, 3000),
+    'Match Up data opens for it at /app/matchup-data, without the owner\'s upload form');
+  await tab('lab');
   await ev(`window.TitanApp.setOwner(false, false); true`);
   check(await waitFor(`document.querySelector('#tabs [data-tab="lab"]').hidden`, 3000), 'taking the role away hides it again');
   await tab('lineups');

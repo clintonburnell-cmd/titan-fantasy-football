@@ -746,6 +746,15 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 .cc-list .cc-res span { font-weight: 800; }
 .cc-season b { color: var(--text); }
 .vr-n4 small { color: var(--muted); white-space: nowrap; }
+/* Match Up data: the weekly matchup sheets, ranks shaded green (best) to red (worst) inline; a dot on the teams your starters play for. */
+.mu-t td, .mu-t th { text-align: center; }
+.mu-t td:first-child, .mu-t th:first-child, .mu-t .vr-w { text-align: left; }
+.mu-t .mu-grp th { border-top: 0; font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; }
+.mu-t tr.mu-mine td:first-child b { color: var(--accent-2); }
+.mu-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent-2); margin-left: 4px; vertical-align: middle; }
+.mu-form { display: grid; gap: 10px; }
+.mu-form textarea { width: 100%; font: 500 .8rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); resize: vertical; }
+.mu-up code { font-size: .8rem; }
 .sc-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: .76rem; }
 .sc-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .sw-bar { width: 10px; height: 10px; border-radius: 2px; background: var(--chart-bar); }

@@ -474,6 +474,15 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   `valuesKey`). Only the owner can read `lab/` and write `lab/config` (firestore.rules). `SCC.labWeek`
   (pure, tested) scores lineup points (scoreLeague's by-rank per source) and order (rank correlation
   against Sleeper's stats feed, `API.fetchStats`, PPR). Finished weeks are kept on the device (`KEY.lab`).
+- Match Up data (`screenMatchups`, tab `matchups`, `/app/matchup-data`, after Data dump under Rankings; v1.72.0) is for
+  the owner and the `titanLab` accounts (`canSee`): the owner's weekly matchup sheets (Overview, Passing, Rushing: one
+  row per offense, ranks 1 to 32 and a few value columns), kept as `lab/matchups-<season>` ({season, weeks: {week:
+  {overview, passing, rushing, at}}}, each table `SCC.parseMatchups`'s shape: cols, rows [{team, opp, home, v}],
+  ranks). The owner uploads a week by pasting each sheet as text into the screen's form (`uploadMatchups` →
+  `labWrite`) or with `node upload.js matchups <season> <week>` in titan-analytics (TSVs in reports/matchups/, out of
+  git: the sheets are his paid source, so they reach `lab/` only, never `public/` or the newsletter). The rules let the
+  owner write `matchups-YYYY` and titanLab read it. Shading is inline (`muShade`: green 1 to red 32 with alpha, so both
+  themes work); a dot marks the teams the person's starters play for in the league picked.
 - Data dump (`screenDump`, tab `dump`, `/app/data-dump`, right after Value under Rankings) is Titan's owner's only too,
   and separate from Value. Each Tuesday the owner downloads a spreadsheet (`week<N>-data-dump.xlsx`: player usage and
   expected points, defense by position, schedule strength, team tendencies) to Downloads; on the owner's PC the

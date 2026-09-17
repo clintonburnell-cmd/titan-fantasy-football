@@ -613,6 +613,16 @@ section('a trade offer as text (parseOffer)');
   check(P('Jaylen Warren') === null && P('') === null && P('give Jaylen Warren') === null, 'one side only, or nothing: null');
 }
 
+section('a weekly matchup table as text (parseMatchups)');
+{
+  const tsv = ['Offense\tMatchup\tTeam Tot\tSpread\tPROE Off\tPROE Def', 'BUF\tvs. DET\t30.0\t+5.5\t10\t11', 'ATL\tvs. CAR\t20.5\t−2.5\t32\t16', 'DET\t@ BUF\t24.5\t-5.5\t25\t19'].join('\n');
+  const M = SCC.parseMatchups(tsv);
+  check(M && M.cols.join('|') === 'Team Tot|Spread|PROE Off|PROE Def' && M.rows.length === 3 && M.rows[0].team === 'ATL' && M.rows[1].team === 'BUF' && M.rows[1].opp === 'DET' && M.rows[1].home === true && M.rows[2].home === false,
+    'a tab-separated sheet with a header: the measures, each offense with its opponent and home or away, sorted by team');
+  check(M.rows[0].v.join() === '20.5,-2.5,32,16' && M.rows[1].v[1] === 5.5 && M.ranks.join() === 'false,false,true,true', 'numbers parsed (a minus sign of either kind, a plus), and the 1-to-32 columns marked as ranks');
+  check(SCC.parseMatchups('Offense,Matchup,PROE Off\nKC,@ IND,12') .rows[0].v[0] === 12 && SCC.parseMatchups('just some text') === null && SCC.parseMatchups('') === null, 'comma-separated works too; no table gives null');
+}
+
 section('the nudge before kickoff (kickoffNudge)');
 {
   const now = Date.parse('2026-09-20T15:00:00Z'), h = 3600e3, min = 60e3;
