@@ -961,9 +961,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       s.getBoundingClientRect().right < cards[0].getBoundingClientRect().left && getComputedStyle(s).position === 'sticky'; })()`;
   check(await waitFor(sideOk, 5000), 'Lineups list the leagues down the left side, beside the cards, with the filters still on top');
   check(await ev(`(() => { const cards = document.querySelectorAll('.card.league'); return cards.length > 0 &&
-    [...cards].every(c => c.querySelector('h3 .licon .lsite') && c.querySelector('h3 .licon .lini img[src="/icon.svg"]')) &&
-    [...document.querySelectorAll('.side [data-jump]')].every(b => b.querySelector('.licon')); })()`),
-    'each league shows its picture (or the Titan icon) with a badge for its site, on the cards and in the sidebar');
+    [...cards].every(c => c.querySelector('h3 .licon.bare .lsite') && !c.querySelector('h3 .licon .lini')) &&
+    [...document.querySelectorAll('.side [data-jump]')].every(b => !b.querySelector('.licon')); })()`),
+    'a league with no picture of its own shows the site letter on its card and nothing in the sidebar, where the site is already named');
   if (await ev(`document.querySelectorAll('.side [data-jump]').length > 1`)) {
     await ev(`document.querySelectorAll('.side [data-jump]')[1].click(); true`);
     check(await waitFor(`document.querySelectorAll('.side [data-jump]')[1].classList.contains('on')`, 4000),

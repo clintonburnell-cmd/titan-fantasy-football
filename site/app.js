@@ -956,7 +956,7 @@
       const on = pick && String(x.cfg.id) === String(pick);
       const how = pick ? `data-pickleague="${esc(x.cfg.id)}" aria-current="${on ? 'true' : 'false'}"` : `data-jump="${anchor(x.cfg)}"`;
       return `<button type="button" class="side-link${on ? ' is-on' : ''}" ${how}>${x.flag ? '<i class="dot" role="img" aria-label="Needs action" title="Needs action"></i>'
-        : dots ? '<i class="dot off" aria-hidden="true"></i>' : ''}${leagueIcon(x.cfg)}<span class="sl-name">${
+        : dots ? '<i class="dot off" aria-hidden="true"></i>' : ''}${x.cfg.pic ? leagueIcon(x.cfg) : ''}<span class="sl-name">${
         esc(x.cfg.key)}<small>${esc(x.note || siteName(x.cfg))}</small></span></button>`;
     }).join('')}</nav>`;
   }
@@ -1123,11 +1123,15 @@
   const SITE_LETTER = {sleeper: 'S', espn: 'E', yahoo: 'Y'};
   // A league without a picture of its own shows the Titan icon; the site's badge stays in the corner.
   const NO_PIC = '<img src="/icon.svg" alt="" width="26" height="26">';
+  /* A league's own picture with a lettered badge for the site it lives on. A league with no picture used to get the
+     Titan icon, which on an account of twelve Sleeper leagues meant a column of identical logos saying nothing
+     (v1.82.0, the owner asked): it now gets the site letter alone, which at least says where the league is. */
   function leagueIcon(cfg, size = '') {
     const site = SITE_LETTER[cfg.platform] ? cfg.platform : 'sleeper';
-    return `<span class="licon${size ? ' ' + size : ''}" aria-hidden="true"><span class="lini">${NO_PIC}</span>${
-      cfg.pic ? `<img src="${esc(cfg.pic)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}${
-      size === 'xs' ? '' : `<i class="lsite s-${site}" title="${siteName(cfg)}">${SITE_LETTER[site]}</i>`}</span>`;
+    const badge = `<i class="lsite s-${site}" title="${esc(siteName(cfg))}">${SITE_LETTER[site]}</i>`;
+    if (!cfg.pic) return `<span class="licon bare${size ? ' ' + size : ''}" aria-hidden="true">${badge}</span>`;
+    return `<span class="licon${size ? ' ' + size : ''}" aria-hidden="true"><span class="lini">${NO_PIC}</span><img src="${
+      esc(cfg.pic)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">${size === 'xs' ? '' : badge}</span>`;
   }
   function lineupUrl(cfg) {
     if (cfg.platform === 'yahoo') return cfg.url || 'https://football.fantasysports.yahoo.com/';

@@ -1413,6 +1413,11 @@ body.app-page :is(.stand .tnum, .stand .st-odds b) { font-variant-numeric: tabul
 .lsite.s-espn { background: #cc0000; }
 .lsite.s-yahoo { background: #6001d2; }
 .licon.xs { width: 18px; height: 18px; margin-right: 6px; }
+/* No picture of its own: the site letter alone, in place rather than hanging off a circle that isn't there. */
+.licon.bare { width: 14px; height: 14px; margin: 0 7px 0 0; }
+.licon.bare .lsite { position: static; width: 14px; height: 14px; font-size: 9px; box-shadow: none; }
+.licon.bare.xs { width: 12px; height: 12px; margin-right: 5px; }
+.licon.bare.xs .lsite { width: 12px; height: 12px; font-size: 8px; }
 .licon.xs .lini { font-size: .48rem; }
 .slot[data-pos="QB"] { color: var(--pos-qb); }
 .slot[data-pos="RB"] { color: var(--pos-rb); }

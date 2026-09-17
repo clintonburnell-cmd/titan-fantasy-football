@@ -164,7 +164,10 @@ How the pieces fit, and what keeps them working.
   (no raw colours for text or surfaces), and text meets WCAG 4.5:1 in both. Each page's `<head>` has
   the early snippet that sets a saved dark theme before anything draws, plus `/theme.js`. Check new
   screens in both themes.
-- Every league name shows `leagueIcon(cfg)`: the league's picture (`cfg.pic`: Sleeper's league avatar,
+- Every league name shows `leagueIcon(cfg)`, but only a league with a picture of its own gets one (v1.82.0): the
+  placeholder Titan icon is gone, since an account of twelve picture-less Sleeper leagues showed twelve identical
+  logos. Without a picture it is the site letter alone (`.licon.bare`), and the sidebar shows nothing at all there
+  because its second line already names the site. With a picture (`cfg.pic`: Sleeper's league avatar,
   or your team's logo in an ESPN league, kept through `slimLeague`) with a lettered site badge in the
   corner (not the sites' logos), or the Titan icon (`/icon.svg`, `NO_PIC`) when there's no picture. Give Yahoo a `pic` too.
   On Matchup, your score in the middle is red when you're behind, or purple (`--fav`) while you're behind but
