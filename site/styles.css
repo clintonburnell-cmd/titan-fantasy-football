@@ -765,6 +765,15 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 .wstream-k { padding-top: 8px; }
 .wstream-k h4 { font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 2px; }
 .wstream-k .wrow { padding: 6px 0; }
+/* The pre-kickoff sweep on Today, and the note pill on a graded call. */
+.sweep { margin-bottom: 10px; }
+.p-muted { background: var(--chip); color: var(--muted); }
+/* Results: what your rankings would have started, beside what did. */
+.sc-cmp { margin: 8px 0 4px; }
+.sc-cmp .lu-cmp { width: 100%; }
+.sc-cmp tr.sc-diff td, .sc-cmp tr.sc-diff th { background: var(--swap-soft); }
+.sc-cmp td small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.sc-same { margin: 6px 0; }
 .sc-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: .76rem; }
 .sc-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .sw-bar { width: 10px; height: 10px; border-radius: 2px; background: var(--chart-bar); }

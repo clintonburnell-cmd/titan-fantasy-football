@@ -345,6 +345,14 @@
       const id = String(L.cfg.id), was = W[id] || {}, now = {}, locked = {};
       L.roster.forEach(p => { if (p.locked) locked[p.id] = 1; });
       const proj = tilt ? tilt(L.cfg) : (p => SCC.projFor(S.proj, p.id, L.cfg));
+      // The projections-disagree notes are recorded too, keyed apart: Titan kept the starter and said why, and Results
+      // grades that the same way, so the note's threshold can be judged rather than assumed.
+      SCC.disagreements(L.opt, L.roster, proj).forEach(({starter, bench, a, b}) => {
+        const key = 'n|' + [starter.id, bench.id].map(String).sort().join('|');
+        const slot = (L.opt.find(o => o.p && o.p.id === starter.id) || {}).slot || starter.pos;
+        now[key] = {league: L.cfg.key, slot, pick: slimCall(starter), other: slimCall(bench), flip: false, note: true,
+          a: has(a) ? Math.round(a * 10) / 10 : null, b: has(b) ? Math.round(b * 10) / 10 : null, at: Date.now()};
+      });
       SCC.closeCallPairs(L.opt, L.roster).forEach(({starter, bench}) => {
         const key = [starter.id, bench.id].map(String).sort().join('|');
         const slot = (L.opt.find(o => o.p && o.p.id === starter.id) || {}).slot || starter.pos;
@@ -563,7 +571,7 @@
     const G = D.provisional ? null : gradeWeek(D), BM = D.provisional ? null : SCC.benchMistakes(D.rows)[0];
     const entry = seasonStore().weeks[D.week] = {week: D.week, actual: T.actual, proj: T.projActual, byRank: T.byRank, perfect: T.perfect,
       wins: T.wins, losses: T.losses, ties: T.ties, done: !D.provisional, sig: weekSig(D.week),
-      calls: G ? {n: G.n, right: G.right, fn: G.flips.n, fr: G.flips.right} : null,
+      calls: G ? {n: G.n, right: G.right, fn: G.flips.n, fr: G.flips.right, nn: G.notes.n, nr: G.notes.right} : null,
       miss: BM ? {key: BM.key, sat: BM.sat.name, satPts: BM.sat.pts, started: BM.started.name, startedPts: BM.started.pts, slot: BM.slot, lost: BM.lost} : null};
     if (entry.done && S.sync.api && S.sync.user && S.snap.week === D.week + 1 && S.sync.api.pushRecap) {
       S.sync.api.pushRecap({season: S.snap.season, week: D.week, at: Date.now(), wins: T.wins, losses: T.losses, ties: T.ties, actual: T.actual, proj: T.projActual,
@@ -1829,6 +1837,17 @@
     return items;
   }
 
+  /* One line before the early games (Today): how many lineups are set, and which aren't, worst first (SCC.lineupSweep).
+     It answers the Sunday-morning question without reading twelve cards. */
+  function sweepLine() {
+    const S2 = SCC.lineupSweep((S.A && S.A.leagues) || []);
+    if (!S2.total) return '';
+    if (!S2.problems.length) return `<p class="banner ok sweep">All ${plural(S2.total, 'lineup')} are set: no changes, no empty spots, no hurt starters.</p>`;
+    const worst = S2.problems.slice(0, 3).map(x => `<b>${esc(x.key)}</b> has ${esc(x.what)}`).join('; ');
+    const more = S2.problems.length > 3 ? `, and ${S2.problems.length - 3} more` : '';
+    return `<p class="banner swap sweep">${S2.ready} of ${plural(S2.total, 'lineup')} set. ${worst}${more}.</p>`;
+  }
+
   function screenToday() {
     if (!S.snap) return emptyState();
     if (S.owner.is && !DEMO) {
@@ -1840,6 +1859,7 @@
     const KIND_CLASS = {Lineup: 'swap', Injury: 'stop', Waiver: 'ok', Claim: 'ok', 'Buy low': 'ok', 'Sell high': 'swap', Keep: 'muted', 'Start idea': 'swap'};
     let h = `<div class="bar match-bar"><p class="lede">Everything to act on in week ${esc(S.snap.week)}, in every league: lineup changes, hurt starters, waiver upgrades${
       S.owner.is ? ', claims, trades and start ideas' : ''}. Tick each one off as you make it${S.owner.is ? '' : ''}.</p></div>`;
+    h += sweepLine();
     h += `<section class="tiles three" aria-label="Where you stand">${tile(left.length, 'to do', left.length ? 'swap' : 'ok')}${tile(items.length - left.length, 'done', 'muted')}${tile(A_leagues().length, 'leagues', 'muted')}</section>`;
     h += recapCard();
     if (!items.length) return h + '<div class="empty-note">Nothing to do: every lineup matches your rankings, no starter is hurt, and no free agent beats a starter.</div>';
@@ -2139,6 +2159,7 @@
           : `<span class="${r.vsProj >= 0 ? 'good' : 'amber'}">${gap(r.vsProj)}</span> vs projection`}` : ''}${!live && left > 0 ? ` · ${fmt(left)} left on the bench` : ''}</span>
       </summary>
       <p class="sub">By rank ${fmt(r.byRank)} · perfect ${fmt(r.perfect)} · close calls ${r.close.total ? `${r.close.wins} of ${r.close.total}` : 'none'}</p>
+      ${scoreCompare(r, live)}
       <ul class="detail">${r.detail.map(d => detailRow(d, live)).join('')}</ul>
     </details>`;
     }).join('');
@@ -2169,24 +2190,27 @@
     if (!G || !G.rows.length) return '';
     const live = D.provisional;
     const s = S.season && S.season.season === S.snap.season ? Object.values(S.season.weeks).filter(x => x.done && x.calls && x.week !== D.week) : [];
-    const tot = {n: G.n, right: G.right, fn: G.flips.n, fr: G.flips.right};
-    s.forEach(x => { tot.n += x.calls.n; tot.right += x.calls.right; tot.fn += x.calls.fn; tot.fr += x.calls.fr; });
+    const tot = {n: G.n, right: G.right, fn: G.flips.n, fr: G.flips.right, nn: G.notes.n, nr: G.notes.right};
+    s.forEach(x => { tot.n += x.calls.n; tot.right += x.calls.right; tot.fn += x.calls.fn; tot.fr += x.calls.fr; tot.nn += x.calls.nn || 0; tot.nr += x.calls.nr || 0; });
     const pct = (a, b) => (b ? Math.round(a / b * 100) + '%' : '–');
     const who = p => `<b${pcAttr(p)}>${esc(p.name)}</b> <small>${esc(rl(p))}${SCC.rankNote(p) ? ' · ' + esc(SCC.rankNote(p)) : ''}</small>`;
     const rows = G.rows.map(r => `<li class="${r.right === null ? 'cc-wait' : r.right ? 'cc-right' : 'cc-wrong'}">
-      <span class="cc-lg">${esc(r.league)} · ${esc(slotName(r.slot))}${r.flip ? ' <span class="pill p-swap" title="The matchup tilt started him over the higher-ranked player">tilt</span>' : ''}</span>
+      <span class="cc-lg">${esc(r.league)} · ${esc(slotName(r.slot))}${r.flip ? ' <span class="pill p-swap" title="The matchup tilt started him over the higher-ranked player">tilt</span>' : ''}${
+        r.note ? ' <span class="pill p-muted" title="The projections liked the bench player, and Titan followed your rankings anyway">note</span>' : ''}</span>
       <span class="cc-who">${who(r.pick)} <em>over</em> ${who(r.other)}${has(r.a) && has(r.b) ? ` <small class="cc-proj">projected ${fmt(r.a)} vs ${fmt(r.b)}</small>` : ''}</span>
       <span class="cc-res">${r.right === null ? '<small>yet to play</small>' : `<b>${fmt(r.pickPts)}</b> vs ${fmt(r.otherPts)} <span class="${r.right ? 'good' : 'amber'}">${r.right ? '✓' : '✗'} ${signed(r.margin)}</span>`}</span></li>`).join('');
     return `<section class="card pad ccalls"><h3>Close calls, graded</h3>
       <p class="fine">Each close call as it stood before kickoff: Titan's pick against the bench player your rankings had within a tier, and what each scored.
-        Right when the pick outscored him.${live ? ' Games are still on: a call counts once both have played.' : ''}</p>
+        Right when the pick outscored him. The rows marked <b>note</b> aren't close calls: they are the spots where the projections liked someone on your bench and Titan
+        followed your rankings anyway, graded so the note's bar can be judged.${live ? ' Games are still on: a call counts once both have played.' : ''}</p>
       <div class="wsum-stats cc-stats">
         <div><b>${G.n ? `${G.right} of ${G.n}` : '–'}</b><span>right this week${G.n ? ` (${pct(G.right, G.n)})` : ''}</span></div>
         <div><b>${G.ranks.n ? `${G.ranks.right} of ${G.ranks.n}` : '–'}</b><span>by your rankings</span></div>
         <div><b>${G.flips.n ? `${G.flips.right} of ${G.flips.n}` : '–'}</b><span>matchup-tilt flips</span></div>
+        <div><b>${G.notes.n ? `${G.notes.right} of ${G.notes.n}` : '–'}</b><span>times the projections disagreed and your rankings were right</span></div>
       </div>
       ${s.length ? `<p class="fine cc-season">Season so far, ${plural(s.length + (live ? 0 : 1), 'week')}: <b>${tot.right} of ${tot.n}</b> right (${pct(tot.right, tot.n)}), the tilt's flips <b>${tot.fr} of ${tot.fn}</b> (${
-        pct(tot.fr, tot.fn)})${tot.fn >= 10 ? (tot.fr / tot.fn >= 0.55 ? '. The tilt is earning its keep.' : tot.fr / tot.fn < 0.45 ? '. The tilt is losing more than it wins: worth a look at its margin.' : '. The tilt is about even so far.') : ''}</p>` : ''}
+        pct(tot.fr, tot.fn)})${tot.nn ? `, the disagreement notes <b>${tot.nr} of ${tot.nn}</b> (${pct(tot.nr, tot.nn)})` : ''}${tot.fn >= 10 ? (tot.fr / tot.fn >= 0.55 ? '. The tilt is earning its keep.' : tot.fr / tot.fn < 0.45 ? '. The tilt is losing more than it wins: worth a look at its margin.' : '. The tilt is about even so far.') : ''}</p>` : ''}
       <ul class="cc-list">${rows}</ul></section>`;
   }
 
@@ -2250,6 +2274,26 @@
   const hideTip = () => { if (tipEl) tipEl.hidden = true; };
 
   // While the week is live, a player who hasn't scored yet shows no gap to his projection.
+  /* What Titan's rankings would have started, beside what actually did, spot by spot with the points each scored
+     (Results). Only where the two differ, and only once the week is over: mid-week a starter yet to play shows 0 and
+     every row would look like a mistake. The gap at the foot is the week's cost of the difference. */
+  function scoreCompare(r, live) {
+    if (live || !r.byRankLine || !r.byRankLine.length) return '';
+    const act = (r.detail || []).filter(d => d.slot !== 'bench');
+    const rows = r.byRankLine.map((o, i) => {
+      const mine = (act[i] || {}).p || null, his = o.p || null;
+      const same = (!mine && !his) || (mine && his && String(mine.id) === String(his.id));
+      const cell = p => (p ? `<b>${esc(p.name)}</b> <small>${fmt(p.pts)}</small>` : '<small>empty</small>');
+      return {same, html: `<tr class="${same ? '' : 'sc-diff'}"><th scope="row">${esc(slotName(o.slot))}</th><td>${cell(his)}</td><td>${cell(mine)}</td></tr>`};
+    });
+    if (rows.every(x => x.same)) return '<p class="fine sc-same">You started exactly what your rankings would have.</p>';
+    const gap = Math.round((r.byRank - r.actual) * 10) / 10;
+    return `<div class="table-wrap sc-cmp"><table class="lu-cmp"><thead><tr><th scope="col"><span class="sr-only">Spot</span></th>
+      <th scope="col">Your rankings would have</th><th scope="col">You started</th></tr></thead><tbody>${rows.map(x => x.html).join('')}</tbody></table>
+      <p class="fine">${gap > 0 ? `Following them would have scored <b class="amber">${fmt(gap)} more</b>.`
+        : gap < 0 ? `Your lineup beat them by <b class="good">${fmt(-gap)}</b>.` : 'Both lineups scored the same.'}</p></div>`;
+  }
+
   function detailRow(d, live) {
     const slot = `<span class="slot">${esc(d.slot === 'bench' ? 'BENCH' : slotName(d.slot))}</span>`;
     if (!d.p) return `<li class="row r-stop">${slot}<span class="pos"></span><span class="who"><b>Empty slot</b></span><span class="right"></span></li>`;

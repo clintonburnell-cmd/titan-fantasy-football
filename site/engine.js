@@ -2043,15 +2043,22 @@
      both have played: {n, right, flips: {n, right}, ranks: {n, right}, rows: [{pick, other, flip, league, slot, a, b,
      pickPts, otherPts, margin, right}]}. A call is right when the pick outscored the other. */
   function gradeCalls(calls, ptsOf) {
-    var out = {n: 0, right: 0, flips: {n: 0, right: 0}, ranks: {n: 0, right: 0}, rows: []};
+    // `notes` are the projections-disagree lines, where Titan followed the rankings and said so: graded apart, because
+    // they are not close calls and lumping them in would flatter or spoil the close-call score.
+    var out = {n: 0, right: 0, flips: {n: 0, right: 0}, ranks: {n: 0, right: 0}, notes: {n: 0, right: 0}, rows: []};
     (calls || []).forEach(function (c) {
       if (!c || !c.pick || !c.other) return;
       var a = ptsOf(c.pick.id), b = ptsOf(c.other.id);
       var done = typeof a === 'number' && typeof b === 'number' && isFinite(a) && isFinite(b);
-      var row = {pick: c.pick, other: c.other, flip: !!c.flip, league: c.league, slot: c.slot, a: c.a, b: c.b,
+      var row = {pick: c.pick, other: c.other, flip: !!c.flip, note: !!c.note, league: c.league, slot: c.slot, a: c.a, b: c.b,
         pickPts: done ? round2(a) : null, otherPts: done ? round2(b) : null, margin: done ? round2(a - b) : null, right: done ? a > b : null};
       out.rows.push(row);
       if (!done) return;
+      if (c.note) {
+        out.notes.n++;
+        if (row.right) out.notes.right++;
+        return;
+      }
       out.n++;
       if (row.right) out.right++;
       var g = c.flip ? out.flips : out.ranks;
@@ -2228,6 +2235,29 @@
       });
     });
     return n;
+  }
+
+  /* The pre-kickoff sweep (Today): how many lineups are ready, and what is left in the ones that aren't. Ready means
+     the rankings want no change, nothing is stopping the lineup (an empty spot, a starter out or on bye) and no starter
+     carries an injury tag. {ready, total, problems: [{key, stops, moves, hurt, what}]}, the worst first, so one line
+     can say where to look before the early games. */
+  function lineupSweep(leagues) {
+    var out = {ready: 0, total: 0, problems: []};
+    (leagues || []).forEach(function (L) {
+      out.total++;
+      var moves = (L.moves || []).length, stops = Number(L.stops) || 0;
+      var hurt = (L.hurt || []).filter(function (h) {
+        return !(L.moves || []).some(function (m) { return m.out && m.out.id === h.id; });
+      }).length;
+      if (!moves && !stops && !hurt) { out.ready++; return; }
+      var bits = [];
+      if (stops) bits.push(stops === 1 ? 'a spot to fill' : stops + ' spots to fill');
+      if (moves) bits.push(moves === 1 ? 'a change to make' : moves + ' changes to make');
+      if (hurt) bits.push(hurt === 1 ? 'a hurt starter' : hurt + ' hurt starters');
+      out.problems.push({key: (L.cfg && L.cfg.key) || '', stops: stops, moves: moves, hurt: hurt, what: bits.join(', ')});
+    });
+    out.problems.sort(function (a, b) { return (b.stops - a.stops) || (b.hurt - a.hurt) || (b.moves - a.moves) || String(a.key).localeCompare(String(b.key)); });
+    return out;
   }
 
   function closeCalls(roster, slots, startedIds) {
@@ -2825,7 +2855,8 @@
     });
 
     var actual = sumPts(roster.filter(function (p) { return p.start; }));
-    var rankLine = optimal(roster, lg.lineup).map(function (o) { return o.p; });
+    var rankSpots = optimal(roster, lg.lineup);
+    var rankLine = rankSpots.map(function (o) { return o.p; });
     var byRank = sumPts(rankLine);
     // Players with no frozen call get the call today's rankings make.
     var inLine = {};
@@ -2856,6 +2887,8 @@
       leftOnBench: round2(byRank - actual), ceiling: round2(perfect - byRank),
       projActual: projActual, projByRank: projByRank, vsProj: round2(actual - projActual),
       frozen: roster.filter(function (p) { return p.frozen; }).length,
+      // The lineup the rankings would have set, spot by spot, beside the one that played: Results shows the two.
+      byRankLine: rankSpots.map(function (o) { return {slot: o.slot, p: o.p || null}; }),
       close: cc, detail: detail, roster: roster};
   }
 
@@ -3361,7 +3394,7 @@
     rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
-    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest, taggedIds: taggedIds, applyInjuries: applyInjuries,
+    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest, taggedIds: taggedIds, applyInjuries: applyInjuries, lineupSweep: lineupSweep,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,

@@ -610,6 +610,12 @@ section('close calls graded against the points (gradeCalls)');
   const G = SCC.gradeCalls(calls, id => (id in pts ? pts[id] : null));
   check(G.n === 3 && G.right === 1 && G.rows.length === 4, `three calls with both players played, one right (${G.right} of ${G.n}), every call listed`);
   check(G.ranks.n === 2 && G.ranks.right === 1 && G.flips.n === 1 && G.flips.right === 0, 'the rankings\' calls and the tilt\'s flips are counted apart');
+  // A projections-disagree note is graded apart: Titan kept the starter, and it was right when the starter outscored him.
+  const withNote = calls.concat([{league: 'C', slot: 'WR', pick: {id: '9', name: 'Kept'}, other: {id: '10', name: 'Liked'}, note: true}]);
+  const notePts = {9: 14, 10: 6};
+  const GN = SCC.gradeCalls(withNote, id => (id in notePts ? notePts[id] : (id in pts ? pts[id] : null)));
+  check(GN.notes.n === 1 && GN.notes.right === 1 && GN.n === 3 && GN.rows[4].note === true,
+    'a note is counted in its own bucket and left out of the close-call score');
   check(G.rows[0].margin === 7.1 && G.rows[0].right === true && G.rows[1].margin === -13.5 && G.rows[1].right === false, 'each row carries the margin and the verdict');
   check(G.rows[2].right === false && G.rows[3].right === null && G.rows[3].pickPts === null, 'a tie is not right; a call with a player yet to play is ungraded');
 }
@@ -675,6 +681,24 @@ section('streaming a kicker or a defense, and the next best at a spot (streamPic
   const opt = [{slot: 'RB', p: roster[0]}];
   check(SCC.nextBest(opt, roster, 'RB').name === 'Bench One', 'the best bench player who fits the spot, skipping the hurt and the on-bye');
   check(SCC.nextBest(opt, roster, 'FLEX').name === 'A Tight End' && SCC.nextBest(opt, roster, 'QB') === null, 'a flex takes the best of any eligible position; a spot with nobody gives null');
+}
+
+section('the pre-kickoff sweep (lineupSweep)');
+{
+  const LG = (key, o) => Object.assign({cfg: {key}, moves: [], hurt: [], stops: 0}, o);
+  const hurtOne = {id: 'h1', name: 'Hurt Man'};
+  const sweepLeagues = [LG('Set A'), LG('Set B'),
+    LG('Needs One', {moves: [{slot: 'RB', inn: {id: 'a'}, out: {id: 'b'}}]}),
+    LG('Empty Spot', {stops: 2}),
+    LG('Hurt', {hurt: [hurtOne]}),
+    LG('Covered', {hurt: [hurtOne], moves: [{slot: 'RB', inn: {id: 'x'}, out: hurtOne}]})];
+  const SW = SCC.lineupSweep(sweepLeagues);
+  check(SW.total === 6 && SW.ready === 2 && SW.problems.length === 4,
+    `every league counted, the ready ones apart (${SW.ready} of ${SW.total} ready, ${SW.problems.length} with something left)`);
+  check(SW.problems[0].key === 'Empty Spot' && SW.problems[0].what === '2 spots to fill', 'the worst comes first, and says what is wrong: ' + SW.problems[0].what);
+  check(SW.problems.map(x => x.key).join() === 'Empty Spot,Hurt,Covered,Needs One', 'then the hurt starters, then the plain changes: ' + SW.problems.map(x => x.key).join(', '));
+  check(SW.problems.find(x => x.key === 'Covered').what === 'a change to make', "a hurt starter the changes already bench isn't counted twice");
+  check(SCC.lineupSweep([]).total === 0 && SCC.lineupSweep(null).problems.length === 0, 'no leagues, nothing to say');
 }
 
 section('injury tags refreshed without a full refresh (taggedIds, applyInjuries)');
