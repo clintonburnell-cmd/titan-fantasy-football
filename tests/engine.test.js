@@ -683,6 +683,22 @@ section('streaming a kicker or a defense, and the next best at a spot (streamPic
   check(SCC.nextBest(opt, roster, 'FLEX').name === 'A Tight End' && SCC.nextBest(opt, roster, 'QB') === null, 'a flex takes the best of any eligible position; a spot with nobody gives null');
 }
 
+section('what a lineup change is worth (lineupSwing)');
+{
+  const P = (proj, pts, state) => ({proj, pts: pts || 0, state: state || 'pre'});
+  const opp = [P(20), P(15), P(12)];
+  const now = [P(18), P(10), P(9)], better = [P(18), P(16), P(9)];
+  const S1 = SCC.lineupSwing(now, better, opp);
+  check(S1.before < S1.after && S1.swing === S1.after - S1.before && S1.points === 6,
+    `a better lineup lifts the chance of winning (${S1.before}% to ${S1.after}%, ${S1.points} more points)`);
+  check(SCC.lineupSwing(now, now, opp).swing === 0 && SCC.lineupSwing(now, now, opp).points === 0, 'no change, no swing');
+  const S2 = SCC.lineupSwing(better, now, opp);
+  check(S2.swing === -S1.swing && S2.points === -6, 'and the other way round it costs you the same');
+  // Once a game is over its points are settled, so a swap there changes nothing.
+  const done = [P(18, 22, 'complete'), P(10, 4, 'complete'), P(9, 11, 'complete')];
+  check(SCC.lineupSwing(done, done.slice().reverse(), opp).swing === 0, 'a finished lineup cannot be improved by reordering it');
+}
+
 section('the pre-kickoff sweep (lineupSweep)');
 {
   const LG = (key, o) => Object.assign({cfg: {key}, moves: [], hurt: [], stops: 0}, o);

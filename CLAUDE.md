@@ -244,6 +244,13 @@ One note per screen or feature.
   (3) or more while the rankings put them well apart, so not a close call); it never changes the call either, and shows
   only with the person's own rankings for the week. Matchup's card shows each side's range (`rangeLine`: points so far plus the floors, and plus the
   ceilings, of the starters yet to play).
+- What a lineup change is worth (v1.83.0, `changeWorth` under the moves on a league card): `SCC.lineupSwing` runs
+  `winProbability` twice against the same opponent, the lineup as it stands and Titan's, from the Matchup tab's own
+  lists (`winList`, `recWinList`). It draws nothing until the matchup has loaded and nothing on a later week's plan.
+- A hurt player's practice report (v1.83.0): `fetchDetails` reads Sleeper's `practice_participation` and
+  `practice_description` into `prac`/`pracNote`, `applyDetails` and `applyInjuries` carry them, and
+  `SCC.practiceNote` turns them into words with a lean (full participant up, did not practise down). It is shown,
+  never acted on: it does not bench anyone and does not move the tilt.
 - The matchup tilt (v1.42.0): `analyze` hands `SCC.analyzeAll` a `tilt(p, cfg)` (`tiltFor`: the projection in the
   league's scoring, +8% against the eight softest defenses to his position, -8% against the eight toughest, through
   `matchRank`, which since v1.73.0 prefers the week's Match Up data sheet (`SCC.matchupRank`, the owner's and the lab

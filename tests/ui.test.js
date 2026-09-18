@@ -329,6 +329,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(!head.open && /Team 1/.test(head.score) && /Team 2/.test(head.score), 'each league starts collapsed, its header showing both teams and scores: ' + head.score);
   check(head.wp.length === 2 && head.wp[0] + head.wp[1] === 100, `a chance-to-win bar in the header (${head.wp.join('% / ')}%)`);
   check(/^(Winning|Losing) by \d+\.\d|^Tied|^Projected to (win|lose) by \d|^Projected to tie|^(Won|Lost) by \d/.test(head.status), 'where you stand, in words: ' + head.status);
+
   const mchips = await ev(`[...document.querySelectorAll('[data-mfilter]')].map(b => ({id: b.dataset.mfilter, n: Number(b.innerText.match(/(\\d+)$/)[1])}))`);
   let mchipsOk = mchips.length === 4 && mchips[0].id === 'all' && await ev(`document.querySelectorAll('.match-sum .tile').length === 3`);
   for (const c of mchips) {
@@ -412,6 +413,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await send('Page.navigate', {url: ORIGIN + '/app/results'});
   check(await waitFor(`!!document.querySelector('.wsum-pts b')`, 30000), 'opened straight onto Results (its address, or a reload there), the week loads by itself');
 
+  // With the matchup loaded, Lineups says what this week's changes are actually worth, in win chance and points.
+  await tab('lineups');
+  const worth = await ev(`(() => { const w = document.querySelector('.moves .worth'); const moves = document.querySelectorAll('.move').length;
+    return {moves, text: w ? w.textContent.replace(/\s+/g, ' ').trim() : ''}; })()`);
+  check(!worth.moves || /worth .*win chance, \d+% to \d+%/.test(worth.text),
+    worth.moves ? 'the changes say what they are worth in win chance: ' + worth.text.slice(0, 110) : 'no changes to price this week');
   T.section('the Trade tab');
   await tab('trade');
   check(await waitFor(`document.querySelectorAll('[data-ui="tradePartner"] option').length > 1`, 30000), 'the Trade tab lists the other teams in the league');

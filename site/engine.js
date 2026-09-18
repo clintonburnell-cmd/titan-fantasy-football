@@ -2221,6 +2221,18 @@
 
   /* Those tags put back on the rosters: `details` is {id: {inj}} as Sleeper gave them. Sets `inj` and `outish` on every
      copy of the player across the leagues, clearing a tag that has gone, and returns how many rows changed. Pure. */
+  /* What a practice report says about a Questionable player, in a word: a full participant usually plays, a limited one
+     is a genuine question, and one who did not practise usually sits. `p.prac` is Sleeper's practice participation.
+     '' when there is nothing to say, so nothing is invented from silence. */
+  var PRAC = {'Full Participation': 'practised fully', 'Limited Participation': 'practised in part', 'Did Not Participate In Practice': 'did not practise'};
+  var PRAC_LEAN = {'Full Participation': 'up', 'Limited Participation': '', 'Did Not Participate In Practice': 'down'};
+  function practiceNote(p) {
+    var k = p && p.prac ? String(p.prac) : '';
+    var said = PRAC[k] || (k ? k.toLowerCase() : '');
+    if (!said) return '';
+    return {text: said, lean: PRAC_LEAN[k] === undefined ? '' : PRAC_LEAN[k], note: (p.pracNote || '').trim()};
+  }
+
   function applyInjuries(leagues, details) {
     var n = 0;
     (leagues || []).forEach(function (d) {
@@ -2228,8 +2240,10 @@
         var got = p && details && details[String(p.id)];
         if (!got) return;
         var inj = got.inj || '';
-        if (p.inj === inj) return;
+        if (p.inj === inj && p.prac === (got.prac || '')) return;
         p.inj = inj;
+        p.prac = got.prac || '';
+        p.pracNote = got.pracNote || '';
         p.outish = !!(inj && INJ_OUT[inj.split(' ')[0]]);
         n++;
       });
@@ -2258,6 +2272,16 @@
     });
     out.problems.sort(function (a, b) { return (b.stops - a.stops) || (b.hurt - a.hurt) || (b.moves - a.moves) || String(a.key).localeCompare(String(b.key)); });
     return out;
+  }
+
+  /* What a week's lineup changes are actually worth (Lineups): your chance of winning with the lineup as it stands
+     against the chance with Titan's, the same opponent both times, and the projected points between them. A rank says
+     who is better; this says what it costs you. Lists are winProbability's shape: [{pts, proj, state}].
+     {before, after, swing, points} in whole percents and points. */
+  function lineupSwing(now, next, opp) {
+    var a = winProbability(now, opp), b = winProbability(next, opp);
+    var pa = Math.round(a.a * 100), pb = Math.round(b.a * 100);
+    return {before: pa, after: pb, swing: pb - pa, points: round1(b.expA - a.expA)};
   }
 
   function closeCalls(roster, slots, startedIds) {
@@ -2353,7 +2377,7 @@
         var x = details[p.id];
         if (x && x.team && x.team !== p.team) { p.team = x.team; p.bye = byeOf(x.team); }
         // A player Sleeper can't look up (an unmatched ESPN or Yahoo player) keeps the tag his league gave him.
-        if (x) p.inj = x.inj;
+        if (x) { p.inj = x.inj; p.prac = x.prac || ''; p.pracNote = x.pracNote || ''; }
         p.outish = !!(p.inj && INJ_OUT[p.inj.split(' ')[0]]);
         if (p.inj) tagged[p.id] = 1;
       });
@@ -3394,7 +3418,7 @@
     rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
-    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest, taggedIds: taggedIds, applyInjuries: applyInjuries, lineupSweep: lineupSweep,
+    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest, taggedIds: taggedIds, applyInjuries: applyInjuries, lineupSweep: lineupSweep, lineupSwing: lineupSwing, practiceNote: practiceNote,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,

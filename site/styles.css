@@ -800,6 +800,12 @@ table.byes { border-collapse: collapse; width: 100%; font-size: .85rem; font-var
 .rost-more > summary { padding: 8px 14px; border-top: 1px solid var(--line); color: var(--muted); font-weight: 600; font-size: .78rem; }
 .rost-more > summary:hover, .wlg-fold > summary:hover { color: var(--text); }
 .news-more { justify-content: center; padding-top: 10px; }
+.worth { padding-top: 6px; }
+.worth b { font-size: .88rem; }
+/* How a hurt player practised: the missing half of a Questionable tag. */
+.prac { color: var(--muted); font-weight: 600; }
+.prac.p-up { color: var(--ok); }
+.prac.p-down { color: var(--stop); }
 /* A screen waiting on data keeps its shape. */
 .skel { display: grid; gap: 8px; padding: 4px 0; }
 .skel-row { display: block; height: 56px; border-radius: 12px; background: var(--chip); opacity: .75; }

@@ -128,7 +128,10 @@
         if (!p) return;
         out[chunk[j]] = {
           name: SCC.fullName(p), pos: p.position || '', team: p.team || '',
-          inj: p.injury_status ? p.injury_status + (p.injury_body_part ? ' (' + p.injury_body_part + ')' : '') : ''
+          inj: p.injury_status ? p.injury_status + (p.injury_body_part ? ' (' + p.injury_body_part + ')' : '') : '',
+          // How he practised this week, where the NFL has said: the missing input on a Questionable call, since a
+          // full participant usually plays and a player who did not practise usually does not.
+          prac: p.practice_participation || '', pracNote: p.practice_description || ''
         };
       });
     }

@@ -1149,6 +1149,27 @@
   };
   const kickOf = p => kickText(p) ? ', ' + kickText(p) : '';
 
+  /* What this week's changes are worth, under the list of them: your chance of winning as the lineup stands against
+     the chance with Titan's, the same opponent both times (SCC.lineupSwing over the Matchup tab's own numbers). A rank
+     says who is better; this says what it costs you, which is the question actually being asked. Nothing until the
+     matchup has loaded, and nothing on a later week's plan. */
+  function recWinList(L) {
+    return (L.opt || []).map(o => (o.p ? {pts: Number(o.p.pts) || 0, proj: SCC.projFor(S.proj, o.p.id, L.cfg), state: (gameOf(o.p.team) || {}).state || ''} : null));
+  }
+  function changeWorth(L) {
+    if (LV || !L.moves.length || !S.snap) return '';
+    const M = S.match;
+    if (!M.data || M.week !== S.snap.week) { winChance(L.cfg); return ''; } // winChance starts the load
+    const m = M.data.find(x => x.cfg.id === L.cfg.id);
+    if (!m || m.error || m.none) return '';
+    const W = SCC.lineupSwing(winList(m.me, L.cfg), recWinList(L), winList(m.opp, L.cfg));
+    if (!W.swing && !W.points) return '';
+    const worth = W.swing > 0 ? `<b class="good">+${W.swing} points of win chance</b>` : W.swing < 0 ? `<b class="amber">${W.swing} points of win chance</b>` : '<b>no change to your win chance</b>';
+    return `<p class="fine worth">Making these changes is worth ${worth}, ${W.before}% to ${W.after}%${
+      W.points ? `, and ${fmt(Math.abs(W.points))} projected points ${W.points > 0 ? 'more' : 'fewer'}` : ''}.</p>`;
+  }
+
+
   function leagueCard(L) {
     const st = L.stops ? ['stop', plural(L.stops, 'problem')]
       : L.moves.length ? ['swap', plural(L.moves.length, 'change')]
@@ -1168,7 +1189,7 @@
         <div class="move"><span class="slot">${esc(slotName(m.slot))}</span>
           <span class="mv out${m.to ? ' to' : ''}">${m.out ? `${esc(m.out.name)} <em>${m.to ? `to ${esc(slotName(m.to))}${esc(kickOf(m.out))}` : esc(rl(m.out))}</em>${SCC.rankNote(m.out) ? `<small class="mv-note">${esc(SCC.rankNote(m.out))}</small>` : ''}` : '<em>nobody</em>'}</span>
           <span class="mv in">${esc(m.inn.name)} <em>${m.from ? `from ${esc(slotName(m.from))}${esc(kickOf(m.inn))}` : esc(rl(m.inn)) + (m.inn.opp ? ' vs ' + esc(m.inn.opp) : '')}</em>${SCC.rankNote(m.inn) ? `<small class="mv-note">${esc(SCC.rankNote(m.inn))}</small>` : ''}</span>
-        </div>`).join('')}${L.moves.some(m => m.from || m.to) ? '<p class="fine">Later kickoffs go in FLEX, so a late scratch can still be covered from your bench.</p>' : ''}</div>`;
+        </div>`).join('')}${L.moves.some(m => m.from || m.to) ? '<p class="fine">Later kickoffs go in FLEX, so a late scratch can still be covered from your bench.</p>' : ''}${changeWorth(L)}</div>`;
     }
     const rec = recLineup(L);
     h += compareLineups(L, rec);
@@ -1294,7 +1315,8 @@
       const ba = SCC.rankBits(starter), bb = SCC.rankBits(bench), pair = (x, y, f) => (x !== null && y !== null ? f(x) + ' vs ' + f(y) : '');
       const nums = [pair(ba.overall, bb.overall, n => '#' + n), pair(ba.pos, bb.pos, n => starter.pos + n), pair(ba.tier, bb.tier, n => 'tier ' + n)].filter(Boolean).join(', ');
       // His status matters to the reader: a projection is written as though he plays, so a tag is why it can be optimistic.
-      const tag = bench.inj ? ` ${esc(bench.name)} is ${esc(String(bench.inj))}, and the projection is written as though he plays.` : '';
+      const pr = bench.inj ? SCC.practiceNote(bench) : '';
+      const tag = bench.inj ? ` ${esc(bench.name)} is ${esc(String(bench.inj))}${pr ? ` and ${esc(pr.text)}` : ''}, and the projection is written as though he plays.` : '';
       return `<p class="note disagree"><b>Projections disagree:</b> with the matchups counted, <b>${esc(bench.name)}</b> projects ${fmt(b)} against <b>${esc(starter.name)}</b>'s ${
         fmt(a)}, while your rankings have ${esc(starter.name)} well ahead${nums ? ` (${esc(nums)})` : ''}.${tag} Titan follows your rankings here; worth a look if the news has moved since you imported them.</p>`;
     }).join('');
@@ -1338,7 +1360,11 @@
 
   function statusText(p) {
     const s = [p.locked && !scored(p) && 'Locked', p.inj].filter(Boolean).join(' · ');
-    return s ? ` · <span class="${p.outish ? 'bad' : 'warn'}">${esc(s)}</span>` : '';
+    if (!s) return '';
+    // A tag on its own doesn't say much; how he practised does.
+    const pr = p.inj ? SCC.practiceNote(p) : '';
+    const lean = pr ? ` <span class="prac ${pr.lean ? 'p-' + pr.lean : ''}" title="${esc(pr.note || 'From this week’s practice report')}">${esc(pr.text)}</span>` : '';
+    return ` · <span class="${p.outish ? 'bad' : 'warn'}">${esc(s)}</span>${lean}`;
   }
 
   /* Game context for start/sit calls, from Titan's server (/api/game-context): each team's
@@ -4290,6 +4316,18 @@
     const started = {}, games = (S.snap && S.snap.games) || {};
     Object.keys(games).forEach(t => { if (games[t] && games[t].state !== 'pre') started[t] = 1; });
     const opts = {implied: t => impliedOf({team: t}), oppImplied: oppImpliedOf, rank: (t, pos) => matchRank({team: t, pos})};
+    /* The weeks after this one: a kicker or a defense is worth holding when the next few games are soft too, and the
+       betting lines only exist for this week, so the look-ahead uses the schedule and the season's points allowed by
+       position (the same numbers Schedule strength shows). SCC.scheduleStrength over the next STREAM_AHEAD weeks. */
+    const swk = S.snap.week, ahead = {};
+    if (S.sos.sched && S.ctx.data && S.ctx.data.dvp) {
+      ['K', 'DEF'].forEach(pos => {
+        ahead[pos] = {};
+        const p2 = pos === 'DEF' ? 'QB' : 'K'; // what a defense faces is the passing offense; a kicker rides his own
+        SCC.scheduleStrength(S.sos.sched, S.ctx.data.dvp, p2, swk + 1, {soon: [swk + 1, swk + STREAM_AHEAD]})
+          .forEach(r => { ahead[pos][r.team] = r.spans.soon; });
+      });
+    } else if (!S.sos.sched && !S.sos.busy && !S.sos.error) loadSos();
     const cards = leagues.filter(L => inPick(L.cfg)).map(L => {
       const slots = L.cfg.lineup || [];
       const kinds = [['K', 'Kicker'], ['DEF', 'Defense']].filter(k => slots.includes(k[0]));
@@ -4303,8 +4341,11 @@
         const mine = L.roster.find(x => x.start && x.pos === pos) || null;
         const rows = picks.map(({p, why}) => {
           const add = {id: pos === 'DEF' ? '' : idByName(players, p.name), name: p.name, pos, team: p.team};
+          const soon = (ahead[pos] || {})[SCC.teamAbbr(p.team)];
+          const after = has(soon) ? `<small class="wsoon">Next ${STREAM_AHEAD} weeks: ${esc(soon <= 12 ? 'soft' : soon >= 21 ? 'tough' : 'middling')}, ${
+            nth(Math.round(soon))} on average</small>` : '';
           return `<li class="wrow"><span class="who"><b${pcAttr(add)}>${esc(p.name)}</b> <small>${esc([p.team, rl(p)].filter(Boolean).join(' · '))}</small>${
-            bid(L, p.name, add, mine)}<small class="wuse">${esc(why.join(' · ') || 'no game read yet')}</small></span></li>`;
+            bid(L, p.name, add, mine)}<small class="wuse">${esc(why.join(' · ') || 'no game read yet')}</small>${after}</span></li>`;
         }).join('');
         const now = mine ? `You start ${esc(mine.name)} (${esc(rl(mine) || mine.pos)})` : `No ${esc(label.toLowerCase())} in your lineup`;
         return `<div class="wstream-k"><h4>${esc(label)}</h4><p class="fine">${now}.</p><ul class="wlist">${rows}</ul></div>`;
@@ -4315,10 +4356,12 @@
     if (!cards.length) return '';
     return `<section class="card pad wsec wstream"><h3>Streamers this week</h3>
       <p class="fine">Kickers and defenses turn on the game, not the season, so these are ordered by it: a kicker by what his own team is expected to score, a defense by how
-        little the offense it faces is expected to score, both moved by the matchup. Free agents only, and only in leagues that start one.</p>
+        little the offense it faces is expected to score, both moved by the matchup. Each one also says how the next ${STREAM_AHEAD} weeks look, so you can tell a one-week
+        rental from someone worth holding. Free agents only, and only in leagues that start one.</p>
       <ul class="wlist">${cards.join('')}</ul></section>`;
   }
 
+  const STREAM_AHEAD = 3; // weeks of look-ahead on a streamer: enough to say whether he is worth holding
   const TREND_FIRST = 8; // trending pickups shown before "show more": Sleeper returns forty
   function screenWaivers() {
     if (!S.snap || !S.A) return emptyState();
