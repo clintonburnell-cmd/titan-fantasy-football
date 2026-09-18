@@ -833,6 +833,12 @@ table.byes { border-collapse: collapse; width: 100%; font-size: var(--t-md); fon
 .ch-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
 .ch-list li { font-size: var(--t-md); padding-left: 16px; position: relative; }
 .ch-list li::before { content: ''; position: absolute; left: 0; top: .55em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-2); }
+/* What this week's result is worth, and how each manager has played it. */
+.whatif { padding: 8px 0 2px; }
+.mgr-t td b { font-variant-numeric: tabular-nums; }
+.mgr-t td small { display: block; color: var(--muted); font-size: var(--t-2xs); }
+.mgr-t tr.mgr-me td { background: var(--chip); }
+.mgr-t tr.mgr-me td:first-child b { color: var(--accent-2); }
 /* A screen waiting on data keeps its shape. */
 .skel { display: grid; gap: 8px; padding: 4px 0; }
 .skel-row { display: block; height: 56px; border-radius: var(--r-lg); background: var(--chip); opacity: .75; }

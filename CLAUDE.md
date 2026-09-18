@@ -288,6 +288,14 @@ One note per screen or feature.
 - Standings under All leagues (v1.46.0) leads with your playoff odds in every league (`oddsOverview`, `.podds`: each
   league's schedule and teams load quietly and its simulation runs, rows fill in best odds first, a row
   (`data-stand`) opens that league's full standings below, `S.ui.standLeague`).
+- Standings also carries what this week's result is worth (`whatIf`: the simulation twice more at `WHATIF_SIMS` with
+  `opts.force = {week, team, win}`, which only sets the order of a game's scores, never their size) and how each
+  manager has played it (`managerCard`, `SCC.managerReport` over the league's transactions and today's values;
+  a category with nothing in it is null, so a quiet manager is blank rather than last). Both wait for the league's
+  teams, and the manager card asks for the transactions itself.
+- A projection moves once the game does (v1.86.0, `SCC.liveProjection` through `projOf`): points plus half of what
+  is left while a game is on, the points once it is over, the plain projection before kickoff and on a planned
+  later week. It must keep agreeing with `winProbability`, which makes the same assumption.
 - The Standings tab (`SCC.standings`): records, all-play, luck, power and playoff odds from 5,000
   seeded simulations (each team scores around its mean with its own swing: the spread of its weekly
   scores blended with the league's, `SD_PRIOR` games' worth, clamped 8 to 45). Divisions (v1.45.0): each

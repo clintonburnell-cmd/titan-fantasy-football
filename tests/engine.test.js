@@ -718,6 +718,32 @@ section('what changed since you last looked (whatChanged)');
   check(reimported[0] === 'Your week 2 rankings changed', 'a re-import is the first thing said: ' + reimported[0]);
 }
 
+section('how each manager has played it (managerReport, liveProjection)');
+{
+  const pl = (id, name) => ({id, name, pos: 'RB', team: 'KC'});
+  const teams = [{id: '1', name: 'Me', roster: [pl('a', 'Kept Add'), pl('t1', 'Traded In')]},
+    {id: '2', name: 'Rival', roster: [pl('b', 'Their Add')]},
+    {id: '3', name: 'Quiet', roster: []}];
+  const moves = [
+    {kind: 'waiver', sides: [{roster: '1', adds: [pl('a', 'Kept Add')], drops: []}]},
+    {kind: 'free_agent', sides: [{roster: '1', adds: [pl('z', 'Dropped Since')], drops: []}]},
+    {kind: 'waiver', sides: [{roster: '2', adds: [pl('b', 'Their Add')], drops: []}]},
+    {kind: 'trade', sides: [{roster: '1', adds: [pl('t1', 'Traded In')], drops: [pl('t2', 'Traded Out')]},
+      {roster: '2', adds: [pl('t2', 'Traded Out')], drops: [pl('t1', 'Traded In')]}]}];
+  const value = p => ({a: 40, z: 90, b: 10, t1: 70, t2: 30}[p.id] || 0);
+  const R = SCC.managerReport({teams, moves, value, grades: {1: 12, 2: -4}});
+  const me = R.find(x => x.id === '1'), rival = R.find(x => x.id === '2'), quiet = R.find(x => x.id === '3');
+  check(me.waiverAdds === 2 && me.waiverValue === 40, 'a pickup counts toward waivers only while he is still on the roster: ' + me.waiverValue);
+  check(me.tradeCount === 1 && me.tradeNet === 40 && rival.tradeNet === -40, `a trade is valued both ways at today's numbers (${me.tradeNet} against ${rival.tradeNet})`);
+  check(quiet.waiverValue === null && quiet.tradeNet === null && quiet.draft === null, 'a manager who has done nothing is blank, not bottom');
+  check(me.waiverValueRank === 1 && me.waiverValueOf === 2 && me.draftRank === 1 && rival.draftRank === 2, 'each category is ranked within the league');
+  // The live projection: a number that moves once the game does.
+  check(SCC.liveProjection(20, 8, 'in_game') === 14 && SCC.liveProjection(20, 0, 'pre') === 20 && SCC.liveProjection(20, 25, 'complete') === 25,
+    'before kickoff the projection stands, during the game it is points plus half of what is left, after it the points');
+  check(SCC.liveProjection(20, 26, 'in_game') === 26 && SCC.liveProjection(null, 5, 'in_game') === null,
+    'a player past his projection keeps his points, and no projection stays no projection');
+}
+
 section('the pre-kickoff sweep (lineupSweep)');
 {
   const LG = (key, o) => Object.assign({cfg: {key}, moves: [], hurt: [], stops: 0}, o);

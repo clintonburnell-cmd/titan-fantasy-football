@@ -1107,7 +1107,14 @@
     return h + (list.length ? `<div class="league-grid">${list.map(leagueCard).join('')}</div>` : '') + credit;
   }
 
-  const projOf = (p, cfg) => SCC.projFor(LV ? LV.proj : S.proj, p.id, cfg);
+  /* A player's projection, and once his game is on, what he is actually heading for: Sleeper writes its number before
+     kickoff and never moves it, so by the third quarter it describes a game that is not happening (v1.86.0). A planned
+     later week keeps the plain projection, since none of it has been played. */
+  const projOf = (p, cfg) => {
+    const raw = SCC.projFor(LV ? LV.proj : S.proj, p.id, cfg);
+    if (LV || raw === null || raw === undefined) return raw;
+    return SCC.liveProjection(raw, p.pts, (gameOf(p.team) || {}).state || 'pre');
+  };
 
   /* This week's games across every lineup: starters and bench players whose
      game has started (locked) or is still to come. Players on IR or a taxi
@@ -4720,6 +4727,64 @@
     }
     return St.result;
   }
+  /* What this week's result is worth, in playoff odds: the same simulation twice more with your game already decided
+     (SCC.standings opts.force). Fewer runs than the headline number, since it is a comparison rather than the figure
+     itself, and kept on the league's entry so it is worked out once. Nothing when your game is already played. */
+  const WHATIF_SIMS = 2000;
+  function whatIf(d) {
+    const cfg = d.cfg, St = S.stand[cfg.id], R = standingsResult(d);
+    if (!R || !St || !St.sched) return '';
+    const mineTeam = ((S.trade.teams[cfg.id] || {}).list || []).find(t => t.mine);
+    const me = mineTeam ? R.teams.find(r => String(r.id) === String(mineTeam.id)) : null;
+    if (!me) return '';
+    const wk = S.snap.week;
+    const game = St.sched.games.find(g => !g.done && Number(g.week) === wk && (String(g.a) === String(me.id) || String(g.b) === String(me.id)));
+    if (!game) return '';
+    const key = [St.key, me.id, wk].join('|');
+    if (!St.wif || St.wifKey !== key) {
+      const proj = {};
+      (S.trade.teams[cfg.id].list || []).forEach(t => { proj[t.id] = SCC.lineupPoints(t.roster, cfg.lineup, x => SCC.projFor(S.proj, x.id, cfg) || 0); });
+      const run = win => {
+        const out = SCC.standings(St.sched.teams, St.sched.games, proj,
+          Object.assign(simOpts(cfg, St.sched, WHATIF_SIMS, 7), {force: {week: wk, team: me.id, win}}));
+        const row = (out.teams || []).find(r => String(r.id) === String(me.id));
+        return row ? Math.round(row.playoffs * 100) : null;
+      };
+      St.wifKey = key;
+      St.wif = {w: run(true), l: run(false)};
+    }
+    const {w, l} = St.wif;
+    if (w === null || l === null) return '';
+    const them = String(game.a) === String(me.id) ? game.b : game.a;
+    const other = (R.teams.find(r => String(r.id) === String(them)) || {}).name || 'your opponent';
+    const gap = w - l;
+    return `<p class="fine whatif"><b>This week is worth ${gap >= 20 ? 'a lot' : gap >= 8 ? 'a fair amount' : 'less than it feels'}:</b>
+      beat ${esc(other)} and your playoff chance is <b class="good">${w}%</b>, lose and it is <b class="amber">${l}%</b>.</p>`;
+  }
+
+  /* How each manager in the league has played the parts they control (SCC.managerReport): what the draft returned, what
+     they have picked up and still hold, and what their trades have made, all at today's values. Standings says who is
+     winning; this says who is deciding well. Needs the league's teams and its transactions, so it waits for both. */
+  function managerCard(d, teams) {
+    const M = S.moves[d.cfg.id];
+    if (!teams || !teams.length || !M || !M.list || !M.list.length) return '';
+    const worth = titanValueFor(d.cfg);
+    const R = SCC.managerReport({teams: teams.map(t => ({id: t.id, name: t.name, roster: t.roster})), moves: M.list, value: p => worth(p) || 0});
+    if (!R.some(x => x.waiverValue !== null || x.tradeNet !== null)) return '';
+    const cell = (x, k) => (x[k] === null ? '<td class="fine">–</td>'
+      : `<td><b>${k === 'tradeNet' && x[k] > 0 ? '+' : ''}${thousands(Math.round(x[k]))}</b><small>${nth(x[k + 'Rank'])} of ${x[k + 'Of']}</small></td>`);
+    const rank = x => (x.waiverValueRank || 99) + (x.tradeNetRank || 99);
+    const rows = R.slice().sort((a, b) => rank(a) - rank(b)).map(x =>
+      `<tr${(teams.find(t => String(t.id) === x.id) || {}).mine ? ' class="mgr-me"' : ''}><td class="vr-p"><b>${esc(x.name)}</b></td>${
+        cell(x, 'waiverValue')}${cell(x, 'tradeNet')}<td class="fine">${x.waiverAdds} added, ${plural(x.tradeCount, 'trade')}</td></tr>`).join('');
+    return `<section class="card pad mgr"><h3>How everyone has played it</h3>
+      <p class="fine">The parts a manager controls, at today's values, over the moves Titan can see.</p>
+      <div class="table-wrap vr-scroll"><table class="season-t mgr-t"><thead><tr><th>Manager</th><th>Waivers</th><th>Trades</th><th>Moves</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <details class="how"><summary>What these count</summary><p class="fine">Waivers counts only the players still on the roster, since keeping the good ones is the skill. Trades are valued
+        both ways at today's numbers, so one that has aged badly reads badly. It covers the transactions Titan holds, which is the last few weeks, not the whole season.</p></details></section>`;
+  }
+
   // The simulation's settings for a league: its playoff spots and how divisions seed them (the teams carry their divisions).
   const simOpts = (cfg, sched, sims, seed) => ({playoffTeams: cfg.playoffTeams || sched.playoffTeams, seedType: cfg.seedType || 0, sims, seed});
 
@@ -4824,6 +4889,7 @@
     if (!St || St.busy || !Tm || Tm.busy) return h + skeleton(5, 'Loading the schedule and every team\'s roster');
     const sched = St.sched;
     if (!sched.teams.length || !sched.games.length) return h + '<div class="empty-note">This league has no regular-season schedule yet.</div>';
+    if (!S.moves[cfg.id] && onSleeper(cfg) && !DEMO) loadMoves(d);   // for "How everyone has played it"
     const R = standingsResult(d), picture = playoffPicture(d, sched, R), mineId = String(cfg.platform === 'espn' ? cfg.teamId : d.rosterId), me = R.teams.find(t => t.id === mineId);
     if (me) {
       h += `<div class="banner ok"><b>Your playoff chances in ${esc(cfg.key)}: ${pct(me.playoffs)}.</b> ${me.games
@@ -4846,7 +4912,7 @@
         usual swing (steadied by the league's while few games are played). ${R.divisions ? `Each of the ${R.divisions} divisions' best record takes a playoff spot${
         cfg.seedType === 1 ? ', seeded by record' : ', seeded first'} (the ★ marks today's division leaders).` : 'This league has no divisions.'} All-play is a team's record if it had played every team every week, and
         luck is how many more (or fewer) wins it has than that record would give. Power ranks all-play, points per game and projected
-        strength together.</p>` + strengthTable(strengthOf(cfg, Tm.list), R, mineId, cfg);
+        strength together.</p>` + whatIf(d) + strengthTable(strengthOf(cfg, Tm.list), R, mineId, cfg) + managerCard(d, Tm.list);
   }
 
   /* ---- Trade */

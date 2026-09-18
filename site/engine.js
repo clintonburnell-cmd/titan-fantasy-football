@@ -1077,6 +1077,7 @@
     var left = (games || []).filter(function (m) { return !m.done && T[String(m.a)] && T[String(m.b)]; });
     var n = Math.max(1, opts.sims || 5000), spots = Math.min(opts.playoffTeams || 6, ids.length), rand = seeded(opts.seed || 7);
     // Divisions: each one's best record is in. Seeds by opts.seedType (0 winners first, 1 by record, 2 no divisions).
+    var F = opts.force && opts.force.team ? {week: Number(opts.force.week) || 0, team: String(opts.force.team), win: opts.force.win !== false} : null;
     var seedType = Number(opts.seedType) || 0, divList = [];
     ids.forEach(function (i) { var d = T[i].division; if (d && divList.indexOf(d) < 0) divList.push(d); });
     var useDivs = seedType !== 2 && divList.length >= 2 && spots >= divList.length;
@@ -1098,6 +1099,13 @@
       left.forEach(function (m) {
         var a = String(m.a), b = String(m.b);
         var ap = T[a].mean + T[a].sd * normal(rand), bp = T[b].mean + T[b].sd * normal(rand);
+        /* opts.force = {week, team, win}: play the season out with one result already decided, which is how a person
+           actually asks the question ("what if I win on Sunday?"). The scores stay realistic; only their order is set. */
+        if (F && Number(m.week) === F.week && (a === F.team || b === F.team)) {
+          var mineA = a === F.team, mine = mineA ? ap : bp, theirs = mineA ? bp : ap;
+          if (F.win === (mine < theirs)) { var sw = mine; mine = theirs; theirs = sw; }
+          if (mineA) { ap = mine; bp = theirs; } else { bp = mine; ap = theirs; }
+        }
         pf[a] += ap; pf[b] += bp;
         w[ap > bp ? a : b]++;
       });
@@ -2316,6 +2324,66 @@
     return out;
   }
 
+  /* How each manager in a league has played the parts they actually control, from what Titan already reads: the draft,
+     what they have picked up off waivers and what they have traded, all priced at today's numbers. Standings says who
+     is winning; this says who is deciding well, which is a different question and often a different answer.
+       opts: {teams: [{id, name, roster}], moves: transactionsFrom's list, grades: {teamId: draft total}, value(p)}
+     Per team: {id, name, waiverAdds, waiverValue, tradeCount, tradeNet, draft, notes}. A category with nothing in it
+     comes back null rather than zero, so a quiet manager is not called a bad one. */
+  function managerReport(opts) {
+    var o = opts || {}, val = typeof o.value === 'function' ? o.value : function () { return 0; };
+    var held = {}, out = [];
+    (o.teams || []).forEach(function (t) {
+      var ids = {};
+      (t.roster || []).forEach(function (p) { if (p && p.id) ids[String(p.id)] = p; });
+      held[String(t.id)] = ids;
+    });
+    var acc = {};
+    (o.teams || []).forEach(function (t) { acc[String(t.id)] = {adds: 0, addValue: 0, trades: 0, inV: 0, outV: 0}; });
+    (o.moves || []).forEach(function (m) {
+      var kind = String(m.kind || '');
+      (m.sides || []).forEach(function (side) {
+        var a = acc[String(side.roster)];
+        if (!a) return;
+        if (kind === 'trade') {
+          a.trades++;
+          (side.adds || []).forEach(function (pl) { a.inV += Number(val(pl)) || 0; });
+          (side.drops || []).forEach(function (pl) { a.outV += Number(val(pl)) || 0; });
+          return;
+        }
+        // A pickup only counts if he still has the player: keeping the good ones is the skill being measured.
+        (side.adds || []).forEach(function (pl) {
+          a.adds++;
+          if (held[String(side.roster)] && held[String(side.roster)][String(pl.id)]) a.addValue += Number(val(pl)) || 0;
+        });
+      });
+    });
+    (o.teams || []).forEach(function (t) {
+      var id = String(t.id), a = acc[id], g = (o.grades || {})[id];
+      out.push({id: id, name: t.name,
+        waiverAdds: a.adds, waiverValue: a.adds ? round1(a.addValue) : null,
+        tradeCount: a.trades, tradeNet: a.trades ? round1(a.inV - a.outV) : null,
+        draft: g === undefined || g === null ? null : round1(Number(g))});
+    });
+    // Ranks within the league, so a number means something without knowing the scale.
+    ['waiverValue', 'tradeNet', 'draft'].forEach(function (k) {
+      var have = out.filter(function (x) { return x[k] !== null; }).sort(function (x, y) { return y[k] - x[k]; });
+      have.forEach(function (x, i) { x[k + 'Rank'] = i + 1; x[k + 'Of'] = have.length; });
+    });
+    return out;
+  }
+
+  /* A player's projected final while his game is on: what he has scored plus what is left of the projection. Sleeper's
+     weekly number is written before kickoff and never moves, so by the third quarter it describes a game that is not
+     happening. Halving the remainder is the same assumption winProbability makes, and the two must agree.
+     state: 'pre' | 'in_game' | 'complete'. Returns the projection unchanged before kickoff and the points after it. */
+  function liveProjection(proj, pts, state) {
+    var p = proj === null || proj === undefined || proj === '' ? NaN : Number(proj), s = Number(pts) || 0; // Number(null) is 0, not absent
+    if (state === 'complete') return round1(s);
+    if (state !== 'in_game' || !isFinite(p)) return isFinite(p) ? round1(p) : null;
+    return round1(s + Math.max(0, p - s) * 0.5);
+  }
+
   function closeCalls(roster, slots, startedIds) {
     var wins = 0, total = 0;
     var starters = roster.filter(function (p) { return startedIds[p.id]; });
@@ -3450,7 +3518,7 @@
     rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
-    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest, taggedIds: taggedIds, applyInjuries: applyInjuries, lineupSweep: lineupSweep, lineupSwing: lineupSwing, practiceNote: practiceNote, whatChanged: whatChanged,
+    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest, taggedIds: taggedIds, managerReport: managerReport, liveProjection: liveProjection, applyInjuries: applyInjuries, lineupSweep: lineupSweep, lineupSwing: lineupSwing, practiceNote: practiceNote, whatChanged: whatChanged,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
