@@ -172,7 +172,13 @@ How the pieces fit, and what keeps them working.
   corner (not the sites' logos), or the Titan icon (`/icon.svg`, `NO_PIC`) when there's no picture. Give Yahoo a `pic` too.
   On Matchup, your score in the middle is red when you're behind, or purple (`--fav`) while you're behind but
   still projected to win (over a 50% chance); the status line says so in words too.
-- Type: the app (`body.app-page`; the website keeps the system font) uses Inter (`fonts/inter-latin-wght.woff2`, fontsource's Latin variable build, SIL Open Font
+- **Sizes, corners and spacing are tokens, not judgement calls** (v1.84.0): `--t-2xs` to `--t-2xl` for type and
+  `--r-sm/md/lg/pill` for radii, in the first `:root`. A new literal `font-size` or `border-radius` is a nudge, not
+  a decision: pick the nearest token, or change the token if the whole scale is wrong. They replaced 42 sizes and
+  10 radii. Long instructions live behind a `.how` fold, not above the thing they describe.
+- The home page's screenshots come from `node tools/shots.js` (Chrome for Testing, the live demo at 390px) into
+  `site/shots/`. Re-run it when a screen it shows changes shape rather than editing images by hand.
+- Type: both the app and the website (v1.84.0; it was the app alone) use Inter (`fonts/inter-latin-wght.woff2`, fontsource's Latin variable build, SIL Open Font
   License in `fonts/OFL.txt`; keep the license beside it). Titan serves it itself, so no browser asks Google or anyone
   else for it: never switch to a font CDN (the privacy policy and Play's Data safety form say the app shares nothing).
   It's in `SHELL` in `sw.js`. Its type scale sits on `.vr-page` (`display: contents`, so the main view's grid gap still

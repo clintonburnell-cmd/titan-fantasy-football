@@ -4297,9 +4297,9 @@
         whenRun ? `<span class="wmeta">· ${esc(whenRun)}</span>` : ''}</summary><div class="wlg-body"><span class="wlg-open">${openSite(cfg)}</span><ol class="wclaims">${rows}</ol></div></details></li>`;
     });
     return `<section class="card pad wsec wplan"><div class="wplan-h"><h3>Your waiver plan</h3><span class="wmeta">${ticked} of ${plural(total, 'claim')} done</span></div>
-      <p class="fine">Each claim is a free agent your rankings rate above one of your starters. The drop is the bench player valued least (by your season rankings where you've saved them, else Titan's values) over the
-        season that you can spare: never someone on IR, and never your only backup at a position you start. A kicker or defense is only ever swapped for the kicker or defense he
-        outranks. Change it if you like, and tick Done once the claim is in. Tap a name for his stats.</p><ul class="wlist">${cards.join('')}</ul></section>`;
+      <p class="fine">A free agent your rankings rate above one of your starters, with the bench player Titan would give up for him. Change the drop if you disagree, and tick Done once the claim is in.</p>
+      <details class="how"><summary>How the drop is chosen</summary><p class="fine">The bench player valued least over the season, by your season rankings where you have saved them and Titan's values otherwise:
+        never someone on IR, and never your only backup at a position you start. A kicker or a defense is only ever swapped for the one he outranks.</p></details><ul class="wlist">${cards.join('')}</ul></section>`;
   }
 
   /* Streamers (Waivers): in every league that starts a kicker or a defense, the free agents at that position put in the
@@ -4355,9 +4355,9 @@
     }).filter(Boolean);
     if (!cards.length) return '';
     return `<section class="card pad wsec wstream"><h3>Streamers this week</h3>
-      <p class="fine">Kickers and defenses turn on the game, not the season, so these are ordered by it: a kicker by what his own team is expected to score, a defense by how
-        little the offense it faces is expected to score, both moved by the matchup. Each one also says how the next ${STREAM_AHEAD} weeks look, so you can tell a one-week
-        rental from someone worth holding. Free agents only, and only in leagues that start one.</p>
+      <p class="fine">Free agents, ordered by this week's game rather than the season, each with how the next ${STREAM_AHEAD} weeks look.</p>
+      <details class="how"><summary>How these are ordered</summary><p class="fine">A kicker by what his own team is expected to score, a defense by how little the offense it faces is expected to
+        score, both moved by the matchup. The weeks ahead come from the schedule and the season's points allowed by position, since betting lines exist only for this week.</p></details>
       <ul class="wlist">${cards.join('')}</ul></section>`;
   }
 

@@ -216,3 +216,10 @@
 .site-foot a { color: var(--muted); text-decoration: none; }
 .site-foot a:hover { color: var(--text); }
 .site-foot .tip { color: var(--text); }
+
+/* Three product shots on the home page: a stranger should see the thing before reading about it. */
+.shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-top: 18px; }
+.shots figure { margin: 0; }
+.shots img { display: block; width: 100%; height: auto; border-radius: var(--r-lg); border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgb(15 23 42 / .10); background: var(--surface); }
+.shots figcaption { margin-top: 10px; color: var(--muted); font-size: var(--t-sm); line-height: 1.45; }
