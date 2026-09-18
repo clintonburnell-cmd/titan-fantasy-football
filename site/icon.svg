@@ -1,11 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Titan Fantasy Football Manager">
+  <!-- The Titan's helmet, the same one the hero illustration wears: a Corinthian helm whose visor is a lit T, so the
+       brand letter does the work of the eye slot and the mark says the name while staying a picture. Seen head on, so
+       there is no crest: a crest runs front to back, and from this angle every version of one reads as a spike or a
+       bobble. It survives 16px because it is three shapes, a dark tile, a blue helm and a bright T. -->
   <defs>
-    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#6b93ff"/>
-      <stop offset="1" stop-color="#2f5fe0"/>
+    <linearGradient id="t-helm" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7ba3ff"/>
+      <stop offset=".55" stop-color="#3a67ea"/>
+      <stop offset="1" stop-color="#1e3f9e"/>
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="14" fill="#0a0f1a"/>
-  <path d="M32 8 L52 15 V31 C52 43 43.5 51.5 32 56 C20.5 51.5 12 43 12 31 V15 Z" fill="url(#shield)"/>
-  <path d="M21 20 H43 V26.5 H35.5 V46 H28.5 V26.5 H21 Z" fill="#ffffff"/>
+  <!-- Dome, then a cheek guard down each side with the chin gap between them -->
+  <path fill="url(#t-helm)" d="M32 8c-9.4 0-16.6 8-16.6 18.6V42c0 5.2 1 9.5 3 12.4h5.6c-1.4-2.9-2-6.6-2-11V43h20v.4c0 4.4-.6 8.1-2 11h5.6c2-2.9 3-7.2 3-12.4V26.6C48.6 16 41.4 8 32 8Z"/>
+  <!-- The visor, lit -->
+  <path fill="#5fe0a6" d="M23.4 22.6h17.2a1.7 1.7 0 0 1 1.7 1.7v4.6a1.7 1.7 0 0 1-1.7 1.7h-6.1v9.1a1.7 1.7 0 0 1-1.7 1.7h-2.6a1.7 1.7 0 0 1-1.7-1.7v-9.1h-6.1a1.7 1.7 0 0 1-1.7-1.7v-4.6a1.7 1.7 0 0 1 1.7-1.7Z"/>
 </svg>
