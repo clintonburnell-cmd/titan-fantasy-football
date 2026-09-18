@@ -183,6 +183,12 @@ How the pieces fit, and what keeps them working.
   `--r-sm/md/lg/pill` for radii, in the first `:root`. A new literal `font-size` or `border-radius` is a nudge, not
   a decision: pick the nearest token, or change the token if the whole scale is wrong. They replaced 42 sizes and
   10 radii. Long instructions live behind a `.how` fold, not above the thing they describe.
+- **Speed is measured, not guessed at**: `node tools/perf.js` walks a cold first visit on a throttled phone and prints
+  the waterfall, first paint and the moment a lineup is readable; `--warm` measures the second visit. Run it before and
+  after any change meant to make the app faster and put the numbers in the save point. Two ideas that read well on
+  paper lost when measured and were reverted (warming Sleeper's requests from an inline script, v1.85.0; a
+  `Content-Encoding` on the projections endpoint, v1.89.0). The document's own time swings by about a second between
+  runs, so compare several, and compare runs whose first paint is similar.
 - The home page's screenshots come from `node tools/shots.js` (Chrome for Testing, the live demo at 390px) into
   `site/shots/`. Re-run it when a screen it shows changes shape rather than editing images by hand.
 - Type: both the app and the website (v1.84.0; it was the app alone) use Inter (`fonts/inter-latin-wght.woff2`, fontsource's Latin variable build, SIL Open Font
