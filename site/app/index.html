@@ -28,6 +28,10 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/styles.css">
+  <!-- The first thing the app does after its scripts run is talk to Sleeper, and on a phone the handshake alone costs a
+       few hundred milliseconds. Open the connections while the scripts are still downloading. -->
+  <link rel="preconnect" href="https://api.sleeper.app" crossorigin>
+  <link rel="preconnect" href="https://sleepercdn.com" crossorigin>
 </head>
 <body class="app-page">
   <a class="skip" href="#view">Skip to content</a>
@@ -99,14 +103,14 @@
   <div id="toast" class="toast" role="status" hidden></div>
 
   <!-- deferred: they run in this order once the page is parsed, and don't hold up drawing it. -->
-  <script src="/engine.js" defer></script>
-  <script src="/demo.js" defer></script>
+  <script src="/engine.js" defer fetchpriority="high"></script>
+  <script src="/demo.js" defer fetchpriority="low"></script>
   <script src="/espn.js" defer></script>
-  <script src="/yahoo.js" defer></script>
+  <script src="/yahoo.js" defer fetchpriority="low"></script>
   <script src="/sleeper.js" defer></script>
-  <script src="/syncplan.js" defer></script>
+  <script src="/syncplan.js" defer fetchpriority="low"></script>
   <!-- app.js loads sync.js (Google sign-in) itself, except in the demo. -->
-  <script src="/newsletter.js" defer></script>
-  <script src="/app.js" defer></script>
+  <script src="/newsletter.js" defer fetchpriority="low"></script>
+  <script src="/app.js" defer fetchpriority="high"></script>
 </body>
 </html>

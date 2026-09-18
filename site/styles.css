@@ -637,6 +637,7 @@ main.wrap { display: grid; gap: 12px; padding-block: 14px 28px; align-content: s
 .note.wire b { color: var(--accent-2); }
 .note.hurt, .note.hurt b { color: var(--bad); }
 .note.close-call b, .note.tilt b, .note.disagree b { color: var(--accent-2); }
+.note.calls-rec b { color: var(--text); }
 .wbid-why { display: block; color: var(--muted); font-size: var(--t-xs); }
 .xrow .meter { position: relative; }
 .xrow .meter b { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-2); opacity: .55; border-radius: inherit; }
@@ -827,6 +828,11 @@ table.byes { border-collapse: collapse; width: 100%; font-size: var(--t-md); fon
 .how > summary::after { content: ' be'; }
 .how[open] > summary::after { content: ' b4'; }
 .how > summary:hover { color: var(--text); }
+/* What moved since the last visit, at the top of Today. */
+.changed { border-left: 3px solid var(--accent-2); }
+.ch-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.ch-list li { font-size: var(--t-md); padding-left: 16px; position: relative; }
+.ch-list li::before { content: ''; position: absolute; left: 0; top: .55em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-2); }
 /* A screen waiting on data keeps its shape. */
 .skel { display: grid; gap: 8px; padding: 4px 0; }
 .skel-row { display: block; height: 56px; border-radius: var(--r-lg); background: var(--chip); opacity: .75; }

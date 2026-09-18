@@ -16,8 +16,8 @@
   // the demo can't overwrite someone's leagues or rankings.
   const DEMO = new URLSearchParams(location.search).has('demo');
   const KEY = DEMO
-    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1', seasonRanks: 'titan.demo.seasonranks.v1', calls: 'titan.demo.calls.v1'}
-    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1', seasonRanks: 'titan.seasonranks.v1', calls: 'titan.calls.v1'};
+    ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1', seasonRanks: 'titan.demo.seasonranks.v1', calls: 'titan.demo.calls.v1', look: 'titan.demo.look.v1'}
+    : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1', seasonRanks: 'titan.seasonranks.v1', calls: 'titan.calls.v1', look: 'titan.look.v1'};
   const STALE_MS = 5 * 60 * 1000;
   const TABS = ['today', 'lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'plan', 'score', 'news', 'trade', 'moves', 'ranks', 'season', 'multi', 'lab', 'value', 'dump', 'matchups', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
@@ -147,6 +147,9 @@
     // Results' season so far: each week's totals, kept on this device once its games are all played (loadSeason).
     season: store.get(KEY.season) || null, seasonBusy: false,
     calls: store.get(KEY.calls) || null, // this season's close calls as they stood before kickoff (recordCalls), graded on Results
+    // What the app showed when it was last closed. Frozen for this visit, so the "since you last looked" line holds
+    // still while you read it, and rewritten as you go for the next visit to compare against.
+    look0: store.get(KEY.look) || null,
     // Compare rankings (Titan's owner only): each week's test, kept on this device once its games are over (loadLab).
     lab: store.get(KEY.lab) || null, labBusy: false, labAt: 0, labError: '',
     value: {busy: false, data: null, error: '', at: 0, q: ''}, // the value report (Titan's owner only), from the owner's PC; q: its player search
@@ -322,6 +325,7 @@
     S.A = SCC.analyzeAll(S.snap, rankingsOf(r, S.proj, playerList()), tilt ? {tilt: (p, cfg) => tilt(cfg)(p), rankOf: p => matchRank(p)} : undefined);
     S.A.ranks = r;
     recordCalls(tilt);
+    saveLook();
   }
 
   /* This week's close calls, kept as they stood before kickoff so Results can grade them (SCC.gradeCalls): for each
@@ -367,6 +371,35 @@
     });
     if (changed) store.set(KEY.calls, S.calls);
   }
+  /* What the app is showing right now, small enough to keep: the week, when the rankings were saved, and per league the
+     changes, the hurt starters, the wire positions and every starter's injury tag. SCC.whatChanged diffs two of these. */
+  function lookSnapshot() {
+    if (!S.A || !S.snap) return null;
+    const r = S.A.ranks, leagues = {};
+    S.A.leagues.forEach(L => {
+      const inj = {}, names = {};
+      L.roster.forEach(p => { if (p.start) { inj[p.id] = p.inj || ''; names[p.id] = p.name; } });
+      leagues[L.cfg.id] = {name: L.cfg.key, mv: L.moves.map(m => String(m.inn.id)), hurt: L.hurt.map(p => String(p.id)),
+        wire: L.wire.map(w => w.pos), inj, names};
+    });
+    return {week: S.snap.week, ranksAt: (r && r.rows && r.rows.length && ((S.ranks.weeks[S.snap.week] || {}).savedAt || 0)) || 0, leagues};
+  }
+  function saveLook() {
+    if (DEMO || !S.account) return;
+    const now = lookSnapshot();
+    if (now) store.set(KEY.look, now);
+  }
+  /* The first thing on Today: what is different since the app was last closed. Nothing on a first visit, nothing in a
+     new week, and nothing when the answer is "nothing", which is itself worth not saying. */
+  function changedLine() {
+    if (DEMO || !S.look0) return '';
+    const lines = SCC.whatChanged(S.look0, lookSnapshot());
+    if (!lines.length) return '';
+    const shown = lines.slice(0, 4), more = lines.length - shown.length;
+    return `<section class="card pad changed"><h3>Since you last looked</h3><ul class="ch-list">${
+      shown.map(t => `<li>${esc(t)}</li>`).join('')}</ul>${more ? `<p class="fine">and ${more} more</p>` : ''}</section>`;
+  }
+
   // A week's recorded calls, flat.
   const callsFor = week => {
     const W = S.calls && S.calls.season === S.snap.season ? S.calls.weeks[week] : null;
@@ -1273,6 +1306,17 @@
      the higher ceiling gives the better shot. The recommended lineup itself follows the rankings; this is the
      second opinion for the spots where they're nearly even. */
   const FAV = 60, DOG = 40;
+  /* How Titan's close calls have actually gone for you this season, from the weeks Results has scored (keepWeek). Shown
+     beside a close call once there are CALLS_MIN of them, so the reader can weigh the advice instead of taking it on
+     tone. It is the record for every close call, not for calls resembling this one, and it says so. */
+  const CALLS_MIN = 5;
+  function callRecord() {
+    const s = S.season;
+    if (!s || !S.snap || s.season !== S.snap.season) return null;
+    let n = 0, right = 0;
+    Object.values(s.weeks).forEach(x => { if (x.done && x.calls) { n += x.calls.n; right += x.calls.right; } });
+    return n >= CALLS_MIN ? {n, right} : null;
+  }
   function closeNotes(L) {
     const pairs = SCC.closeCallPairs(L.opt, L.roster);
     if (!pairs.length) return '';
@@ -1299,6 +1343,11 @@
       }
       notes.push(`<p class="note close-call">${s}</p>`);
     });
+    const rec = notes.length ? callRecord() : null;
+    if (rec) {
+      notes.push(`<p class="note calls-rec"><b>How these have gone:</b> Titan's close calls are <b>${rec.right} of ${rec.n}</b> for you this season (${
+        Math.round(rec.right / rec.n * 100)}%), across every league. That is the record for close calls as a whole, not for ones resembling this.</p>`);
+    }
     return notes.join('');
   }
 
@@ -1929,7 +1978,7 @@
     const KIND_CLASS = {Lineup: 'swap', Injury: 'stop', Waiver: 'ok', Claim: 'ok', 'Buy low': 'ok', 'Sell high': 'swap', Keep: 'muted', 'Start idea': 'swap'};
     let h = `<div class="bar match-bar"><p class="lede">Everything to act on in week ${esc(S.snap.week)}, in every league: lineup changes, hurt starters, waiver upgrades${
       S.owner.is ? ', claims, trades and start ideas' : ''}. Tick each one off as you make it${S.owner.is ? '' : ''}.</p></div>`;
-    h += sweepLine();
+    h += changedLine() + sweepLine();
     h += `<section class="tiles three" aria-label="Where you stand">${tile(left.length, 'to do', left.length ? 'swap' : 'ok')}${tile(items.length - left.length, 'done', 'muted')}${tile(A_leagues().length, 'leagues', 'muted')}</section>`;
     h += recapCard();
     if (!items.length) return h + '<div class="empty-note">Nothing to do: every lineup matches your rankings, no starter is hurt, and no free agent beats a starter.</div>';

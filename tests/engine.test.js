@@ -699,6 +699,25 @@ section('what a lineup change is worth (lineupSwing)');
   check(SCC.lineupSwing(done, done.slice().reverse(), opp).swing === 0, 'a finished lineup cannot be improved by reordering it');
 }
 
+section('what changed since you last looked (whatChanged)');
+{
+  const mk = o => Object.assign({week: 2, ranksAt: 100, leagues: {L1: {name: 'Big League', mv: [], hurt: [], wire: [], inj: {}, names: {p1: 'A Starter'}}}}, o || {});
+  const before = mk();
+  const after = mk({leagues: {L1: {name: 'Big League', mv: ['p9'], hurt: ['p1'], wire: ['TE'], inj: {p1: 'Out'}, names: {p1: 'A Starter'}}}});
+  const lines = SCC.whatChanged(before, after);
+  check(lines[0] === 'A Starter is Out (Big League)', 'a starter newly ruled out leads: ' + lines[0]);
+  check(lines.includes('Big League: a hurt starter') && lines.includes('Big League: a new lineup change')
+    && lines.includes('Big League: a free agent worth a look at TE'), `then the hurt starters, the changes and the wire (${lines.length} lines)`);
+  check(SCC.whatChanged(before, before).length === 0 && SCC.whatChanged(null, after).length === 0, 'nothing moved, or no previous visit: nothing to say');
+  const worse = SCC.whatChanged(mk({leagues: {L1: {name: 'Big League', mv: [], hurt: [], wire: [], inj: {p1: 'Questionable'}, names: {p1: 'A Starter'}}}}), after);
+  check(worse[0] === 'A Starter is now Out, was Questionable (Big League)', 'a tag that worsened says both: ' + worse[0]);
+  const cleared = SCC.whatChanged(after, mk({leagues: {L1: {name: 'Big League', mv: ['p9'], hurt: [], wire: ['TE'], inj: {p1: ''}, names: {p1: 'A Starter'}}}}));
+  check(cleared[0] === 'A Starter is off the injury report (Big League)', 'and a tag that cleared is news too: ' + cleared[0]);
+  check(SCC.whatChanged(before, mk({week: 3})).length === 0, 'a new week is a new slate, not a list of changes');
+  const reimported = SCC.whatChanged(before, mk({ranksAt: 200}));
+  check(reimported[0] === 'Your week 2 rankings changed', 'a re-import is the first thing said: ' + reimported[0]);
+}
+
 section('the pre-kickoff sweep (lineupSweep)');
 {
   const LG = (key, o) => Object.assign({cfg: {key}, moves: [], hurt: [], stops: 0}, o);

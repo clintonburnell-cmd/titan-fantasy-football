@@ -172,6 +172,12 @@ How the pieces fit, and what keeps them working.
   corner (not the sites' logos), or the Titan icon (`/icon.svg`, `NO_PIC`) when there's no picture. Give Yahoo a `pic` too.
   On Matchup, your score in the middle is red when you're behind, or purple (`--fav`) while you're behind but
   still projected to win (over a 50% chance); the status line says so in words too.
+- Today opens with what changed since the app was last closed (`changedLine`, `SCC.whatChanged`, `lookSnapshot`,
+  `KEY.look`). `S.look0` is read once at boot and never updated during a visit, so the list does not vanish while
+  it is being read; `saveLook` rewrites the stored snapshot after every analysis for the next visit.
+- Where Titan has a record, it shows it (v1.85.0): the close-call notes carry the season's graded record once
+  there are `CALLS_MIN` (5) scored calls, and say it is the record for close calls as a whole. Add a number like
+  this only where it is honestly computed and honestly described.
 - **Sizes, corners and spacing are tokens, not judgement calls** (v1.84.0): `--t-2xs` to `--t-2xl` for type and
   `--r-sm/md/lg/pill` for radii, in the first `:root`. A new literal `font-size` or `border-radius` is a nudge, not
   a decision: pick the nearest token, or change the token if the whole scale is wrong. They replaced 42 sizes and

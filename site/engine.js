@@ -2284,6 +2284,38 @@
     return {before: pa, after: pb, swing: pb - pa, points: round1(b.expA - a.expA)};
   }
 
+  /* What is different since the person last had the app open. `before` and `after` are `lookSnapshot`'s shape:
+     {week, ranksAt, leagues: {id: {name, mv: [player ids], hurt: [ids], wire: [positions], inj: {id: tag}}}}. Returns
+     lines in the order they matter: a starter newly ruled out first, then new changes, then the rest. [] when nothing
+     moved, and [] when there is no `before` at all, since a first visit has nothing to compare. */
+  function whatChanged(before, after) {
+    if (!before || !after || !before.leagues || !after.leagues) return [];
+    if (Number(before.week) !== Number(after.week)) return [];   // a new week is not a change, it is a new slate
+    var out = [], tags = [], moves = [], wires = [], hurt = [];
+    Object.keys(after.leagues).forEach(function (id) {
+      var b = before.leagues[id], a = after.leagues[id];
+      if (!b || !a) return;
+      var name = a.name || '';
+      Object.keys(a.inj || {}).forEach(function (pid) {
+        var was = (b.inj || {})[pid] || '', now = a.inj[pid] || '';
+        if (was === now) return;
+        var who = (a.names || {})[pid] || 'A starter';
+        if (!now) tags.push(who + ' is off the injury report (' + name + ')');
+        else if (!was) tags.push(who + ' is ' + now + ' (' + name + ')');
+        else tags.push(who + ' is now ' + now + ', was ' + was + ' (' + name + ')');
+      });
+      var fresh = (a.mv || []).filter(function (x) { return (b.mv || []).indexOf(x) < 0; }).length;
+      if (fresh) moves.push(name + ': ' + (fresh === 1 ? 'a new lineup change' : fresh + ' new lineup changes'));
+      var newHurt = (a.hurt || []).filter(function (x) { return (b.hurt || []).indexOf(x) < 0; }).length;
+      if (newHurt) hurt.push(name + ': ' + (newHurt === 1 ? 'a hurt starter' : newHurt + ' hurt starters'));
+      var newWire = (a.wire || []).filter(function (x) { return (b.wire || []).indexOf(x) < 0; });
+      if (newWire.length) wires.push(name + ': a free agent worth a look at ' + newWire.join(' and '));
+    });
+    out = tags.concat(hurt, moves, wires);
+    if (Number(before.ranksAt || 0) !== Number(after.ranksAt || 0) && after.ranksAt) out.unshift('Your week ' + after.week + ' rankings changed');
+    return out;
+  }
+
   function closeCalls(roster, slots, startedIds) {
     var wins = 0, total = 0;
     var starters = roster.filter(function (p) { return startedIds[p.id]; });
@@ -3418,7 +3450,7 @@
     rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
-    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest, taggedIds: taggedIds, applyInjuries: applyInjuries, lineupSweep: lineupSweep, lineupSwing: lineupSwing, practiceNote: practiceNote,
+    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest, taggedIds: taggedIds, applyInjuries: applyInjuries, lineupSweep: lineupSweep, lineupSwing: lineupSwing, practiceNote: practiceNote, whatChanged: whatChanged,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
