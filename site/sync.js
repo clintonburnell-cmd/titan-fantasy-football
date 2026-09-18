@@ -83,8 +83,18 @@ async function alertsState(uid) {
   return {supported, permission: typeof Notification !== 'undefined' ? Notification.permission : 'default',
     on: !!(t && data.tokens && data.tokens[t]), prefs: Object.assign({out: true, check: true, news: true, waivers: true}, data.prefs || {})};
 }
-const ESPN = window.EspnAPI;
-const YAHOO = window.YahooAPI;
+/* espn.js and yahoo.js are fetched only when an account needs one, which can be after this module has loaded, so
+   they are read when used rather than captured here. `window.TitanWireTransports` lets the app wire a reader that
+   arrives after someone has already signed in. */
+const espnApi = () => window.EspnAPI || null;
+const yahooApi = () => window.YahooAPI || null;
+let signedIn = false;
+function wireTransports() {
+  const E = espnApi(), Y = yahooApi();
+  if (E) E.setTransport(signedIn ? args => readEspnLeague(args).then(r => r.data) : null);
+  if (Y) Y.setTransport(signedIn ? args => readYahooLeague(args).then(r => r.data) : null);
+}
+window.TitanWireTransports = wireTransports;
 const why = e => (e && (e.code || e.message)) || String(e);
 let listeners = [];
 
@@ -355,16 +365,16 @@ getRedirectResult(auth).catch(e => App.setSync({state: 'error', error: 'Sign-in 
 onAuthStateChanged(auth, user => {
   if (!user) {
     stopListening();
-    if (ESPN) ESPN.setTransport(null);
-    if (YAHOO) YAHOO.setTransport(null);
+    signedIn = false;
+    wireTransports();
     App.setEspnLogin(null);
     App.setSync({user: null, state: 'off', at: 0});
     App.setOwner(false);
     App.setAlerts(null);
     return;
   }
-  if (ESPN) ESPN.setTransport(args => readEspnLeague(args).then(r => r.data));
-  if (YAHOO) YAHOO.setTransport(args => readYahooLeague(args).then(r => r.data));
+  signedIn = true;
+  wireTransports();
   // The app only learns whether a login is saved, and the SWID (to find the person's team). A login saved
   // before 2026-09-15 still holds the cookie here: it goes to the server, which keeps it and strips it here.
   getDoc(espnDoc(user.uid)).then(async s => {

@@ -2849,6 +2849,42 @@
     return map;
   }
 
+  /* The trimmed projections, smaller on the wire.
+
+     `trimProjections` leaves a map of about 500 players, each with a stat line whose 70 key names are spelled out
+     again for every player: two thirds of the bytes are the same forty words over and over. Neither Firebase Hosting
+     nor Cloud Run compresses a function's answer, and a Content-Encoding the function sets is stripped before it
+     reaches the browser (measured 2026-09-17), so the size has to come out of the JSON itself rather than out of gzip.
+
+     Packed: the key names once, then each player as [standard, ppr over standard] with the stat line as a flat run of
+     key index and value. 125 KB becomes about 70 KB and nothing is lost: unpack returns exactly what went in. */
+  function packProjections(map) {
+    var keys = [], at = {}, p = {};
+    for (var id in map) {
+      var e = map[id], st = e && e[2], flat = [];
+      if (st) {
+        for (var k in st) {
+          if (at[k] === undefined) { at[k] = keys.length; keys.push(k); }
+          flat.push(at[k], st[k]);
+        }
+      }
+      p[id] = flat.length ? [e[0], e[1], flat] : [e[0], e[1]];
+    }
+    return {v: 1, k: keys, p: p};
+  }
+  function unpackProjections(packed) {
+    if (!packed || packed.v !== 1 || !packed.p) return null;
+    var keys = packed.k || [], out = {};
+    for (var id in packed.p) {
+      var e = packed.p[id], flat = e[2];
+      if (!flat || !flat.length) { out[id] = [e[0], e[1]]; continue; }
+      var st = {};
+      for (var i = 0; i + 1 < flat.length; i += 2) st[keys[flat[i]]] = flat[i + 1];
+      out[id] = [e[0], e[1], st];
+    }
+    return out;
+  }
+
   // Sleeper's standard scoring, per projected stat: what pts_std is made of. (Receptions are the PPR setting, kept apart.)
   var SLEEPER_STD = {pass_yd: 0.04, pass_td: 4, pass_int: -1, pass_2pt: 2, rush_yd: 0.1, rush_td: 6, rush_2pt: 2, rec_yd: 0.1, rec_td: 6, rec_2pt: 2,
     fum_lost: -2, xpm: 1, fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3, fgm_40_49: 4, fgm_50p: 5, fgmiss: -1,
@@ -3549,7 +3585,8 @@
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
-    trimProjections: trimProjections, projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
+    trimProjections: trimProjections, packProjections: packProjections, unpackProjections: unpackProjections,
+    projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
     openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, planWeek: planWeek, sleeperTeamUrl: sleeperTeamUrl, applyPoints: applyPoints,
     keepStartedRanks: keepStartedRanks, winProbability: winProbability, matchStatus: matchStatus, benchMistakes: benchMistakes,
     labWeek: labWeek, rankCorrelation: rankCorrelation

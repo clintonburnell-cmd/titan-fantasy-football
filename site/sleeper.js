@@ -11,6 +11,21 @@
   var SCC = root.SCC || (typeof require === 'function' ? require('./engine.js') : null);
   var ESPN = root.EspnAPI || (typeof require === 'function' ? require('./espn.js') : null);
   var YAHOO = root.YahooAPI || (typeof require === 'function' ? require('./yahoo.js') : null);
+  /* In the browser, espn.js and yahoo.js are no longer loaded with the page: an account that plays only on Sleeper,
+     which is most of them, never downloads either (v1.89.0). They arrive after this file when an account needs one,
+     so the app hands the module over rather than this file reading a global that was empty when it loaded. */
+  function useEspn(m) { if (m) ESPN = m; }
+  function useYahoo(m) { if (m) YAHOO = m; }
+  /* Those files are fetched while the app is starting, so a read could arrive before its reader does. The app hands
+     over a promise for "the readers this account needs are here" (`whenReady`), and every function below that can
+     touch a league waits on it. One gate in one place: a new league reader gets it by being here, rather than by
+     someone remembering to guard its caller. Node sets nothing, so there it costs nothing. */
+  var readers = null;
+  function whenReady(p) { readers = p || null; }
+  async function waitReaders() {
+    if (!readers) return;
+    try { await readers; } catch (e) { /* a reader that will not load leaves its leagues unread, reported below */ }
+  }
 
   var API = 'https://api.sleeper.app/v1';
   var SCHEDULE = 'https://api.sleeper.app/schedule/nfl/regular/';
@@ -227,6 +242,7 @@
      `opts.espnCreds` is an ESPN login for private leagues (server only; the
      browser reads those through Titan's server instead). */
   async function collect(account, progress, known, opts) {
+    await waitReaders();
     progress = progress || function () {};
     opts = opts || {};
     var prefs = account.prefs || {};
@@ -378,6 +394,13 @@
      projections carry each player's name, position and team. The trimmed
      projections are cached for the app, as fetchProjections does. */
   async function demoPlayers(season, week) {
+    /* Titan's server sends the names beside the projections, which is 80 KB instead of the two megabytes Sleeper
+       sends: the demo is the page a stranger is most likely to open first, so it should not be the slowest. */
+    var got = await titanProjections('?season=' + season + '&week=' + week + '&scope=demo');
+    if (got && got.names && Object.keys(got.names).length) {
+      store.set('titan.proj.v2.' + season + '.' + week, {ts: Date.now(), map: got.map});
+      return {players: got.names, proj: got.map};
+    }
     var list = (await getJson(projectionsUrl(season, week)).catch(function () { return null; })) || [];
     var proj = SCC.trimProjections(list);
     if (Object.keys(proj).length) store.set('titan.proj.v2.' + season + '.' + week, {ts: Date.now(), map: proj});
@@ -461,6 +484,7 @@
      matchups, the rosters (who owns which) and the league's members. ESPN: the
      week's box score. Locks, kickoff times and projections are added by the app. */
   async function collectMatchups(snap) {
+    await waitReaders();
     var players = await loadPlayers();
     return Promise.all(snap.leagues.map(function (d) {
       var lg = d.cfg;
@@ -487,6 +511,7 @@
      the person's own is (Sleeper ids where matched). `rosterId` (Sleeper) or the
      league's teamId (ESPN) marks the person's own team. */
   async function leagueTeams(lg, rosterId, season) {
+    await waitReaders();
     if (lg.platform === 'yahoo') throw new Error('Yahoo trades are coming next');
     var players = await loadPlayers();
     var slim = function (p) { return {id: p.id, espnId: p.espnId, name: p.name, pos: p.pos, team: p.team, held: !!p.held}; };
@@ -539,6 +564,7 @@
      (SCC.draftFromSleeper, or ESPN.fetchDraft). A Sleeper league's latest draft that has
      started (a dynasty league's is its rookie draft), else one still to come; null for none. */
   async function leagueDraft(lg, season) {
+    await waitReaders();
     if (lg.platform === 'yahoo') throw new Error('Yahoo drafts are coming next');
     var players = await loadPlayers();
     if (lg.platform === 'espn') return ESPN.fetchDraft(lg.espnId, season, players);
@@ -561,6 +587,7 @@
      claims, free-agent moves, commissioner moves), with team names, for the Transactions
      tab (SCC.transactionsFrom). Players Titan hasn't met yet are looked up by id. */
   async function leagueTransactions(lg, rosterId, week, weeks, season) {
+    await waitReaders();
     if (lg.platform === 'yahoo') throw new Error('Yahoo transactions are coming next');
     // An ESPN league: its transactions this season (ESPN.fetchTransactions), the last `weeks` weeks.
     if (lg.platform === 'espn') {
@@ -589,6 +616,7 @@
   /* How often each team in a Sleeper league trades: completed trades this season by roster id (a trade counts for
      every team in it), for the Trade tab's partner list. A team that has dealt before is the one to approach. */
   async function leagueTradeCounts(lg, week) {
+    await waitReaders();
     var paths = [];
     for (var w = 1; w <= Math.max(1, Number(week) || 1); w++) paths.push('/transactions/' + w);
     var got = await Promise.all(paths.map(function (p) { return getJson(API + '/league/' + lg.id + p).catch(function () { return []; }); }));
@@ -607,6 +635,7 @@
      budget, what's left on the person's roster, and the league's winning bids over the last
      six weeks (completed waiver claims). */
   async function leagueWaivers(lg, rosterId, week) {
+    await waitReaders();
     var paths = ['/rosters'];
     for (var w = Math.max(1, Number(week) - 5); w <= Number(week); w++) paths.push('/transactions/' + w);
     var got = await Promise.all(paths.map(function (p, i) {
@@ -628,6 +657,7 @@
      played. Sleeper: the rosters, members and each week's matchups up to the playoffs
      (roster ids are the team ids, as in leagueTeams). ESPN: the league's schedule. */
   async function leagueSchedule(lg, season, week) {
+    await waitReaders();
     if (lg.platform === 'yahoo') throw new Error('Yahoo standings are coming next');
     if (lg.platform === 'espn') return ESPN.fetchSchedule(lg.espnId, season, week);
     var last = (Number(lg.playoffStart) || 15) - 1, paths = ['/rosters', '/users'];
@@ -713,6 +743,7 @@
   }
 
   async function livePoints(snap, withEspn) {
+    await waitReaders();
     var sched = await schedule(snap.season);
     if (!sched || !sched.length) return 0;
     snap.games = SCC.gameStates(sched, snap.week);
@@ -727,6 +758,7 @@
      Sleeper leagues: the week's rosters and matchups. ESPN leagues: the week's
      box score for the person's team, shaped the same way (espnWeek). */
   async function collectScores(account, leagues, week, season) {
+    await waitReaders();
     var sched = await getJson(SCHEDULE + season);
     if (!sched || !sched.length) throw new Error('could not read the NFL schedule');
     var prog = SCC.weekProgress(sched, week);
@@ -834,18 +866,50 @@
   function projectionsUrl(season, week) {
     return 'https://api.sleeper.app/projections/nfl/' + season + '/' + week + '?season_type=regular' + PROJ_POS;
   }
+  /* Sleeper sends every projected player with every projected stat: two megabytes, a quarter of that compressed,
+     and the largest thing a first visit ever downloaded. Titan's own server does the same trim once and shares it
+     (`/api/projections`, about fifteen kilobytes compressed), so ask there first and fall back to Sleeper directly
+     if it cannot be reached. Only in a browser on a real page: the server job and the tests' Node runs have no
+     `/api` to ask. Returns the trimmed map, or null to say "ask Sleeper". */
+  var TITAN_API = typeof location !== 'undefined' && location.protocol && /^https?:$/.test(location.protocol);
+  var TITAN_WAIT = 8000;   // a server that does not answer must never hold up the first screen: Sleeper still will
+  async function titanProjections(q) {
+    if (!TITAN_API) return null;
+    try {
+      var stop = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(TITAN_WAIT) : undefined;
+      var r = await fetch('/api/projections' + q, stop ? {signal: stop} : undefined);
+      if (!r.ok) return null;
+      var d = await r.json();
+      var map = d && d.packed ? SCC.unpackProjections(d.packed) : null;
+      if (!map || !Object.keys(map).length) return null;
+      d.map = map;
+      return d;
+    } catch (e) { return null; }   // offline, or a server that does not answer this: Sleeper still does
+  }
+
   async function fetchProjections(season, week) {
     var key = 'titan.proj.v2.' + season + '.' + week; // v2: with the projected stat line (SCC.trimProjections)
     var cached = store.get(key);
     if (cached && Date.now() - cached.ts < 3600 * 1000) return cached.map;
     try {
-      var list = await getJson(projectionsUrl(season, week));
-      var map = SCC.trimProjections(list || []);
+      var got = await titanProjections('?season=' + season + '&week=' + week);
+      var map = got ? got.map : SCC.trimProjections((await getJson(projectionsUrl(season, week))) || []);
       store.set(key, {ts: Date.now(), map: map});
       return map;
     } catch (e) {
       return cached ? cached.map : {};
     }
+  }
+
+  /* This week's projections without first asking which week it is. Titan's server knows the week and answers with
+     it, so the app can start its biggest download at the same moment it starts working out which leagues a person
+     has, instead of waiting two round trips for the answer. Returns {season, week, map}, or null if it fails, in
+     which case the ordinary path runs and nothing is lost but the head start. */
+  async function earlyProjections() {
+    var got = await titanProjections('');
+    if (!got || !got.season || !got.week) return null;
+    store.set('titan.proj.v2.' + got.season + '.' + got.week, {ts: Date.now(), map: got.map});
+    return {season: String(got.season), week: Number(got.week), map: got.map};
   }
 
   /* Sleeper's season-long projections, trimmed and kept for 12 hours: Titan's own trade
@@ -854,7 +918,8 @@
     var key = 'titan.sproj.v2.' + season, cached = store.get(key);
     if (cached && Date.now() - cached.ts < 12 * 3600 * 1000) return cached.map;
     try {
-      var map = SCC.trimProjections((await getJson('https://api.sleeper.app/projections/nfl/' + season + '?season_type=regular' + PROJ_POS)) || []);
+      var got = await titanProjections('?season=' + season + '&scope=season');
+      var map = got ? got.map : SCC.trimProjections((await getJson('https://api.sleeper.app/projections/nfl/' + season + '?season_type=regular' + PROJ_POS)) || []);
       store.set(key, {ts: Date.now(), map: map});
       return map;
     } catch (e) {
@@ -872,7 +937,8 @@
     collectMatchups: collectMatchups, sleeperMatchup: sleeperMatchup, leagueTeams: leagueTeams, leagueSchedule: leagueSchedule, leagueDraft: leagueDraft,
     trendingAdds: trendingAdds, leagueWaivers: leagueWaivers, leagueTransactions: leagueTransactions, leagueTradeCounts: leagueTradeCounts,
     loadPlayers: loadPlayers, clearPlayers: clearPlayers, fetchDetails: fetchDetails,
-    fetchProjections: fetchProjections, fetchStats: fetchStats, fetchPlayerStats: fetchPlayerStats, PLAYERS_KEY: PLAYERS_KEY
+    fetchProjections: fetchProjections, earlyProjections: earlyProjections, fetchStats: fetchStats, fetchPlayerStats: fetchPlayerStats,
+    useEspn: useEspn, useYahoo: useYahoo, whenReady: whenReady, PLAYERS_KEY: PLAYERS_KEY
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

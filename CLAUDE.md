@@ -654,6 +654,38 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   user; it wants a sign-in within five minutes (`recent-login`), and the client re-authenticates and retries.
 - The public `/api` addresses take plain GETs with known parameters only (`plainGet`): a made-up
   parameter would skip the CDN cache and reach the function every time.
+- Projections reach the browser through Titan, not Sleeper (v1.89.0, `/api/projections` → `nflProjections`):
+  Sleeper's feed is ~2 MB because it carries every projected stat for every player, and `SCC.trimProjections` keeps a
+  fraction of it. The server trims once, keeps it in memory and gzipped in `meta/proj-<season>-<week>` (`gz`, and
+  `ngz` for the demo's names; both exempt from indexing), and the CDN holds it, so one read from Sleeper serves
+  everyone. 232 KB over the wire becomes 65 KB. `?season&week` is a week, `?season&scope=season` the season,
+  `?season&week&scope=demo` adds the player names the demo needs, and **no parameters means this week**, worked out by
+  the server (`nflState`) and named in the answer: that is the call `API.earlyProjections` makes at the top of
+  `refresh`, in parallel with `API.collect`, so the biggest download no longer waits two round trips to learn the
+  week. If the refresh settles on a different week (the Tuesday rollover) the right week is fetched and the head start
+  is unused; the demo never makes that call, since `demoPlayers` takes projections and names from one answer.
+  `fetchProjections` falls back to Sleeper directly whenever `/api` cannot be reached (with an 8-second limit, so a
+  silent server can never hold up the first screen), and Node (the job, the tests) always goes straight to Sleeper.
+  A stale copy still serves for a day if Sleeper is down.
+- **The size has to come out of the JSON, not out of gzip.** Neither Firebase Hosting nor Cloud Run compresses a
+  function's answer, and a `Content-Encoding` the function sets itself is stripped by Google's front end (measured
+  2026-09-17: gzip, brotli and identity all came back as the same uncompressed bytes, through Hosting and at the
+  function's own URL, cache hit or miss). So `SCC.packProjections`/`unpackProjections` (pure, tested) carry the
+  seventy stat names once instead of once per player, which is most of the difference. Don't reach for a compression
+  header here again without re-measuring; the helpers are still in `sendJson` if it ever starts working.
+- **espn.js, yahoo.js and newsletter.js are not in the page** (v1.89.0) and not in `SHELL`: `loadScript` fetches one
+  when it is needed, `loadPlatform` hands it to sleeper.js (`API.useEspn`/`useYahoo`, which replace the globals those
+  files used to capture at load) and re-wires sync.js's transports (`window.TitanWireTransports`). `platformsFor` is
+  called at boot and on an account change and passes the promise to `API.whenReady`; **the wait lives in sleeper.js**
+  (`waitReaders`, at the top of `collect`, `collectMatchups`, `collectScores`, `livePoints`, `leagueSchedule`,
+  `leagueTeams`, `leagueTradeCounts`, `leagueTransactions`, `leagueWaivers`, `leagueDraft`), so a new league reader is
+  covered by being written there rather than by every caller remembering. Guarding the callers instead is how the
+  Trade tab broke on a fresh load: `leagueTeams` had been missed. A Sleeper-only account downloads none of the three,
+  and the newsletter file loads on idle after the first render.
+- Inter is `font-display: optional` (v1.89.0), not `swap`: the browser uses it only if it is already there, so a first
+  visit draws immediately in the system font at `font-size-adjust` 0.5, which is Inter's x-height, and never reflows
+  partway through being read; every visit after is Inter from the cache. Note what it does **not** do: the file is
+  still fetched, so this bought rendering, not bandwidth.
 - Hosting sends security headers on every response (`firebase.json`: nosniff, frame denial, referrer
   policy, permissions policy, HSTS) and, since v1.44.0, a Content-Security-Policy in **report-only** mode:
   nothing is blocked, browsers post what the policy would have blocked to `/api/csp` (`cspReport`, logged at

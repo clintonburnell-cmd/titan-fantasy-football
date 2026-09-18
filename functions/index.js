@@ -1041,6 +1041,135 @@ async function buildContext(now = Date.now(), deps = {}) {
   return contextCache;
 }
 
+/* Sleeper's projections, trimmed, for the app's first screen.
+
+   Sleeper sends every projected player with every projected stat: two megabytes of JSON, a quarter of a megabyte
+   compressed, and the single largest thing a first visit downloads. `SCC.trimProjections` throws away all but the
+   two point totals and the stats a league's scoring can touch, which is the same trim the browser was doing after
+   paying for the whole thing, and leaves about fifteen kilobytes compressed. So the trim moves here: one read from
+   Sleeper is shared by everyone, and each browser downloads a twentieth of what it used to.
+
+   The copy is kept in memory and, gzipped in one field, in Firestore (`meta/proj-<season>-<week>`, `gz` exempt from
+   indexing), so a cold instance does not go back to Sleeper for two megabytes. Projections move through the week as
+   players are ruled in or out, so a copy is good for PROJ_KEEP; a stale copy still serves if Sleeper cannot be
+   reached, because last hour's projections beat none. No week means the season-long projections (the Trade tab's
+   own values), which change slowly and are kept far longer. */
+const PROJ_KEEP = 10 * 60 * 1000, SEASON_PROJ_KEEP = 12 * 3600 * 1000, PROJ_SERVE = 24 * 3600 * 1000;
+const projCache = {};
+function projUrl(season, week) {
+  return SLEEPER + '/projections/nfl/' + season + (week ? '/' + week : '') + '?season_type=regular' + PROJ_POS;
+}
+/* The demo names its players from this same answer (`?scope=demo`), so it is built here rather than sending the
+   visitor to Sleeper for two megabytes on the page a stranger is most likely to open first. Defenses are named from
+   their team elsewhere, so only numbered players are kept. */
+function namesFrom(list, map) {
+  const names = {};
+  (list || []).forEach(e => {
+    const p = e && e.player, id = e ? String(e.player_id) : '';
+    if (!p || !map[id] || !/^\d+$/.test(id)) return;
+    names[id] = [`${p.first_name || ''} ${p.last_name || ''}`.trim() || ('id ' + id), p.position || '', p.team || e.team || ''];
+  });
+  return names;
+}
+
+async function projections(season, week, now = Date.now(), get = getJson, docOf = k => db.doc('meta/' + k)) {
+  const key = 'proj-' + season + (week ? '-' + week : '-season'), keep = week ? PROJ_KEEP : SEASON_PROJ_KEEP;
+  const mem = projCache[key];
+  if (mem && now - mem.at < keep) return mem;
+  const ref = docOf(key);
+  let saved = null;
+  try {
+    const d = await ref.get();
+    if (d.exists && d.get('gz')) saved = {at: d.get('ts'), map: unpack(d.get('gz')), names: d.get('ngz') ? unpack(d.get('ngz')) : null};
+  } catch (e) { logger.warn('saved projections unreadable: ' + e.message); }
+  if (saved && now - saved.at < keep) return (projCache[key] = saved);
+  let map, names = null;
+  try {
+    const list = await get(projUrl(season, week)) || [];
+    map = SCC.trimProjections(list);
+    if (week) names = namesFrom(list, map);
+  } catch (e) {
+    // Sleeper is down or slow: yesterday's projections are worth more than an error.
+    const old = [mem, saved].filter(c => c && now - c.at < PROJ_SERVE).sort((a, b) => b.at - a.at)[0];
+    if (!old) throw e;
+    logger.warn(`projections: Sleeper unavailable (${e.message}), serving the copy from ${new Date(old.at).toISOString()}`);
+    return (projCache[key] = old);
+  }
+  const out = projCache[key] = {at: now, map, names};
+  const doc = {ts: now, gz: pack(map)};
+  if (names) doc.ngz = pack(names);
+  await ref.set(doc).catch(e => logger.warn('could not cache the projections: ' + e.message));
+  return out;
+}
+
+/* Which season and week the NFL is on, kept for a few minutes. It is here so a browser can ask for this week's
+   projections without first spending a round trip finding out what this week is. */
+const STATE_KEEP = 5 * 60 * 1000;
+let stateCache = null;
+async function nflState(now = Date.now(), get = getJson) {
+  if (stateCache && now - stateCache.at < STATE_KEEP) return stateCache;
+  const st = await get(SLEEPER + '/v1/state/nfl');
+  const week = Math.max(1, Number(st && (st.display_week || st.week)) || 1);
+  stateCache = {at: now, season: String((st && st.season) || new Date().getFullYear()), week};
+  return stateCache;
+}
+
+/* Sent as plain JSON, and smaller because of the trim rather than because of compression.
+
+   Worth knowing before trying again: neither Firebase Hosting nor Cloud Run compresses a function's answer, and a
+   `Content-Encoding` the function sets itself is stripped by Google's front end (measured 2026-09-17: gzip, br and
+   identity all came back as the same uncompressed bytes, through Hosting and at the function's own URL, hit or miss).
+   So the size here is what the browser downloads. The compression helpers stay because they cost nothing and would
+   start working if that ever changes.
+
+   Firebase Hosting compresses the files it serves itself, but a rewrite to a function passes the answer through as
+   the function sends it, and Cloud Run does not compress either. Uncompressed, the trimmed projections are 128 KB,
+   which throws away most of what the trim won; brotli takes them to about 15 KB. The compressed bytes are built once
+   per season and week and kept beside the map, so this costs nothing per request. `body` is memoised on the copy
+   itself, so a fresh read from Sleeper rebuilds it and nothing else does. */
+function body(out, season, week, withNames) {
+  const key = season + '|' + week + (withNames ? '|n' : '');
+  if (out.body && out.body.key === key) return out.body;
+  const payload = {at: out.at, season: season, week: week, packed: SCC.packProjections(out.map)};
+  if (withNames) payload.names = out.names || {};
+  const raw = Buffer.from(JSON.stringify(payload), 'utf8');
+  out.body = {key: key, raw: raw, br: zlib.brotliCompressSync(raw), gz: zlib.gzipSync(raw)};
+  return out.body;
+}
+function sendJson(res, accept, b) {
+  const enc = /br/.test(accept) ? 'br' : /gzip/.test(accept) ? 'gzip' : '';
+  const buf = enc === 'br' ? b.br : enc === 'gzip' ? b.gz : b.raw;
+  res.set('Content-Type', 'application/json; charset=utf-8');
+  if (enc) res.set('Content-Encoding', enc);
+  res.set('Content-Length', String(buf.length));
+  res.end(buf);
+}
+
+exports.nflProjections = onRequest({region: 'us-central1', memory: '512MiB', maxInstances: 5, timeoutSeconds: 60, invoker: 'public'}, async (req, res) => {
+  if (!plainGet(req, res, ['season', 'week', 'scope'])) return;
+  const q = req.query, wantSeason = q.scope === 'season', wantNames = q.scope === 'demo';
+  if (q.scope !== undefined && !wantSeason && !wantNames) { res.status(400).json({error: 'Not a scope.'}); return; }
+  let season = String(q.season || ''), week = q.week === undefined ? 0 : Number(q.week);
+  if (season && !/^\d{4}$/.test(season)) { res.status(400).json({error: 'Not a season.'}); return; }
+  if (q.week !== undefined && !(week >= 1 && week <= 22 && week === Math.floor(week))) { res.status(400).json({error: 'Not a week.'}); return; }
+  try {
+    // Nothing named: this week, worked out here. That is the call a browser can make before it knows the week.
+    if (!season || (!week && !wantSeason)) {
+      const st = await nflState();
+      if (!season) season = st.season;
+      if (!week && !wantSeason) week = st.week;
+    }
+    const out = await projections(season, wantSeason ? 0 : week);
+    // The CDN holds it, so a week's projections are read from Sleeper once however many people open Titan.
+    res.set('Cache-Control', wantSeason ? 'public, max-age=3600, s-maxage=21600' : 'public, max-age=300, s-maxage=600');
+    res.set('Vary', 'Accept-Encoding');
+    sendJson(res, req.headers['accept-encoding'] || '', body(out, season, wantSeason ? 0 : week, wantNames));
+  } catch (e) {
+    logger.warn('projections unavailable: ' + e.message);
+    res.status(502).json({error: 'Projections are unavailable right now.'});
+  }
+});
+
 exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInstances: 3, timeoutSeconds: 120, invoker: 'public'}, async (req, res) => {
   if (!plainGet(req, res, [])) return;
   try {
@@ -1053,7 +1182,7 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
   }
 });
 
-exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest, briefingFor, seasonStale, recapLine,
+exports._test = {valuesFormat, valuesKey, slimValues, tradeValues, newsAlerts, latestNews, projections, projUrl, nflState, body, sendJson, namesFrom, kickoffWeather, dvpFor, buildContext, run, freezeForUser, ranksFor, playerMap, pack, unpack, countStats, alertUser, deliver, hasAlerts, sendTest, briefingFor, seasonStale, recapLine,
   yahooAuthUrl, yahooToken, yahooRead, linkYahoo, yahooAccess, yahooAll, latestScores, newsForAlerts, labSnapshot, formatFromKey,
   setSend: fn => { sendPush = fn; },
   setCreds: store => { creds = store; }, espnCredsFor, espnLeaguesOf, plainGet,

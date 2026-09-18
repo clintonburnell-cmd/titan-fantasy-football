@@ -103,14 +103,14 @@
   <div id="toast" class="toast" role="status" hidden></div>
 
   <!-- deferred: they run in this order once the page is parsed, and don't hold up drawing it. -->
+  <!-- espn.js, yahoo.js and newsletter.js are not here on purpose (v1.89.0): app.js fetches each one when it is
+       actually needed, so an account that plays only on Sleeper never downloads any of them and the two files the
+       first screen does need are not competing with them for a phone's bandwidth. -->
   <script src="/engine.js" defer fetchpriority="high"></script>
   <script src="/demo.js" defer fetchpriority="low"></script>
-  <script src="/espn.js" defer></script>
-  <script src="/yahoo.js" defer fetchpriority="low"></script>
   <script src="/sleeper.js" defer></script>
   <script src="/syncplan.js" defer fetchpriority="low"></script>
   <!-- app.js loads sync.js (Google sign-in) itself, except in the demo. -->
-  <script src="/newsletter.js" defer fetchpriority="low"></script>
   <script src="/app.js" defer fetchpriority="high"></script>
 </body>
 </html>

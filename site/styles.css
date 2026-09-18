@@ -1123,8 +1123,13 @@ details.match[open] .mh-score { display: none; }
 /* Inter (rsms/inter, via fontsource; SIL Open Font License, fonts/OFL.txt), Latin only, served from Titan's own site
    so no visitor's browser asks Google or anyone else for it. The app uses it (body.app-page); the website keeps the
    system font. Declared up to 700 only, so the stylesheet's 800s and 900s draw at Inter's bold (700), not heavier. */
+/* `optional`, not `swap` (v1.89.0): the file is 48 KB, and on a slow first visit it was taking a quarter of the
+   bandwidth in the window where the two scripts the first screen needs were still arriving. With `optional` the
+   browser uses it only if it is already there, so a first visit draws immediately in the system font and every
+   visit after that is in Inter, from the cache. It also means no reflow partway through reading. The
+   `font-size-adjust` below draws the fallback at Inter's x-height, so neither one changes the layout. */
 @font-face {
-  font-family: "Inter Titan"; src: url("/fonts/inter-latin-wght.woff2") format("woff2"); font-weight: 100 700; font-style: normal; font-display: swap;
+  font-family: "Inter Titan"; src: url("/fonts/inter-latin-wght.woff2") format("woff2"); font-weight: 100 700; font-style: normal; font-display: optional;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
     U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }

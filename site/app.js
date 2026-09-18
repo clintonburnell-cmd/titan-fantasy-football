@@ -9,7 +9,9 @@
 (() => {
   'use strict';
 
-  const {SCC, SleeperAPI: API, EspnAPI: ESPN} = window;
+  const {SCC, SleeperAPI: API} = window;
+  // espn.js and yahoo.js are fetched only when an account needs one (loadPlatform), which is after this file runs.
+  let ESPN = window.EspnAPI || null;
   const store = API.store;
   // "Try a demo" (/app/?demo): sample leagues from real NFL players, kept apart
   // from any real account (its own storage names, and sync.js never loads), so
@@ -454,6 +456,66 @@
     gone.forEach(k => store.del(k));
   }
 
+  /* Files fetched only when they are needed.
+
+     Every visit used to download espn.js, yahoo.js and newsletter.js with the page, about eighteen kilobytes over
+     the wire, competing for a phone's bandwidth with the two files the first screen actually needs. An account that
+     plays only on Sleeper, which is most of them, never opens any of the three. So they are loaded on demand: the
+     platform ones before a refresh that needs them, and the newsletter one once the screen is drawn and the
+     connection is idle. A second visit has them in the service worker's cache anyway.
+
+     `loadScript` keeps one promise per file, so asking twice never fetches twice, and a failure is forgotten so a
+     later attempt can retry. */
+  const scripts = {};
+  function loadScript(src) {
+    if (scripts[src]) return scripts[src];
+    return (scripts[src] = new Promise((resolve, reject) => {
+      const el = document.createElement('script');
+      el.src = src;
+      el.async = false;
+      el.onload = () => resolve(true);
+      el.onerror = () => { delete scripts[src]; reject(new Error('could not load ' + src)); };
+      document.head.appendChild(el);
+    }));
+  }
+
+  /* One platform's reader. sleeper.js and sync.js both captured these at load; now they are handed over, and the
+     sign-in transports are wired again in case the person signed in before the file arrived. Never throws: a
+     platform that will not load leaves its leagues unread, which the refresh already reports, rather than stopping
+     everything else. */
+  async function loadPlatform(which) {
+    const src = which === 'yahoo' ? '/yahoo.js' : '/espn.js';
+    try { await loadScript(src); } catch (e) { return null; }
+    const mod = which === 'yahoo' ? window.YahooAPI : window.EspnAPI;
+    if (!mod) return null;
+    if (which === 'yahoo') API.useYahoo(mod); else { API.useEspn(mod); ESPN = mod; }
+    if (window.TitanWireTransports) window.TitanWireTransports();
+    return mod;
+  }
+  /* The readers this account needs, started at boot and again whenever the account changes. It is handed to
+     sleeper.js (`API.whenReady`), where every function that touches a league waits on it, so no caller has to
+     remember. A Sleeper-only account waits on nothing; an ESPN one waits only the first time, since the file is in
+     the browser's cache after that and the promise is already kept. */
+  let platforms = Promise.resolve([]);
+  function platformsFor(account) {
+    const a = account || {}, want = [];
+    if (a.espn && (a.espn.leagues || []).length) want.push('espn');
+    if (a.yahoo && a.yahoo.linked) want.push('yahoo');
+    platforms = Promise.all(want.map(loadPlatform));
+    if (API.whenReady) API.whenReady(want.length ? platforms : null);
+    return platforms;
+  }
+
+  // The signup boxes, once the screen is drawn and nothing is waiting on the connection.
+  let nlAsked = false;
+  function loadNewsletter() {
+    if (nlAsked || DEMO) return;
+    nlAsked = true;
+    const go = () => loadScript('/newsletter.js').then(() => { if (window.TitanNewsletter) render(); }, () => {});
+    if (window.requestIdleCallback) requestIdleCallback(go, {timeout: 6000});
+    else setTimeout(go, 3000);
+  }
+
   async function refresh() {
     if (S.busy || !S.account) return;
     S.busy = true;
@@ -462,11 +524,21 @@
     else render(); // swap the empty state for the loading message
     setProgress('Starting…');
     try {
+      /* The projections are the biggest thing the first screen waits for, and nothing in them depends on the
+         refresh: Titan's server knows which week it is, so both start together instead of the download waiting two
+         round trips to learn the week. If the refresh settles on a different week (the Tuesday rollover, where
+         Titan moves on before Sleeper does), the right week is fetched and the head start is simply unused. */
+      // Not in the demo: it reads Sleeper's raw list for the players' names (demoPlayers) and takes the
+      // projections out of the same answer, so a head start here would be a second download of the same thing.
+      const early = !DEMO && API.earlyProjections ? API.earlyProjections().catch(() => null) : null;
+      await platformsFor(S.account);   // restarted here in case the account gained a platform since boot
       const snap = await API.collect(S.account, setProgress, S.snap && S.snap.available);
       snap.userId = S.account.userId;
       S.snap = snap;
       saveSnap(true);
-      S.proj = await API.fetchProjections(snap.season, snap.week);
+      const guess = early ? await early : null;
+      S.proj = guess && guess.season === String(snap.season) && guess.week === Number(snap.week)
+        ? guess.map : await API.fetchProjections(snap.season, snap.week);
       S.projAt = Date.now();
       S.look.proj = {}; // later weeks' projections are fetched again when shown (loadLook)
       S.look.none = {};
@@ -1583,6 +1655,8 @@
   let scoresTimer = null;
   // ESPN's scoreboard read by the browser itself, trimmed the way Titan's server trims it: the ticker's fallback.
   async function scoresFromEspn() {
+    if (!ESPN) await loadPlatform('espn');
+    if (!ESPN) throw new Error('ESPN unavailable');
     const b = await ESPN.fetchScoreboard();
     return {at: Date.now(), season: b.season, week: b.week,
       games: b.games.map(g => ({id: g.id, kickoff: g.kickoff, home: g.home, away: g.away, state: g.state, hs: g.hs, as: g.as, detail: g.detail}))};
@@ -3809,6 +3883,8 @@
   }
 
   async function addEspn(text) {
+    if (!ESPN) await loadPlatform('espn');
+    if (!ESPN) { S.espn.error = 'Titan could not load its ESPN reader. Check your connection and try again.'; S.espn.busy = false; render(); return; }
     const E = S.espn, id = ESPN.parseLeagueId(text);
     E.pick = null;
     if (!id) { E.error = 'Type the league ID (a number) or paste the league\'s ESPN link.'; return render(); }
@@ -4178,6 +4254,7 @@
         JSON.stringify(S.account.yahoo || {}) !== JSON.stringify(account.yahoo || {}));
       S.account = Object.assign({}, account);
       store.set(KEY.account, S.account);
+      platformsFor(S.account);
       tipJar();
       if (newUser) { S.snap = null; S.A = null; store.del(KEY.snap); }
       render();
@@ -6554,8 +6631,10 @@
   // The Appearance card shows which theme is on (theme.js tells us when it changes).
   document.addEventListener('titan-theme', () => { if (S.ui.tab === 'settings') render(); });
   tipJar();
+  platformsFor(S.account);   // an ESPN or Yahoo reader starts downloading now, beside everything else
   analyze();
   render();
+  loadNewsletter();   // the signup boxes, once the screen is up and the connection is idle
   // A snapshot saved by an older version lacks what live scores and kickoff times need, so it's refreshed.
   if (S.account && (!S.snap || Date.now() - S.snap.at > STALE_MS || (S.snap.v || 0) < 4)) refresh();
   else { loadProj(); scheduleLive(); }

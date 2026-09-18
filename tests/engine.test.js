@@ -744,6 +744,23 @@ section('how each manager has played it (managerReport, liveProjection)');
     'a player past his projection keeps his points, and no projection stays no projection');
 }
 
+section('the projections, packed for the wire (packProjections, unpackProjections)');
+{
+  const map = {'96': [16.2, 3.4, {pass_yd: 250.5, pass_td: 1.8}], '12': [9, 0], '44': [4.1, 2.2, {rec: 4.4, rec_yd: 51}]};
+  const packed = SCC.packProjections(map);
+  check(JSON.stringify(SCC.unpackProjections(packed)) === JSON.stringify(map), 'what goes in comes back out unchanged');
+  check(packed.k.length === 4 && packed.p['12'].length === 2, 'each stat name is stored once, and a player with no stat line carries no third slot');
+  // The saving is the repeated key names, so it only shows at a real roster's size: a handful of players costs more
+  // than it saves, which is fine, because the wire only ever carries the whole league's worth.
+  const many = {};
+  for (let i = 0; i < 300; i++) many[String(i)] = [i / 10, 1.5, {pass_yd: i, rec_yd: i + 1, rush_yd: i + 2, rec_tgt: i % 9, rush_att: i % 7}];
+  const big = JSON.stringify(many).length, small = JSON.stringify(SCC.packProjections(many)).length;
+  check(small < big * 0.6, `at a league's size it is well under half the bytes (${small} vs ${big})`);
+  check(JSON.stringify(SCC.unpackProjections(SCC.packProjections(many))) === JSON.stringify(many), 'and 300 players still come back unchanged');
+  check(SCC.unpackProjections(null) === null && SCC.unpackProjections({v: 2, p: {}}) === null, 'a shape from another version is refused rather than half read');
+  check(JSON.stringify(SCC.unpackProjections(SCC.packProjections({}))) === '{}', 'an empty map survives the round trip');
+}
+
 section('every player week by week (weeklyPoints)');
 {
   const st = (ppr, half, gp) => ({ppr, half, std: ppr - 2, gp: gp === undefined ? 1 : gp, snp: gp === 0 ? 0 : 40});

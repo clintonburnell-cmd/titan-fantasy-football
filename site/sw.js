@@ -6,12 +6,14 @@
  * PAGE_WAIT with a saved copy at hand, the saved page serves and the fresh one lands for the next
  * open. Sleeper's API is never touched here: live data always comes straight from Sleeper.
  */
-const CACHE = 'titan-v19';
+const CACHE = 'titan-v20';
 const PAGE_WAIT = 2500;
-// The website (the root page) and the app (/app/), with everything the app loads.
-const SHELL = ['./', 'index.html', 'site.css', 'theme.js', 'stats.js', 'titan.svg', 'app/', 'app/index.html', 'styles.css', 'engine.js', 'demo.js', 'espn.js', 'yahoo.js', 'sleeper.js',
+/* The website (the root page) and the app (/app/), with everything the app loads at once. espn.js, yahoo.js and
+   newsletter.js are deliberately absent (v1.89.0): the app fetches each only when it needs it, and the handler
+   below saves any asset it serves, so a person who does use one has it from the cache next time. */
+const SHELL = ['./', 'index.html', 'site.css', 'theme.js', 'stats.js', 'titan.svg', 'app/', 'app/index.html', 'styles.css', 'engine.js', 'demo.js', 'sleeper.js',
   'syncplan.js', 'app.js', 'sync.js', 'icon.svg', 'icon-192.png', 'apple-touch-icon.png', 'manifest.webmanifest', 'privacy.html', 'terms.html', '404.html',
-  'fonts/inter-latin-wght.woff2', 'newsletter.js', 'newsletter/', 'guides/', 'guides/import-fantasy-rankings.html', 'guides/combine-fantasy-rankings.html',
+  'fonts/inter-latin-wght.woff2', 'newsletter/', 'guides/', 'guides/import-fantasy-rankings.html', 'guides/combine-fantasy-rankings.html',
   'guides/sleeper-start-sit.html', 'guides/espn-private-league.html', 'guides/fantasy-draft-grades.html', 'guides/fantasy-trade-help.html'];
 const ASSET = /\.(js|css|woff2|png|jpg|svg|webmanifest)$/;
 
