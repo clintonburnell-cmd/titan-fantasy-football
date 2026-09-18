@@ -121,6 +121,8 @@
     error: '',
     A: null, // the snapshot analysed under the current rankings
     score: {week: 0, busy: false, data: null, error: ''},
+    // Results -> By week: every week's stats for the season so far, loaded once (loadByWeek).
+    bw: {busy: false, key: '', weeks: [], list: null, error: ''},
     draft: {week: 0, text: '', parsed: null, file: '', pos: ''},
     link: {busy: false, error: ''},
     sync: {ready: false, api: null, user: null, state: 'off', error: '', at: 0},
@@ -2243,9 +2245,20 @@
   const gap = n => (n > 0 ? '+' : n < 0 ? '−' : '') + fmt(Math.abs(n));
   // Whether any of this week's games has kicked off (before that there's nothing to score).
   const weekStarted = () => Object.values((S.snap && S.snap.games) || {}).some(g => g && g.state !== 'pre');
+
+  /* Results holds two questions that share a screen: how this week went, and how each player has gone week by week.
+     Chips rather than a second menu entry, the same shape Planning uses, so the nav stays at five sections. */
+  const SCORE_VIEWS = [['week', 'This week'], ['byweek', 'By week']];
   function screenScore() {
     if (DEMO) return demoOnly('Results', 'Results score your real teams week by week, against what your rankings would have started.');
     if (!S.snap) return emptyState();
+    const view = S.ui.scoreView === 'byweek' ? 'byweek' : 'week';
+    const chips = `<div class="chips plan-views" role="group" aria-label="Results view">${SCORE_VIEWS.map(([k, label]) =>
+      `<button type="button" class="chip" data-scoreview="${k}" aria-pressed="${k === view}">${label}</button>`).join('')}</div>`;
+    return chips + (view === 'byweek' ? screenByWeek() : scoreWeek());
+  }
+
+  function scoreWeek() {
     const cur = S.snap.week, wk = S.score.week || cur, D = S.score.data, busy = S.score.busy;
     let h = `<div class="wstep">
       <button type="button" class="btn ghost small" data-sweek="${wk - 1}"${wk <= 1 || busy ? ' disabled' : ''} aria-label="Week ${wk - 1}">‹</button>
@@ -2398,6 +2411,121 @@
       <details class="help"><summary>Every week</summary><div class="table-wrap"><table class="season-t"><thead><tr><th>Week</th><th>Record</th><th>Points</th><th>Projected</th><th>By rank</th></tr></thead>
         <tbody>${weeks.map(x => `<tr><td>${x.week}${x.done ? '' : ' (so far)'}</td><td>${rec(x) || '–'}</td><td>${fmt(x.actual)}</td><td>${fmt(x.proj || 0)}</td><td>${fmt(x.byRank)}</td></tr>`).join('')}</tbody></table></div></details>
       ${liveNote}${S.seasonBusy ? '<p class="fine">Reading more of your earlier weeks…</p>' : ''}</section>`;
+  }
+
+  /* ---- Results -> By week: every player on one of your rosters and what he has actually scored, week by week.
+
+     Titan is full of what a player is projected to do; this is the only place that lays out what he has done, which is
+     how a person decides whether to keep starting him. One league at a time, because a catch is worth a different
+     number in each of them: the league's own scoring decides every figure here. The chart carries the handful of
+     players being compared (tap a row to swap one in) and the table carries all of them. A week he did not play is a
+     dash, never a nought: a bye and a bad game should not look the same. */
+  const BW_MAX = 4;   // series the chart can tell apart at a glance
+  // The weeks the season has actually had: finished ones, plus this one once its games are on.
+  const bwUpto = () => (S.snap ? (weekStarted() ? S.snap.week : S.snap.week - 1) : 0);
+  async function loadByWeek() {
+    const B = S.bw, season = S.snap.season, upto = bwUpto(), weeks = [];
+    for (let w = 1; w <= upto; w++) weeks.push(w);
+    B.busy = true;
+    B.error = '';
+    try {
+      B.list = await Promise.all(weeks.map(w => API.fetchStats(season, w)));
+      B.weeks = weeks;
+      B.key = season + '|' + upto;
+    } catch (e) { B.error = 'Titan could not load the weekly scores.'; }
+    B.busy = false;
+    if (S.ui.tab === 'score') render();
+  }
+
+  function screenByWeek() {
+    const leagues = (S.A && S.A.leagues) || [];
+    if (!leagues.length) return '<div class="empty-note">No leagues to show yet.</div>';
+    const lg = leagues.find(L => String(L.cfg.id) === String(S.ui.bwLeague)) || leagues[0];
+    jumpBar(leagues.map(L => ({cfg: L.cfg})), true, {pick: lg.cfg.id});
+    const upto = bwUpto();
+    if (upto < 1) return '<div class="empty-note">No games have been played yet this season.</div>';
+    const B = S.bw;
+    if ((!B.list || B.key !== S.snap.season + '|' + upto) && !B.busy && !B.error) loadByWeek();
+    if (B.error) return `<div class="banner stop">${esc(B.error)} <button class="link" data-action="byweek">Try again</button></div>`;
+    if (!B.list || B.key !== S.snap.season + '|' + upto) return '<div class="empty-note">Reading every week of the season…</div>';
+
+    const weeks = B.weeks, cfg = lg.cfg;
+    const rows = SCC.weeklyPoints(weeks.map((w, i) => ({week: w, stats: B.list[i]})), lg.roster, cfg.ppr)
+      .map(r => Object.assign(r, {start: !!(lg.roster.find(x => String(x.id) === r.id) || {}).start}));
+    if (!rows.length) return '<div class="empty-note">No players on this roster yet.</div>';
+    const scoring = cfg.ppr === 1 ? 'PPR' : cfg.ppr === 0.5 ? 'half PPR' : 'standard';
+    const live = weeks[weeks.length - 1] === S.snap.week && !allGamesDone();
+
+    // The players on the chart: the ones picked here, else the roster's three biggest scorers so it opens on something.
+    const played = rows.filter(r => r.games);
+    const picked = (S.ui.bwPick || []).map(String).filter(id => played.some(r => r.id === id)).slice(0, BW_MAX);
+    const show = picked.length ? picked : played.slice(0, 3).map(r => r.id);
+    const series = show.map((id, i) => Object.assign({}, played.find(r => r.id === id), {si: i + 1}));
+
+    let h = `<p class="lede">What every player on <b>${esc(cfg.key)}</b> has actually scored, week by week, in that league's
+      ${esc(scoring)} scoring. Tap a row to put that player on the chart.</p>`;
+    h += bwChart(series, weeks, live);
+    const cols = weeks.map(w => `<th class="tnum" scope="col">W${w}${w === S.snap.week && live ? '*' : ''}</th>`).join('');
+    const cell = v => (v === null ? '<td class="tnum bw-none">–</td>' : `<td class="tnum">${fmt(v)}</td>`);
+    const body = rows.map(r => {
+      const on = series.findIndex(x => x.id === r.id);
+      /* The whole row is a target on a phone, and the swatch beside the name is the button a keyboard and a screen
+         reader use, so the name itself stays free to open the player card. */
+      const pick = r.games ? `<button type="button" class="bw-pick" data-bwpick="${esc(r.id)}" aria-pressed="${on >= 0}"
+        aria-label="${esc((on >= 0 ? 'Take ' + r.name + ' off the chart' : 'Put ' + r.name + ' on the chart'))}"></button>` : '<i class="bw-pick off"></i>';
+      return `<tr class="bw-row${on >= 0 ? ' is-on bw-s' + series[on].si : ''}"${r.games ? ` data-bwpick="${esc(r.id)}"` : ''}>
+        <th scope="row" class="bw-p"><span class="bw-pw">${pick}<span><b${pcAttr({id: r.id})}>${esc(r.name)}</b><small>${
+          esc([r.pos, r.team].filter(Boolean).join(' · '))}${r.start ? ' · starting' : ''}</small></span></span></th>
+        ${r.pts.map(cell).join('')}
+        <td class="tnum"><b>${fmt(r.total)}</b></td><td class="tnum">${r.avg === null ? '–' : fmt(r.avg)}</td>
+        <td class="tnum bw-hi">${r.best === null ? '–' : fmt(r.best)}</td><td class="tnum bw-lo">${r.worst === null ? '–' : fmt(r.worst)}</td></tr>`;
+    }).join('');
+    h += `<div class="card table-wrap"><table class="rtable bw-t"><thead><tr><th scope="col">Player</th>${cols}
+      <th class="tnum" scope="col">Total</th><th class="tnum" scope="col">Avg</th><th class="tnum" scope="col">Best</th><th class="tnum" scope="col">Worst</th></tr></thead>
+      <tbody>${body}</tbody></table></div>`;
+    h += `<p class="fine">Best and worst count only the weeks he played, so a bye does not read as a nought.${
+      live ? ` Week ${S.snap.week} (*) is still being played.` : ''} Sorted by total points. Stats via Sleeper.</p>`;
+    return h;
+  }
+
+  // Are all of this week's games finished? (By week marks a week that is still being played.)
+  const allGamesDone = () => Object.values((S.snap && S.snap.games) || {}).every(g => !g || g.state === 'complete');
+
+  /* The chart: one line per picked player, points down the side and weeks along the bottom. A week he missed breaks the
+     line rather than dropping it to the floor. It scales to the window, so a phone needs no sideways scroll. */
+  function bwChart(series, weeks, live) {
+    if (!series.length) return '';
+    const vals = series.reduce((a, r) => a.concat(r.pts.filter(v => v !== null)), []);
+    const top = Math.max(10, ...vals), step = top <= 20 ? 5 : top <= 50 ? 10 : 20;
+    const max = Math.ceil(top / step) * step;
+    const H = 150, PAD = 10, LEFT = 30, RIGHT = 12, BAND = 62;
+    const width = LEFT + RIGHT + Math.max(1, weeks.length - 1) * BAND;
+    const x = i => (weeks.length === 1 ? LEFT + (width - LEFT - RIGHT) / 2 : LEFT + i * BAND);
+    const y = v => PAD + H - Math.max(0, Math.min(max, v)) / max * H;
+    const grid = [];
+    for (let v = 0; v <= max; v += step) {
+      grid.push(`<line class="sc-grid" x1="${LEFT}" x2="${width}" y1="${y(v)}" y2="${y(v)}"/><text class="sc-y" x="${LEFT - 6}" y="${y(v) + 4}">${v}</text>`);
+    }
+    const xlab = weeks.map((w, i) => `<text class="sc-x" x="${x(i)}" y="${PAD + H + 16}">W${w}${w === S.snap.week && live ? '*' : ''}</text>`).join('');
+    const lines = series.map(r => {
+      // Each run of weeks he played is its own stretch of line, so a missed week leaves a gap rather than a dive to zero.
+      let d = '', open = false;
+      r.pts.forEach((v, i) => {
+        if (v === null) { open = false; return; }
+        d += `${open ? 'L' : 'M'}${x(i)},${y(v)}`;
+        open = true;
+      });
+      const dots = r.pts.map((v, i) => (v === null ? ''
+        : `<circle class="bw-dot" cx="${x(i)}" cy="${y(v)}" r="4" tabindex="0" data-tip="${esc(fmt(v) + ' points')}&#10;${
+          esc(r.name + ', week ' + weeks[i])}" aria-label="${esc(r.name + ', week ' + weeks[i] + ', ' + fmt(v) + ' points')}"/>`)).join('');
+      return `<g class="bw-s${r.si}"><path class="bw-line" d="${d}"/>${dots}</g>`;
+    }).join('');
+    const key = series.map(r => `<span class="bw-s${r.si}"><i></i>${esc(r.name)} <b>${fmt(r.avg)}</b>/gm</span>`).join('');
+    return `<section class="card pad bw-card"><h3>Week by week</h3>
+      <div class="bw-key-row">${key}</div>
+      <svg class="sc-chart bw-chart" viewBox="0 0 ${width} ${PAD + H + 22}" role="img"
+        aria-label="Points scored each week by ${esc(series.map(r => r.name).join(', '))}">${grid.join('')}${lines}${xlab}</svg>
+    </section>`;
   }
 
   // The season chart's tooltip: a column's numbers on hover or keyboard focus (the table has them too).
@@ -6083,6 +6211,7 @@
       const id = t.dataset.pickleague, at = window.scrollY;
       if (S.ui.tab === 'trade') { S.ui.tradeLeague = id; S.ui.tradePartner = ''; if (pickedLeague() !== 'all') S.ui.league = id; }
       else if (S.ui.tab === 'standings') { S.ui.standLeague = id; if (pickedLeague() !== 'all') S.ui.league = id; }
+      else if (S.ui.tab === 'score' && S.ui.scoreView === 'byweek') S.ui.bwLeague = id;
       else S.ui.league = id;
       saveUi();
       render();
@@ -6102,6 +6231,7 @@
     if (t.dataset.viewPos) { S.view.pos = t.dataset.viewPos; return render(); }
     const a = t.dataset.action;
     if (a === 'score') loadScore(S.score.week || S.snap.week);
+    if (a === 'byweek') { S.bw.error = ''; loadByWeek(); render(); }
     else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
     else if (a === 'matchups') loadMatchups();
     else if (a === 'news-all') { S.news.all = true; render(); }
@@ -6195,6 +6325,17 @@
     if (fb) { S.ui.valueFmt = fb.dataset.vfmt; saveUi(); render(); return; }
     const pv = e.target.closest('[data-planview]');
     if (pv) { S.ui.planView = pv.dataset.planview; saveUi(); render(); return; }
+    const sv = e.target.closest('[data-scoreview]');
+    if (sv) { S.ui.scoreView = sv.dataset.scoreview; saveUi(); render(); return; }
+    // A row on By week goes onto the chart; tapping one already on it takes it off. The oldest drops out once it is full.
+    const bp = e.target.closest('[data-bwpick]');
+    if (bp && !e.target.closest('[data-pcard]')) {
+      const id = String(bp.dataset.bwpick), on = (S.ui.bwPick || []).map(String);
+      S.ui.bwPick = on.includes(id) ? on.filter(v => v !== id) : on.concat(id).slice(-BW_MAX);
+      saveUi();
+      render();
+      return;
+    }
     const mw = e.target.closest('[data-mu-week]');
     if (mw) { S.mu.week = Number(mw.dataset.muWeek); render(); return; }
     const mt = e.target.closest('[data-mu-table]');

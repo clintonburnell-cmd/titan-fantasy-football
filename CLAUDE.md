@@ -293,6 +293,12 @@ One note per screen or feature.
   manager has played it (`managerCard`, `SCC.managerReport` over the league's transactions and today's values;
   a category with nothing in it is null, so a quiet manager is blank rather than last). Both wait for the league's
   teams, and the manager card asks for the transactions itself.
+- Results holds two views behind chips (v1.87.0, `SCORE_VIEWS`, the shape Planning uses): **This week** (`scoreWeek`,
+  the old screen) and **By week** (`screenByWeek`), every rostered player's points week by week for one league. The
+  season's stats load once per visit (`loadByWeek`, `S.bw`, one `API.fetchStats` per week) and `SCC.weeklyPoints`
+  scores them in that league's `cfg.ppr`. A week not played is null, never zero, in the engine, the table and the
+  chart; the average counts only the weeks he played. `S.ui.bwPick` holds up to `BW_MAX` players for the chart and
+  `S.ui.bwLeague` the league, which the left rail picks like the other one-league screens.
 - A projection moves once the game does (v1.86.0, `SCC.liveProjection` through `projOf`): points plus half of what
   is left while a game is on, the points once it is over, the plain projection before kickoff and on a planned
   later week. It must keep agreeing with `winProbability`, which makes the same assumption.

@@ -744,6 +744,23 @@ section('how each manager has played it (managerReport, liveProjection)');
     'a player past his projection keeps his points, and no projection stays no projection');
 }
 
+section('every player week by week (weeklyPoints)');
+{
+  const st = (ppr, half, gp) => ({ppr, half, std: ppr - 2, gp: gp === undefined ? 1 : gp, snp: gp === 0 ? 0 : 40});
+  const weeks = [{week: 1, stats: {a: st(20, 17), b: st(4, 3)}}, {week: 2, stats: {a: st(10, 9), b: st(30, 26)}},
+    {week: 3, stats: {a: st(0, 0, 0), b: st(12, 10)}}];
+  const players = [{id: 'a', name: 'Steady', pos: 'RB', team: 'KC'}, {id: 'b', name: 'Spiky', pos: 'WR', team: 'BUF'},
+    {id: 'c', name: 'Never Played', pos: 'TE', team: 'NYJ'}];
+  const R = SCC.weeklyPoints(weeks, players, 1);
+  check(R[0].name === 'Spiky' && R[0].total === 46 && R[1].total === 30, `rows come back best first by total (${R.map(x => x.name + ' ' + x.total).join(', ')})`);
+  check(R[1].pts.join() === '20,10,' && R[1].pts[2] === null, 'a week he did not play is null, not zero: ' + JSON.stringify(R[1].pts));
+  check(R[1].games === 2 && R[1].avg === 15 && R[1].best === 20 && R[1].worst === 10, 'the average counts only the weeks he played');
+  const last = R.find(x => x.name === 'Never Played');
+  check(last.games === 0 && last.total === 0 && last.avg === null && last.best === null, 'a player with no games is empty rather than zeroed');
+  const half = SCC.weeklyPoints(weeks, [players[0]], 0.5)[0];
+  check(half.total === 26 && SCC.weeklyPoints(weeks, [players[0]], 0)[0].total === 26, "the league's own scoring decides the numbers");
+}
+
 section('the pre-kickoff sweep (lineupSweep)');
 {
   const LG = (key, o) => Object.assign({cfg: {key}, moves: [], hurt: [], stops: 0}, o);

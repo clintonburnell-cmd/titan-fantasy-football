@@ -2384,6 +2384,33 @@
     return round1(s + Math.max(0, p - s) * 0.5);
   }
 
+  /* Every player on your rosters, week by week (Results, By week). `weeks` is [{week, stats: {id: trimStat}}] oldest
+     first, `players` the rostered players (deduped by the caller), and `ppr` the league's points per catch so the
+     numbers match the league being shown. Each row carries the weeks he played, his total, his average over the weeks
+     the season has had, and his best and worst. Sorted by total, best first. A week he did not play is null, not zero:
+     a bye and a blank are not the same thing and a chart should not draw them the same way. */
+  function weeklyPoints(weeks, players, ppr) {
+    var scale = function (st) {
+      if (!st) return null;
+      if (ppr === 0.5) return round2(st.half);
+      if (ppr === 0) return round2(st.std);
+      return round2(st.ppr);
+    };
+    var rows = (players || []).map(function (p) {
+      var pts = (weeks || []).map(function (w) {
+        var st = w && w.stats && w.stats[String(p.id)];
+        return st && (st.gp || st.snp || st.ppr) ? scale(st) : null;
+      });
+      var played = pts.filter(function (x) { return x !== null; });
+      var total = played.reduce(function (a, b) { return a + b; }, 0);
+      return {id: String(p.id), name: p.name, pos: p.pos, team: p.team, pts: pts,
+        games: played.length, total: round2(total), avg: played.length ? round2(total / played.length) : null,
+        best: played.length ? Math.max.apply(null, played) : null, worst: played.length ? Math.min.apply(null, played) : null};
+    });
+    rows.sort(function (a, b) { return b.total - a.total || String(a.name).localeCompare(String(b.name)); });
+    return rows;
+  }
+
   function closeCalls(roster, slots, startedIds) {
     var wins = 0, total = 0;
     var starters = roster.filter(function (p) { return startedIds[p.id]; });
@@ -3518,7 +3545,7 @@
     rankKey: rankKey, rankLabel: rankLabel, rankBits: rankBits, rankNote: rankNote, slotFits: slotFits, optimal: optimal,
     actualLineup: actualLineup, bestByPoints: bestByPoints, sumPts: sumPts,
     closeCalls: closeCalls, freeAgents: freeAgents, spreadOf: spreadOf, closeCallPairs: closeCallPairs, closeByRank: closeByRank,
-    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest, taggedIds: taggedIds, managerReport: managerReport, liveProjection: liveProjection, applyInjuries: applyInjuries, lineupSweep: lineupSweep, lineupSwing: lineupSwing, practiceNote: practiceNote, whatChanged: whatChanged,
+    disagreements: disagreements, gradeCalls: gradeCalls, kickoffNudge: kickoffNudge, DISAGREE: DISAGREE, parseOffer: parseOffer, parseMatchups: parseMatchups, matchupRank: matchupRank, tiltFromRank: tiltFromRank, MATCH_TILT: MATCH_TILT, streamPicks: streamPicks, nextBest: nextBest, taggedIds: taggedIds, managerReport: managerReport, liveProjection: liveProjection, weeklyPoints: weeklyPoints, applyInjuries: applyInjuries, lineupSweep: lineupSweep, lineupSwing: lineupSwing, practiceNote: practiceNote, whatChanged: whatChanged,
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,

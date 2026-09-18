@@ -29,6 +29,9 @@
   --muted: #4b5972;
   --faint: #5d6a83; /* the lightest grey that still reads clearly on every surface (WCAG 4.5:1) */
   --accent: #2456d6; /* dark enough for white button text (WCAG 4.5:1) */
+  /* The four lines on Results -> By week. Four hues that stay apart for the common kinds of colour blindness; the
+     table names each player beside his swatch, so nothing here is carried by colour alone. */
+  --bw1: #2456d6; --bw2: #0f7d5f; --bw3: #a35c00; --bw4: #8e3bb8;
   --accent-2: #2456d6; /* links and highlights */
   --accent-ink: #ffffff;
   --swap: #a35c00; /* amber text and marks */
@@ -66,6 +69,7 @@
   --faint: #7f8ba3;
   --accent: #3a67ea;
   --accent-2: #7aa0ff;
+  --bw1: #7aa0ff; --bw2: #4cc790; --bw3: #f5b942; --bw4: #d38bf0;
   --swap: #f5b942;
   --swap-soft: rgb(245 185 66 / .11);
   --stop: #e2574c;
@@ -1520,6 +1524,38 @@ body.app-page :is(.stand .tnum, .stand .st-odds b) { font-variant-numeric: tabul
   margin: 0; max-height: 360px; overflow: auto; white-space: pre-wrap;
   font: .76rem/1.5 ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--muted);
 }
+
+/* Results -> By week: the chart and the week-by-week table. Four series, told apart by colour and by the swatch
+   beside each name in the table, never by colour alone. */
+.bw-key-row { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 2px 0 10px; font-size: var(--t-sm); color: var(--muted); }
+.bw-key-row i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.bw-key-row b { color: var(--text); font-variant-numeric: tabular-nums; }
+.bw-chart { width: 100%; height: auto; }
+.bw-line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.bw-dot { stroke: var(--surface); stroke-width: 2; }
+.bw-dot:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.bw-card .bw-s1 :is(.bw-line, .bw-dot), .bw-key-row .bw-s1 i { stroke: var(--bw1); fill: var(--bw1); background: var(--bw1); }
+.bw-card .bw-s2 :is(.bw-line, .bw-dot), .bw-key-row .bw-s2 i { stroke: var(--bw2); fill: var(--bw2); background: var(--bw2); }
+.bw-card .bw-s3 :is(.bw-line, .bw-dot), .bw-key-row .bw-s3 i { stroke: var(--bw3); fill: var(--bw3); background: var(--bw3); }
+.bw-card .bw-s4 :is(.bw-line, .bw-dot), .bw-key-row .bw-s4 i { stroke: var(--bw4); fill: var(--bw4); background: var(--bw4); }
+.bw-card .bw-line { fill: none; }
+.bw-t th[scope="col"] { position: sticky; top: 0; z-index: 1; }
+.bw-t .bw-p { min-width: 11rem; font-weight: 600; }
+.bw-pw { display: flex; align-items: center; gap: 8px; }
+.bw-t .bw-p small { display: block; color: var(--muted); font-size: var(--t-xs); font-weight: 500; }
+.bw-t .bw-none { color: var(--muted); }
+.bw-t .bw-hi { color: var(--good); }
+.bw-t .bw-lo { color: var(--muted); }
+.bw-row[data-bwpick] { cursor: pointer; }
+.bw-pick { width: 14px; height: 14px; flex: none; padding: 0; border: 2px solid var(--line); border-radius: 50%; background: none; cursor: pointer; }
+.bw-pick.off { border-style: dotted; cursor: default; }
+.bw-pick:hover { border-color: var(--accent-2); }
+.bw-row.is-on .bw-pick { border-color: transparent; }
+.bw-row.bw-s1 .bw-pick { background: var(--bw1); }
+.bw-row.bw-s2 .bw-pick { background: var(--bw2); }
+.bw-row.bw-s3 .bw-pick { background: var(--bw3); }
+.bw-row.bw-s4 .bw-pick { background: var(--bw4); }
+.bw-row.is-on > th { box-shadow: inset 3px 0 0 currentColor; }
 
 .toast {
   position: fixed; left: 50%; bottom: calc(82px + env(safe-area-inset-bottom)); transform: translateX(-50%); /* above the bottom bar */
