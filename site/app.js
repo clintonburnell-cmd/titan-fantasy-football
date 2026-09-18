@@ -21,14 +21,14 @@
     ? {account: 'titan.demo.account.v1', ranks: 'titan.demo.ranks.v1', snap: 'titan.demo.snapshot.v1', ui: 'titan.demo.ui.v1', multi: 'titan.demo.multi.v1', season: 'titan.demo.season.v1', lab: 'titan.demo.lab.v1', seasonRanks: 'titan.demo.seasonranks.v1', calls: 'titan.demo.calls.v1', look: 'titan.demo.look.v1'}
     : {account: 'titan.account.v1', ranks: 'titan.ranks.v1', snap: 'titan.snapshot.v1', ui: 'titan.ui.v1', multi: 'titan.multi.v1', season: 'titan.season.v1', lab: 'titan.lab.v1', seasonRanks: 'titan.seasonranks.v1', calls: 'titan.calls.v1', look: 'titan.look.v1'};
   const STALE_MS = 5 * 60 * 1000;
-  const TABS = ['today', 'lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'plan', 'score', 'news', 'trade', 'moves', 'ranks', 'season', 'multi', 'lab', 'value', 'dump', 'matchups', 'settings'];
+  const TABS = ['today', 'lineups', 'matchup', 'standings', 'rosters', 'waivers', 'exposure', 'byes', 'sos', 'plan', 'score', 'news', 'trade', 'moves', 'ranks', 'season', 'multi', 'lab', 'value', 'dump', 'matchups', 'coach', 'settings'];
   // Each screen's name, as a heading for screen readers (the tabs show it visually).
   const TAB_NAMES = {today: 'Today', lineups: 'Lineups', matchup: 'Matchup', standings: 'Standings', rosters: 'Rosters', waivers: 'Waivers', exposure: 'Exposure', byes: 'Byes',
-    sos: 'Schedule strength', plan: 'Planning', score: 'Results', news: 'News', ranks: 'Rankings', season: 'Season rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump', matchups: 'Match Up data',
+    sos: 'Schedule strength', plan: 'Planning', score: 'Results', news: 'News', ranks: 'Rankings', season: 'Season rankings', multi: 'Import multiple sources', lab: 'Compare rankings', value: 'Value report', dump: 'Data dump', matchups: 'Match Up data', coach: 'Coach Speak',
     trade: 'Trade', moves: 'Transactions', settings: 'Settings'};
   // Each screen's address under /app/ (the Results tab's id is still 'score').
   const SLUG = {today: 'today', lineups: 'lineups', matchup: 'matchup', standings: 'standings', rosters: 'rosters', waivers: 'waivers', exposure: 'exposure', byes: 'byes', sos: 'schedule', plan: 'planning',
-    score: 'results', news: 'news', ranks: 'rankings', season: 'season', multi: 'multiple', lab: 'compare', value: 'value', dump: 'data-dump', matchups: 'matchup-data', trade: 'trade', moves: 'transactions',
+    score: 'results', news: 'news', ranks: 'rankings', season: 'season', multi: 'multiple', lab: 'compare', value: 'value', dump: 'data-dump', matchups: 'matchup-data', coach: 'coach-speak', trade: 'trade', moves: 'transactions',
     settings: 'settings'};
   const tabFromPath = () => {
     const m = location.pathname.match(/^\/app\/([a-z-]+)\/?$/);
@@ -44,11 +44,11 @@
     {id: 'league', name: 'League', tabs: ['standings', 'rosters', 'trade', 'moves']},
     {id: 'players', name: 'Players', tabs: ['waivers', 'news', 'plan']},
     // Compare (lab), Value and Data dump are Titan's owner's only: they show only on the owner's account.
-    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'season', 'multi', 'lab', 'value', 'dump', 'matchups']},
+    {id: 'rankings', name: 'Rankings', tabs: ['ranks', 'season', 'multi', 'lab', 'value', 'dump', 'matchups', 'coach']},
     {id: 'results', name: 'Results', tabs: ['score']}
   ];
-  const SUB_NAMES = {ranks: 'Weekly import', season: 'Season import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', matchups: 'Match Up data', score: 'Results', sos: 'Schedule', plan: 'Planning'};
-  const OWNER_TABS = ['lab', 'value', 'dump', 'matchups']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else); Compare and Match Up data also for titanLab
+  const SUB_NAMES = {ranks: 'Weekly import', season: 'Season import', multi: 'Import multiple', lab: 'Compare', value: 'Value', dump: 'Data dump', matchups: 'Match Up data', coach: 'Coach Speak', score: 'Results', sos: 'Schedule', plan: 'Planning'};
+  const OWNER_TABS = ['lab', 'value', 'dump', 'matchups', 'coach']; // screens only Titan's owner sees (their menu buttons and sub-tabs hide for everyone else); Compare and Match Up data also for titanLab
   // ... except Compare rankings, which an account with the titanLab claim sees too (S.owner.lab; nothing else of the owner's).
   const canSee = t => (t === 'lab' || t === 'matchups' ? S.owner.is || S.owner.lab : S.owner.is);
   const sectionOf = tab => SECTIONS.find(s => s.tabs.includes(tab)) || null;
@@ -158,7 +158,9 @@
     lab: store.get(KEY.lab) || null, labBusy: false, labAt: 0, labError: '',
     value: {busy: false, data: null, error: '', at: 0, q: ''}, // the value report (Titan's owner only), from the owner's PC; q: its player search
     dump: {busy: false, data: null, error: '', at: 0}, // the data dump (Titan's owner only), from the owner's PC; it shares the value report's search
-    mu: {busy: false, data: null, error: '', at: 0, week: 0, table: 'overview', note: ''}, // Match Up data (the owner and titanLab): the weekly matchup sheets, uploaded week by week
+    mu: {busy: false, data: null, error: '', at: 0, week: 0, table: 'overview', note: ''},
+    // Coach Speak (the owner's alone): the Coachspeak Index ratings he pastes in, kept per season.
+    cs: {busy: false, data: null, error: '', at: 0, note: ''}, // Match Up data (the owner and titanLab): the weekly matchup sheets, uploaded week by week
     news: {busy: false, at: 0, list: null, error: '', all: false}, // ESPN's latest stories, on the News tab
     sos: {sched: null, busy: false, error: ''}, // the NFL schedule, for Schedule strength
     stand: {}, // the Standings tab: each league's schedule ({busy, error, sched, result})
@@ -1622,7 +1624,7 @@
       if (!p) return '<b class="lu-empty">Empty</b>';
       const proj = projOf(p, cfg);
       const bits = [p.pos, p.team, p.opp && 'vs ' + p.opp, p.bye && 'bye ' + p.bye, proj !== null && proj !== undefined && `proj ${fmt(proj)}`].filter(Boolean).join(' · ');
-      return `${headshot(p)}${nameLine(p)}<small>${esc(bits)}${statusText(p)}${roleFlag(p.id, p.pos)}</small>${rankOf(p, true)}${ctxLine(p)}`;
+      return `${headshot(p)}${nameLine(p)}<small>${esc(bits)}${statusText(p)}${roleFlag(p.id, p.pos)}</small>${rankOf(p, true)}${coachNote(p)}${ctxLine(p)}`;
     };
     const plain = p => (p ? `${nameLine(p)}<small>${esc([p.pos, p.team].filter(Boolean).join(' · '))}${statusText(p)}</small>${rankOf(p, false)}` : '<b class="lu-empty">Empty</b>');
     const one = p => (p ? `<span class="lu-one">${headshot(p, true)}${nameLine(p)}${rankOf(p, false)}</span>` : '<b class="lu-empty">Empty</b>');
@@ -2061,7 +2063,7 @@
     const KIND_CLASS = {Lineup: 'swap', Injury: 'stop', Waiver: 'ok', Claim: 'ok', 'Buy low': 'ok', 'Sell high': 'swap', Keep: 'muted', 'Start idea': 'swap'};
     let h = `<div class="bar match-bar"><p class="lede">Everything to act on in week ${esc(S.snap.week)}, in every league: lineup changes, hurt starters, waiver upgrades${
       S.owner.is ? ', claims, trades and start ideas' : ''}. Tick each one off as you make it${S.owner.is ? '' : ''}.</p></div>`;
-    h += changedLine() + sweepLine();
+    h += changedLine() + coachLine() + sweepLine();
     h += `<section class="tiles three" aria-label="Where you stand">${tile(left.length, 'to do', left.length ? 'swap' : 'ok')}${tile(items.length - left.length, 'done', 'muted')}${tile(A_leagues().length, 'leagues', 'muted')}</section>`;
     h += recapCard();
     if (!items.length) return h + '<div class="empty-note">Nothing to do: every lineup matches your rankings, no starter is hurt, and no free agent beats a starter.</div>';
@@ -3320,6 +3322,141 @@
         <button class="btn" type="submit">Save the week</button>${U.note ? `<p class="fine mu-note">${esc(U.note)}</p>` : ''}</form></section>`;
     }
     return h;
+  }
+
+  /* ---- Coach Speak (Rankings, Titan's owner only)
+
+     The Coachspeak Index (thecoachspeakindex.com) scores every NFL head coach on how often what he says turns out to
+     be true, split into injuries, the depth chart, usage and transactions. It publishes the numbers as pictures and
+     keeps the full ratings in its Discord, so there is nothing to read automatically: he pastes them in and
+     `SCC.parseCoachSpeak` reads whatever shape they came in. Kept per season (`lab/coachspeak-<season>`), because the
+     ratings move slowly; re-pasting replaces them.
+
+     The screen leads with what the ratings change *this week* on his own rosters (`SCC.coachFlags`), because a table
+     of 32 coaches is a reference and the four names he has to decide about today are the point. */
+  async function loadCoachSpeak() {
+    if (DEMO || !S.owner.is || !S.sync.api || !S.sync.api.labJson || S.cs.busy || !S.snap) { S.cs.at = S.cs.at || Date.now(); return; }
+    S.cs.busy = true;
+    S.cs.error = '';
+    try { S.cs.data = await S.sync.api.labJson(`coachspeak-${S.snap.season}`); }
+    catch (e) { S.cs.error = `Couldn't load the coach ratings: ${e && e.message ? e.message : e}`; }
+    S.cs.busy = false;
+    S.cs.at = Date.now();
+    if (['coach', 'lineups', 'today', 'waivers'].includes(S.ui.tab)) render();
+  }
+
+  async function uploadCoachSpeak(el) {
+    const text = String(el.paste.value || '').trim();
+    if (!text) { S.cs.note = 'Paste the ratings first.'; render(); return; }
+    const P = SCC.parseCoachSpeak(text);
+    if (!P) { S.cs.note = "Titan couldn't find a coach in that. Each line needs a team and at least one number."; render(); return; }
+    if (!S.sync.api || !S.sync.api.labWrite) { S.cs.note = 'Sign in with Google first (Settings): the ratings are kept in your account.'; render(); return; }
+    const D = {season: String(S.snap.season), at: Date.now(), rows: P.rows};
+    try {
+      await S.sync.api.labWrite(`coachspeak-${S.snap.season}`, D);
+      S.cs.data = D;
+      const missing = 32 - P.rows.filter(r => r.team).length;
+      S.cs.note = `Saved ${plural(P.rows.length, 'coach', 'coaches')}.` + (missing > 0 ? ` ${missing} still to add.` : '');
+      el.paste.value = '';
+    } catch (e) { S.cs.note = `Couldn't save: ${e && e.message ? e.message : e}`; }
+    render();
+  }
+
+  // This season's ratings, or null. Everything that reads them goes through here, so an old season's sheet is never used.
+  function coachSheet() {
+    // Asked for once a visit, by whichever screen wants it first: Today and Lineups read it as well as its own tab.
+    if (S.owner.is && !S.cs.at && !S.cs.busy) loadCoachSpeak();
+    return S.cs.data && String(S.cs.data.season) === String(S.snap && S.snap.season) ? S.cs.data : null;
+  }
+
+  /* A line for a hurt starter whose coach cannot be trusted about injuries (Lineups, under the player). It never
+     changes a call: it says how much the thing the call rests on is worth. Nothing for a reliable coach, which is
+     the point of the ratings being split by category. */
+  function coachNote(p) {
+    const sheet = coachSheet();
+    if (!sheet || !p || !p.inj || !p.team) return '';
+    const c = SCC.coachFor(sheet, p.team);
+    if (!c || c.inj === null || c.inj > SCC.CS_OK) return '';
+    return `<small class="cs-line ${SCC.coachLevel(c.inj)}">${esc(c.coach || 'His coach')} is <b>${c.inj}%</b> reliable on injuries${
+      c.inj < SCC.CS_DANGER ? ', which is the danger zone' : ''}. Wait for the inactives rather than a quote.</small>`;
+  }
+
+  /* Today, for the owner only: the calls this week that rest on something a coach said, when the coach saying it has
+     a record of being wrong. One line, since Today is a summary and the Coach Speak tab carries the detail. */
+  function coachLine() {
+    if (!S.owner.is || !S.A) return '';
+    const sheet = coachSheet();
+    if (!sheet) return '';
+    const F = SCC.coachFlags({leagues: S.A.leagues, sheet});
+    if (!F.length) return '';
+    const worst = F[0];
+    return `<section class="card pad cs-act"><h3>Coach Speak</h3>
+      <p>${plural(F.length, 'call')} this week ${F.length === 1 ? 'rests' : 'rest'} on something a coach said, and the coach is not reliable on it.
+        Worst: <b>${esc(worst.coach || 'his coach')}</b> on <b>${esc(worst.name)}</b>, right ${worst.pct}% of the time.</p>
+      <p class="fine"><button class="link" data-go="coach">See all of them</button></p></section>`;
+  }
+
+  const CS_WORDS = {trust: 'Worth acting on', ok: 'Cautiously optimistic', careful: 'The danger zone', doubt: 'Well into the danger zone'};
+
+  function screenCoach() {
+    if (!S.owner.is) return '<div class="empty-note">Only Titan\'s owner sees this screen.</div>';
+    if (!S.snap) return emptyState();
+    const C = S.cs;
+    if (!C.at && !C.busy) loadCoachSpeak();
+    let h = `<div class="bar match-bar"><p class="lede">Only you see this. How often each NFL head coach's word turns out to be true, from
+      <a href="https://www.thecoachspeakindex.com/" target="_blank" rel="noopener">the Coachspeak Index</a>, split into injuries, the depth chart, usage and transactions.
+      ${SCC.CS_TRUST}% and up is worth acting on, ${SCC.CS_OK}% is cautiously optimistic, under ${SCC.CS_DANGER}% is their danger zone.</p>
+      <button class="btn ghost small" data-action="cs-reload"${C.busy ? ' disabled' : ''}>${C.busy ? 'Loading…' : 'Reload'}</button></div>`;
+    if (C.error) h += `<div class="banner stop">${esc(C.error)}</div>`;
+    const sheet = coachSheet();
+
+    // What it changes today, before the reference table: the calls on his own rosters that rest on a coach's word.
+    if (sheet && S.A) {
+      const F = SCC.coachFlags({leagues: S.A.leagues, sheet});
+      h += `<section class="card pad cs-act"><h3>What this changes this week</h3>`;
+      h += F.length ? `<ul class="cs-list">${F.map(f => `<li class="cs-row ${f.level}">
+        <span class="who"><b${pcAttr({id: f.id})}>${esc(f.name)}</b><small>${esc([f.pos, f.team, f.inj].filter(Boolean).join(' · '))} · ${esc(f.leagues.join(', '))}</small></span>
+        <span class="cs-say">${f.kind === 'inj'
+          ? `<b>${esc(f.coach || 'His coach')}</b> is right about injuries <b>${f.pct}%</b> of the time. Start him until he's ruled out, and trust the inactives, not the podium.`
+          : `<b>${esc(f.coach || 'His coach')}</b> is right about roles <b>${f.pct}%</b> of the time. Bid what he's worth if the job is real, not what the quote implies.`}</span>
+        </li>`).join('')}</ul>`
+        : `<p class="fine">Nothing on your rosters turns on a coach's word this week: no hurt starter and no wire target plays for a coach under ${SCC.CS_OK}% in the category that would decide it.</p>`;
+      h += `</section>`;
+    }
+
+    if (sheet && sheet.rows.length) {
+      const cat = SCC.CS_CATS;
+      // The word as well as the colour: a number that only means something by its colour means nothing read aloud.
+      const cell = v => {
+        if (v === null || v === undefined) return '<td class="tnum cs-none"><span class="sr-only">no rating</span>–</td>';
+        const lv = SCC.coachLevel(v);
+        return `<td class="tnum cs-${lv}" title="${esc(CS_WORDS[lv])}">${v}<span class="sr-only"> per cent, ${esc(CS_WORDS[lv].toLowerCase())}</span></td>`;
+      };
+      const rows = sheet.rows.slice().sort((a, b) => {
+        const av = a.overall !== null ? a.overall : avgOf(a), bv = b.overall !== null ? b.overall : avgOf(b);
+        return (bv === null ? -1 : av === null ? 1 : bv - av) || String(a.team).localeCompare(String(b.team));
+      });
+      h += `<section class="card pad vr-sec"><h3>Every coach</h3><p class="fine">Saved ${esc(when(sheet.at))}. Best first. Green is worth acting on, amber is cautious, red is the danger zone.</p>
+        <div class="table-wrap vr-scroll"><table class="rtable cs-t"><thead><tr><th>Coach</th><th>Team</th>${
+          cat.map(c => `<th class="tnum">${c.label}</th>`).join('')}<th class="tnum">Overall</th></tr></thead><tbody>${
+          rows.map(r => `<tr><th scope="row">${esc(r.coach || '–')}</th><td>${esc(r.team || '–')}</td>${
+            cat.map(c => cell(r[c.k])).join('')}${cell(r.overall)}</tr>`).join('')}</tbody></table></div></section>`;
+    } else if (C.busy) h += skeleton(5, 'Loading the coach ratings');
+    else h += '<div class="empty-note">No coach ratings yet. Paste them below.</div>';
+
+    h += `<section class="card pad mu-up"><h3>Paste the ratings</h3>
+      <p class="fine">Copy the ratings out of the Coachspeak Index Discord and paste them here, in whatever shape they come in. Titan wants a team and at least
+        one number on each line, takes the category from words beside a number where there are any (injuries, depth, usage, transactions) and otherwise reads them in that order.
+        A single number on its own is read as the coach's overall rating. Pasting again replaces the lot.</p>
+      <form data-form="cs-upload" class="mu-form"><label class="field"><span>Ratings</span><textarea name="paste" rows="8" spellcheck="false"
+        placeholder="Dan Campbell   DET   Inj 81  Depth 74  Use 69  Trans 88"></textarea></label>
+      <button class="btn" type="submit">Save the ratings</button>${C.note ? `<p class="fine mu-note">${esc(C.note)}</p>` : ''}</form></section>`;
+    return h;
+  }
+  // A coach's four categories averaged, for ordering the table when there's no overall rating.
+  function avgOf(r) {
+    const v = SCC.CS_CATS.map(c => r[c.k]).filter(x => x !== null && x !== undefined);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
   }
 
   // Each league's ideas, in the order they're acted on: this week's lineup, then the wire, trades and the playoffs.
@@ -6067,7 +6204,7 @@
   const SCREENS = {
     today: screenToday, lineups: screenLineups, matchup: screenMatchup, standings: screenStandings, waivers: screenWaivers, news: screenNews, rosters: screenRosters, exposure: screenExposure, byes: screenByes,
     sos: screenSos, plan: screenPlan, score: screenScore, ranks: screenRanks, season: screenSeason, multi: screenMulti, lab: screenLab, value: () => `<div class="vr-page">${screenValue()}</div>`,
-    dump: () => `<div class="vr-page">${screenDump()}</div>`, matchups: () => `<div class="vr-page">${screenMatchups()}</div>`, trade: screenTrade, moves: screenMoves, settings: screenSettings
+    dump: () => `<div class="vr-page">${screenDump()}</div>`, matchups: () => `<div class="vr-page">${screenMatchups()}</div>`, coach: () => `<div class="vr-page">${screenCoach()}</div>`, trade: screenTrade, moves: screenMoves, settings: screenSettings
   };
 
   /* ------------------------------------------------------------- events */
@@ -6184,6 +6321,7 @@
     else if (form === 'espn-add') addEspn(el.league.value);
     else if (form === 'espn-login') saveEspnLogin(el.s2.value, el.swid.value);
     else if (form === 'mu-upload') uploadMatchups(el);
+    else if (form === 'cs-upload') uploadCoachSpeak(el);
     else if (form === 'trade-paste') {
       // The offer is read against the league the Trade tab shows (the same pick screenTrade makes).
       const leagues = (S.snap && S.snap.leagues) || [];
@@ -6309,6 +6447,7 @@
     const a = t.dataset.action;
     if (a === 'score') loadScore(S.score.week || S.snap.week);
     if (a === 'byweek') { S.bw.error = ''; loadByWeek(); render(); }
+    if (a === 'cs-reload') { S.cs.at = 0; S.cs.note = ''; loadCoachSpeak(); render(); }
     else if (a === 'ranks-view') viewRanks(Number(t.dataset.week));
     else if (a === 'matchups') loadMatchups();
     else if (a === 'news-all') { S.news.all = true; render(); }

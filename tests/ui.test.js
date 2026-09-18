@@ -1069,7 +1069,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     , labJson: async name => window.__lab[name] || null, labWrite: async (name, data) => { window.__lab[name] = JSON.parse(JSON.stringify(data)); }}); window.TitanApp.setOwner(true); true`);
   await tab('value');
   check(await waitFor(`location.pathname === '/app/value' && document.querySelectorAll('.vr-lg').length === 2 && document.querySelectorAll('.vr-moves li').length === 6 &&
-    document.querySelectorAll('.subtabs [data-go]').length === 7`, 5000), 'the owner sees it under Rankings, at /app/value: each league\'s sells, buys and claims');
+    document.querySelectorAll('.subtabs [data-go]').length === 8`, 5000), 'the owner sees it under Rankings, at /app/value: each league\'s sells, buys and claims');
   check(await ev(`document.querySelectorAll('[data-vfmt]').length === 2 && /Buy Guy/.test(${vsec(0)}) &&
     [...document.querySelectorAll('.vr-t th')].every(th => th.textContent !== 'Where')`), 'under All leagues, the lists are in the format most leagues play, with a chip for each format');
   check(await ev(`/Sell high or keep/.test(document.getElementById('view').textContent) && document.querySelectorAll('.vr-moves .pill.p-swap').length === 1 &&
@@ -1149,8 +1149,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const ddOrder = await ev(`[...document.querySelectorAll('.vr-lg h3')].map(h => [...h.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim()).join(' | ')`);
   check(ddOrder === 'Dump Test League | Another Dump League',
     'its leagues come in the same order as every other tab (the app\'s leagues first), not by name: ' + ddOrder);
-  check(await ev(`[...document.querySelectorAll('.subtabs [data-go]')].map(b => b.textContent).join('|') === 'Weekly import|Season import|Import multiple|Compare|Value|Data dump|Match Up data'`),
-    'Data dump is its own screen under Rankings, right after Value, and Match Up data after it');
+  check(await ev(`[...document.querySelectorAll('.subtabs [data-go]')].map(b => b.textContent).join('|') === 'Weekly import|Season import|Import multiple|Compare|Value|Data dump|Match Up data|Coach Speak'`),
+    'Data dump is its own screen under Rankings, right after Value, then Match Up data and Coach Speak');
   check(await ev(`(() => { const nav = document.querySelector('.subtabs'), n = nav.getBoundingClientRect(), b = nav.querySelector('[aria-current="page"]').getBoundingClientRect();
     return b.left >= n.left - 1 && b.right <= n.right + 1; })()`), 'on a phone the sub-tab row scrolls so Data dump shows in full');
   const ddText = await text('#view');
@@ -1194,6 +1194,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     `each offense with its opponent, the numbers shaded by rank, and a week chip (${muRow.c}, ${muRow.shaded} shaded)`);
   check(await ev(`document.documentElement.scrollWidth <= innerWidth`), 'the matchup table fits a 390px phone (it scrolls sideways in its box)');
   await shot('matchup-data');
+  /* Coach Speak: the owner pastes the Coachspeak Index ratings in whatever shape the Discord posts them, they save to
+     lab/ and the screen leads with the calls on his own rosters that actually turn on a coach's word. */
+  await tab('coach');
+  check(await waitFor(`location.pathname === '/app/coach-speak' && !!document.querySelector('form[data-form="cs-upload"]')`, 5000),
+    'Coach Speak is its own screen under Rankings, with the owner paste form');
+  const COACHES = ['Coach          Team  Inj  Depth  Use  Trans', 'Andy Reid      KC    88   84     86   90',
+    'Sean McDermott | BUF | Injuries 61% | Depth Chart 70% | Usage 58% | Transactions 74%',
+    'Raheem Morris (Atlanta Falcons): 79, 66, 64, 81'].join('\n');
+  await ev(`(() => { const f = document.querySelector('form[data-form="cs-upload"]'); f.elements.paste.value = ${JSON.stringify(COACHES)}; f.requestSubmit(); return true; })()`);
+  check(await waitFor(`document.querySelectorAll('.cs-t tbody tr').length === 3 && /Saved 3 coaches/.test((document.querySelector('.mu-note') || {}).textContent || '')`, 5000),
+    'pasting the ratings saves them and draws every coach: ' + (await text('.mu-note')).slice(0, 60));
+  const csRow = await ev(`(() => { const r = document.querySelectorAll('.cs-t tbody tr')[0];
+    return [r.querySelector('th').textContent.trim(), ...[...r.querySelectorAll('td')].map(td => td.firstChild.textContent.trim())].join('|'); })()`);
+  // Six cells: team, the four categories, then Overall, which this paste does not carry ('no rating' is the screen-reader text).
+  check(csRow === 'Andy Reid|KC|88|84|86|90|no rating', 'the best coach first, with the four categories read straight out of a plain paste: ' + csRow);
+  const csLevels = await ev(`[...document.querySelectorAll('.cs-t tbody tr')].map(r => r.querySelector('td.cs-doubt, td.cs-careful') ? 'flag' : 'ok').join(',')`);
+  check(/flag/.test(csLevels), 'a coach under the danger threshold is marked, not just listed: ' + csLevels);
+  check(await ev(`document.documentElement.scrollWidth <= innerWidth`), 'the coach table fits a 390px phone');
+  await shot('coach-speak');
+
   await tab('dump');
   await pickLeague('all');
   await ev(`window.TitanApp.setOwner(false); true`);
@@ -1207,6 +1227,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check(await waitFor(`location.pathname === '/app/compare' && !/Only Titan's owner/.test(document.getElementById('view').textContent)`, 3000),
     'and Compare rankings opens for it');
   check(await ev(`document.querySelectorAll('.subtabs [data-go]').length === 5`), 'its Rankings sub-tabs: Import, Season, Import multiple, Compare rankings and Match Up data (no Value report, no Data dump)');
+  check(await ev(`!document.querySelector('.subtabs [data-go="coach"]') && document.querySelector('#tabs [data-tab="coach"]').hidden`),
+    'and not Coach Speak: that one is the owner\'s alone, unlike Match Up data');
   await tab('matchups');
   check(await waitFor(`location.pathname === '/app/matchup-data' && /matchup sheets/.test(document.getElementById('view').textContent) && !document.querySelector('.mu-up')`, 3000),
     'Match Up data opens for it at /app/matchup-data, without the owner\'s upload form');

@@ -2885,6 +2885,145 @@
     return out;
   }
 
+  /* ---- Coach Speak (the Coachspeak Index, thecoachspeakindex.com, the owner's source)
+
+     Every NFL head coach is scored on how often the things he says turn out to be true, in four separate categories:
+     injuries, the depth chart, usage and workload, and transactions. A coach can be straight about injuries and
+     useless about snap counts, which is why the categories matter more than one number. Their own thresholds:
+     85 and up is worth acting on, 75 and up is cautiously optimistic, below 65 is the danger zone.
+
+     The site publishes the numbers as pictures and keeps the full ratings in its Discord, so nothing can be read
+     automatically: the owner pastes them in (Coach Speak, owner only) and this parses what he pastes. Forgiving on
+     purpose, because a Discord post is not a spreadsheet: it wants a team and at least one number on a line, takes
+     the categories from words near each number where there are any, and falls back to their published order. */
+  var CS_CATS = [
+    {k: 'inj', label: 'Injuries', re: /inj|health|status/i},
+    {k: 'depth', label: 'Depth chart', re: /depth|chart|starter|start\b/i},
+    {k: 'use', label: 'Usage', re: /usage|use\b|work|snap|touch|carr|role/i},
+    {k: 'trans', label: 'Transactions', re: /trans|move|sign|cut|waiv|trade|roster/i}
+  ];
+  var CS_TRUST = 85, CS_OK = 75, CS_DANGER = 65;
+
+  // Where a number sits against the Coachspeak Index's own thresholds. Null stays null: no rating is not a bad one.
+  function coachLevel(pct) {
+    // Number(null) is 0, not absent, and a coach with no rating must never read as the least trustworthy of all.
+    if (pct === null || pct === undefined || pct === '') return null;
+    var n = Number(pct);
+    if (!isFinite(n)) return null;
+    return n >= CS_TRUST ? 'trust' : n >= CS_OK ? 'ok' : n >= CS_DANGER ? 'careful' : 'doubt';
+  }
+
+  // The team a line is about: a full name, a nickname, or an abbreviation standing on its own.
+  function csTeam(line) {
+    var low = ' ' + String(line).toLowerCase() + ' ';
+    for (var full in TEAM_NAMES) if (low.indexOf(full) >= 0) return {abbr: TEAM_NAMES[full], text: full};
+    for (var nick in NICKNAMES) {
+      var at = low.indexOf(' ' + nick + ' ');
+      if (at >= 0) return {abbr: NICKNAMES[nick], text: nick};
+    }
+    var m = /(^|[\s(|,])([A-Z]{2,3})([\s)|,]|$)/.exec(String(line));
+    while (m) {
+      var ab = teamAbbr(m[2]);
+      for (var f in TEAM_NAMES) if (TEAM_NAMES[f] === ab) return {abbr: ab, text: m[2]};
+      var rest = String(line).slice(m.index + m[0].length);
+      m = /(^|[\s(|,])([A-Z]{2,3})([\s)|,]|$)/.exec(rest);
+      if (m) m.index += String(line).length - rest.length;
+    }
+    return null;
+  }
+
+  function parseCoachSpeak(text) {
+    var lines = String(text || '').replace(/\r/g, '').split('\n');
+    var rows = [], seen = {};
+    lines.forEach(function (raw) {
+      var line = String(raw).replace(/[|•·\u2013\u2014]/g, ' ').trim();
+      if (!line || /^(coach|team|name)\b/i.test(line) && !/\d/.test(line)) return;
+      var team = csTeam(line);
+      // Take the team's own words out before reading numbers, so "49ers" cannot be mistaken for a rating.
+      var body = team ? line.replace(new RegExp(team.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), ' ') : line;
+      var nums = [], re = /(\d{1,3})(?:\.\d+)?\s*%?/g, m;
+      while ((m = re.exec(body))) {
+        var v = Number(m[1]);
+        if (v < 0 || v > 100) continue;
+        nums.push({v: v, at: m.index, before: body.slice(Math.max(0, m.index - 18), m.index)});
+      }
+      if (!nums.length) return;
+      var row = {coach: '', team: team ? team.abbr : '', inj: null, depth: null, use: null, trans: null, overall: null};
+      // A number wearing a category's name takes that category; the rest fill what is left, in the published order.
+      var spare = [];
+      nums.forEach(function (n) {
+        var cat = null;
+        CS_CATS.forEach(function (c) { if (!cat && c.re.test(n.before) && row[c.k] === null) cat = c.k; });
+        if (cat) row[cat] = n.v; else spare.push(n.v);
+      });
+      // One bare number is the coach's overall rating, not his injuries rating: guessing a category there would be a lie.
+      if (nums.length === 1 && spare.length === 1) row.overall = spare.shift();
+      CS_CATS.forEach(function (c) { if (row[c.k] === null && spare.length) row[c.k] = spare.shift(); });
+      if (spare.length) row.overall = spare[0];
+      // The coach's name is what comes before the team and the first number.
+      // From `body`, not `line`: the number positions were measured there, and the team's own words are already gone.
+      var cut = Math.min.apply(null, [body.length].concat(nums.map(function (n) { return n.at; })));
+      var name = body.slice(0, cut);
+      // Stop the name at the first category word or leftover team word, so a label cannot become part of it.
+      CS_CATS.forEach(function (c) {
+        var hit = c.re.exec(name);
+        if (hit && hit.index >= 0) name = name.slice(0, hit.index);
+      });
+      var city = /(los angeles|new york|new england|new orleans|green bay|kansas city|las vegas|san francisco|tampa bay)/i.exec(name);
+      if (city) name = name.slice(0, city.index);
+      row.coach = name.replace(/[^A-Za-z'.\- ]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!row.team && !row.coach) return;
+      if (row.team && seen[row.team]) return;     // the first line about a team wins, so a recap below cannot overwrite it
+      if (row.team) seen[row.team] = 1;
+      rows.push(row);
+    });
+    return rows.length ? {rows: rows} : null;
+  }
+
+  // One team's ratings out of a saved sheet.
+  function coachFor(sheet, team) {
+    var rows = (sheet && sheet.rows) || [], ab = teamAbbr(team);
+    for (var i = 0; i < rows.length; i++) if (rows[i].team === ab) return rows[i];
+    return null;
+  }
+
+  /* What the ratings actually change this week, from the person's own rosters. Two places a coach's word decides
+     something Titan cannot see for itself:
+       - a starter carrying an injury tag, where the call is whether to believe the coach about his status;
+       - a wire target, where the case for the pickup is usually a coach talking about his role.
+     Only where the coach is at or below `at` (the danger threshold by default), because a reliable coach is not news.
+     opts: {leagues: [{cfg, roster, wire}], sheet, at}. Worst coach first, so the top of the list is the one to doubt. */
+  function coachFlags(opts) {
+    var o = opts || {}, at = isFinite(o.at) ? o.at : CS_OK, out = [], seen = {};
+    (o.leagues || []).forEach(function (L) {
+      var key = L.cfg ? L.cfg.key : '';
+      (L.roster || []).forEach(function (p) {
+        if (!p || !p.start || !p.inj || !p.team) return;
+        var c = coachFor(o.sheet, p.team);
+        if (!c || c.inj === null || c.inj > at) return;
+        var id = 'inj|' + p.id;
+        if (seen[id]) { seen[id].leagues.push(key); return; }
+        seen[id] = {kind: 'inj', id: String(p.id), name: p.name, pos: p.pos, team: teamAbbr(p.team), inj: p.inj,
+          coach: c.coach, pct: c.inj, level: coachLevel(c.inj), leagues: [key]};
+        out.push(seen[id]);
+      });
+      (L.wire || []).forEach(function (w) {
+        var p = w && (w.inn || w.p || w);
+        if (!p || !p.team) return;
+        var c = coachFor(o.sheet, p.team);
+        var worst = c && [c.use, c.depth].filter(function (x) { return x !== null; }).sort(function (a, b) { return a - b; })[0];
+        if (!c || worst === undefined || worst === null || worst > at) return;
+        var id = 'use|' + (p.id || p.name);
+        if (seen[id]) { seen[id].leagues.push(key); return; }
+        seen[id] = {kind: 'use', id: String(p.id || ''), name: p.name, pos: p.pos, team: teamAbbr(p.team), inj: p.inj || '',
+          coach: c.coach, pct: worst, level: coachLevel(worst), leagues: [key]};
+        out.push(seen[id]);
+      });
+    });
+    out.sort(function (a, b) { return a.pct - b.pct || String(a.name).localeCompare(String(b.name)); });
+    return out;
+  }
+
   // Sleeper's standard scoring, per projected stat: what pts_std is made of. (Receptions are the PPR setting, kept apart.)
   var SLEEPER_STD = {pass_yd: 0.04, pass_td: 4, pass_int: -1, pass_2pt: 2, rush_yd: 0.1, rush_td: 6, rush_2pt: 2, rec_yd: 0.1, rec_td: 6, rec_2pt: 2,
     fum_lost: -2, xpm: 1, fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3, fgm_40_49: 4, fgm_50p: 5, fgmiss: -1,
@@ -3585,6 +3724,8 @@
     buildLeague: buildLeague, applyDetails: applyDetails, applyLocks: applyLocks,
     attachRanks: attachRanks, analyzeLeague: analyzeLeague, analyzeAll: analyzeAll,
     exposure: exposure, byeMap: byeMap, scoreLeague: scoreLeague, scoreWeek: scoreWeek,
+    parseCoachSpeak: parseCoachSpeak, coachFor: coachFor, coachFlags: coachFlags, coachLevel: coachLevel, CS_CATS: CS_CATS,
+    CS_TRUST: CS_TRUST, CS_OK: CS_OK, CS_DANGER: CS_DANGER,
     trimProjections: trimProjections, packProjections: packProjections, unpackProjections: unpackProjections,
     projFor: projFor, sumProj: sumProj, freezeWeek: freezeWeek,
     openSlots: openSlots, byeNeeds: byeNeeds, effectiveWeek: effectiveWeek, planWeek: planWeek, sleeperTeamUrl: sleeperTeamUrl, applyPoints: applyPoints,

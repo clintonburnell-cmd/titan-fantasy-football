@@ -6,7 +6,7 @@
  * PAGE_WAIT with a saved copy at hand, the saved page serves and the fresh one lands for the next
  * open. Sleeper's API is never touched here: live data always comes straight from Sleeper.
  */
-const CACHE = 'titan-v20';
+const CACHE = 'titan-v21';
 const PAGE_WAIT = 2500;
 /* The website (the root page) and the app (/app/), with everything the app loads at once. espn.js, yahoo.js and
    newsletter.js are deliberately absent (v1.89.0): the app fetches each only when it needs it, and the handler

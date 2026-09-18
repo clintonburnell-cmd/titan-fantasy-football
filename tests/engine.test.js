@@ -744,6 +744,49 @@ section('how each manager has played it (managerReport, liveProjection)');
     'a player past his projection keeps his points, and no projection stays no projection');
 }
 
+section('coach speak: what a coach says, and whether it has ever been true (parseCoachSpeak, coachFlags)');
+{
+  // A Discord post is not a spreadsheet, so the parser has to take the shapes a person actually pastes.
+  const paste = [
+    'Coach            Team   Inj   Depth   Use   Trans',
+    'Dan Campbell     DET    81    74      69    88',
+    'Mike Tomlin  |  PIT  |  Injuries 62%  |  Depth Chart 71%  |  Usage 58%  |  Transactions 79%',
+    'Sean McVay (Los Angeles Rams): 77, 83, 80, 74',
+    'Kyle Shanahan  SF  91',
+    'Mike McDaniel \u2014 Dolphins \u2014 usage 58% \u00b7 injuries 88%',
+    'this line is just chat'
+  ].join('\n');
+  const P = SCC.parseCoachSpeak(paste);
+  check(P && P.rows.length === 5, `five coaches out of the paste, and the chatter ignored (${P ? P.rows.length : 0})`);
+  const det = SCC.coachFor(P, 'DET');
+  check(det.coach === 'Dan Campbell' && det.inj === 81 && det.trans === 88, 'a plain column layout reads straight across');
+  const pit = SCC.coachFor(P, 'PIT');
+  check(pit.coach === 'Mike Tomlin' && pit.use === 58, `labels and pipes do not end up in the coach's name (got "${pit.coach}")`);
+  check(SCC.coachFor(P, 'LAR').coach === 'Sean McVay', 'nor does the city when the team is written out in full');
+  const sf = SCC.coachFor(P, 'SF');
+  check(sf.overall === 91 && sf.inj === null, 'one bare number is his overall rating, not a guess at a category');
+  const mia = SCC.coachFor(P, 'MIA');
+  check(mia.use === 58 && mia.inj === 88 && mia.depth === null, 'a number takes the category named beside it, whatever the order');
+  check(SCC.parseCoachSpeak('') === null && SCC.parseCoachSpeak('hello') === null, 'nothing to read comes back null rather than empty rows');
+
+  check(SCC.coachLevel(90) === 'trust' && SCC.coachLevel(78) === 'ok' && SCC.coachLevel(68) === 'careful'
+    && SCC.coachLevel(55) === 'doubt' && SCC.coachLevel(null) === null, "the Index's own thresholds, and no rating is not a bad one");
+
+  // What it changes this week: a hurt starter whose coach is not straight about injuries, and a pickup whose case is usage.
+  const leagues = [{cfg: {key: 'Main'}, roster: [
+    {id: '1', name: 'Hurt Starter', pos: 'WR', team: 'PIT', start: true, inj: 'Q'},
+    {id: '2', name: 'Hurt Bench', pos: 'RB', team: 'PIT', start: false, inj: 'Q'},
+    {id: '3', name: 'Fit Starter', pos: 'RB', team: 'PIT', start: true, inj: ''},
+    {id: '4', name: 'Honest Coach Guy', pos: 'TE', team: 'DET', start: true, inj: 'Q'}
+  ], wire: [{inn: {id: '9', name: 'Wire Target', pos: 'RB', team: 'PIT'}}]}];
+  const F = SCC.coachFlags({leagues, sheet: P});
+  check(F.length === 2, `only the two calls a coach's word actually decides (${F.map(f => f.name).join(', ')})`);
+  check(F[0].name === 'Wire Target' && F[0].kind === 'use' && F[0].pct === 58, 'worst coach first, by the category that matters for that call');
+  check(F[1].name === 'Hurt Starter' && F[1].kind === 'inj' && F[1].pct === 62, 'a hurt starter is flagged; a hurt bench player and a fit starter are not');
+  check(!F.some(f => f.team === 'DET'), 'a coach who is reliable about injuries is not news, so he is left out');
+  check(SCC.coachFlags({leagues, sheet: null}).length === 0, 'no sheet, nothing claimed');
+}
+
 section('the projections, packed for the wire (packProjections, unpackProjections)');
 {
   const map = {'96': [16.2, 3.4, {pass_yd: 250.5, pass_td: 1.8}], '12': [9, 0], '44': [4.1, 2.2, {rec: 4.4, rec_yd: 51}]};

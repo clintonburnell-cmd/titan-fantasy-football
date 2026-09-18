@@ -564,6 +564,21 @@ The owner's account (the `titanOwner` claim) and the screens only it sees.
   git: the sheets are his paid source, so they reach `lab/` only, never `public/` or the newsletter). The rules let the
   owner write `matchups-YYYY` and titanLab read it. Shading is inline (`muShade`: green 1 to red 32 with alpha, so both
   themes work); a dot marks the teams the person's starters play for in the league picked.
+- Coach Speak (`screenCoach`, tab `coach`, `/app/coach-speak`, last under Rankings; v1.90.0) is **Titan's owner's
+  alone**: not `titanLab`, and the firestore rule lets him write `coachspeak-YYYY` without adding it to the titanLab
+  read. It holds the Coachspeak Index's ratings (thecoachspeakindex.com, his source): how often each NFL head coach's
+  word turns out to be true, in four categories (injuries, depth chart, usage, transactions), thresholds `SCC.CS_TRUST`
+  85, `SCC.CS_OK` 75, `SCC.CS_DANGER` 65. **There is no feed**: the site renders the numbers as images with empty alt
+  text and keeps the full ratings in its Discord, so he pastes them in (`uploadCoachSpeak` → `labWrite`,
+  `lab/coachspeak-<season>`, one sheet a season since the ratings move slowly; pasting again replaces it).
+  `SCC.parseCoachSpeak` is deliberately forgiving, because a Discord post is not a spreadsheet: a line needs a team
+  and one number, categories come from words beside a number (`CS_CATS`) or their published order, a lone number is
+  the coach's overall rather than a guessed category, and the first line about a team wins so a recap below cannot
+  overwrite it. `SCC.coachFlags` is what makes it actionable and is the only part on more than one screen: a starter
+  carrying an injury tag whose coach is at or under `CS_OK` on injuries, and a wire target whose coach is that low on
+  usage or depth chart. Shown on the tab, as `coachLine` on Today and as `coachNote` under the player on Lineups.
+  **It never changes a call**, like the matchup sheet: it says what the thing the call rests on is worth. `coachSheet`
+  loads the ratings on first use, so Today and Lineups get them without the tab being opened.
 - Data dump (`screenDump`, tab `dump`, `/app/data-dump`, right after Value under Rankings) is Titan's owner's only too,
   and separate from Value. Each Tuesday the owner downloads a spreadsheet (`week<N>-data-dump.xlsx`: player usage and
   expected points, defense by position, schedule strength, team tendencies) to Downloads; on the owner's PC the

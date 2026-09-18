@@ -1562,6 +1562,26 @@ body.app-page :is(.stand .tnum, .stand .st-odds b) { font-variant-numeric: tabul
 .bw-row.bw-s4 .bw-pick { background: var(--bw4); }
 .bw-row.is-on > th { box-shadow: inset 3px 0 0 currentColor; }
 
+/* Coach Speak (the owner's): how far a coach's word can be trusted. The four levels are named in words as well as
+   coloured, since a number that only means something by its colour means nothing to a screen reader. */
+.cs-line { display: block; margin-top: 2px; font-size: var(--t-xs); color: var(--muted); }
+.cs-line.careful { color: var(--swap); }
+.cs-line.doubt { color: var(--stop); }
+.cs-line b { color: inherit; }
+.cs-act { border-left: 3px solid var(--swap); }
+.cs-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 10px; }
+.cs-row { display: grid; gap: 4px; padding-left: 12px; border-left: 3px solid var(--line); }
+.cs-row.careful { border-left-color: var(--swap); }
+.cs-row.doubt { border-left-color: var(--stop); }
+.cs-row .who small { display: block; color: var(--muted); font-size: var(--t-xs); }
+.cs-say { font-size: var(--t-sm); }
+.cs-t th[scope="row"] { font-weight: 600; }
+.cs-t .cs-trust { color: var(--ok); font-weight: 700; }
+.cs-t .cs-ok { color: var(--text); }
+.cs-t .cs-careful { color: var(--swap); font-weight: 700; }
+.cs-t .cs-doubt { color: var(--stop); font-weight: 700; }
+.cs-t .cs-none { color: var(--faint); }
+
 .toast {
   position: fixed; left: 50%; bottom: calc(82px + env(safe-area-inset-bottom)); transform: translateX(-50%); /* above the bottom bar */
   max-width: calc(100% - 32px); background: var(--text); color: var(--bg);

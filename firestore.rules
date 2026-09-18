@@ -54,7 +54,9 @@ service cloud.firestore {
       allow read: if request.auth != null && (request.auth.token.titanOwner == true
         || (request.auth.token.titanLab == true && (doc.matches('^[0-9]{4}-[0-9]{1,2}$') || doc.matches('^matchups-[0-9]{4}$'))));
       // The owner's app writes its lab formats and the matchup sheets it uploads week by week.
-      allow write: if request.auth != null && request.auth.token.titanOwner == true && (doc == 'config' || doc.matches('^matchups-[0-9]{4}$'));
+      // Coach Speak stays the owner's alone: it is not in the titanLab read above, only in this write.
+      allow write: if request.auth != null && request.auth.token.titanOwner == true
+        && (doc == 'config' || doc.matches('^matchups-[0-9]{4}$') || doc.matches('^coachspeak-[0-9]{4}$'));
     }
     // The Titan Waiver Wire's latest issue, which the newsletter page shows to new subscribers: anyone can
     // read it; only the owner's PC writes it (titan-analytics' upload.js, with Google's own sign-in, which
