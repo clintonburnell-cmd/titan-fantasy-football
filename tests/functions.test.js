@@ -302,10 +302,16 @@ function fakeUser(db) {
   job.freshInstance();
   const gc2 = await job.buildContext(gcNow + 2 * 3600e3, gcRefused);
   job.freshInstance();
-  let gc3 = null;
-  try { await job.buildContext(gcNow + 7 * 3600e3, gcRefused); } catch (e) { gc3 = e.message; }
-  check(gc2.at === gcNow && gc2.teams.BUF.implied === 25 && gc3 === 'ESPN scoreboard answered 403',
-    'when ESPN refuses a new instance, the saved game context serves for up to six hours, then the request fails');
+  const gc3 = await job.buildContext(gcNow + 7 * 3600e3, gcRefused);
+  check(gc2.at === gcNow && gc2.teams.BUF.implied === 25 && gc3.unavailable === true && gc3.teams === null,
+    'when ESPN refuses a new instance, the saved game context serves for up to six hours, then the answer says it is unavailable');
+  // Past six hours the answer isn't kept: the next reader tries ESPN again instead of waiting out
+  // the half hour. (An unavailable answer held in memory would have been returned here unchanged.)
+  let tries = 0;
+  const gc4 = await job.buildContext(gcNow + 7 * 3600e3 + 60e3,
+    {scoreboard: async () => { tries++; return gcBoard; }, weather: async () => null, dvp: async () => ({from: 2025, weeks: 18, teams: {}}), doc: gcDoc});
+  check(tries === 1 && gc4.teams.BUF.implied === 25 && !gc4.unavailable,
+    'an unavailable answer isn\'t cached: the next read goes back to ESPN');
 
   const pid = Object.keys(lg.players)[0], wasLocked = lg.players[pid].locked;
   db.history['1'].leagues['espn:99999901'].players[pid].rank = -7;

@@ -1508,7 +1508,10 @@
     try {
       const res = await fetch('/api/game-context');
       if (!res.ok) throw new Error('answered ' + res.status);
-      S.ctx.data = await res.json();
+      const d = await res.json();
+      // {unavailable: true} means ESPN turned the server away and there was no recent copy: the
+      // same as having no context at all, so every row below takes the path it already knows.
+      S.ctx.data = d && d.unavailable ? null : d;
     } catch (e) { /* no context this time: the rows just go without it */ }
     S.ctx.at = Date.now();
     S.ctx.busy = false;

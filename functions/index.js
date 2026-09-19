@@ -956,7 +956,9 @@ exports.nflScores = onRequest({region: 'us-central1', memory: '256MiB', maxInsta
    (the National Weather Service, public domain; each home stadium's spot from STADIUMS), and
    the fantasy points each defense gives up to each position (nflverse's weekly player stats,
    CC BY 4.0: last season's until three weeks of this one are played; kept 12 hours). If
-   ESPN's scoreboard can't be reached, the last copy serves for up to six hours. */
+   ESPN's scoreboard can't be reached, the last copy serves for up to six hours; past that the
+   answer is {unavailable: true} and the rows go without context, the same as the scores ticker,
+   so ESPN refusing the server doesn't set off the alert. */
 const STADIUMS = {
   ARI: [33.5276, -112.2626], ATL: [33.7554, -84.4010], BAL: [39.2780, -76.6227], BUF: [42.7738, -78.7870], CAR: [35.2258, -80.8528],
   CHI: [41.8623, -87.6167], CIN: [39.0955, -84.5161], CLE: [41.5061, -81.6995], DAL: [32.7473, -97.0945], DEN: [39.7439, -105.0201],
@@ -1021,7 +1023,18 @@ async function buildContext(now = Date.now(), deps = {}) {
   const doc = deps.doc || db.doc('meta/gameContext');
   let board;
   try { board = await (deps.scoreboard || ESPN.fetchScoreboard)(); }
-  catch (e) { return (contextCache = await fallback('game context', contextCache, doc, now, CONTEXT_SERVE, e)); }
+  catch (e) {
+    try { return (contextCache = await fallback('game context', contextCache, doc, now, CONTEXT_SERVE, e)); }
+    catch (old) {
+      // ESPN turns this server away now and then (403, as it does the scores ticker), and with no
+      // copy from the last six hours there is nothing to serve. That is ESPN's doing, not a fault
+      // here, so the answer says so and the rows go without context; a fault in Titan's own code
+      // still answers 502 and still sets off the alert. Not kept in memory: the next reader tries
+      // ESPN again rather than waiting out the half hour (the CDN holds this answer one minute).
+      logger.warn(`game context: ESPN unavailable (${e.message}) and no copy from the last six hours; the rows go without it`);
+      return {at: now, unavailable: true, teams: null};
+    }
+  }
   const weather = deps.weather || kickoffWeather, teams = {};
   await Promise.all(board.games.map(async g => {
     const imp = SCC.impliedTotals(g);
@@ -1174,7 +1187,9 @@ exports.gameContext = onRequest({region: 'us-central1', memory: '1GiB', maxInsta
   if (!plainGet(req, res, [])) return;
   try {
     const out = await buildContext();
-    res.set('Cache-Control', 'public, max-age=900, s-maxage=1800');
+    // An answer of "no context this time" is held a minute, not half an hour, so it clears as soon
+    // as ESPN lets the server back in.
+    res.set('Cache-Control', out.unavailable ? 'public, max-age=60, s-maxage=60' : 'public, max-age=900, s-maxage=1800');
     res.json(out);
   } catch (e) {
     logger.warn('game context unavailable: ' + e.message);
